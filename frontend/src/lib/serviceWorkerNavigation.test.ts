@@ -32,6 +32,16 @@ it("leaves progressive audio and Range requests to the browser network stack", (
   expect(intercepts(request)).toBe(false);
 });
 
+it("never serves saved playback and background job statuses", () => {
+  for (const path of [
+    "/api/playback/now",
+    "/api/library/scan",
+    "/api/integrations/yandex-music/imports",
+  ]) {
+    expect(intercepts(new Request(`https://music.test${path}`))).toBe(false);
+  }
+});
+
 it("leaves Next.js chunks to the network under next dev", () => {
   const chunk = new Request("https://music.test/_next/static/chunks/_013ufyf._.js");
   expect(intercepts(chunk, "?dev")).toBe(false);

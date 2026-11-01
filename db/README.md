@@ -1,7 +1,6 @@
 # Database
 
-Caimack's schema is `db/migrations/0001_baseline.sql`. The file is compiled into the `caimack`
-binary.
+Caimack's schema is the ordered set of files in `db/migrations/`. Migrations are compiled into the `caimack` binary.
 
 Only `caimack migrate` changes the schema. The server never does: at startup it compares the
 migration recorded in the database with the one it was built with and refuses to start when they
@@ -23,18 +22,13 @@ so it works even when the backend's queries don't compile against the current da
 
 ## Changing the schema
 
-Until the first release the schema is edited in place in `0001_baseline.sql`; there are no numbered
-follow-up migrations. A database migrated from an older version of the file is then rejected as
-changed, so bring it in line by hand:
+Add a new numbered migration for each change. Never modify an already deployed migration or rewrite its checksum. Migration 0002 adds durable enrichment jobs and catalog invalidation without changing the baseline.
 
-1. Apply the matching `ALTER` statements to the dev database.
-2. Record the new checksum:
+Run migrations before starting the corresponding backend version. Regenerate SQLx metadata with `make sqlx` when changing compile-time checked queries. New enrichment queries are checked by PostgreSQL integration tests:
 
-   ```bash
-   sum=$(sha384sum db/migrations/0001_baseline.sql | cut -d' ' -f1)
-   psql "$DATABASE_URL" -c "UPDATE _sqlx_migrations SET checksum = decode('$sum', 'hex') WHERE version = 1"
-   ```
+```bash
+cd backend
+SQLX_OFFLINE=true DATABASE_URL=postgres://music:password@localhost:5432/postgres cargo test -p app integrations::enrichment_jobs::tests -- --include-ignored
+```
 
-3. Run `make sqlx`, so builds without a database (CI, Docker) see the new queries.
-
-Or drop the dev database and run `make migrate` again, if its data doesn't matter.
+Use a disposable local PostgreSQL server and a role allowed to create databases. SQLx creates isolated test databases. Do not run these tests against production.

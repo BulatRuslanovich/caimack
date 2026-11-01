@@ -66,6 +66,7 @@ impl EmbeddingIndex {
 
 #[derive(Debug, PartialEq, Eq)]
 struct Signature {
+    revision: i64,
     vectors: i64,
     analyzed_at: Option<DateTime<Utc>>,
     tracks: i64,
@@ -79,7 +80,8 @@ async fn signature(db: &PgPool) -> sqlx::Result<Signature> {
     )
     .fetch_one(db)
     .await?;
-    Ok(Signature { vectors: row.vectors, analyzed_at: row.analyzed_at, tracks: row.tracks })
+    let revision = sqlx::query_scalar("SELECT last_value FROM catalog_revision").fetch_one(db).await?;
+    Ok(Signature { revision, vectors: row.vectors, analyzed_at: row.analyzed_at, tracks: row.tracks })
 }
 
 pub async fn load(db: &PgPool) -> sqlx::Result<Snapshot> {

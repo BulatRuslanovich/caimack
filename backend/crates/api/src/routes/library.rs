@@ -23,9 +23,36 @@ use crate::state::AppState;
 const MAX_UPLOAD_BYTES: i64 = 200 * 1024 * 1024;
 const MAX_IMAGE_UPLOAD_BYTES: i64 = 8 * 1024 * 1024;
 
+#[derive(Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+struct EnrichmentStatus {
+    kind: String,
+    pending: i64,
+    running: i64,
+    cooling_down: i64,
+    failed: i64,
+    last_updated_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+async fn enrichment_status(State(state): State<AppState>, Admin(_): Admin) -> ApiResult<impl IntoResponse> {
+    let rows: Vec<EnrichmentStatus> = sqlx::query_as(
+        "SELECT kind,
+         count(*) FILTER (WHERE next_attempt_at<=now() AND (locked_until IS NULL OR locked_until<now())) AS pending,
+         count(*) FILTER (WHERE locked_until>=now()) AS running,
+         count(*) FILTER (WHERE next_attempt_at>now() AND locked_until IS NULL) AS cooling_down,
+         count(*) FILTER (WHERE last_outcome='failed') AS failed,
+         max(updated_at) AS last_updated_at FROM enrichment_jobs GROUP BY kind ORDER BY kind",
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(app::AppError::from)?;
+    Ok(Json(rows))
+}
+
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/config", get(client_config))
+        .route("/api/library/enrichment", get(enrichment_status))
         .route("/api/me/settings", get(get_settings).put(update_settings))
         .route("/api/me/password", post(change_password))
         .route("/api/favorites", get(list_favorites))

@@ -5,7 +5,7 @@ const SHELL_CACHE = "caimack-shell-v1";
 const ASSET_CACHE = "caimack-assets-v2";
 const IMAGE_CACHE = "caimack-images-v1";
 const HLS_CACHE = "caimack-hls-v2";
-const DATA_CACHE = "caimack-data-v1";
+const DATA_CACHE = "caimack-data-v2";
 const LEGACY_AUDIO_CACHE = "caimack-audio-v1";
 
 const CACHE_DATABASE = "caimack-stream-cache";
@@ -22,7 +22,7 @@ const IMAGE = /^\/api\/(albums|artists|playlists|tracks)\/[0-9a-f-]+\/(cover|ima
 const HLS = /^\/api\/tracks\/([0-9a-f-]+)\/hls\//i;
 
 const UNCACHEABLE_API =
-  /^\/api\/(auth|me|connect|tracks\/[^/]+\/stream|playback\/(session|signals))/i;
+  /^\/api\/(auth|me|connect|tracks\/[^/]+\/stream|playback\/|library\/(scan|enrichment)|integrations\/yandex-music\/imports)/i;
 
 let maintenance = Promise.resolve();
 
@@ -154,15 +154,22 @@ async function segment(event, request, trackId) {
 
 async function store(cache, request, response, trackId) {
   const measured = response.clone();
-  await cache.put(request, response);
-
   const fromHeader = Number(measured.headers.get("Content-Length") ?? 0);
   const bytes = fromHeader > 0 ? fromHeader : (await measured.arrayBuffer()).byteLength;
-  await putEntry({ url: request.url, trackId, bytes, touchedAt: Date.now() });
-  totalBytes = (await knownTotal()) + bytes;
-
-  maintenance = maintenance.then(enforceBudget, enforceBudget);
-  await maintenance;
+  // Serialize replacement accounting with eviction, including concurrent segment writes.
+  const save = async () => {
+    const previous = await getEntry(request.url);
+    const total = await knownTotal();
+    await cache.put(request, response);
+    await putEntry({ url: request.url, trackId, bytes, touchedAt: Date.now() });
+    totalBytes = total - (previous?.bytes ?? 0) + bytes;
+    await enforceBudget();
+  };
+  const saved = maintenance.then(save, save);
+  maintenance = saved.catch(() => {
+    totalBytes = null;
+  });
+  await saved;
 }
 
 async function knownTotal() {
@@ -209,22 +216,13 @@ async function evict() {
 
 async function data(event, request) {
   const cache = await caches.open(DATA_CACHE);
-  const cached = await cache.match(request, { ignoreVary: true });
-
-  const revalidate = fetch(request)
-    .then(async (response) => {
-      if (response.ok) await cache.put(request, response.clone());
-      return response;
-    })
-    .catch(() => null);
-
-  if (cached) {
-    event.waitUntil(revalidate);
-    return cached;
+  try {
+    const response = await fetch(request);
+    if (response.ok) event.waitUntil(cache.put(request, response.clone()));
+    return response;
+  } catch {
+    return (await cache.match(request, { ignoreVary: true })) ?? Response.error();
   }
-
-  const response = await revalidate;
-  return response ?? Response.error();
 }
 
 async function cacheFirst(event, request, cacheName) {
@@ -290,6 +288,10 @@ async function withStore(mode, action) {
 
 function putEntry(entry) {
   return withStore("readwrite", (store) => store.put(entry));
+}
+
+function getEntry(url) {
+  return withStore("readonly", (store) => store.get(url));
 }
 
 function deleteEntry(url) {

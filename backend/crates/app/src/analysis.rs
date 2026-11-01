@@ -147,7 +147,9 @@ async fn analyze(
     };
 
     let embedder = Arc::clone(embedder);
+    let Ok(permit) = crate::background::permit().await else { return Outcome::failed(embed, "worker_closed") };
     let work = tokio::task::spawn_blocking(move || -> anyhow::Result<(Analysis, Option<anyhow::Result<Vec<f32>>>)> {
+        let _permit = permit;
         let analysis = media::analysis::analyze(&source, duration, embed)?;
         let vector = embed.then(|| embedder.embed(&analysis.windows));
         Ok((analysis, vector))

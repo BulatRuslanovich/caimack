@@ -16,13 +16,12 @@ use super::lrclib::{Lrclib, LyricsLookup, LyricsQuery};
 use crate::catalog::lyrics::{self, LyricsSource};
 use crate::catalog::tags;
 use crate::covers;
-use crate::storage::{ARTIST_IMAGE_DIRECTORY, COVER_DIRECTORY, Storage};
+use crate::storage::{ARTIST_IMAGE_DIRECTORY, COVER_DIRECTORY, CoverSize, Storage};
 
 const CAPACITY: usize = 2048;
 const ARTIST_PAUSE: Duration = Duration::from_secs(2);
 const LYRICS_PAUSE: Duration = Duration::from_millis(500);
 const BACKFILL_DELAY: Duration = Duration::from_secs(60);
-const BACKFILL_CHUNK: usize = 20;
 
 #[derive(Debug, Clone)]
 pub struct EnrichmentRequest {
@@ -80,6 +79,14 @@ enum Outcome {
 }
 
 impl Enrichment {
+    fn image_exists(&self, path: Option<&str>) -> bool {
+        path.is_some_and(|path| {
+            [CoverSize::Full, CoverSize::Thumb, CoverSize::Large]
+                .into_iter()
+                .any(|size| self.storage.existing(&Storage::cover_variant(path, size)).is_some())
+        })
+    }
+
     async fn track_cover(&self, track: Uuid) -> anyhow::Result<Outcome> {
         let row = sqlx::query!(
             r#"SELECT t.title, t.artist_id, t.album_id, t.year, ar.name AS artist_name,
@@ -90,9 +97,30 @@ impl Enrichment {
         )
         .fetch_optional(&self.db)
         .await?;
-        let Some(row) = row.filter(|row| row.cover_path.is_none()) else { return Ok(Outcome::Skipped) };
-        let Some(cover) = self.deezer.track_cover(&row.title, &row.artist_name, row.album_title.as_deref()).await?
-        else {
+        let Some(row) = row.filter(|row| !self.image_exists(row.cover_path.as_deref())) else {
+            return Ok(Outcome::Skipped);
+        };
+        let file: Option<String> =
+            sqlx::query_scalar("SELECT file_path FROM tracks WHERE id=$1").bind(track).fetch_optional(&self.db).await?;
+        let embedded = if let Some(path) = file.and_then(|path| self.storage.existing(&path)) {
+            tokio::task::spawn_blocking(move || {
+                media::tags::read(&path).and_then(|tags| tags.cover.map(|bytes| (bytes, tags.album)))
+            })
+            .await?
+        } else {
+            None
+        };
+        let local = embedded.and_then(|(bytes, album)| {
+            row.album_title
+                .clone()
+                .or(album)
+                .filter(|title| !title.trim().is_empty())
+                .map(|album_title| super::deezer::TrackCover { album_title, bytes })
+        });
+        let Some(cover) = (match local {
+            Some(cover) => Some(cover),
+            None => self.deezer.track_cover(&row.title, &row.artist_name, row.album_title.as_deref()).await?,
+        }) else {
             return Ok(Outcome::NotFound);
         };
         if cover.bytes.is_empty() {
@@ -107,6 +135,15 @@ impl Enrichment {
         let Some(current) = current.filter(|current| current.album_id == row.album_id) else {
             return Ok(Outcome::Skipped);
         };
+        let unchanged: bool = sqlx::query_scalar("SELECT title=$2 AND artist_id=$3 FROM tracks WHERE id=$1")
+            .bind(track)
+            .bind(&row.title)
+            .bind(row.artist_id)
+            .fetch_one(&mut *tx)
+            .await?;
+        if !unchanged {
+            return Ok(Outcome::Skipped);
+        }
         let album = match current.album_id {
             Some(album) => album,
             None => tags::album(&mut tx, &cover.album_title, row.artist_id, row.year).await?,
@@ -114,7 +151,9 @@ impl Enrichment {
         let available = sqlx::query_scalar!("SELECT cover_path IS NULL FROM albums WHERE id = $1 FOR UPDATE", album)
             .fetch_one(&mut *tx)
             .await?;
-        if available != Some(true) {
+        let current_path: Option<String> =
+            sqlx::query_scalar("SELECT cover_path FROM albums WHERE id=$1").bind(album).fetch_one(&mut *tx).await?;
+        if available != Some(true) && self.image_exists(current_path.as_deref()) {
             if current.album_id.is_none() {
                 sqlx::query!("UPDATE tracks SET album_id = $2 WHERE id = $1", track, album).execute(&mut *tx).await?;
                 tx.commit().await?;
@@ -139,22 +178,32 @@ impl Enrichment {
     async fn artist_image(&self, artist: Uuid) -> anyhow::Result<Outcome> {
         let row =
             sqlx::query!("SELECT name, image_path FROM artists WHERE id = $1", artist).fetch_optional(&self.db).await?;
-        let Some(row) = row.filter(|row| row.image_path.is_none()) else { return Ok(Outcome::Skipped) };
+        let Some(row) = row.filter(|row| !self.image_exists(row.image_path.as_deref())) else {
+            return Ok(Outcome::Skipped);
+        };
 
         let Some(bytes) = self.deezer.artist_image(&row.name).await? else { return Ok(Outcome::NotFound) };
         if bytes.is_empty() {
             return Ok(Outcome::NotFound);
         }
         let set = covers::renditions(bytes).await?;
-        let path = self.storage.save_renditions(ARTIST_IMAGE_DIRECTORY, artist, &set).await?;
+        let path = self.storage.save_renditions(ARTIST_IMAGE_DIRECTORY, Uuid::now_v7(), &set).await?;
 
-        let updated =
-            sqlx::query!("UPDATE artists SET image_path = $2 WHERE id = $1 AND image_path IS NULL", artist, path)
-                .execute(&self.db)
-                .await;
+        let updated = sqlx::query(
+            "UPDATE artists SET image_path=$2 WHERE id=$1 AND image_path IS NOT DISTINCT FROM $3 AND name=$4",
+        )
+        .bind(artist)
+        .bind(&path)
+        .bind(&row.image_path)
+        .bind(&row.name)
+        .execute(&self.db)
+        .await;
         match updated {
             Ok(done) if done.rows_affected() == 1 => Ok(Outcome::Saved),
-            Ok(_) => Ok(Outcome::Skipped),
+            Ok(_) => {
+                self.storage.delete_cover(&path);
+                Ok(Outcome::Skipped)
+            }
             Err(error) => {
                 self.storage.delete_cover(&path);
                 Err(error.into())
@@ -190,18 +239,22 @@ impl Enrichment {
             return Ok(Outcome::NotFound);
         }
 
-        sqlx::query!(
-            "INSERT INTO track_lyrics (track_id, plain, synced, source, updated_at) VALUES ($1, $2, $3, $4, $5)
+        let saved = sqlx::query(
+            "INSERT INTO track_lyrics (track_id, plain, synced, source, updated_at)
+             SELECT $1,$2,$3,$4,$5 FROM tracks t JOIN artists ar ON ar.id=t.artist_id
+             WHERE t.id=$1 AND t.title=$6 AND ar.name=$7
              ON CONFLICT (track_id) DO NOTHING",
-            track,
-            parsed.plain,
-            sqlx::types::Json(&parsed.lines) as _,
-            LyricsSource::Provider as i32,
-            Utc::now()
         )
+        .bind(track)
+        .bind(parsed.plain)
+        .bind(sqlx::types::Json(&parsed.lines))
+        .bind(LyricsSource::Provider as i32)
+        .bind(Utc::now())
+        .bind(&query.title)
+        .bind(&query.artist)
         .execute(&self.db)
         .await?;
-        Ok(Outcome::Saved)
+        Ok(if saved.rows_affected() == 1 { Outcome::Saved } else { Outcome::Skipped })
     }
 }
 
@@ -211,55 +264,76 @@ pub fn spawn(
     mut requests: mpsc::Receiver<EnrichmentRequest>,
     cancel: CancellationToken,
 ) -> Vec<tokio::task::JoinHandle<()>> {
-    let backfill = {
-        let (db, queue, cancel) = (enrichment.db.clone(), queue.clone(), cancel.clone());
-        tokio::spawn(async move {
-            tokio::select! {
-                () = cancel.cancelled() => return,
-                () = tokio::time::sleep(BACKFILL_DELAY) => {}
-            }
-            match sqlx::query_scalar!("SELECT id FROM artists WHERE image_path IS NULL").fetch_all(&db).await {
-                Ok(artists) => {
-                    for chunk in artists.chunks(BACKFILL_CHUNK) {
-                        queue.try_enqueue(EnrichmentRequest { track: None, artists: chunk.to_vec() });
-                    }
-                    tracing::debug!("Queued {} artists without a photo for a lookup", artists.len());
-                }
-                Err(error) => tracing::error!("Queueing artists without a photo failed: {error}"),
-            }
-        })
-    };
-
-    let worker = tokio::spawn(async move {
+    let wake = Arc::new(tokio::sync::Notify::new());
+    let mut handles = Vec::new();
+    let signal = Arc::clone(&wake);
+    let stop = cancel.clone();
+    handles.push(tokio::spawn(async move {
         loop {
-            let request = tokio::select! {
-                () = cancel.cancelled() => break,
-                request = requests.recv() => request,
-            };
-            let Some(request) = request else { break };
-
-            let mut seen = HashSet::new();
-            for artist in request.artists.iter().filter(|artist| seen.insert(**artist)) {
-                report(&format!("Artist image enrichment for {artist}"), enrichment.artist_image(*artist).await);
-                if pause(&cancel, ARTIST_PAUSE).await {
-                    return;
-                }
-            }
-            if let Some(track) = request.track {
-                report(&format!("Cover enrichment for track {track}"), enrichment.track_cover(track).await);
-                if pause(&cancel, ARTIST_PAUSE).await {
-                    return;
-                }
-                report(&format!("Lyrics enrichment for track {track}"), enrichment.lyrics(track).await);
-                queue.finished(Some(track));
-                if pause(&cancel, LYRICS_PAUSE).await {
-                    return;
+            tokio::select! {
+                () = stop.cancelled() => return,
+                request = requests.recv() => match request {
+                    Some(request) => { queue.finished(request.track); signal.notify_waiters(); }
+                    None => return,
                 }
             }
         }
-    });
-
-    vec![backfill, worker]
+    }));
+    for kind in ["cover", "artist", "lyrics"] {
+        let (enrichment, wake, cancel) = (enrichment.clone(), Arc::clone(&wake), cancel.clone());
+        handles.push(tokio::spawn(async move {
+            let mut next_seed = tokio::time::Instant::now() + BACKFILL_DELAY;
+            loop {
+                if cancel.is_cancelled() { return; }
+                if tokio::time::Instant::now() >= next_seed {
+                    let delay = match super::enrichment_jobs::seed(&enrichment.db, kind).await {
+                        Ok(500) => Duration::from_secs(5),
+                        Ok(_) => Duration::from_secs(86_400),
+                        Err(error) => { tracing::error!("Enrichment {kind} discovery failed: {error}"); Duration::from_secs(30) }
+                    };
+                    next_seed = tokio::time::Instant::now() + delay;
+                }
+                let job = match super::enrichment_jobs::claim(&enrichment.db, kind).await {
+                    Ok(job) => job,
+                    Err(error) => { tracing::error!("Enrichment {kind} claim failed: {error}"); None }
+                };
+                let Some(job) = job else {
+                    tokio::select! {
+                        () = cancel.cancelled() => return,
+                        () = wake.notified() => {},
+                        () = tokio::time::sleep(next_seed.saturating_duration_since(tokio::time::Instant::now()).min(Duration::from_secs(30))) => {},
+                    }
+                    continue;
+                };
+                let result = tokio::select! {
+                    () = cancel.cancelled() => return,
+                    result = async {
+                        match kind {
+                            "cover" => enrichment.track_cover(job.entity_id).await,
+                            "artist" => enrichment.artist_image(job.entity_id).await,
+                            _ => enrichment.lyrics(job.entity_id).await,
+                        }
+                    } => result,
+                };
+                let skipped = matches!(result, Ok(Outcome::Skipped));
+                let (outcome, error) = match result {
+                    Ok(Outcome::Saved) => { tracing::info!("Enrichment {kind} {} saved", job.entity_id); ("saved", None) }
+                    Ok(Outcome::Skipped) => ("skipped", None),
+                    Ok(Outcome::NotFound) => ("not_found", None),
+                    Ok(Outcome::Instrumental) => ("instrumental", None),
+                    Err(error) => {
+                        tracing::warn!("Enrichment {kind} {} failed; scheduling retry: {error:#}", job.entity_id);
+                        ("failed", Some(format!("{error:#}").chars().take(2000).collect()))
+                    }
+                };
+                if let Err(error) = super::enrichment_jobs::finish(&enrichment.db, kind, &job, outcome, error).await {
+                    tracing::error!("Enrichment {kind} completion failed; lease will expire: {error}");
+                }
+                if !skipped && pause(&cancel, if kind == "lyrics" { LYRICS_PAUSE } else { ARTIST_PAUSE }).await { return; }
+            }
+        }));
+    }
+    handles
 }
 
 async fn pause(cancel: &CancellationToken, how_long: Duration) -> bool {
@@ -269,10 +343,97 @@ async fn pause(cancel: &CancellationToken, how_long: Duration) -> bool {
     }
 }
 
-fn report(step: &str, result: anyhow::Result<Outcome>) {
-    match result {
-        Ok(Outcome::Saved) => tracing::info!("{step} finished with Saved"),
-        Ok(outcome) => tracing::debug!("{step} finished with {outcome:?}"),
-        Err(error) => tracing::warn!("{step} failed: {error:#}"),
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[sqlx::test(migrations = "../../../db/migrations")]
+    #[ignore = "requires local PostgreSQL and ffmpeg"]
+    async fn embedded_art_repairs_old_tracks_and_missing_files_without_replacing_existing_art(
+        db: PgPool,
+    ) -> anyhow::Result<()> {
+        let root = std::env::temp_dir().join(format!("caimack-enrichment-{}", Uuid::now_v7()));
+        let storage = Storage::open(&root)?;
+        let audio = root.join("music/test.flac");
+        let image = root.join("image.png");
+        assert!(
+            std::process::Command::new("ffmpeg")
+                .args([
+                    "-nostdin",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "anullsrc=r=44100:cl=stereo",
+                    "-t",
+                    "1",
+                    "-y"
+                ])
+                .arg(&audio)
+                .status()?
+                .success()
+        );
+        assert!(
+            std::process::Command::new("ffmpeg")
+                .args([
+                    "-nostdin",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "color=c=red:s=32x32",
+                    "-frames:v",
+                    "1",
+                    "-y"
+                ])
+                .arg(&image)
+                .status()?
+                .success()
+        );
+        media::tags::write(
+            &audio,
+            &media::tags::AudioTags {
+                title: "Song".into(),
+                artists: vec!["Artist".into()],
+                album_artists: vec![],
+                album: Some("Old Album".into()),
+                genre: None,
+                year: None,
+                track_number: None,
+                disc_number: None,
+                cover: Some(std::fs::read(&image)?),
+            },
+        )?;
+        let artist = Uuid::now_v7();
+        let track = Uuid::now_v7();
+        sqlx::query("INSERT INTO artists(id,name,normalized_name,created_at) VALUES ($1,'Artist','artist',now())")
+            .bind(artist)
+            .execute(&db)
+            .await?;
+        sqlx::query("INSERT INTO tracks(id,title,normalized_title,artist_id,duration_seconds,file_path,original_file_name,mime_type,file_size,content_hash,created_at)
+            VALUES ($1,'Song','song',$2,1,'music/test.flac','test.flac','audio/flac',100,'hash',now())")
+            .bind(track).bind(artist).execute(&db).await?;
+        let enrichment = Enrichment {
+            db: db.clone(),
+            storage: storage.clone(),
+            deezer: Deezer::new("http://127.0.0.1:9"),
+            lrclib: Lrclib::new("http://127.0.0.1:9"),
+        };
+        assert_eq!(enrichment.track_cover(track).await?, Outcome::Saved);
+        let path: String =
+            sqlx::query_scalar("SELECT cover_path FROM albums WHERE id=(SELECT album_id FROM tracks WHERE id=$1)")
+                .bind(track)
+                .fetch_one(&db)
+                .await?;
+        assert!(storage.existing(&path).is_some());
+        assert_eq!(enrichment.track_cover(track).await?, Outcome::Skipped);
+        storage.delete_cover(&path);
+        assert_eq!(enrichment.track_cover(track).await?, Outcome::Saved);
+        std::fs::remove_dir_all(root)?;
+        Ok(())
     }
 }

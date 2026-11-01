@@ -60,11 +60,17 @@ pub struct YandexClient {
     config: YandexMusicConfig,
     api: reqwest::Client,
     downloads: reqwest::Client,
+    images: reqwest::Client,
 }
 
 impl YandexClient {
     pub fn new(config: YandexMusicConfig) -> Self {
-        Self { config, api: http_client(API_TIMEOUT), downloads: http_client(DOWNLOAD_TIMEOUT) }
+        Self {
+            config,
+            api: http_client(API_TIMEOUT),
+            downloads: http_client(DOWNLOAD_TIMEOUT),
+            images: http_client(Duration::from_secs(12)),
+        }
     }
 
     pub async fn search(&self, token: &str, text: &str) -> AppResult<(Vec<YandexTrack>, Vec<YandexAlbum>)> {
@@ -171,8 +177,18 @@ impl YandexClient {
 
     pub async fn cover(&self, cover_uri: Option<&str>) -> Option<Vec<u8>> {
         let url = cover_url(cover_uri, COVER_SIZE)?;
-        let response = self.downloads.get(url).send().await.ok()?.error_for_status().ok()?;
-        read_limited(response, MAX_COVER_BYTES).await.ok()
+        let result = async {
+            let response = self.images.get(url).send().await?.error_for_status()?;
+            read_limited(response, MAX_COVER_BYTES).await
+        }
+        .await;
+        match result {
+            Ok(bytes) => Some(bytes),
+            Err(error) => {
+                tracing::warn!("Yandex cover download failed; background enrichment will retry: {error:#}");
+                None
+            }
+        }
     }
 
     pub async fn genre_titles(&self, token: &str) -> AppResult<HashMap<String, String>> {
@@ -233,7 +249,13 @@ pub fn sign(key: &str, payload: &str) -> String {
 }
 
 fn cover_url(cover_uri: Option<&str>, size: &str) -> Option<String> {
-    cover_uri.filter(|uri| !uri.trim().is_empty()).map(|uri| format!("https://{}", uri.replace("%%", size)))
+    let uri = cover_uri?.trim();
+    let url = reqwest::Url::parse(&format!("https://{}", uri.replace("%%", size))).ok()?;
+    (matches!(url.host_str(), Some("avatars.yandex.net" | "avatars.mds.yandex.net"))
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.port().is_none())
+    .then(|| url.to_string())
 }
 
 pub fn thumbnail_url(cover_uri: Option<&str>) -> Option<String> {
@@ -306,6 +328,24 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn artwork_uses_only_the_csp_allowed_yandex_hosts() {
+        assert_eq!(
+            thumbnail_url(Some("avatars.yandex.net/music/%%")),
+            Some("https://avatars.yandex.net/music/200x200".into())
+        );
+        assert!(thumbnail_url(Some("avatars.mds.yandex.net/music/%%")).is_some());
+        for uri in [
+            "example.com/%%",
+            "avatars.yandex.net.evil.test/x",
+            "evil@avatars.yandex.net/x",
+            "avatars.yandex.net:8443/x",
+            "",
+        ] {
+            assert_eq!(thumbnail_url(Some(uri)), None);
+        }
+    }
 
     #[test]
     fn the_file_link_is_signed_like_the_web_client() {

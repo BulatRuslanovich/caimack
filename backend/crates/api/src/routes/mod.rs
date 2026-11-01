@@ -52,8 +52,15 @@ pub fn router(state: AppState) -> Router {
         .layer(axum::middleware::from_fn(logging::log_request))
 }
 
-async fn health() -> impl IntoResponse {
-    ([(header::CONTENT_TYPE, "text/plain"), (header::CACHE_CONTROL, "no-store, no-cache")], "Healthy")
+async fn health(axum::extract::State(state): axum::extract::State<AppState>) -> impl IntoResponse {
+    let available =
+        tokio::time::timeout(std::time::Duration::from_secs(2), sqlx::query("SELECT 1").execute(&state.db)).await;
+    let (status, text) = if matches!(available, Ok(Ok(_))) {
+        (StatusCode::OK, "Healthy")
+    } else {
+        (StatusCode::SERVICE_UNAVAILABLE, "Database unavailable")
+    };
+    (status, [(header::CONTENT_TYPE, "text/plain"), (header::CACHE_CONTROL, "no-store, no-cache")], text)
 }
 
 async fn not_found() -> Response {

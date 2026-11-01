@@ -102,7 +102,7 @@ pub fn spawn(
     receivers: TranscodeReceivers,
     cancel: CancellationToken,
 ) -> Vec<tokio::task::JoinHandle<()>> {
-    let workers = std::thread::available_parallelism().map_or(1, |n| (n.get() / 2).max(1));
+    let workers = crate::background::capacity();
     let warmup_workers = (workers - 1).max(1);
     let running: Arc<Mutex<HashSet<String>>> = Arc::default();
     let warmup = Arc::new(tokio::sync::Mutex::new(receivers.warmup));
@@ -171,6 +171,10 @@ async fn transcode(
             tokio::fs::create_dir_all(parent).await?;
         }
         let started = Instant::now();
+        let _permit = tokio::select! {
+            () = cancel.cancelled() => return Ok(()),
+            permit = crate::background::permit() => permit?,
+        };
         let done = tokio::select! {
             () = cancel.cancelled() => return Ok(()),
             done = media::ffmpeg::transcode_to_hls(&source, &target, bitrate) => done?,

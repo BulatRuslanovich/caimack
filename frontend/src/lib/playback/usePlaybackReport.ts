@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { api } from "@/lib/api";
 import { deviceId } from "@/lib/events";
 import { deviceName } from "@/lib/playback/deviceName";
+import { reportQueue } from "@/lib/playback/reportQueue";
 import type { RepeatMode } from "@/lib/playback/playerTypes";
 import type { Track } from "@/lib/types";
 
@@ -35,8 +36,7 @@ export function usePlaybackReport(source: PlaybackReportSource): () => void {
       .reportPlayback({
         deviceId: deviceId(),
         deviceName: deviceName(),
-        trackIds: queue.map((track) => track.id),
-        index: currentIndex,
+        ...reportQueue(queue, currentIndex),
         positionSeconds: getPosition(),
         isPlaying,
         shuffle,

@@ -5,6 +5,8 @@ package app.caimack.playback
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
 import android.media.audiofx.Equalizer
 import android.os.Bundle
 import android.os.PowerManager
@@ -84,6 +86,7 @@ class PlaybackService : MediaLibraryService() {
     private var networkRecovery: Job? = null
     private var bufferingRecovery: Job? = null
     private var networkAttempts = 0
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private val reduced = mutableSetOf<String>()
     private val networkNotified = mutableSetOf<String>()
 
@@ -192,9 +195,11 @@ class PlaybackService : MediaLibraryService() {
                 if (playbackState == Player.STATE_BUFFERING && player.playWhenReady) {
                     bufferingRecovery = container.scope.launch(Dispatchers.Main) {
                         delay(4000)
+                        var retryDelay = 5000L
                         while (player.playWhenReady && player.playbackState == Player.STATE_BUFFERING) {
                             if (tryLighterStream(container, player)) break
-                            delay(5000)
+                            delay(retryDelay + kotlin.random.Random.nextLong(1000))
+                            retryDelay = (retryDelay * 2).coerceAtMost(60_000L)
                         }
                     }
                 }
@@ -273,6 +278,18 @@ class PlaybackService : MediaLibraryService() {
             }
         })
 
+        networkCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                ticks.post {
+                    if (player.playWhenReady && player.playerError != null) {
+                        networkRecovery?.cancel()
+                        networkAttempts = 0
+                        player.prepare()
+                    }
+                }
+            }
+        }.also { getSystemService(ConnectivityManager::class.java).registerDefaultNetworkCallback(it) }
+
         val tree = LibraryTree(this, container) { resolve(container, it) }
         container.scope.launch {
             val saved = runCatching { tree.resumption() }.getOrNull() ?: return@launch
@@ -337,6 +354,8 @@ class PlaybackService : MediaLibraryService() {
         sleep?.cancel()
         leveling?.cancel()
         qualityChanges?.cancel()
+        networkCallback?.let { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(it) }
+        networkCallback = null
         networkRecovery?.cancel()
         bufferingRecovery?.cancel()
         equalizer?.release()
@@ -358,6 +377,8 @@ class PlaybackService : MediaLibraryService() {
     private fun resolve(container: AppContainer, item: MediaItem): MediaItem = trimSilence(container, source(container, item))
 
     private suspend fun tryLighterStream(container: AppContainer, player: ExoPlayer): Boolean {
+        // A LAN server can work without validated Internet access, so only test for a network.
+        if (getSystemService(ConnectivityManager::class.java).activeNetwork == null) return false
         val item = player.currentMediaItem ?: return false
         if (container.settings.value.quality != ORIGINAL ||
             item.localConfiguration?.mimeType == MimeTypes.APPLICATION_M3U8 ||
@@ -543,12 +564,14 @@ class PlaybackService : MediaLibraryService() {
     private fun report(container: AppContainer, player: Player) {
         val ids = idsOf(player)
         if (ids.isEmpty()) return
+        val current = player.currentMediaItemIndex.coerceIn(0, ids.size - 1)
+        val from = (current - 100).coerceAtLeast(0)
 
         val report = PlaybackStateReport(
             deviceId = container.deviceId,
             deviceName = container.deviceName,
-            trackIds = ids,
-            index = player.currentMediaItemIndex.coerceIn(0, ids.size - 1),
+            trackIds = ids.subList(from, (current + 401).coerceAtMost(ids.size)),
+            index = current - from,
             positionSeconds = player.currentPosition / 1000.0,
             isPlaying = player.playWhenReady,
             shuffle = player.shuffleModeEnabled,

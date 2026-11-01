@@ -140,10 +140,23 @@ async fn main() -> anyhow::Result<()> {
         .with_context(|| format!("Could not listen on {}", config.listen_addr))?;
     tracing::info!("Listening on http://{}", config.listen_addr);
 
-    axum::serve(listener, routes::router(state).into_make_service_with_connect_info::<SocketAddr>())
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .context("The server stopped unexpectedly")?;
+    let server = axum::serve(listener, routes::router(state).into_make_service_with_connect_info::<SocketAddr>())
+        .with_graceful_shutdown(shutdown_signal());
+    tokio::select! {
+        result = std::future::IntoFuture::into_future(server) => result.context("The server stopped unexpectedly")?,
+        error = async {
+            loop {
+                let (result, index, _) = futures_util::future::select_all(workers.iter_mut()).await;
+                let _finished = workers.swap_remove(index);
+                if let Err(error) = result { return error; }
+                // Startup backfills are finite; a normal completion is expected.
+                if workers.is_empty() { std::future::pending::<()>().await; }
+            }
+        } => {
+            background.cancel();
+            anyhow::bail!("Background worker crashed: {error}");
+        }
+    }
 
     background.cancel();
     for worker in workers {
