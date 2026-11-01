@@ -60,3 +60,7 @@
   border-radius: 0 2px 2px 0;
   background: var(--primary);
 }
+
+:root[data-colorway="graphite"][data-theme="dark"] .ambient-glow {
+  display: none;
+}

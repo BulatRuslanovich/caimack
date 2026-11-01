@@ -16,9 +16,9 @@
     <string name="settings_colorway">Palette</string>
     <string name="settings_cover_tone">Cover colour</string>
     <string name="settings_colorway_coffee">Coffee</string>
-    <string name="settings_colorway_graphite">Graphite &amp; Vermilion</string>
-    <string name="settings_colorway_midnight">Midnight &amp; Brass</string>
-    <string name="settings_colorway_plum">Plum &amp; Peach</string>
+    <string name="settings_colorway_graphite">OLED Black</string>
+    <string name="settings_colorway_midnight">Midnight Blue</string>
+    <string name="settings_colorway_plum">Plum Violet</string>
     <string name="settings_colorway_studio">Studio: Pine &amp; Lime</string>
     <string name="settings_language">Language</string>
     <string name="language_english" translatable="false">English</string>
@@ -41,4 +41,16 @@
     <string name="recap_reminder_channel">Monthly recap</string>
     <string name="recap_reminder_title">Your %1$s recap is ready</string>
     <string name="recap_reminder_text">See what you played most</string>
+    <string name="settings_help_quality">Choose audio quality: lower bitrates use less data.</string>
+    <string name="settings_help_crossfade">Blend the end of a track with the start of the next.</string>
+    <string name="settings_help_smartTransitions">Adapt transitions to the sound of each track.</string>
+    <string name="settings_help_normalizeVolume">Reduce loudness differences between tracks.</string>
+    <string name="settings_help_equalizer">Adjust bass, midrange and treble.</string>
+    <string name="settings_help_theme">Use light, dark or your system appearance.</string>
+    <string name="settings_help_colorway">Change the colours of backgrounds, surfaces and accents.</string>
+    <string name="settings_help_language">Change the interface language.</string>
+    <string name="settings_help_coverTone">Tint the interface with colours from the current cover.</string>
+    <string name="settings_help_visualizer">Show an animation that responds to music.</string>
+    <string name="settings_help_leanBack">Open the listening screen automatically when idle.</string>
+    <string name="settings_help_yandexMusic">Enable music search and import from Yandex Music.</string>
 </resources>

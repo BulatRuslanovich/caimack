@@ -94,7 +94,7 @@ fun SettingsScreen() {
         Panel(stringResource(R.string.settings_playback)) {
             Choice(
                 stringResource(R.string.settings_quality),
-                null,
+                stringResource(R.string.settings_help_quality),
                 settings.quality,
                 listOf(
                     Option("Low", stringResource(R.string.settings_quality_low), stringResource(R.string.settings_quality_bitrate, 64)),
@@ -107,8 +107,9 @@ fun SettingsScreen() {
                 Modifier.fillMaxWidth().clickable { container.playbackPrefs.setSmartTransitions(!smartTransitions) },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
+                SettingLabel(
                     stringResource(R.string.settings_smart_transitions),
+                    stringResource(R.string.settings_help_smartTransitions),
                     style = Type.body.copy(fontWeight = FontWeight.SemiBold),
                     modifier = Modifier.weight(1f).padding(end = 12.dp),
                 )
@@ -120,8 +121,9 @@ fun SettingsScreen() {
                 Modifier.fillMaxWidth().clickable { container.playbackPrefs.setNormalizeVolume(!normalizeVolume) },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
+                SettingLabel(
                     stringResource(R.string.settings_normalize_volume),
+                    stringResource(R.string.settings_help_normalizeVolume),
                     style = Type.body.copy(fontWeight = FontWeight.SemiBold),
                     modifier = Modifier.weight(1f).padding(end = 12.dp),
                 )
@@ -176,6 +178,7 @@ fun SettingsScreen() {
         }
 
         Panel(stringResource(R.string.settings_equalizer), action = { Toggle(equalizer.enabled) { container.equalizer.setEnabled(it) } }) {
+            Text(stringResource(R.string.settings_help_equalizer), style = Type.small, color = palette.muted)
 
             if (equalizer.enabled) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -216,7 +219,7 @@ fun SettingsScreen() {
         Panel(stringResource(R.string.settings_appearance)) {
             Choice(
                 stringResource(R.string.settings_theme),
-                null,
+                stringResource(R.string.settings_help_theme),
                 theme,
                 listOf(
                     Option(Appearance.SYSTEM, stringResource(R.string.settings_theme_system)),
@@ -229,7 +232,7 @@ fun SettingsScreen() {
             val dark = palette.dark
             Choice(
                 stringResource(R.string.settings_colorway),
-                null,
+                stringResource(R.string.settings_help_colorway),
                 colorway.key,
                 Colorway.entries.map { option ->
                     Option(option.key, stringResource(colorwayName(option)), preview = { ColorwaySwatch(paletteOf(option, dark)) })
@@ -241,8 +244,9 @@ fun SettingsScreen() {
                 Modifier.fillMaxWidth().clickable { container.appearance.setCoverTone(!coverTone) },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
+                SettingLabel(
                     stringResource(R.string.settings_cover_tone),
+                    stringResource(R.string.settings_help_coverTone),
                     style = Type.body.copy(fontWeight = FontWeight.SemiBold),
                     modifier = Modifier.weight(1f).padding(end = 12.dp),
                 )
@@ -252,7 +256,7 @@ fun SettingsScreen() {
             val current = container.appearance.language.ifEmpty { LocalConfiguration.current.locales[0].language }
             Choice(
                 stringResource(R.string.settings_language),
-                null,
+                stringResource(R.string.settings_help_language),
                 if (current == "ru") "ru" else "en",
                 listOf(Option("en", stringResource(R.string.language_english)), Option("ru", stringResource(R.string.language_russian))),
             ) {
@@ -432,4 +436,19 @@ private fun EqualizerCurve(gains: List<Int>, frequencies: List<String>, decibels
             frequencies.forEach { Text(it, style = Type.micro, color = palette.muted, textAlign = TextAlign.Center, modifier = Modifier.weight(1f)) }
         }
     }
+}
+
+@Composable
+private fun SettingLabel(text: String, hint: String, style: androidx.compose.ui.text.TextStyle, modifier: Modifier = Modifier) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Text(text, style = style, modifier = Modifier.weight(1f))
+        TextButton(onClick = { expanded = true }) { Text("?") }
+    }
+    if (expanded) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { expanded = false },
+        title = { Text(text) },
+        text = { Text(hint) },
+        confirmButton = { TextButton(onClick = { expanded = false }) { Text(stringResource(android.R.string.ok)) } },
+    )
 }

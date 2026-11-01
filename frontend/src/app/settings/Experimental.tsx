@@ -6,6 +6,7 @@
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/form";
+import { SettingHelp } from "./SettingHelp";
 import { Switch } from "@/components/ui/switch";
 import { setYandexMusicEnabled, setYandexMusicToken } from "@/lib/yandexMusic";
 import { useYandexMusicSettings } from "@/lib/useYandexMusic";
@@ -29,7 +30,11 @@ export function Experimental() {
     <Panel title={t("settings.experimental")}>
       <label className="flex cursor-pointer items-center gap-3">
         <Switch checked={yandex.enabled} onCheckedChange={setYandexMusicEnabled} />
-        <span className="font-medium">{t("settings.yandexMusic")}</span>
+        <span className="font-medium">
+          <SettingHelp hint={t("settings.help.yandexMusic")}>
+            {t("settings.yandexMusic")}
+          </SettingHelp>
+        </span>
       </label>
 
       {yandex.enabled && (

@@ -13,6 +13,7 @@ import {
   useEqualizer,
 } from "@/lib/playback/equalizer";
 import { cn } from "@/lib/cn";
+import { SettingHelp } from "./SettingHelp";
 import { Switch } from "@/components/ui/switch";
 import { useSettings } from "@/lib/useSettings";
 import { useI18n, useT } from "@/contexts/I18nContext";
@@ -41,7 +42,9 @@ export function Playback() {
   return (
     <Panel title={t("settings.playback")}>
       <Choice
-        legend={t("settings.quality")}
+        legend={
+          <SettingHelp hint={t("settings.help.quality")}>{t("settings.quality")}</SettingHelp>
+        }
         value={settings.quality}
         onChange={(quality) => settings.update({ quality })}
         options={QUALITIES.map(({ quality, bitrateKbps }) => ({
@@ -54,7 +57,9 @@ export function Playback() {
       />
 
       <Choice
-        legend={t("settings.crossfade")}
+        legend={
+          <SettingHelp hint={t("settings.help.crossfade")}>{t("settings.crossfade")}</SettingHelp>
+        }
         value={String(crossfade)}
         onChange={(seconds) => setCrossfade(Number(seconds))}
         options={CROSSFADE_CHOICES.map((seconds) => ({
@@ -70,14 +75,22 @@ export function Playback() {
           className="mt-0.5"
         />
         <span className="flex flex-col gap-0.5">
-          <span className="font-medium">{t("settings.smartTransitions")}</span>
+          <span className="font-medium">
+            <SettingHelp hint={t("settings.help.smartTransitions")}>
+              {t("settings.smartTransitions")}
+            </SettingHelp>
+          </span>
         </span>
       </label>
 
       <label className="flex cursor-pointer items-start gap-3">
         <Switch checked={normalizeVolume} onCheckedChange={setNormalizeVolume} className="mt-0.5" />
         <span className="flex flex-col gap-0.5">
-          <span className="font-medium">{t("settings.normalizeVolume")}</span>
+          <span className="font-medium">
+            <SettingHelp hint={t("settings.help.normalizeVolume")}>
+              {t("settings.normalizeVolume")}
+            </SettingHelp>
+          </span>
         </span>
       </label>
 
@@ -104,7 +117,9 @@ function Equalizer() {
       <label className="flex cursor-pointer items-start gap-3">
         <Switch checked={eq.enabled} onCheckedChange={eq.setEnabled} className="mt-0.5" />
         <span className="flex flex-col gap-0.5">
-          <span className="font-medium">{t("settings.equalizer")}</span>
+          <span className="font-medium">
+            <SettingHelp hint={t("settings.help.equalizer")}>{t("settings.equalizer")}</SettingHelp>
+          </span>
         </span>
       </label>
 

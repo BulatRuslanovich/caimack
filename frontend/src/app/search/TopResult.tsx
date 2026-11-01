@@ -29,7 +29,7 @@ export function TopResult({ top }: { top: SearchTopResult }) {
   const artist = useQuery({ ...queries.artist(artistId ?? ""), enabled: artistId !== undefined });
 
   return (
-    <Section title={t("search.topResult")} className="h-full">
+    <Section title={t("search.topResult")} className="h-full min-w-0">
       {top.kind === "Track" && top.track ? (
         <TrackTop track={top.track} />
       ) : top.kind === "Album" && top.album ? (
@@ -66,7 +66,7 @@ export function TopResult({ top }: { top: SearchTopResult }) {
 
 function Shell({ children }: { children: ReactNode }) {
   return (
-    <div className="relative flex flex-1 items-center gap-5 rounded-lg bg-card p-5 max-md:gap-4 max-md:p-4 lg:group-data-beside/top:flex-col lg:group-data-beside/top:items-start lg:group-data-beside/top:justify-between">
+    <div className="relative flex min-w-0 flex-1 items-center gap-5 rounded-lg bg-card p-5 max-md:gap-4 max-md:p-4 lg:group-data-beside/top:flex-col lg:group-data-beside/top:items-start lg:group-data-beside/top:justify-between">
       {children}
     </div>
   );
@@ -103,9 +103,12 @@ function Card<T extends string>({
         {art}
       </span>
 
-      <span className="flex min-w-0 flex-col gap-1">
+      <span className="flex min-w-0 max-w-full flex-1 flex-col gap-1 lg:group-data-beside/top:w-full lg:group-data-beside/top:pr-16">
         <Caption>{kind}</Caption>
-        <Link href={href} className="truncate text-title font-semibold hover:no-underline">
+        <Link
+          href={href}
+          className="line-clamp-2 wrap-anywhere text-title font-semibold hover:no-underline"
+        >
           {title}
         </Link>
         <span className="truncate text-muted-foreground">{subtitle}</span>
@@ -124,9 +127,9 @@ function TrackTop({ track }: { track: NonNullable<SearchTopResult["track"]> }) {
         <TrackCover track={track} variant="full" />
       </span>
 
-      <span className="flex min-w-0 flex-col gap-1">
+      <span className="flex min-w-0 max-w-full flex-1 flex-col gap-1 lg:group-data-beside/top:w-full lg:group-data-beside/top:pr-16">
         <Caption>{t("nav.tracks")}</Caption>
-        <span className="truncate text-title font-semibold">{track.title}</span>
+        <span className="line-clamp-2 wrap-anywhere text-title font-semibold">{track.title}</span>
         <span className="truncate text-muted-foreground">{formatArtists(track)}</span>
         <span className={actionClass}>
           <PlayAllButton tracks={[track]} name={track.title} />

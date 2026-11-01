@@ -172,9 +172,9 @@ private fun AllResults(results: SearchResults, open: (Any) -> Unit, play: (List<
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     Cover(url, title, Modifier.size(72.dp), round = round)
-                    Column {
-                        Text(title, style = Type.title)
-                        Text(subtitle, style = Type.small, color = palette.muted)
+                    Column(Modifier.weight(1f)) {
+                        Text(title, style = Type.title, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Text(subtitle, style = Type.small, color = palette.muted, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     }
                 }
             }
