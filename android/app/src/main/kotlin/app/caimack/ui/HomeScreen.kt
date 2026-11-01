@@ -105,7 +105,7 @@ fun HomeScreen(nav: NavController) {
                 }
             }
 
-            if (java.time.LocalDate.now().dayOfMonth <= 7) item("recap") { RecapBanner() }
+            item("recap") { RecapBanner() }
             item("moods") { MoodRadio() }
 
             blocks.filter { it.zone == "Browse" }.forEach { block -> item(block.key) { Block(block, nav, shown, seen) } }

@@ -73,6 +73,7 @@ fun RecapBanner() {
 
     LaunchedEffect(Unit) {
         runCatching { withNetworkRetries { container.api.recap() } }.getOrNull()?.let { response ->
+            if (!response.isSuccessful) return@let
             recap = response.body()?.takeIf { response.code() == 200 }
             if (recap != null) Remote.cache[RECAP] = recap!! else Remote.cache.remove(RECAP)
         }

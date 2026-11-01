@@ -270,7 +270,7 @@ data class PlaybackHandoff(
 )
 
 @Serializable
-data class RecapTrack(val track: Track, val plays: Int, val listenedSeconds: Long)
+data class RecapTrack(val track: Track, val plays: Int)
 
 @Serializable
 data class RecapArtist(val artist: Artist, val plays: Int, val listenedSeconds: Long)
@@ -292,7 +292,7 @@ data class Recap(
     val previousListenedSeconds: Long? = null,
     val topTracks: List<RecapTrack> = emptyList(),
     val topArtists: List<RecapArtist> = emptyList(),
-    val topGenres: List<RecapGenre> = emptyList(),
+    val topGenre: String? = null,
     val moods: List<RecapMood> = emptyList(),
     val daySeconds: List<Long> = emptyList(),
     val hourSeconds: List<Long> = emptyList(),

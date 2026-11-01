@@ -298,7 +298,7 @@ internal fun SummarySlide(recap: Recap, onClose: () -> Unit, onRestart: () -> Un
         recap.topArtists.firstOrNull()?.let { stringResource(R.string.recap_summary_artist) to it.artist.name },
         recap.topTracks.firstOrNull()?.let { stringResource(R.string.recap_summary_track) to it.track.title },
         recap.moods.firstOrNull()?.let { stringResource(R.string.recap_summary_mood) to moodLabel(it.key) },
-        recap.topGenres.firstOrNull()?.let { stringResource(R.string.recap_summary_genre) to it.name },
+        recap.topGenre?.let { stringResource(R.string.recap_summary_genre) to it },
     )
 
     Eyebrow(stringResource(R.string.recap_summary_eyebrow, monthName(recap.year, recap.month).replaceFirstChar { it.titlecase(currentLocale()) }))
