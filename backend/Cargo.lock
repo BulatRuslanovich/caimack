@@ -40,7 +40,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "api"
-version = "2.1.0"
+version = "2.2.0"
 dependencies = [
  "anyhow",
  "app",
@@ -67,7 +67,7 @@ dependencies = [
 
 [[package]]
 name = "app"
-version = "2.1.0"
+version = "2.2.0"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
@@ -1894,7 +1894,7 @@ dependencies = [
 
 [[package]]
 name = "media"
-version = "2.1.0"
+version = "2.2.0"
 dependencies = [
  "anyhow",
  "ebur128",
@@ -2540,7 +2540,7 @@ dependencies = [
 
 [[package]]
 name = "reco"
-version = "2.1.0"
+version = "2.2.0"
 dependencies = [
  "serde",
  "serde_json",
