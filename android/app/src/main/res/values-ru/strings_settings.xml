@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="settings_title">Настройки</string>
+    <string name="settings_search">Поиск по настройкам</string>
+    <string name="settings_search_empty">Настройки не найдены. Попробуйте другое слово.</string>
     <string name="settings_playback">Воспроизведение</string>
     <string name="settings_appearance">Оформление</string>
     <string name="settings_quality">Качество звука</string>

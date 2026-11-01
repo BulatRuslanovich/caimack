@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -37,10 +36,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -308,35 +303,6 @@ fun GenreRow(genre: Genre, onClick: () -> Unit) {
 }
 
 @Composable
-private fun NewPlaylistTile(onClick: () -> Unit) {
-    val palette = LocalPalette.current
-    Column(Modifier.clickable(onClick = onClick)) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .drawBehind {
-                    val dash = 6.dp.toPx()
-                    drawRoundRect(
-                        palette.borderStrong,
-                        cornerRadius = CornerRadius(4.dp.toPx()),
-                        style = Stroke(width = 1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(dash, dash))),
-                    )
-                },
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Lucide.Plus, null, tint = palette.muted, modifier = Modifier.size(32.dp))
-        }
-        Text(
-            stringResource(R.string.playlist_new),
-            style = Type.small.copy(fontWeight = FontWeight.Medium),
-            color = palette.muted,
-            modifier = Modifier.padding(top = 10.dp),
-        )
-    }
-}
-
-@Composable
 fun PlaylistsScreen(nav: NavController) {
     val palette = LocalPalette.current
     val container = LocalContainer.current
@@ -355,11 +321,12 @@ fun PlaylistsScreen(nav: NavController) {
 
     Column(Modifier.fillMaxSize()) {
         PageTitle(stringResource(R.string.nav_playlists))
+        LibraryShortcuts(onFavorites = { nav.openSection(FavoritesRoute) }, onDownloads = { nav.openSection(DownloadsRoute) })
         Tabs(
             Modifier.padding(vertical = 4.dp),
             trailing = {
                 if (!publicTab) {
-                    Chip(stringResource(R.string.playlist_new), active = false, Modifier.padding(start = 12.dp, bottom = 6.dp), icon = Lucide.Plus) { creating = true }
+                    Chip(stringResource(R.string.playlist_create_short), active = false, Modifier.padding(start = 12.dp, bottom = 6.dp), icon = Lucide.Plus) { creating = true }
                 }
             },
         ) {
@@ -390,7 +357,6 @@ fun PlaylistsScreen(nav: NavController) {
                         Cover(cover, playlist.name, it)
                     }
                 }
-                if (!publicTab) item { NewPlaylistTile { creating = true } }
             }
         }
     }

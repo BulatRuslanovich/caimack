@@ -4,8 +4,9 @@
 package app.caimack.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,8 +25,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,11 +37,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -59,6 +57,7 @@ private const val PREVIEW = 5
 fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit) {
     val palette = LocalPalette.current
     val container = LocalContainer.current
+    val focus = LocalFocusManager.current
     var input by rememberSaveable { mutableStateOf("") }
     var query by rememberSaveable { mutableStateOf("") }
     var tab by rememberSaveable { mutableStateOf("all") }
@@ -69,6 +68,7 @@ fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit) {
     }
 
     val open: (Any) -> Unit = { route ->
+        focus.clearFocus()
         container.recentSearches.remember(query)
         nav.navigate(route)
     }
@@ -79,39 +79,26 @@ fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit) {
 
     Column(Modifier.fillMaxSize()) {
         PageTitle(stringResource(R.string.nav_search))
-        Row(
-            Modifier
-                .padding(horizontal = 16.dp)
-                .fillMaxWidth()
-                .height(44.dp)
-                .clip(Radius.row)
-                .background(palette.raised)
-                .border(1.dp, palette.controlBorder, Radius.row)
-                .padding(horizontal = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Icon(Lucide.Search, null, tint = palette.muted, modifier = Modifier.size(16.dp))
-            Box(Modifier.weight(1f)) {
-                if (input.isEmpty()) Text(stringResource(R.string.search_placeholder), style = Type.body, color = palette.faint)
-                BasicTextField(
-                    value = input,
-                    onValueChange = { input = it },
-                    singleLine = true,
-                    textStyle = Type.body.copy(color = palette.foreground),
-                    cursorBrush = SolidColor(palette.foreground),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        }
+        SearchInput(
+            value = input,
+            onValueChange = { input = it; if (it.isEmpty()) query = "" },
+            label = stringResource(R.string.search_placeholder),
+            modifier = Modifier.padding(horizontal = 16.dp),
+            onSearch = {
+                query = input.trim()
+                if (query.length >= MIN_LENGTH) container.recentSearches.remember(query)
+            },
+        )
 
         if (query.length < MIN_LENGTH) {
-            RecentSearches { recent ->
-                input = recent
-                query = recent
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+                RecentSearches { recent ->
+                    input = recent
+                    query = recent
+                    focus.clearFocus()
+                }
+                BrowseGenres(open)
             }
-            BrowseGenres(open)
             return@Column
         }
 

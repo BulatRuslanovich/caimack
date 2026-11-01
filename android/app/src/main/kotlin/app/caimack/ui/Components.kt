@@ -51,10 +51,19 @@ import java.util.concurrent.ConcurrentHashMap
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 
 val LocalContainer = staticCompositionLocalOf<AppContainer> { error("No container") }
+val LocalSnackbar = staticCompositionLocalOf<androidx.compose.material3.SnackbarHostState> { error("No snackbar host") }
 object Remote {
     val cache = ConcurrentHashMap<String, Any>()
+    val updates = MutableSharedFlow<Pair<String, Any>>(extraBufferCapacity = 16, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    fun update(key: String, value: Any) {
+        cache[key] = value
+        updates.tryEmit(key to value)
+    }
 }
 @Composable
 fun <T : Any> Load(
@@ -69,12 +78,29 @@ fun <T : Any> Load(
     var failed by remember(key) { mutableStateOf(false) }
     var attempt by remember(key) { mutableIntStateOf(0) }
 
+    LaunchedEffect(key) {
+        Remote.updates.collect { (updatedKey, updatedValue) ->
+            if (updatedKey == key) {
+                @Suppress("UNCHECKED_CAST")
+                value = updatedValue as T
+            }
+        }
+    }
+
     LaunchedEffect(key, attempt) {
         failed = false
+        val cachedBeforeRequest = Remote.cache[key]
         runCatching { withNetworkRetries(load) }
             .onSuccess {
-                Remote.cache[key] = it
-                value = it
+                // A completed edit takes precedence over an older in-flight read.
+                val edited = Remote.cache[key]
+                if (edited != null && edited !== cachedBeforeRequest) {
+                    @Suppress("UNCHECKED_CAST")
+                    value = edited as T
+                } else {
+                    Remote.cache[key] = it
+                    value = it
+                }
             }
             .onFailure {
                 if (it is CancellationException) throw it

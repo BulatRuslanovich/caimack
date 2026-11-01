@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="nav_home">Home</string>
+    <string name="nav_back">Back</string>
+    <string name="search_clear">Clear search</string>
     <string name="nav_search">Search</string>
     <string name="nav_tracks">Tracks</string>
     <string name="nav_playlists">Playlists</string>

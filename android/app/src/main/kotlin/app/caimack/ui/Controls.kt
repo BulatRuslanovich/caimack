@@ -24,6 +24,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -46,9 +49,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -126,7 +126,7 @@ fun Tabs(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
-            Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+            Modifier.weight(1f).horizontalScroll(rememberScrollState()).selectableGroup(),
             horizontalArrangement = Arrangement.spacedBy(24.dp),
             content = content,
         )
@@ -141,11 +141,8 @@ fun Tab(label: String, active: Boolean, onClick: () -> Unit) {
         style = Type.small.copy(fontWeight = FontWeight.Medium),
         color = if (active) palette.foreground else palette.muted,
         modifier = Modifier
-            .semantics {
-                role = Role.Tab
-                selected = active
-            }
-            .clickable(onClick = onClick)
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+            .selectable(selected = active, role = Role.Tab, onClick = onClick)
             .drawBehind {
                 if (!active) return@drawBehind
                 val line = 2.dp.toPx()

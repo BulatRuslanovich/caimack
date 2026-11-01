@@ -6,6 +6,7 @@ package app.caimack.ui
 import app.caimack.playback.Background
 import androidx.core.content.edit
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
 import android.content.Context
@@ -19,6 +20,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -40,14 +43,19 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -60,6 +68,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -118,10 +128,23 @@ private val tabs = listOf(
     Tab(PlaylistsRoute, PlaylistsRoute::class, R.string.nav_library, Lucide.LibraryBig),
 )
 
-private fun NavController.openSection(route: Any) = navigate(route) {
-    popUpTo(HomeRoute) { saveState = true }
-    launchSingleTop = true
-    restoreState = true
+internal fun NavController.openSection(route: Any) {
+    // Settings belongs to the account, not to a tab's saved navigation history.
+    if (currentDestination?.hasRoute(SettingsRoute::class) == true) popBackStack()
+    if (currentDestination?.hasRoute(route::class) == true) return
+
+    // Reselecting an open section returns to its root without duplicating it.
+    if (route != HomeRoute && runCatching { getBackStackEntry(route) }.isSuccess) {
+        popBackStack(route, inclusive = false)
+        return
+    }
+
+    navigate(route) {
+        popUpTo(HomeRoute) { saveState = true }
+        launchSingleTop = true
+        // Restoring Home can bring back the screen that was saved above it.
+        restoreState = route != HomeRoute
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
@@ -131,6 +154,7 @@ fun App(user: User) {
     val container = LocalContainer.current
     val nav = rememberNavController()
     val scope = rememberCoroutineScope()
+    val snackbar = remember { SnackbarHostState() }
     var account by remember { mutableStateOf(false) }
     var expanded by rememberSaveable { mutableStateOf(false) }
     val playback by container.player.state.collectAsStateWithLifecycle()
@@ -177,6 +201,7 @@ fun App(user: User) {
         LocalNavigate provides navigate,
         LocalNowPlayingTone provides nowPlayingTone,
         LocalToneEnabled provides toneEnabled,
+        LocalSnackbar provides snackbar,
     ) {
     Scaffold(
         modifier = Modifier
@@ -184,6 +209,18 @@ fun App(user: User) {
             .then(if (full) Modifier.clearAndSetSemantics {} else Modifier),
         containerColor = palette.background,
         contentWindowInsets = WindowInsets(0),
+        snackbarHost = {
+            SnackbarHost(snackbar) { data ->
+                Snackbar(
+                    snackbarData = data,
+                    shape = Radius.panel,
+                    containerColor = palette.raised,
+                    contentColor = palette.foreground,
+                    actionColor = palette.primary,
+                    dismissActionContentColor = palette.muted,
+                )
+            }
+        },
         topBar = { Header(nav, user) { account = true } },
         bottomBar = {
             Column {
@@ -263,7 +300,7 @@ fun App(user: User) {
 internal fun SheetRow(label: String, icon: ImageVector, onClick: () -> Unit) {
     val palette = LocalPalette.current
     Row(
-        Modifier.fillMaxWidth().clip(Radius.row).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth().clip(Radius.row).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -277,14 +314,24 @@ private fun Header(nav: NavController, user: User, onAccount: () -> Unit) {
     val palette = LocalPalette.current
     val destination = nav.currentBackStackEntryAsState().value?.destination
     val inLibrary = library.any { destination?.hasRoute(it.type) == true }
+    val isSettings = destination?.hasRoute(SettingsRoute::class) == true
+    val showBack = isSettings || (!inLibrary && tabs.none { destination?.hasRoute(it.type) == true } && destination != null)
 
     Column(Modifier.background(palette.background).statusBarsPadding()) {
-        Row(Modifier.fillMaxWidth().height(52.dp).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            BrandMark(palette.foreground, palette.primary, Modifier.size(28.dp))
+        Row(Modifier.fillMaxWidth().height(52.dp).padding(start = if (showBack) 4.dp else 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (showBack) {
+                IconButton(onClick = { nav.popBackStack() }) {
+                    Icon(Lucide.ArrowLeft, stringResource(R.string.nav_back), tint = palette.foreground)
+                }
+            } else {
+                BrandMark(palette.foreground, palette.primary, Modifier.size(28.dp))
+            }
             Text(
-                stringResource(R.string.app_name),
+                stringResource(if (isSettings) R.string.settings_title else R.string.app_name),
                 style = Type.title.copy(fontSize = 18.sp, letterSpacing = (-0.025).em),
                 modifier = Modifier.padding(start = 8.dp).weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             Box(
                 Modifier.size(48.dp).clip(CircleShape).clickable(onClickLabel = stringResource(R.string.nav_account), onClick = onAccount),
@@ -308,17 +355,33 @@ private fun Header(nav: NavController, user: User, onAccount: () -> Unit) {
 }
 
 @Composable
-private fun BottomBar(nav: NavController) {
+internal fun BottomBar(nav: NavController) {
     val palette = LocalPalette.current
-    val destination = nav.currentBackStackEntryAsState().value?.destination
-    val inLibrary = library.any { destination?.hasRoute(it.type) == true }
+    val focus = LocalFocusManager.current
+    val entry by nav.currentBackStackEntryAsState()
+    val section = remember(entry) {
+        val sections = tabs + library
+        entry?.destination?.takeIf { destination -> sections.any { destination.hasRoute(it.type) } }
+            // Home stays at the bottom of every stack, so check it last.
+            ?: (library + tabs.asReversed()).firstNotNullOfOrNull { tab ->
+                runCatching { nav.getBackStackEntry(tab.route).destination }.getOrNull()
+            }
+    }
+    val inLibrary = library.any { section?.hasRoute(it.type) == true }
+    var libraryIndex by rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(section) {
+        library.indexOfFirst { section?.hasRoute(it.type) == true }.takeIf { it >= 0 }?.let { libraryIndex = it }
+    }
 
     Column(Modifier.background(palette.card).navigationBarsPadding()) {
         HorizontalDivider(color = palette.border)
-        Row(Modifier.fillMaxWidth().height(62.dp)) {
+        Row(Modifier.fillMaxWidth().height(62.dp).selectableGroup()) {
             tabs.forEach { tab ->
-                val active = if (tab.route == PlaylistsRoute) inLibrary else destination?.hasRoute(tab.type) == true
-                TabItem(stringResource(tab.label), tab.icon, active) { nav.openSection(tab.route) }
+                val active = if (tab.route == PlaylistsRoute) inLibrary else section?.hasRoute(tab.type) == true
+                TabItem(stringResource(tab.label), tab.icon, active) {
+                    focus.clearFocus()
+                    nav.openSection(if (tab.route == PlaylistsRoute) library[libraryIndex].route else tab.route)
+                }
             }
         }
     }
@@ -328,16 +391,22 @@ private fun BottomBar(nav: NavController) {
 private fun androidx.compose.foundation.layout.RowScope.TabItem(label: String, icon: ImageVector, active: Boolean, onClick: () -> Unit) {
     val palette = LocalPalette.current
     Column(
-        Modifier.weight(1f).fillMaxSize().clickable(onClick = onClick),
+        Modifier.weight(1f).fillMaxSize().selectable(selected = active, role = Role.Tab, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
     ) {
-        Icon(icon, null, tint = if (active) palette.primary else palette.faint)
+        Box(
+            Modifier.clip(CircleShape).background(if (active) palette.primarySoft else Color.Transparent).padding(horizontal = 18.dp, vertical = 4.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, null, tint = if (active) palette.primary else palette.muted)
+        }
         Text(
             label,
             style = Type.micro.copy(fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal),
-            color = if (active) palette.foreground else palette.faint,
+            color = if (active) palette.foreground else palette.muted,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

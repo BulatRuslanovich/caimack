@@ -32,10 +32,13 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -57,7 +60,10 @@ import app.caimack.api.AddTracksRequest
 import app.caimack.api.PlaylistDetail
 import app.caimack.api.Track
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -75,6 +81,10 @@ private fun PlaylistContent(loaded: PlaylistDetail, play: (List<Track>, Int) -> 
     val container = LocalContainer.current
     val context = LocalContext.current
     val resources = LocalResources.current
+    val snackbar = LocalSnackbar.current
+    val actions = remember(container.api) { PlaylistTrackActions(container.api) }
+    val mutations = remember(loaded.id) { Mutex() }
+    val removing = remember(loaded.id) { mutableStateListOf<String>() }
     val me = currentUserId()
     var playlist by remember(loaded) { mutableStateOf(loaded) }
     var editing by remember { mutableStateOf(Editing.None) }
@@ -97,11 +107,54 @@ private fun PlaylistContent(loaded: PlaylistDetail, play: (List<Track>, Int) -> 
         }
     }
 
-    fun removeTrack(track: Track) = background {
-        container.api.removeFromPlaylist(playlist.id, track.id)
-        withContext(Dispatchers.Main) {
-            playlist = playlist.copy(tracks = playlist.tracks.filterNot { it.id == track.id })
-            say(resources.getString(R.string.playlist_track_removed, track.title))
+    fun updateTracks(tracks: List<Track>, latest: PlaylistDetail = playlist) {
+        playlist = latest.copy(tracks = tracks)
+        Remote.update("playlist:${loaded.id}", playlist)
+        Remote.cache.remove("playlists:mine")
+        Remote.cache.remove("playlists:public")
+    }
+
+    fun removeTrack(track: Track) {
+        if (track.id in removing) return
+        removing += track.id
+        val originalOrder = playlist.tracks.map { it.id }
+        container.scope.launch {
+            try {
+                mutations.withLock { actions.remove(loaded.id, track.id) }
+                withContext(Dispatchers.Main) {
+                    updateTracks(playlist.tracks.filterNot { it.id == track.id })
+                    removing -= track.id
+                }
+                val result = withContext(Dispatchers.Main) {
+                    snackbar.currentSnackbarData?.dismiss()
+                    snackbar.showSnackbar(
+                        message = resources.getString(R.string.playlist_track_removed, track.title),
+                        actionLabel = resources.getString(R.string.action_undo),
+                        withDismissAction = true,
+                        duration = SnackbarDuration.Long,
+                    )
+                }
+                if (result == SnackbarResult.ActionPerformed) {
+                    try {
+                        val restored = mutations.withLock { actions.restore(loaded.id, track.id, originalOrder) }
+                        withContext(Dispatchers.Main) { updateTracks(restored.tracks, restored) }
+                    } catch (error: Exception) {
+                        if (error is CancellationException) throw error
+                        // Adding may have succeeded even if restoring the order failed.
+                        val latest = runCatching { container.api.playlist(loaded.id) }.getOrNull()
+                        withContext(Dispatchers.Main) {
+                            Remote.cache.remove("playlist:${loaded.id}")
+                            if (latest != null) updateTracks(latest.tracks, latest)
+                            say(resources.getString(R.string.playlist_restore_failed))
+                        }
+                    }
+                }
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                withContext(Dispatchers.Main) { say(resources.getString(R.string.playlist_save_failed)) }
+            } finally {
+                withContext(Dispatchers.Main) { removing -= track.id }
+            }
         }
     }
 

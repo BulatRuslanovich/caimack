@@ -22,6 +22,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -47,6 +48,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -54,6 +56,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -81,6 +85,11 @@ fun SettingsScreen() {
     val smartTransitions by container.playbackPrefs.smartTransitions.collectAsStateWithLifecycle()
     val activity = LocalActivity.current
     val scope = rememberCoroutineScope()
+    var query by rememberSaveable { mutableStateOf("") }
+    val resources = LocalResources.current
+    val configuration = LocalConfiguration.current
+    val visible = remember(query, configuration) { matchingSettings(query, resources) }
+    val scroll = rememberScrollState()
 
     val update = { changes: SettingsChanges ->
         container.settings.value = settings.copy(quality = changes.quality ?: settings.quality)
@@ -88,185 +97,222 @@ fun SettingsScreen() {
         Unit
     }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-        PageTitle(stringResource(R.string.settings_title))
+    Column(Modifier.fillMaxSize()) {
+        SearchInput(
+            value = query,
+            onValueChange = { query = it; scope.launch { scroll.scrollTo(0) } },
+            label = stringResource(R.string.settings_search),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+        )
+        Column(Modifier.weight(1f).verticalScroll(scroll).padding(bottom = 24.dp)) {
+            if (visible.isEmpty()) Empty(stringResource(R.string.settings_search_empty))
+            if (visible.any { it.section == R.string.settings_playback }) {
+                Panel(stringResource(R.string.settings_playback)) {
+                    if (SettingKey.Quality in visible) {
+                        Choice(
+                            stringResource(R.string.settings_quality),
+                            stringResource(R.string.settings_help_quality),
+                            settings.quality,
+                            listOf(
+                                Option("Low", stringResource(R.string.settings_quality_low), stringResource(R.string.settings_quality_bitrate, 64)),
+                                Option("Normal", stringResource(R.string.settings_quality_normal), stringResource(R.string.settings_quality_bitrate, 128)),
+                                Option("Original", stringResource(R.string.settings_quality_original), stringResource(R.string.settings_quality_as_uploaded)),
+                            ),
+                        ) { update(SettingsChanges(quality = it)) }
+                    }
 
-        Panel(stringResource(R.string.settings_playback)) {
-            Choice(
-                stringResource(R.string.settings_quality),
-                stringResource(R.string.settings_help_quality),
-                settings.quality,
-                listOf(
-                    Option("Low", stringResource(R.string.settings_quality_low), stringResource(R.string.settings_quality_bitrate, 64)),
-                    Option("Normal", stringResource(R.string.settings_quality_normal), stringResource(R.string.settings_quality_bitrate, 128)),
-                    Option("Original", stringResource(R.string.settings_quality_original), stringResource(R.string.settings_quality_as_uploaded)),
-                ),
-            ) { update(SettingsChanges(quality = it)) }
+                    if (SettingKey.Transitions in visible) {
+                        Row(
+                            Modifier.fillMaxWidth().clickable { container.playbackPrefs.setSmartTransitions(!smartTransitions) },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            SettingLabel(
+                                stringResource(R.string.settings_smart_transitions),
+                                stringResource(R.string.settings_help_smartTransitions),
+                                style = Type.body.copy(fontWeight = FontWeight.SemiBold),
+                                modifier = Modifier.weight(1f).padding(end = 12.dp),
+                            )
+                            Toggle(smartTransitions) { container.playbackPrefs.setSmartTransitions(it) }
+                        }
+                    }
 
-            Row(
-                Modifier.fillMaxWidth().clickable { container.playbackPrefs.setSmartTransitions(!smartTransitions) },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                SettingLabel(
-                    stringResource(R.string.settings_smart_transitions),
-                    stringResource(R.string.settings_help_smartTransitions),
-                    style = Type.body.copy(fontWeight = FontWeight.SemiBold),
-                    modifier = Modifier.weight(1f).padding(end = 12.dp),
-                )
-                Toggle(smartTransitions) { container.playbackPrefs.setSmartTransitions(it) }
+                    if (SettingKey.Loudness in visible) {
+                        val normalizeVolume by container.playbackPrefs.normalizeVolume.collectAsStateWithLifecycle()
+                        Row(
+                            Modifier.fillMaxWidth().clickable { container.playbackPrefs.setNormalizeVolume(!normalizeVolume) },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            SettingLabel(
+                                stringResource(R.string.settings_normalize_volume),
+                                stringResource(R.string.settings_help_normalizeVolume),
+                                style = Type.body.copy(fontWeight = FontWeight.SemiBold),
+                                modifier = Modifier.weight(1f).padding(end = 12.dp),
+                            )
+                            Toggle(normalizeVolume) { container.playbackPrefs.setNormalizeVolume(it) }
+                        }
+                    }
+
+                    if (SettingKey.Downloads in visible) {
+                        val autoDownloads by container.playbackPrefs.autoDownloads.collectAsStateWithLifecycle()
+                        Row(
+                            Modifier.fillMaxWidth().clickable { container.playbackPrefs.setAutoDownloads(!autoDownloads) },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                stringResource(R.string.settings_auto_downloads),
+                                style = Type.body.copy(fontWeight = FontWeight.SemiBold),
+                                modifier = Modifier.weight(1f).padding(end = 12.dp),
+                            )
+                            Toggle(autoDownloads) { container.playbackPrefs.setAutoDownloads(it) }
+                        }
+                    }
+
+                    if (SettingKey.Reminder in visible) {
+                        val recapReminder by container.playbackPrefs.recapReminder.collectAsStateWithLifecycle()
+                        Row(
+                            Modifier.fillMaxWidth().clickable { container.playbackPrefs.setRecapReminder(!recapReminder) },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                stringResource(R.string.settings_recap_reminder),
+                                style = Type.body.copy(fontWeight = FontWeight.SemiBold),
+                                modifier = Modifier.weight(1f).padding(end = 12.dp),
+                            )
+                            Toggle(recapReminder) { container.playbackPrefs.setRecapReminder(it) }
+                        }
+                    }
+
+                    if (SettingKey.Tile in visible) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                stringResource(R.string.settings_tile),
+                                style = Type.body.copy(fontWeight = FontWeight.SemiBold),
+                                modifier = Modifier.weight(1f).padding(end = 12.dp),
+                            )
+                            var added by rememberSaveable { mutableStateOf(false) }
+                            val context = LocalContext.current
+                            Text(
+                                stringResource(if (added) R.string.settings_tile_added else R.string.settings_tile_add),
+                                style = Type.small.copy(fontWeight = FontWeight.Medium),
+                                color = if (added) palette.muted else palette.foreground,
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .border(1.dp, if (added) palette.border else palette.controlBorder, CircleShape)
+                                    .clickable(enabled = !added) { RadioTile.requestAdd(context) { added = it } }
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                            )
+                        }
+                    }
+
+                }
             }
 
-            val normalizeVolume by container.playbackPrefs.normalizeVolume.collectAsStateWithLifecycle()
-            Row(
-                Modifier.fillMaxWidth().clickable { container.playbackPrefs.setNormalizeVolume(!normalizeVolume) },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                SettingLabel(
-                    stringResource(R.string.settings_normalize_volume),
-                    stringResource(R.string.settings_help_normalizeVolume),
-                    style = Type.body.copy(fontWeight = FontWeight.SemiBold),
-                    modifier = Modifier.weight(1f).padding(end = 12.dp),
-                )
-                Toggle(normalizeVolume) { container.playbackPrefs.setNormalizeVolume(it) }
-            }
+            if (SettingKey.Equalizer in visible) {
+                Panel(stringResource(R.string.settings_equalizer), action = { Toggle(equalizer.enabled) { container.equalizer.setEnabled(it) } }) {
+                    Text(stringResource(R.string.settings_help_equalizer), style = Type.small, color = palette.muted)
 
-            val autoDownloads by container.playbackPrefs.autoDownloads.collectAsStateWithLifecycle()
-            Row(
-                Modifier.fillMaxWidth().clickable { container.playbackPrefs.setAutoDownloads(!autoDownloads) },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    stringResource(R.string.settings_auto_downloads),
-                    style = Type.body.copy(fontWeight = FontWeight.SemiBold),
-                    modifier = Modifier.weight(1f).padding(end = 12.dp),
-                )
-                Toggle(autoDownloads) { container.playbackPrefs.setAutoDownloads(it) }
-            }
+                    if (equalizer.enabled) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(
+                                "flat" to R.string.settings_equalizer_flat,
+                                "bass" to R.string.settings_equalizer_bass,
+                                "vocal" to R.string.settings_equalizer_vocal,
+                                "treble" to R.string.settings_equalizer_treble,
+                            ).forEach { (preset, label) ->
+                                val active = equalizer.preset == preset
+                                Text(
+                                    stringResource(label),
+                                    style = Type.small.copy(fontWeight = FontWeight.Medium),
+                                    color = if (active) palette.primary else palette.muted,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(CircleShape)
+                                        .background(if (active) palette.primarySoft else palette.raised)
+                                        .then(if (active) Modifier.border(1.dp, palette.primary, CircleShape) else Modifier)
+                                        .clickable { container.equalizer.applyPreset(preset) }
+                                        .padding(vertical = 8.dp),
+                                )
+                            }
+                        }
 
-            val recapReminder by container.playbackPrefs.recapReminder.collectAsStateWithLifecycle()
-            Row(
-                Modifier.fillMaxWidth().clickable { container.playbackPrefs.setRecapReminder(!recapReminder) },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    stringResource(R.string.settings_recap_reminder),
-                    style = Type.body.copy(fontWeight = FontWeight.SemiBold),
-                    modifier = Modifier.weight(1f).padding(end = 12.dp),
-                )
-                Toggle(recapReminder) { container.playbackPrefs.setRecapReminder(it) }
-            }
-
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    stringResource(R.string.settings_tile),
-                    style = Type.body.copy(fontWeight = FontWeight.SemiBold),
-                    modifier = Modifier.weight(1f).padding(end = 12.dp),
-                )
-                var added by rememberSaveable { mutableStateOf(false) }
-                val context = LocalContext.current
-                Text(
-                    stringResource(if (added) R.string.settings_tile_added else R.string.settings_tile_add),
-                    style = Type.small.copy(fontWeight = FontWeight.Medium),
-                    color = if (added) palette.muted else palette.foreground,
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .border(1.dp, if (added) palette.border else palette.controlBorder, CircleShape)
-                        .clickable(enabled = !added) { RadioTile.requestAdd(context) { added = it } }
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                )
-            }
-        }
-
-        Panel(stringResource(R.string.settings_equalizer), action = { Toggle(equalizer.enabled) { container.equalizer.setEnabled(it) } }) {
-            Text(stringResource(R.string.settings_help_equalizer), style = Type.small, color = palette.muted)
-
-            if (equalizer.enabled) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(
-                        "flat" to R.string.settings_equalizer_flat,
-                        "bass" to R.string.settings_equalizer_bass,
-                        "vocal" to R.string.settings_equalizer_vocal,
-                        "treble" to R.string.settings_equalizer_treble,
-                    ).forEach { (preset, label) ->
-                        val active = equalizer.preset == preset
-                        Text(
-                            stringResource(label),
-                            style = Type.small.copy(fontWeight = FontWeight.Medium),
-                            color = if (active) palette.primary else palette.muted,
-                            textAlign = TextAlign.Center,
-                            maxLines = 1,
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(CircleShape)
-                                .background(if (active) palette.primarySoft else palette.raised)
-                                .then(if (active) Modifier.border(1.dp, palette.primary, CircleShape) else Modifier)
-                                .clickable { container.equalizer.applyPreset(preset) }
-                                .padding(vertical = 8.dp),
-                        )
+                        val locale = LocalConfiguration.current.locales[0]
+                        val frequencies = EqualizerState.BANDS_HZ.map { hz ->
+                            if (hz < 1000) stringResource(R.string.settings_equalizer_hz, hz)
+                            else stringResource(R.string.settings_equalizer_khz, String.format(locale, "%.1f", hz / 1000.0).trimEnd('0').trimEnd('.', ','))
+                        }
+                        val decibels = equalizer.gains.map { stringResource(R.string.settings_equalizer_db, if (it > 0) "+$it" else "$it") }
+                        EqualizerCurve(equalizer.gains, frequencies, decibels) { band, gain -> container.equalizer.setGain(band, gain) }
                     }
                 }
+            }
 
-                val locale = LocalConfiguration.current.locales[0]
-                val frequencies = EqualizerState.BANDS_HZ.map { hz ->
-                    if (hz < 1000) stringResource(R.string.settings_equalizer_hz, hz)
-                    else stringResource(R.string.settings_equalizer_khz, String.format(locale, "%.1f", hz / 1000.0).trimEnd('0').trimEnd('.', ','))
+            if (visible.any { it.section == R.string.settings_appearance }) {
+                Panel(stringResource(R.string.settings_appearance)) {
+                    if (SettingKey.Theme in visible) {
+                        Choice(
+                            stringResource(R.string.settings_theme),
+                            stringResource(R.string.settings_help_theme),
+                            theme,
+                            listOf(
+                                Option(Appearance.SYSTEM, stringResource(R.string.settings_theme_system)),
+                                Option(Appearance.DARK, stringResource(R.string.settings_theme_dark)),
+                                Option(Appearance.LIGHT, stringResource(R.string.settings_theme_light)),
+                            ),
+                        ) { container.appearance.setTheme(it) }
+                    }
+
+                    if (SettingKey.Palette in visible) {
+                        val colorway by container.appearance.colorway.collectAsStateWithLifecycle()
+                        val dark = palette.dark
+                        Choice(
+                            stringResource(R.string.settings_colorway),
+                            stringResource(R.string.settings_help_colorway),
+                            colorway.key,
+                            Colorway.entries.map { option ->
+                                Option(option.key, stringResource(colorwayName(option)), preview = { ColorwaySwatch(paletteOf(option, dark)) })
+                            },
+                        ) { container.appearance.setColorway(Colorway.of(it)) }
+                    }
+
+                    if (SettingKey.Cover in visible) {
+                        val coverTone by container.appearance.coverTone.collectAsStateWithLifecycle()
+                        Row(
+                            Modifier.fillMaxWidth().clickable { container.appearance.setCoverTone(!coverTone) },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            SettingLabel(
+                                stringResource(R.string.settings_cover_tone),
+                                stringResource(R.string.settings_help_coverTone),
+                                style = Type.body.copy(fontWeight = FontWeight.SemiBold),
+                                modifier = Modifier.weight(1f).padding(end = 12.dp),
+                            )
+                            Toggle(coverTone) { container.appearance.setCoverTone(it) }
+                        }
+                    }
+
+                    if (SettingKey.Language in visible) {
+                        val current = container.appearance.language.ifEmpty { LocalConfiguration.current.locales[0].language }
+                        Choice(
+                            stringResource(R.string.settings_language),
+                            stringResource(R.string.settings_help_language),
+                            if (current == "ru") "ru" else "en",
+                            listOf(Option("en", stringResource(R.string.language_english)), Option("ru", stringResource(R.string.language_russian))),
+                        ) {
+                            container.appearance.setLanguage(it)
+                            activity?.recreate()
+                        }
+                    }
+
                 }
-                val decibels = equalizer.gains.map { stringResource(R.string.settings_equalizer_db, if (it > 0) "+$it" else "$it") }
-                EqualizerCurve(equalizer.gains, frequencies, decibels) { band, gain -> container.equalizer.setGain(band, gain) }
-            }
-        }
-
-        Panel(stringResource(R.string.settings_appearance)) {
-            Choice(
-                stringResource(R.string.settings_theme),
-                stringResource(R.string.settings_help_theme),
-                theme,
-                listOf(
-                    Option(Appearance.SYSTEM, stringResource(R.string.settings_theme_system)),
-                    Option(Appearance.DARK, stringResource(R.string.settings_theme_dark)),
-                    Option(Appearance.LIGHT, stringResource(R.string.settings_theme_light)),
-                ),
-            ) { container.appearance.setTheme(it) }
-
-            val colorway by container.appearance.colorway.collectAsStateWithLifecycle()
-            val dark = palette.dark
-            Choice(
-                stringResource(R.string.settings_colorway),
-                stringResource(R.string.settings_help_colorway),
-                colorway.key,
-                Colorway.entries.map { option ->
-                    Option(option.key, stringResource(colorwayName(option)), preview = { ColorwaySwatch(paletteOf(option, dark)) })
-                },
-            ) { container.appearance.setColorway(Colorway.of(it)) }
-
-            val coverTone by container.appearance.coverTone.collectAsStateWithLifecycle()
-            Row(
-                Modifier.fillMaxWidth().clickable { container.appearance.setCoverTone(!coverTone) },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                SettingLabel(
-                    stringResource(R.string.settings_cover_tone),
-                    stringResource(R.string.settings_help_coverTone),
-                    style = Type.body.copy(fontWeight = FontWeight.SemiBold),
-                    modifier = Modifier.weight(1f).padding(end = 12.dp),
-                )
-                Toggle(coverTone) { container.appearance.setCoverTone(it) }
             }
 
-            val current = container.appearance.language.ifEmpty { LocalConfiguration.current.locales[0].language }
-            Choice(
-                stringResource(R.string.settings_language),
-                stringResource(R.string.settings_help_language),
-                if (current == "ru") "ru" else "en",
-                listOf(Option("en", stringResource(R.string.language_english)), Option("ru", stringResource(R.string.language_russian))),
-            ) {
-                container.appearance.setLanguage(it)
-                activity?.recreate()
+            if (SettingKey.SignOut in visible) {
+                TextButton(onClick = { scope.launch { Remote.cache.clear(); container.player.stop(); container.session.logout() } }, modifier = Modifier.padding(horizontal = 8.dp)) {
+                    Text(stringResource(R.string.sign_out), color = palette.muted)
+                }
             }
-        }
-
-        TextButton(onClick = { scope.launch { Remote.cache.clear(); container.player.stop(); container.session.logout() } }, modifier = Modifier.padding(horizontal = 8.dp)) {
-            Text(stringResource(R.string.sign_out), color = palette.muted)
         }
     }
 }
@@ -290,30 +336,38 @@ private fun Panel(title: String, action: (@Composable () -> Unit)? = null, conte
 private fun Choice(legend: String, hint: String?, value: String, options: List<Option>, onChange: (String) -> Unit) {
     val palette = LocalPalette.current
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(legend, style = Type.body.copy(fontWeight = FontWeight.SemiBold))
-        hint?.let { Text(it, style = Type.small, color = palette.muted) }
-        val perRow = if (options.any { it.preview != null }) 2 else options.size
-        options.chunked(perRow).forEach { row ->
-            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                row.forEach { option ->
-                    val checked = option.value == value
-                    Column(
-                        Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clip(Radius.row)
-                            .background(if (checked) palette.primarySoft else palette.card)
-                            .border(1.dp, if (checked) palette.primary else palette.border, Radius.row)
-                            .clickable { onChange(option.value) }
-                            .padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        option.preview?.invoke()
-                        Text(option.label, style = Type.body.copy(fontWeight = FontWeight.Medium))
-                        option.hint?.let { Text(it, style = Type.tiny, color = palette.muted) }
+        if (hint != null) {
+            SettingLabel(legend, hint, Type.body.copy(fontWeight = FontWeight.SemiBold), Modifier.fillMaxWidth())
+        } else {
+            Text(legend, style = Type.body.copy(fontWeight = FontWeight.SemiBold))
+        }
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val preferredColumns = if (options.any { it.preview != null }) 2 else options.size
+            val perRow = (maxWidth / (128.dp * LocalDensity.current.fontScale)).toInt().coerceIn(1, preferredColumns)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                options.chunked(perRow).forEach { row ->
+                    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        row.forEach { option ->
+                            val checked = option.value == value
+                            Column(
+                                Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .clip(Radius.row)
+                                    .background(if (checked) palette.primarySoft else palette.card)
+                                    .border(1.dp, if (checked) palette.primary else palette.border, Radius.row)
+                                    .clickable { onChange(option.value) }
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp),
+                            ) {
+                                option.preview?.invoke()
+                                Text(option.label, style = Type.body.copy(fontWeight = FontWeight.Medium))
+                                option.hint?.let { Text(it, style = Type.tiny, color = palette.muted) }
+                            }
+                        }
+                        repeat(perRow - row.size) { Box(Modifier.weight(1f)) }
                     }
                 }
-                repeat(perRow - row.size) { Box(Modifier.weight(1f)) }
             }
         }
     }
