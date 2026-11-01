@@ -17,6 +17,7 @@ import { Player } from "./Player";
 import { PlayingElsewhereBar } from "./PlayingElsewhereBar";
 import { ShortcutsHelp } from "./ShortcutsHelp";
 import { Sidebar } from "./Sidebar";
+import { SecretCat } from "./SecretCat";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -93,6 +94,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <NowPlayingTone />
       <ShortcutsHelp />
       <LeanBack />
+      <SecretCat />
     </div>
   );
 }
