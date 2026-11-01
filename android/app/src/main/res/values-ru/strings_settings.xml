@@ -40,7 +40,7 @@
     <string name="recap_reminder_title">Итоги за %1$s готовы</string>
     <string name="recap_reminder_text">Посмотрите, что звучало чаще всего</string>
     <string name="settings_help_coverTone">Добавляет в интерфейс цвета обложки текущего трека.</string>
-    <string name="settings_help_quality">Выбирает качество звука: меньше битрейт — меньше расход трафика.</string>
+    <string name="settings_help_quality">Предпочитаемое качество. При медленном соединении оригинал может временно смениться на AAC. Фактическое качество видно в плеере; скачанные треки играют с устройства.</string>
     <string name="settings_help_smartTransitions">Подбирает переход между треками с учётом их звучания.</string>
     <string name="settings_help_leanBack">Автоматически открывает экран прослушивания при бездействии.</string>
     <string name="settings_help_yandexMusic">Включает поиск и импорт музыки из Яндекс Музыки.</string>

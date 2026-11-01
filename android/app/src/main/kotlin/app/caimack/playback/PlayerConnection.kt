@@ -119,7 +119,7 @@ class PlayerConnection(
         it.play()
     }
 
-    fun toggle() = withController { if (it.isPlaying) it.pause() else it.play() }
+    fun toggle() = withController { if (it.playWhenReady) it.pause() else it.play() }
 
     fun pause() = withController { it.pause() }
 

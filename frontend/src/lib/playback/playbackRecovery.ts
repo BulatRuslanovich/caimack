@@ -24,10 +24,12 @@ export class PlaybackRecovery {
   private readonly fellBack = new Set<string>();
 
   private stalled = false;
+  private degradedUntil = 0;
 
   reset(): void {
     this.fellBack.clear();
     this.stalled = false;
+    this.degradedUntil = 0;
   }
 
   fail(trackId: string | undefined, resume: boolean): boolean {
@@ -54,16 +56,24 @@ export class PlaybackRecovery {
     this.failed = null;
   }
 
-  degrade(): void {
+  setIntent(resume: boolean): void {
+    if (this.failed) this.failed.resume = resume;
+  }
+
+  degrade(now = Date.now()): void {
     this.stalled = true;
+    this.degradedUntil = now + 120_000;
   }
 
   get degraded(): boolean {
     return this.stalled;
   }
 
-  forceAdaptive(quality: AudioQuality, trackId: string): boolean {
-    return quality === "Original" && (this.stalled || this.fellBack.has(trackId));
+  forceAdaptive(quality: AudioQuality, trackId: string, now = Date.now()): boolean {
+    return (
+      quality === "Original" &&
+      ((this.stalled && now < this.degradedUntil) || this.fellBack.has(trackId))
+    );
   }
 
   loaded(trackId: string): void {

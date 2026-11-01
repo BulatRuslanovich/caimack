@@ -80,6 +80,7 @@ class AppContainer(context: Context) {
     val media = Media(server)
 
     val settings = MutableStateFlow(UserSettings())
+    val playbackDelivery = MutableStateFlow<app.caimack.playback.PlaybackDelivery?>(null)
 
     val appearance = Appearance(context)
 

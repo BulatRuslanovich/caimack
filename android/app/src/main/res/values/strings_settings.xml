@@ -41,7 +41,7 @@
     <string name="recap_reminder_channel">Monthly recap</string>
     <string name="recap_reminder_title">Your %1$s recap is ready</string>
     <string name="recap_reminder_text">See what you played most</string>
-    <string name="settings_help_quality">Choose audio quality: lower bitrates use less data.</string>
+    <string name="settings_help_quality">Preferred quality. A slow connection may temporarily switch Original to AAC. The player shows actual quality; downloaded tracks play from the device.</string>
     <string name="settings_help_crossfade">Blend the end of a track with the start of the next.</string>
     <string name="settings_help_smartTransitions">Adapt transitions to the sound of each track.</string>
     <string name="settings_help_normalizeVolume">Reduce loudness differences between tracks.</string>

@@ -9,7 +9,6 @@ import { api } from "@/lib/api";
 import { AdaptivePlayback, warmUpHls } from "@/lib/playback/adaptivePlayback";
 import { Crossfade } from "@/lib/playback/crossfade";
 import { refreshSession } from "@/lib/http";
-import { mediaUrl } from "@/lib/media";
 import {
   createListeningTracker,
   historyThresholdFor,
@@ -30,7 +29,7 @@ import type {
   PlaybackEngineInput,
   Standby,
 } from "@/lib/playback/playbackEngineTypes";
-import { silence, sourceKeyOf } from "@/lib/playback/audioSource";
+import { bufferedAhead, silence, sourceKeyOf } from "@/lib/playback/audioSource";
 
 const SWITCH_TIMER_WINDOW_SECONDS = 0.6;
 
@@ -103,17 +102,21 @@ export function usePlaybackEngine({
   const pendingSeekRef = useRef<number | null>(null);
   const positionRef = useRef(0);
   const retryTimerRef = useRef<number | null>(null);
+  const waitingTimerRef = useRef<number | null>(null);
+  const clearWaitingTimer = useCallback(() => {
+    if (waitingTimerRef.current !== null) window.clearTimeout(waitingTimerRef.current);
+    waitingTimerRef.current = null;
+  }, []);
 
   const [recovery] = useState(() => new PlaybackRecovery());
 
   const failSource = useCallback(
     (resume: boolean): boolean => {
       const first = recovery.fail(audioRef.current?.dataset.trackId, resume);
-      setIsPlaying(false);
 
       return first;
     },
-    [recovery, setIsPlaying],
+    [recovery],
   );
 
   const recoverSource = useCallback((): boolean => {
@@ -239,9 +242,25 @@ export function usePlaybackEngine({
     recovery.reset();
   }, [recovery, quality]);
 
+  useEffect(() => {
+    const retryQuality = () => {
+      recovery.reset();
+      setSourceRevision((revision) => revision + 1);
+    };
+    window.addEventListener("retry-stream-quality", retryQuality);
+    return () => window.removeEventListener("retry-stream-quality", retryQuality);
+  }, [recovery]);
+
   const prepareNext = useCallback(
     (track: Track, startAt: number) => {
       if (crossfader.active) return;
+      const playing = audioRef.current;
+      if (playing && !playing.paused) {
+        const ahead = bufferedAhead(playing);
+        const remaining = playing.duration - playing.currentTime;
+        // Prioritize the song being heard over speculative downloads on a weak link.
+        if (ahead < 8 && (!Number.isFinite(remaining) || ahead < remaining - 0.5)) return;
+      }
 
       const forceAdaptive = recovery.forceAdaptive(quality, track.id);
       const sourceKey = sourceKeyOf(track.id, quality, forceAdaptive, sourceRevision);
@@ -285,6 +304,7 @@ export function usePlaybackEngine({
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
+    clearWaitingTimer();
 
     const fadeSeconds = switchPendingRef.current?.fade ?? 0;
     switchPendingRef.current = null;
@@ -297,7 +317,10 @@ export function usePlaybackEngine({
       return;
     }
 
-    const forceAdaptive = recovery.forceAdaptive(quality, currentTrack.id);
+    // Keep this track's delivery stable; recovery of Original happens between tracks.
+    const forceAdaptive =
+      recovery.forceAdaptive(quality, currentTrack.id) ||
+      audio.dataset.sourceKey === sourceKeyOf(currentTrack.id, quality, true, sourceRevision);
     const sourceKey = sourceKeyOf(currentTrack.id, quality, forceAdaptive, sourceRevision);
     if (audio.dataset.sourceKey === sourceKey) return;
 
@@ -365,10 +388,17 @@ export function usePlaybackEngine({
     setDuration(currentTrack.durationSeconds || 0);
 
     const reportLoadFailure = () => {
+      if (adaptiveRef.current !== playback) return;
       const offline = typeof navigator !== "undefined" && !navigator.onLine;
-      if (!failSource(isPlaying)) return;
-
-      if (offline) notify(t("player.offlineWaiting"), "info");
+      const wantsPlay = resumeAfterScrub.current.isPlaying;
+      if (failSource(wantsPlay)) notify(t("player.offlineWaiting"), "info");
+      setWaiting(true);
+      if (!offline && wantsPlay && retryTimerRef.current === null) {
+        retryTimerRef.current = window.setTimeout(() => {
+          retryTimerRef.current = null;
+          setSourceRevision((revision) => revision + 1);
+        }, 10_000);
+      }
     };
 
     adaptiveRef.current?.destroy();
@@ -405,6 +435,7 @@ export function usePlaybackEngine({
     dropStandby,
     spareAudio,
     clearSwitchTimer,
+    clearWaitingTimer,
   ]);
 
   useEffect(() => {
@@ -416,16 +447,24 @@ export function usePlaybackEngine({
     () => () => {
       if (retryTimerRef.current !== null) window.clearTimeout(retryTimerRef.current);
       if (switchTimerRef.current !== null) window.clearTimeout(switchTimerRef.current);
+      clearWaitingTimer();
       crossfader.finish();
       standbyRef.current?.playback.destroy();
       adaptiveRef.current?.destroy();
     },
-    [crossfader],
+    [crossfader, clearWaitingTimer],
   );
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
+
+    adaptiveRef.current?.setPlaying(isPlaying);
+    recovery.setIntent(isPlaying);
+    if (!isPlaying && retryTimerRef.current !== null) {
+      window.clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
 
     if (isPlaying && audio.dataset.sourceLoading !== "true") {
       crossfader.resume();
@@ -444,7 +483,7 @@ export function usePlaybackEngine({
       audio.pause();
       crossfader.pause();
     }
-  }, [isPlaying, currentTrack, notify, t, setIsPlaying, crossfader]);
+  }, [isPlaying, currentTrack, notify, t, setIsPlaying, crossfader, recovery]);
 
   useEffect(() => {
     crossfader.setLevel(volume);
@@ -599,11 +638,9 @@ export function usePlaybackEngine({
   const handleError = useCallback(() => {
     const audio = audioRef.current;
     if (!audio || !currentTrack) return;
-    if (audio.dataset.sourceLoading === "true") return;
     if (audio.dataset.playbackMode !== "progressive") return;
 
     const resumeAt = audio.currentTime > 0 ? audio.currentTime : positionRef.current;
-    const shouldResume = isPlaying || resumeAt > 0;
 
     const decision = recovery.decide({
       trackId: currentTrack.id,
@@ -613,10 +650,35 @@ export function usePlaybackEngine({
 
     if (decision.kind === "offline") {
       if (failSource(isPlaying)) notify(t("player.offlineWaiting"), "info");
+      setWaiting(true);
+      return;
+    }
+
+    if (
+      decision.kind === "retry" &&
+      decision.attempt > 0 &&
+      audio.error?.code === 2 &&
+      quality === "Original" &&
+      !recovery.degraded
+    ) {
+      pendingSeekRef.current = resumeAt;
+      recovery.degrade();
+      notify(t("player.qualityReduced"), "info");
+      setSourceRevision((revision) => revision + 1);
       return;
     }
 
     if (decision.kind === "giveUp") {
+      if (audio.error?.code === 2 || audio.error?.code === undefined) {
+        if (failSource(isPlaying)) notify(t("player.offlineWaiting"), "info");
+        setWaiting(true);
+        if (isPlaying)
+          retryTimerRef.current = window.setTimeout(() => {
+            retryTimerRef.current = null;
+            setSourceRevision((revision) => revision + 1);
+          }, 30_000);
+        return;
+      }
       recovery.recover();
 
       if (isPlaying) {
@@ -627,6 +689,7 @@ export function usePlaybackEngine({
     }
 
     if (decision.kind === "fallback") {
+      notify(t("player.qualityFallback"), "info");
       pendingSeekRef.current = resumeAt;
       setSourceRevision((revision) => revision + 1);
       return;
@@ -641,21 +704,30 @@ export function usePlaybackEngine({
       if (!element || element.dataset.trackId !== currentTrack.id) return;
 
       const retry = () => {
-        if (element.dataset.playbackMode !== "progressive") return;
-
-        element.src = mediaUrl.stream(currentTrack.id);
-        element.addEventListener("loadedmetadata", () => (element.currentTime = resumeAt), {
-          once: true,
-        });
-        element.load();
-
-        if (shouldResume) void element.play().catch(() => {});
+        if (
+          element.dataset.playbackMode !== "progressive" ||
+          audioRef.current !== element ||
+          element.dataset.trackId !== currentTrack.id ||
+          !resumeAfterScrub.current.isPlaying
+        )
+          return;
+        void adaptiveRef.current
+          ?.load({
+            trackId: currentTrack.id,
+            quality,
+            forceAdaptive: recovery.forceAdaptive(quality, currentTrack.id),
+            startAt: resumeAt,
+            play: true,
+          })
+          .catch(() => {
+            if (failSource(true)) notify(t("player.offlineWaiting"), "info");
+          });
       };
 
       if (attempt === 0) void refreshSession().then(retry);
       else retry();
     }, decision.delayMs);
-  }, [currentTrack, isPlaying, notify, t, recovery, failSource, onTrackEnded]);
+  }, [currentTrack, isPlaying, quality, notify, t, recovery, failSource, onTrackEnded]);
 
   const handleWaiting = useCallback(() => {
     const audio = audioRef.current;
@@ -663,22 +735,36 @@ export function usePlaybackEngine({
     if (
       !audio ||
       !currentTrack ||
+      !isPlaying ||
       quality !== "Original" ||
       audio.dataset.playbackMode !== "progressive" ||
-      audio.currentTime <= 0 ||
-      recovery.degraded
+      recovery.forceAdaptive(quality, currentTrack.id) ||
+      audio.seeking ||
+      waitingTimerRef.current !== null
     ) {
       return;
     }
 
-    const ranges = audio.buffered;
-    const bufferedUntil = ranges.length > 0 ? ranges.end(ranges.length - 1) : audio.currentTime;
-    if (bufferedUntil - audio.currentTime > 2) return;
+    if (bufferedAhead(audio) > 2) return;
 
-    pendingSeekRef.current = audio.currentTime;
-    recovery.degrade();
-    setSourceRevision((revision) => revision + 1);
-  }, [currentTrack, quality, recovery]);
+    // A short wait or seek should not lower quality. Do not interrupt buffered playback.
+    waitingTimerRef.current = window.setTimeout(() => {
+      waitingTimerRef.current = null;
+      if (
+        audioRef.current !== audio ||
+        !resumeAfterScrub.current.isPlaying ||
+        (audio.paused && audio.dataset.sourceLoading !== "true") ||
+        audio.seeking ||
+        audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA ||
+        !navigator.onLine
+      )
+        return;
+      pendingSeekRef.current = audio.currentTime;
+      recovery.degrade();
+      notify(t("player.qualityReduced"), "info");
+      setSourceRevision((revision) => revision + 1);
+    }, 4000);
+  }, [currentTrack, quality, recovery, isPlaying, notify, t]);
 
   const getPosition = useCallback(() => audioRef.current?.currentTime ?? positionRef.current, []);
 
@@ -695,7 +781,7 @@ export function usePlaybackEngine({
   );
 
   const audioProps: ComponentPropsWithoutRef<"audio"> = {
-    preload: "metadata",
+    preload: "auto",
     onTimeUpdate: (event) => fromActive(event) && handleTimeUpdate(),
     onProgress: (event) => fromActive(event) && handleProgress(),
     onLoadedMetadata: (event) =>
@@ -712,7 +798,11 @@ export function usePlaybackEngine({
       setWaiting(false);
       handleError();
     },
-    onLoadStart: (event) => fromActive(event) && setWaiting(true),
+    onLoadStart: (event) => {
+      if (!fromActive(event)) return;
+      setWaiting(true);
+      handleWaiting();
+    },
     onWaiting: (event) => {
       if (!fromActive(event)) return;
       setWaiting(true);
@@ -722,13 +812,19 @@ export function usePlaybackEngine({
     onPlay: (event) => fromActive(event) && setIsPlaying(true),
     onPause: (event) => {
       if (scrubRef.current !== null) return;
-      if (fromActive(event) && event.currentTarget.dataset.sourceLoading !== "true") {
+      if (
+        fromActive(event) &&
+        event.currentTarget.dataset.sourceLoading !== "true" &&
+        !event.currentTarget.error
+      ) {
+        clearWaitingTimer();
         setIsPlaying(false);
       }
     },
     onPlaying: (event) => {
       if (!fromActive(event)) return;
       setWaiting(false);
+      clearWaitingTimer();
       recovery.playing();
     },
   };

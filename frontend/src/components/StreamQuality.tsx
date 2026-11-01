@@ -27,16 +27,21 @@ export function StreamQuality({ track, className }: { track: Track; className?: 
   const t = useT();
   const settings = useSettings();
   const [stream, setStream] = useState<string | null>(null);
+  const [reduced, setReduced] = useState(false);
 
   useEffect(() => {
     const read = () => {
       const audio = [...document.querySelectorAll<HTMLAudioElement>("audio[data-track-id]")].find(
         (element) => element.dataset.trackId === track.id,
       );
+      setReduced(audio?.dataset.streamReduced === "true");
 
       if (!audio || audio.dataset.sourceLoading === "true") setStream(null);
-      else if (audio.dataset.playbackMode === "hls.js") {
-        setStream(audio.dataset.streamKbps ? `${audio.dataset.streamKbps}k` : null);
+      else if (
+        audio.dataset.playbackMode === "hls.js" ||
+        audio.dataset.playbackMode === "native-hls"
+      ) {
+        setStream(audio.dataset.streamKbps ? `AAC ${audio.dataset.streamKbps}k` : "AAC");
       } else setStream(formatAudioSpec(track) ?? t("settings.quality.Original"));
     };
 
@@ -51,18 +56,32 @@ export function StreamQuality({ track, className }: { track: Track; className?: 
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={t("player.quality", { stream: stream ?? "…" })}
+        title={reduced ? t("player.qualityReducedDetail") : undefined}
         className={cn(
           "inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-border-strong px-2.5 text-2xs font-semibold whitespace-nowrap text-muted-foreground tabular-nums transition-colors hover:border-foreground hover:text-foreground",
           className,
         )}
       >
+        {reduced && <span aria-hidden="true">↓</span>}
         {stream ?? "…"}
       </DropdownMenuTrigger>
 
       <DropdownMenuContent>
         <DropdownMenuLabel>{t("settings.quality")}</DropdownMenuLabel>
+        {reduced && (
+          <DropdownMenuLabel className="max-w-64 whitespace-normal font-normal">
+            {t("player.qualityReducedDetail")}
+          </DropdownMenuLabel>
+        )}
         {QUALITIES.map((quality) => (
-          <DropdownMenuItem key={quality} onSelect={() => settings.update({ quality })}>
+          <DropdownMenuItem
+            key={quality}
+            onSelect={() => {
+              if (settings.quality === quality)
+                window.dispatchEvent(new Event("retry-stream-quality"));
+              else settings.update({ quality });
+            }}
+          >
             <CheckIcon className={cn(settings.quality !== quality && "invisible")} />
             {t(`settings.quality.${quality}`)}
           </DropdownMenuItem>

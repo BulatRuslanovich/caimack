@@ -26,6 +26,12 @@ function fallenBack(errorCode = MEDIA_ERR_DECODE) {
 }
 
 describe("fail / recover", () => {
+  it("does not restart music after a manual pause while offline", () => {
+    const recovery = new PlaybackRecovery();
+    recovery.fail("t1", true);
+    recovery.setIntent(false);
+    expect(recovery.recover()).toEqual({ resume: false });
+  });
   it("reports only the first failure so the listener is told once", () => {
     const recovery = new PlaybackRecovery();
 
@@ -127,6 +133,13 @@ describe("decide", () => {
 });
 
 describe("adaptive delivery of the original", () => {
+  it("tries Original again on later tracks after two minutes, without forgetting format failures", () => {
+    const recovery = fallenBack();
+    recovery.degrade(1000);
+    expect(recovery.forceAdaptive("Original", "t2", 120_999)).toBe(true);
+    expect(recovery.forceAdaptive("Original", "t2", 121_000)).toBe(false);
+    expect(recovery.forceAdaptive("Original", "t1", 121_000)).toBe(true);
+  });
   it("leaves chosen tiers alone — only the original is ever switched", () => {
     const recovery = fallenBack();
     recovery.degrade();

@@ -26,6 +26,7 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
@@ -49,8 +50,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.Request
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -72,9 +77,15 @@ class PlaybackService : MediaLibraryService() {
     private var tone: Job? = null
     private var sleep: Job? = null
     private var leveling: Job? = null
+    private var qualityChanges: Job? = null
     private var equalizer: Equalizer? = null
     private var normalization = 1f
     private var sleepLevel = 1f
+    private var networkRecovery: Job? = null
+    private var bufferingRecovery: Job? = null
+    private var networkAttempts = 0
+    private val reduced = mutableSetOf<String>()
+    private val networkNotified = mutableSetOf<String>()
 
     override fun onCreate() {
         super.onCreate()
@@ -82,6 +93,10 @@ class PlaybackService : MediaLibraryService() {
         val data = OkHttpDataSource.Factory(container.http)
 
         val player = ExoPlayer.Builder(this)
+            .setLoadControl(DefaultLoadControl.Builder()
+                .setBufferDurationsMs(60_000, 180_000, 1500, 5000)
+                .setPrioritizeTimeOverSizeThresholds(true)
+                .build())
             .setMediaSourceFactory(
                 DefaultMediaSourceFactory(container.downloads.playback).setLoadErrorHandlingPolicy(
                     object : DefaultLoadErrorHandlingPolicy(NETWORK_RETRIES) {
@@ -133,13 +148,16 @@ class PlaybackService : MediaLibraryService() {
             override fun onRepeatModeChanged(repeatMode: Int) = showButtons(container)
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                networkRecovery?.cancel()
+                bufferingRecovery?.cancel()
+                networkAttempts = 0
                 normalize(container, player)
                 if (player.playbackState == Player.STATE_IDLE && player.playerError != null) player.prepare()
                 save(container, player)
                 if (player.playWhenReady) report(container, player)
 
                 val fallback = reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED &&
-                    mediaItem?.mediaId == listening && mediaItem?.mediaId in fellBack
+                    mediaItem?.mediaId == listening
                 if (fallback) return
 
                 val natural = reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT
@@ -158,11 +176,48 @@ class PlaybackService : MediaLibraryService() {
             }
 
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                if (!playWhenReady) {
+                    networkRecovery?.cancel()
+                    bufferingRecovery?.cancel()
+                } else if (player.playerError != null) player.prepare()
                 if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) container.sleepTimer.cancel()
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
+                bufferingRecovery?.cancel()
+                if (playbackState == Player.STATE_READY) {
+                    networkRecovery?.cancel()
+                    networkAttempts = 0
+                }
+                if (playbackState == Player.STATE_BUFFERING && player.playWhenReady) {
+                    bufferingRecovery = container.scope.launch(Dispatchers.Main) {
+                        delay(4000)
+                        while (player.playWhenReady && player.playbackState == Player.STATE_BUFFERING) {
+                            if (tryLighterStream(container, player)) break
+                            delay(5000)
+                        }
+                    }
+                }
                 if (playbackState == Player.STATE_ENDED) signals.tracker.finish(ListeningTracker.COMPLETED)
+            }
+
+            override fun onEvents(ignored: Player, events: Player.Events) {
+                val item = player.currentMediaItem ?: run {
+                    container.playbackDelivery.value = null
+                    return
+                }
+                val adaptive = item.localConfiguration?.mimeType == MimeTypes.APPLICATION_M3U8
+                val offline = container.downloads.completed(item.mediaId) != null
+                container.playbackDelivery.value = PlaybackDelivery(
+                    item.mediaId, adaptive,
+                    player.audioFormat?.bitrate?.takeIf { it > 0 }?.div(1000),
+                    when {
+                        player.playerError != null && networkRecovery?.isActive == true -> "waiting"
+                        adaptive && offline && container.settings.value.quality == ORIGINAL -> "download"
+                        adaptive && item.mediaId in reduced -> "network"
+                        else -> null
+                    },
+                )
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -184,8 +239,22 @@ class PlaybackService : MediaLibraryService() {
             override fun onPlayerError(error: PlaybackException) {
                 val item = player.currentMediaItem ?: return
                 val offline = error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
-                    error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
-                if (offline || statusOf(error.cause) == UNAUTHORIZED) return
+                    error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ||
+                    error.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED
+                if (statusOf(error.cause) == UNAUTHORIZED) return
+                if (offline || (statusOf(error.cause) ?: 0) >= 500 || statusOf(error.cause) in listOf(408, 429)) {
+                    networkRecovery?.cancel()
+                    if (networkNotified.add(item.mediaId)) {
+                        Toast.makeText(this@PlaybackService, Appearance.localized(this@PlaybackService).getString(R.string.player_network_waiting), Toast.LENGTH_LONG).show()
+                    }
+                    networkRecovery = container.scope.launch(Dispatchers.Main) {
+                        delay((1000L shl networkAttempts.coerceAtMost(5)).coerceAtMost(30_000L))
+                        networkAttempts++
+                        if (player.currentMediaItem?.mediaId != item.mediaId || !player.playWhenReady) return@launch
+                        if (!tryLighterStream(container, player)) player.prepare()
+                    }
+                    return
+                }
 
                 if (item.localConfiguration?.mimeType == MimeTypes.APPLICATION_M3U8 && fellBack.add(item.mediaId)) {
                     val index = player.currentMediaItemIndex
@@ -193,7 +262,6 @@ class PlaybackService : MediaLibraryService() {
                     player.replaceMediaItem(index, item.buildUpon().setUri(original(container, item.mediaId)).setMimeType(null).build())
                     player.seekTo(index, position)
                     player.prepare()
-                    player.play()
                     return
                 }
 
@@ -241,6 +309,22 @@ class PlaybackService : MediaLibraryService() {
         tone = container.scope.launch(Dispatchers.Main) { container.equalizer.state.collect { shapeSound(player.audioSessionId, it) } }
         sleep = container.scope.launch(Dispatchers.Main) { container.sleepTimer.state.collectLatest { fallAsleep(container, player, it) } }
         leveling = container.scope.launch(Dispatchers.Main) { container.playbackPrefs.normalizeVolume.collect { normalize(container, player) } }
+        qualityChanges = container.scope.launch(Dispatchers.Main) {
+            container.settings.map { it.quality }.distinctUntilChanged().drop(1).collect {
+                networkRecovery?.cancel()
+                bufferingRecovery?.cancel()
+                fellBack.clear()
+                reduced.clear()
+                val index = player.currentMediaItemIndex
+                val position = player.currentPosition
+                val items = (0 until player.mediaItemCount).map { resolve(container, player.getMediaItemAt(it)) }
+                items.forEachIndexed { slot, item -> player.replaceMediaItem(slot, item) }
+                if (items.isNotEmpty()) {
+                    player.seekTo(index, position)
+                    player.prepare()
+                }
+            }
+        }
 
         setMediaNotificationProvider(DefaultMediaNotificationProvider.Builder(this).build().apply { setSmallIcon(R.drawable.ic_notification) })
     }
@@ -252,6 +336,9 @@ class PlaybackService : MediaLibraryService() {
         tone?.cancel()
         sleep?.cancel()
         leveling?.cancel()
+        qualityChanges?.cancel()
+        networkRecovery?.cancel()
+        bufferingRecovery?.cancel()
         equalizer?.release()
         equalizer = null
         ticks.removeCallbacksAndMessages(null)
@@ -270,6 +357,31 @@ class PlaybackService : MediaLibraryService() {
 
     private fun resolve(container: AppContainer, item: MediaItem): MediaItem = trimSilence(container, source(container, item))
 
+    private suspend fun tryLighterStream(container: AppContainer, player: ExoPlayer): Boolean {
+        val item = player.currentMediaItem ?: return false
+        if (container.settings.value.quality != ORIGINAL ||
+            item.localConfiguration?.mimeType == MimeTypes.APPLICATION_M3U8 ||
+            container.downloads.completed(item.mediaId) != null || item.mediaId in fellBack) return false
+        val master = container.server.resolve("api/tracks/${item.mediaId}/hls/master.m3u8")
+            ?.newBuilder()?.addQueryParameter("maxQuality", NORMAL)?.build() ?: return false
+        // Keep the original and its buffer until a compatible rendition actually exists.
+        val ready = withContext(Dispatchers.IO) {
+            runCatching {
+                container.http.newCall(Request.Builder().url(master).build()).execute().use { it.code == 200 }
+            }.getOrDefault(false)
+        }
+        if (!ready || player.currentMediaItem != item || !player.playWhenReady ||
+            container.settings.value.quality != ORIGINAL || player.playbackState == Player.STATE_READY) return false
+        val index = player.currentMediaItemIndex
+        val position = player.currentPosition
+        reduced.add(item.mediaId)
+        player.replaceMediaItem(index, item.buildUpon().setUri(master.toString().toUri()).setMimeType(MimeTypes.APPLICATION_M3U8).build())
+        player.seekTo(index, position)
+        player.prepare()
+        Toast.makeText(this, Appearance.localized(this).getString(R.string.player_quality_reduced), Toast.LENGTH_LONG).show()
+        return true
+    }
+
     private fun source(container: AppContainer, item: MediaItem): MediaItem {
         container.downloads.completed(item.mediaId)?.request?.let { request ->
             return item.buildUpon()
@@ -284,7 +396,7 @@ class PlaybackService : MediaLibraryService() {
         val adaptive = quality != ORIGINAL
 
         if (!adaptive || item.mediaId in fellBack) {
-            return item.buildUpon().setUri(original(container, item.mediaId)).build()
+            return item.buildUpon().setUri(original(container, item.mediaId)).setMimeType(null).build()
         }
 
         val cap = if (quality == ORIGINAL) NORMAL else quality

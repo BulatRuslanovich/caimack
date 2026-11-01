@@ -68,6 +68,8 @@ export class AdaptivePlayback {
   private generation = 0;
   private retryTimer: number | null = null;
   private retries = 0;
+  private metadataListener: (() => void) | null = null;
+  private nativeErrorListener: (() => void) | null = null;
 
   private destroyed = false;
 
@@ -91,15 +93,19 @@ export class AdaptivePlayback {
     const adaptive = adaptiveWanted(request);
     if (adaptive) this.hlsApi = await loadHls();
 
-    if (adaptive && this.hlsApi?.default.isSupported()) {
+    const useHlsJs = this.hlsApi?.default.isSupported() === true;
+    if (adaptive && (useHlsJs || this.audio.canPlayType("application/vnd.apple.mpegurl"))) {
       const url = mediaUrl.hls(request.trackId, adaptiveCap(request.quality));
       if (await this.hlsReady(url)) {
-        if (generation === this.generation) this.attachAdaptive(url, request.startAt, request.play);
+        if (generation === this.generation) {
+          if (useHlsJs) this.attachAdaptive(url, request.startAt);
+          else this.attachNativeAdaptive(url, request.startAt);
+        }
         return;
       }
     }
 
-    if (generation === this.generation) this.attachProgressive(request.startAt, request.play);
+    if (generation === this.generation) this.attachProgressive(request.startAt);
   }
 
   destroy(): void {
@@ -109,16 +115,21 @@ export class AdaptivePlayback {
     this.destroyDriver();
   }
 
-  private attachAdaptive(url: string, startAt: number, play: boolean): void {
+  setPlaying(play: boolean): void {
+    if (this.request) this.request.play = play;
+    if (!play) this.audio.pause();
+  }
+
+  private attachAdaptive(url: string, startAt: number): void {
     this.destroyDriver();
 
     if (!this.hlsApi) {
-      this.attachProgressive(startAt, play);
+      this.attachProgressive(startAt);
       return;
     }
 
     this.audio.dataset.playbackMode = "hls.js";
-    this.audio.dataset.sourceLoading = "false";
+    this.audio.dataset.sourceLoading = "true";
     this.audio.removeAttribute("src");
     this.audio.load();
 
@@ -136,7 +147,7 @@ export class AdaptivePlayback {
 
     this.hls = hls;
     hls.on(Events.MEDIA_ATTACHED, () => hls.loadSource(url));
-    hls.on(Events.MANIFEST_PARSED, () => this.resumeAt(startAt, play));
+    hls.on(Events.MANIFEST_PARSED, () => this.resumeAt(startAt));
     hls.on(Events.ERROR, (_, data) => this.handleHlsError(data));
     hls.on(Events.LEVEL_SWITCHED, (_, data) =>
       this.reportStream(Math.round((hls.levels[data.level]?.bitrate ?? 0) / 1000) || null),
@@ -145,33 +156,53 @@ export class AdaptivePlayback {
     this.reportStream(null);
   }
 
-  private attachProgressive(startAt: number, play: boolean): void {
+  private attachProgressive(startAt: number): void {
     this.destroyDriver();
     this.audio.dataset.playbackMode = "progressive";
-    this.audio.dataset.sourceLoading = "false";
+    this.audio.dataset.sourceLoading = "true";
     this.audio.src = mediaUrl.stream(this.request!.trackId);
     this.audio.load();
-    this.resumeAt(startAt, play);
+    this.resumeAt(startAt);
+    this.reportStream(null);
+  }
+
+  private attachNativeAdaptive(url: string, startAt: number): void {
+    this.destroyDriver();
+    this.audio.dataset.playbackMode = "native-hls";
+    this.audio.dataset.sourceLoading = "true";
+    this.nativeErrorListener = () => this.callbacks.onFatalError();
+    this.audio.addEventListener("error", this.nativeErrorListener);
+    this.audio.src = url;
+    this.audio.load();
+    this.resumeAt(startAt);
     this.reportStream(null);
   }
 
   private reportStream(kbps: number | null): void {
     if (kbps === null) delete this.audio.dataset.streamKbps;
     else this.audio.dataset.streamKbps = String(kbps);
+    this.audio.dataset.streamReduced = String(
+      this.request?.quality === "Original" && this.audio.dataset.playbackMode !== "progressive",
+    );
 
     this.audio.dispatchEvent(new Event(STREAM_CHANGE));
   }
 
-  private resumeAt(startAt: number, play: boolean): void {
+  private resumeAt(startAt: number): void {
     const apply = () => {
+      this.audio.dataset.sourceLoading = "false";
       if (startAt > 0 && Number.isFinite(this.audio.duration)) {
         this.audio.currentTime = Math.min(startAt, this.audio.duration);
       }
-      if (play) void this.audio.play().catch(() => {});
+      this.audio.dispatchEvent(new Event(STREAM_CHANGE));
+      if (this.request?.play) void this.audio.play().catch(() => {});
     };
 
     if (this.audio.readyState >= HTMLMediaElement.HAVE_METADATA) apply();
-    else this.audio.addEventListener("loadedmetadata", apply, { once: true });
+    else {
+      this.metadataListener = apply;
+      this.audio.addEventListener("loadedmetadata", apply, { once: true });
+    }
   }
 
   private handleHlsError(data: ErrorData): void {
@@ -216,6 +247,14 @@ export class AdaptivePlayback {
   }
 
   private destroyDriver(): void {
+    if (this.nativeErrorListener) {
+      this.audio.removeEventListener("error", this.nativeErrorListener);
+      this.nativeErrorListener = null;
+    }
+    if (this.metadataListener) {
+      this.audio.removeEventListener("loadedmetadata", this.metadataListener);
+      this.metadataListener = null;
+    }
     this.clearRetryTimer();
     this.hls?.destroy();
     this.hls = null;

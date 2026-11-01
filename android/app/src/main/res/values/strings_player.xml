@@ -99,4 +99,12 @@
     <string name="dream_label">Caimack record</string>
     <string name="track_bpm">%1$d BPM</string>
     <string name="track_lufs">%1$d LUFS</string>
+    <string name="player_network_waiting">Connection lost. Music will resume when the connection returns.</string>
+    <string name="player_quality_reduced">Connection is slow. Switching to AAC to keep the music playing.</string>
+    <string name="player_delivery_original">Original</string>
+    <string name="player_delivery_aac">AAC · %1$d kbps</string>
+    <string name="player_delivery_adaptive">AAC · adaptive quality</string>
+    <string name="player_delivery_network">Lower quality for a slow connection</string>
+    <string name="player_delivery_download">Playing the downloaded AAC version</string>
+    <string name="player_delivery_waiting">Waiting for the connection · resumes automatically</string>
 </resources>

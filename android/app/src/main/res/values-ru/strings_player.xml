@@ -101,4 +101,12 @@
     <string name="dream_label">Пластинка Caimack</string>
     <string name="track_bpm">%1$d BPM</string>
     <string name="track_lufs">%1$d LUFS</string>
+    <string name="player_network_waiting">Связь пропала. Музыка продолжится, когда соединение восстановится.</string>
+    <string name="player_quality_reduced">Связь медленная. Переключаемся на AAC, чтобы музыка продолжалась.</string>
+    <string name="player_delivery_original">Оригинал</string>
+    <string name="player_delivery_aac">AAC · %1$d кбит/с</string>
+    <string name="player_delivery_adaptive">AAC · адаптивное качество</string>
+    <string name="player_delivery_network">Качество снижено из-за медленного соединения</string>
+    <string name="player_delivery_download">Играет скачанная версия AAC</string>
+    <string name="player_delivery_waiting">Ждём соединение · продолжим автоматически</string>
 </resources>

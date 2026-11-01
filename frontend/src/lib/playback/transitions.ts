@@ -22,7 +22,7 @@ export interface TransitionTrack {
   cues?: TrackCues | null;
 }
 
-export const TRANSITION_PRELOAD_LEAD_SECONDS = 20;
+export const TRANSITION_PRELOAD_LEAD_SECONDS = 45;
 
 export const SPLICE_LEAD_SECONDS = 0.03;
 

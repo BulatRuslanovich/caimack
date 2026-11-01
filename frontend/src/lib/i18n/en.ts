@@ -298,6 +298,12 @@ export const en = {
 
   "player.upNextNamed": "Up next: {title}",
   "player.quality": "Stream quality: {stream}",
+  "player.qualityReduced":
+    "Connection is slow. Switching to a lighter stream to keep the music playing.",
+  "player.qualityFallback":
+    "This device could not play the original. Trying a compatible AAC stream.",
+  "player.qualityReducedDetail":
+    "Original is selected, but AAC is playing for uninterrupted listening. After a slow connection, the player will try Original on a later track. You can also select Original again.",
   "player.shuffle": "Shuffle",
   "player.previousTrack": "Previous track",
   "player.nextTrack": "Next track",
@@ -858,7 +864,8 @@ export const en = {
   "map.layer.links": "Links",
   "map.layer.moods": "Moods",
   "map.layer.motion": "Animation",
-  "settings.help.quality": "Choose audio quality: lower bitrates use less data.",
+  "settings.help.quality":
+    "Preferred quality. If the connection is too slow, the player may temporarily use AAC to keep music playing. The player shows the actual stream quality.",
   "settings.help.crossfade": "Blend the end of a track with the start of the next.",
   "settings.help.smartTransitions": "Adapt transitions to the sound of each track.",
   "settings.help.normalizeVolume": "Reduce loudness differences between tracks.",

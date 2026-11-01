@@ -4,6 +4,7 @@
 package app.caimack.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -166,6 +167,22 @@ fun FullPlayer(state: PlayerState, onClose: () -> Unit) {
                             Text(track.title, style = displayStyle(track.title), maxLines = if (wide) 1 else 3, overflow = TextOverflow.Ellipsis)
                             Text(artistsOf(track), style = Type.body, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             note?.let { RadioNoteLine(it) }
+                            val delivery by container.playbackDelivery.collectAsStateWithLifecycle()
+                            delivery?.takeIf { it.trackId == track.id }?.let { stream ->
+                                val label = when {
+                                    !stream.adaptive -> stringResource(R.string.player_delivery_original)
+                                    stream.bitrateKbps != null -> stringResource(R.string.player_delivery_aac, stream.bitrateKbps)
+                                    else -> stringResource(R.string.player_delivery_adaptive)
+                                }
+                                Text(label, style = Type.tiny, color = palette.muted)
+                                val explanation = when (stream.reason) {
+                                    "waiting" -> R.string.player_delivery_waiting
+                                    "download" -> R.string.player_delivery_download
+                                    "network" -> R.string.player_delivery_network
+                                    else -> null
+                                }
+                                explanation?.let { Text(stringResource(it), style = Type.tiny, color = palette.muted) }
+                            }
                         }
                         IconAction(
                             if (liked) Lucide.HeartFilled else Lucide.Heart,
