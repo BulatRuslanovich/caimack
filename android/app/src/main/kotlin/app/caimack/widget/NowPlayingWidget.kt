@@ -38,6 +38,7 @@ import app.caimack.ui.artistsOf
 import app.caimack.ui.color
 import app.caimack.ui.coverCrop
 import app.caimack.ui.coverTone
+import app.caimack.ui.coverPlaceholder
 import app.caimack.ui.drawVinyl
 import app.caimack.ui.paletteOf
 import coil3.SingletonImageLoader
@@ -57,6 +58,7 @@ class NowPlayingWidget : AppWidgetProvider() {
         internal const val TITLE = "title"
         private const val ARTIST = "artist"
         private const val COVER = "cover"
+        private const val ART_NAME = "art_name"
         internal const val LIKED = "liked"
         private const val PLAYING = "playing"
         private const val POSITION = "position"
@@ -74,6 +76,7 @@ class NowPlayingWidget : AppWidgetProvider() {
                     putString(TITLE, track.title)
                     putString(ARTIST, artistsOf(track))
                     putString(COVER, container.media.cover(track.albumId, track.id, track.hasCover, small = true))
+                    putString(ART_NAME, track.albumTitle ?: track.title)
                     putBoolean(LIKED, container.favorites.isFavorite(track))
                     putLong(POSITION, positionMs)
                     putLong(DURATION, durationMs.takeIf { it > 0 } ?: (track.durationSeconds * 1000L))
@@ -131,7 +134,9 @@ class NowPlayingWidget : AppWidgetProvider() {
             return RemoteViews(context.packageName, R.layout.widget_now_playing).apply {
                 tint(R.id.widget_root, "setBackgroundTintList", look) { it.card }
                 icon(R.id.widget_wash, look) { palette -> wash(tone?.color(palette, look.colorway)) }
-                icon(R.id.widget_art, look) { palette -> art(cover, palette) }
+                icon(R.id.widget_art, look) { palette ->
+                    art(cover ?: coverPlaceholder(stored.getString(ART_NAME, null) ?: title ?: "Caimack", palette), palette)
+                }
 
                 setTextViewText(R.id.widget_title, title ?: "Caimack")
                 colorInt(R.id.widget_title, "setTextColor", look) { it.foreground }

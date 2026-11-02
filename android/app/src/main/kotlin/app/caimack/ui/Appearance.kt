@@ -43,6 +43,12 @@ class Appearance(private val context: Context) {
 
     val language: String get() = preferences.getString(LANGUAGE, "").orEmpty()
 
+    fun palette(): Palette = paletteOf(colorway.value, when (theme.value) {
+        DARK -> true
+        LIGHT -> false
+        else -> context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+    })
+
     fun setTheme(value: String) {
         preferences.edit { putString(THEME, value) }
         chosenTheme.value = value

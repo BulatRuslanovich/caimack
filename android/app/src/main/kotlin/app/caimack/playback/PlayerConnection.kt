@@ -242,7 +242,7 @@ fun Track.toMediaItem(media: Media): MediaItem = MediaItem.Builder()
             .setTitle(title)
             .setArtist(artistsOf(this))
             .setAlbumTitle(albumTitle)
-            .setArtworkUri(ArtworkProvider.uriFor(media.cover(albumId, id, hasCover, small = false)))
+            .setArtworkUri(ArtworkProvider.uriFor(media.cover(albumId, id, hasCover, small = false), albumTitle ?: title))
             .setDurationMs(durationSeconds * 1000L)
             .build(),
     )

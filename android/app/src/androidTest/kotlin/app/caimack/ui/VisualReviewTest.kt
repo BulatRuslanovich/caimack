@@ -4,6 +4,16 @@
 package app.caimack.ui
 
 import android.Manifest
+import android.app.Notification
+import android.app.NotificationManager
+import android.appwidget.AppWidgetHost
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.TextView
 import android.content.ContentValues
 import android.content.res.Configuration
 import android.graphics.Bitmap
@@ -34,6 +44,8 @@ import app.caimack.api.PlaylistDetail
 import app.caimack.api.Track
 import app.caimack.api.User
 import app.caimack.playback.PlayerState
+import app.caimack.playback.toMediaItem
+import app.caimack.widget.NowPlayingWidget
 import app.caimack.session.SessionState
 import java.util.Locale
 import kotlinx.coroutines.runBlocking
@@ -49,6 +61,11 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import androidx.core.graphics.drawable.toBitmap
+import androidx.compose.ui.graphics.toArgb
+import okio.Buffer
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 class VisualReviewTest {
     @get:Rule
@@ -61,6 +78,7 @@ class VisualReviewTest {
     private val originalFontScale = context.resources.configuration.fontScale
     private val originalLayout = container.appearance.albumLayout.value
     private val originalDensity = container.appearance.libraryDensity.value
+    private val originalColorway = container.appearance.colorway.value
     private val user = User("visual-review", "Визуальная проверка")
     private val original = listOf(
         Track("first", "Ночной город", "artist", "Электрические сны", durationSeconds = 214),
@@ -115,6 +133,7 @@ class VisualReviewTest {
         container.appearance.setLanguage(originalLanguage)
         container.appearance.setAlbumLayout(originalLayout)
         container.appearance.setLibraryDensity(originalDensity)
+        container.appearance.setColorway(originalColorway)
         shell("settings put system font_scale $originalFontScale")
         container.session.expire()
         Remote.cache.clear()
@@ -249,5 +268,71 @@ class VisualReviewTest {
         compose.activityRule.scenario.recreate()
         compose.onNodeWithText(label(R.string.nav_home)).performClick()
         capture("parity-home-large-text")
+    }
+
+    @Test
+    fun widgetAndNotificationRemainVisibleWithoutArtworkInOledTheme() {
+        val previous = web.dispatcher
+        val samples = 8000 * 60
+        val audio = ByteBuffer.allocate(44 + samples * 2).order(ByteOrder.LITTLE_ENDIAN).apply {
+            put("RIFF".toByteArray()); putInt(36 + samples * 2); put("WAVEfmt ".toByteArray())
+            putInt(16); putShort(1); putShort(1); putInt(8000); putInt(16000); putShort(2); putShort(16)
+            put("data".toByteArray()); putInt(samples * 2)
+            repeat(samples) { putShort((kotlin.math.sin(it * 2.0 * Math.PI * 440 / 8000) * 100).toInt().toShort()) }
+        }.array()
+        web.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = if (request.url.encodedPath.endsWith("/stream")) {
+                MockResponse.Builder().code(200).addHeader("Content-Type", "audio/wav").body(Buffer().write(audio)).build()
+            } else previous.dispatch(request)
+        }
+        container.appearance.setTheme(Appearance.DARK)
+        container.appearance.setColorway(Colorway.Graphite)
+        val track = original[1]
+        val uri = checkNotNull(track.toMediaItem(container.media).mediaMetadata.artworkUri)
+        assertEquals("/placeholder", uri.path)
+        val artwork = checkNotNull(context.contentResolver.openInputStream(uri).use { BitmapFactory.decodeStream(it) })
+        assertTrue("Missing artwork has an opaque, drawn sleeve", !artwork.sameAs(Bitmap.createBitmap(artwork.width, artwork.height, Bitmap.Config.ARGB_8888)))
+        artwork.recycle()
+
+        shell("appwidget grantbind --package ${context.packageName} --user 0")
+        val host = AppWidgetHost(context, 2400)
+        try {
+            val manager = AppWidgetManager.getInstance(context)
+            val id = host.allocateAppWidgetId()
+            val component = ComponentName(context, NowPlayingWidget::class.java)
+            assertTrue(manager.bindAppWidgetIdIfAllowed(id, component))
+            lateinit var widget: android.appwidget.AppWidgetHostView
+            compose.runOnIdle {
+                host.startListening()
+                widget = host.createView(compose.activity, id, manager.getAppWidgetInfo(id))
+                compose.activity.addContentView(widget, FrameLayout.LayoutParams(850, 450))
+                NowPlayingWidget.show(context, track, false)
+            }
+            compose.waitUntil(10_000) { widget.findViewById<TextView>(R.id.widget_title)?.text == track.title }
+            compose.runOnIdle {
+                val drawable = checkNotNull(widget.findViewById<ImageView>(R.id.widget_art).drawable)
+                val image = drawable.toBitmap()
+                val colours = (0 until image.width step 8).flatMap { x -> (0 until image.height step 8).map { y -> image.getPixel(x, y) } }.toSet()
+                assertTrue("Widget should show record artwork, not an empty square", colours.size > 10)
+            }
+            capture("oled-widget-no-cover")
+            compose.runOnIdle { (widget.parent as android.view.ViewGroup).removeView(widget) }
+            compose.runOnIdle { container.player.play(listOf(track), 0) }
+            val notifications = context.getSystemService(NotificationManager::class.java)
+            compose.waitUntil(20_000) {
+                notifications.activeNotifications.any { it.notification.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() == track.title && it.notification.getLargeIcon() != null }
+            }
+            val notification = notifications.activeNotifications.first { it.notification.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() == track.title }.notification
+            assertEquals(paletteOf(Colorway.Graphite, true).background.toArgb(), notification.color)
+            assertTrue(notification.extras.getBoolean(Notification.EXTRA_COLORIZED))
+            shell("cmd statusbar expand-notifications")
+            Thread.sleep(500)
+            capture("oled-notification-no-cover")
+            shell("cmd statusbar collapse")
+        } finally {
+            host.stopListening()
+            host.deleteHost()
+            shell("appwidget revokebind --package ${context.packageName} --user 0")
+        }
     }
 }

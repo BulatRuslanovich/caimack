@@ -22,13 +22,8 @@ import androidx.compose.ui.unit.dp
 fun Sleeve(name: String, modifier: Modifier = Modifier) {
     val palette = LocalPalette.current
 
-    var hash = 0L
-    name.trim().lowercase().codePoints().forEach { hash = (hash * 31 + it) and 0xFFFFFFFFL }
-    val sleeve = palette.sleeves[(hash % palette.sleeves.size).toInt()]
-
-    val letter = name.codePoints().toArray()
-        .firstOrNull { Character.isLetter(it) || Character.getType(it) in NUMBER_TYPES }
-        ?.let { String(Character.toChars(it)).uppercase() }
+    val sleeve = sleeveColor(name, palette)
+    val letter = sleeveLetter(name)
 
     BoxWithConstraints(modifier.background(sleeve), contentAlignment = Alignment.Center) {
         val shown = letter?.takeIf { maxWidth >= 80.dp }
@@ -51,9 +46,3 @@ fun Sleeve(name: String, modifier: Modifier = Modifier) {
         }
     }
 }
-
-private val NUMBER_TYPES = setOf(
-    Character.DECIMAL_DIGIT_NUMBER.toInt(),
-    Character.LETTER_NUMBER.toInt(),
-    Character.OTHER_NUMBER.toInt(),
-)

@@ -10,6 +10,7 @@ import android.net.Uri
 import android.os.ParcelFileDescriptor
 import app.caimack.CaimackApp
 import app.caimack.session.SessionState
+import app.caimack.ui.coverPlaceholder
 import java.io.File
 import java.io.FileNotFoundException
 import kotlinx.coroutines.flow.first
@@ -23,6 +24,7 @@ class ArtworkProvider : ContentProvider() {
 
     override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
         val context = context ?: throw FileNotFoundException(uri.toString())
+        if (uri.path == "/placeholder") return placeholder(uri)
         val path = uri.path?.let { ARTWORK.find(it)?.value } ?: throw FileNotFoundException(uri.toString())
         val size = uri.getQueryParameter(SIZE)?.takeIf { it in SIZES }
         val folder = File(context.cacheDir, "artwork")
@@ -46,6 +48,32 @@ class ArtworkProvider : ContentProvider() {
         return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
     }
 
+    private fun placeholder(uri: Uri): ParcelFileDescriptor {
+        val context = context ?: throw FileNotFoundException(uri.toString())
+        val name = uri.getQueryParameter("name").orEmpty().take(512).ifBlank { "Caimack" }
+        val appearance = (context.applicationContext as CaimackApp).container.appearance
+        val palette = appearance.palette()
+        val key = java.security.MessageDigest.getInstance("SHA-256")
+            .digest("$name:${appearance.colorway.value.key}:${palette.dark}".toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        val folder = File(context.cacheDir, "artwork").apply { mkdirs() }
+        val file = File(folder, "placeholder-$key.png")
+        synchronized(placeholderLock) {
+            if (!file.exists()) {
+                val bitmap = coverPlaceholder(name, palette)
+                val partial = File(file.path + ".part")
+                try {
+                    partial.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                    if (!partial.renameTo(file)) throw FileNotFoundException("Could not cache placeholder artwork")
+                } finally {
+                    bitmap.recycle()
+                    partial.delete()
+                }
+            }
+        }
+        return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+    }
+
     override fun getType(uri: Uri): String = "image/*"
 
     override fun query(uri: Uri, projection: Array<out String>?, selection: String?, selectionArgs: Array<out String>?, sortOrder: String?): Cursor? = null
@@ -62,14 +90,18 @@ class ArtworkProvider : ContentProvider() {
         private const val SIZE = "size"
         private val SIZES = setOf("thumb", "large")
         private const val SESSION_WAIT_MS = 10_000L
+        private val placeholderLock = Any()
 
-        fun uriFor(url: String?): Uri? = url?.toHttpUrlOrNull()?.let { http ->
+        fun uriFor(url: String?, fallbackName: String? = null): Uri? = url?.toHttpUrlOrNull()?.let { http ->
             Uri.Builder()
                 .scheme("content")
                 .authority(AUTHORITY)
                 .encodedPath(http.encodedPath)
                 .apply { http.queryParameter(SIZE)?.let { appendQueryParameter(SIZE, it) } }
                 .build()
+        } ?: fallbackName?.let { name ->
+            Uri.Builder().scheme("content").authority(AUTHORITY).path("/placeholder")
+                .appendQueryParameter("name", name).build()
         }
 
         private val ARTWORK = Regex("api/(albums|tracks|playlists|artists)/[0-9a-fA-F-]+/(cover|image)$")
