@@ -20,7 +20,6 @@ use crate::storage::{ARTIST_IMAGE_DIRECTORY, COVER_DIRECTORY, CoverSize, Storage
 
 const CAPACITY: usize = 2048;
 const ARTIST_PAUSE: Duration = Duration::from_secs(2);
-const LYRICS_PAUSE: Duration = Duration::from_millis(500);
 const BACKFILL_DELAY: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Clone)]
@@ -293,6 +292,13 @@ pub fn spawn(
                     };
                     next_seed = tokio::time::Instant::now() + delay;
                 }
+                if kind == "lyrics" {
+                    // Provider cooldowns can outlast a job lease; wait before claiming the next track.
+                    tokio::select! {
+                        () = cancel.cancelled() => return,
+                        () = enrichment.lrclib.wait_ready() => {},
+                    }
+                }
                 let job = match super::enrichment_jobs::claim(&enrichment.db, kind).await {
                     Ok(job) => job,
                     Err(error) => { tracing::error!("Enrichment {kind} claim failed: {error}"); None }
@@ -329,7 +335,7 @@ pub fn spawn(
                 if let Err(error) = super::enrichment_jobs::finish(&enrichment.db, kind, &job, outcome, error).await {
                     tracing::error!("Enrichment {kind} completion failed; lease will expire: {error}");
                 }
-                if !skipped && pause(&cancel, if kind == "lyrics" { LYRICS_PAUSE } else { ARTIST_PAUSE }).await { return; }
+                if !skipped && kind != "lyrics" && pause(&cancel, ARTIST_PAUSE).await { return; }
             }
         }));
     }
