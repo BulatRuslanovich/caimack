@@ -19,7 +19,7 @@ import { useT } from "@/contexts/I18nContext";
 import { PageHeader } from "@/components/PageHeader";
 import { Query } from "@/components/Query";
 import { Button } from "@/components/ui/button";
-import { ToggleGroup, ToggleGroupButton } from "@/components/ui/toggle-group";
+import { MapLayersMenu } from "@/components/map/MapLayersMenu";
 import {
   Select,
   SelectContent,
@@ -38,21 +38,15 @@ import {
 import {
   CrosshairIcon,
   HouseIcon,
-  ImageIcon,
   LassoSelectIcon,
   MapIcon,
   MaximizeIcon,
   MinimizeIcon,
   MinusIcon,
-  PaletteIcon,
   PlayIcon,
   PlusIcon,
-  RouteIcon,
   ShuffleIcon,
-  OrbitIcon,
-  WaypointsIcon,
   XIcon,
-  type LucideIcon,
 } from "lucide-react";
 
 const ALL_GENRES = "*";
@@ -60,14 +54,6 @@ const GENRE_CHOICES = 16;
 const ROUTE_AHEAD = 6;
 const ROUTE_BEHIND = 3;
 const LAYERS_KEY = "music-streaming.map-layers";
-
-const LAYER_ICONS: Record<MapLayer, LucideIcon> = {
-  route: RouteIcon,
-  covers: ImageIcon,
-  links: WaypointsIcon,
-  moods: PaletteIcon,
-  motion: OrbitIcon,
-};
 
 const layerListeners = new Set<() => void>();
 
@@ -296,6 +282,8 @@ function MapExplorer({
           </SelectContent>
         </Select>
 
+        <MapLayersMenu layers={layers} onToggle={toggleLayer} />
+
         <Button
           variant={selecting ? "secondary" : "outline"}
           size="sm"
@@ -357,22 +345,6 @@ function MapExplorer({
           </Button>
         </div>
       </div>
-
-      <ToggleGroup aria-label={t("map.layers")} className="gap-x-5">
-        {MAP_LAYERS.map((layer) => {
-          const Icon = LAYER_ICONS[layer];
-          return (
-            <ToggleGroupButton
-              key={layer}
-              active={layers.has(layer)}
-              onClick={() => toggleLayer(layer)}
-            >
-              <Icon size={14} />
-              {t(`map.layer.${layer}`)}
-            </ToggleGroupButton>
-          );
-        })}
-      </ToggleGroup>
 
       <div className="relative min-h-[22rem] flex-1 max-md:min-h-[60vh]">
         <LibraryMapCanvas

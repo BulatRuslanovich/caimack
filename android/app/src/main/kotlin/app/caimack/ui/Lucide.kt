@@ -35,6 +35,7 @@ object Lucide {
     val Repeat1 by lazy { icon(false, "m17 2 4 4-4 4", "M3 11v-1a4 4 0 0 1 4-4h14", "m7 22-4-4 4-4", "M21 13v1a4 4 0 0 1-4 4H3", "M11 10h1v4") }
     val ChevronRight by lazy { icon(false, "m9 18 6-6-6-6") }
     val ChevronDown by lazy { icon(false, "m6 9 6 6 6-6") }
+    val Layers by lazy { icon(false, "m12 3 10 5-10 5L2 8z", "m2 12 10 5 10-5", "m2 16 10 5 10-5") }
     val ChevronUp by lazy { icon(false, "m18 15-6-6-6 6") }
     val MicVocal by lazy { icon(false, "m11 7.601-5.994 8.19a1 1 0 0 0 .1 1.298l.817.818a1 1 0 0 0 1.314.087L15.09 12", "M16.5 21.174C15.5 20.5 14.372 20 13 20c-2.058 0-3.928 2.356-6 2-2.072-.356-2.775-3.369-1.5-4.5", "M11 7a5 5 0 1 0 10 0a5 5 0 1 0 -10 0") }
     val ListVideo by lazy { icon(false, "M21 5H3", "M10 12H3", "M10 19H3", "M15 12.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997a1 1 0 0 1-1.517-.86z") }

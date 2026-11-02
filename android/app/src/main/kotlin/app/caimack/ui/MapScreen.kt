@@ -3,7 +3,9 @@
 
 package app.caimack.ui
 
+import android.content.Context
 import android.widget.Toast
+import androidx.core.content.edit
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -90,6 +92,10 @@ private fun MapExplorer(map: LibraryMap) {
     val palette = LocalPalette.current
     val playback = container.player.state.collectAsState().value
     val points = map.points
+    val layerPreferences = remember(context) { context.getSharedPreferences("map_layers", Context.MODE_PRIVATE) }
+    var hiddenLayers by remember(layerPreferences) {
+        mutableStateOf(layerPreferences.getStringSet("hidden", emptySet()).orEmpty().toSet())
+    }
 
     val spots = remember(points) { points.map { Spot(it.x, it.y) } }
     val bounds = remember(spots) { boundsOf(spots) }
@@ -111,6 +117,13 @@ private fun MapExplorer(map: LibraryMap) {
         if (members.isEmpty()) null
         else Spot(members.map { it.x }.sorted()[members.size / 2], members.map { it.y }.sorted()[members.size / 2])
     }
+    val visibleLinks = if (MapLayer.Links.key in hiddenLayers) emptyList() else links
+    val moodPlates = if (MapLayer.Moods.key in hiddenLayers) emptyList() else map.landmarks.map {
+        Plate(moodNames[it.mood] ?: it.mood, Spot(it.x, it.y), moodHue(it.mood))
+    }
+    val plates = moodPlates + listOfNotNull(genreLabel?.let {
+        Plate(genre!!.replaceFirstChar { char -> char.uppercase() }, it, null, strong = true)
+    })
 
     val current = playback.current?.id?.let { id -> points.firstOrNull { it.id == id } }
     val measurer = rememberTextMeasurer()
@@ -141,13 +154,17 @@ private fun MapExplorer(map: LibraryMap) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
-                Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                Modifier.weight(1f).padding(end = 8.dp).horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Chip(stringResource(R.string.map_all_genres), genre == null) { genre = null }
                 genres.forEach { name ->
                     Chip(name.replaceFirstChar { it.uppercase() }, genre == name) { genre = if (genre == name) null else name }
                 }
+            }
+            MapLayersMenu(hiddenLayers) { layer ->
+                hiddenLayers = if (layer.key in hiddenLayers) hiddenLayers - layer.key else hiddenLayers + layer.key
+                layerPreferences.edit { putStringSet("hidden", hiddenLayers) }
             }
             if (current != null) {
                 MapButton(Lucide.Crosshair, stringResource(R.string.map_locate)) {
@@ -200,9 +217,7 @@ private fun MapExplorer(map: LibraryMap) {
             ) {
                 val shown = view ?: return@Canvas
                 drawMap(
-                    shown, points, links, maxPlays, palette, genre,
-                    map.landmarks.map { Plate(moodNames[it.mood] ?: it.mood, Spot(it.x, it.y), moodHue(it.mood)) } +
-                        listOfNotNull(genreLabel?.let { Plate(genre!!.replaceFirstChar { c -> c.uppercase() }, it, null, strong = true) }),
+                    shown, points, visibleLinks, maxPlays, palette, genre, plates,
                     current?.id,
                     picked?.id,
                     measurer,

@@ -911,6 +911,7 @@ export const ru: Dictionary = {
   "map.fullscreen": "На весь экран",
   "map.exitFullscreen": "Выйти из полноэкранного режима",
   "map.layers": "Слои карты",
+  "map.layersCount": "Слои · {count}",
   "map.layer.route": "Очередь",
   "map.layer.covers": "Обложки",
   "map.layer.links": "Связи",

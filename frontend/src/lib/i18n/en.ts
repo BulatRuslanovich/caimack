@@ -859,6 +859,7 @@ export const en = {
   "map.fullscreen": "Full screen",
   "map.exitFullscreen": "Exit full screen",
   "map.layers": "Map layers",
+  "map.layersCount": "Layers · {count}",
   "map.layer.route": "Queue",
   "map.layer.covers": "Covers",
   "map.layer.links": "Links",
