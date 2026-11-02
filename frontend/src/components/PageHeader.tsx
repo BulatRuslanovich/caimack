@@ -48,7 +48,7 @@ export function SectionHeader<T extends string, U extends string>({
   return (
     <div className="flex items-end justify-between gap-3">
       <div className="min-w-0">
-        <h2 className="truncate font-display text-heading">
+        <h2 className="line-clamp-2 font-sans text-heading font-semibold">
           {titleHref ? <Link href={titleHref}>{title}</Link> : title}
         </h2>
         {note && <p className="truncate text-sm text-muted-foreground">{note}</p>}
@@ -121,7 +121,7 @@ export function CardGridSkeleton({ round = false }: { round?: boolean }) {
         <div key={card} className={cn("flex flex-col gap-2", round && "items-center")}>
           <span
             className={cn(
-              "mb-0.5 aspect-square w-full animate-pulse rounded-xs bg-raised",
+              "mb-2 aspect-square w-full animate-pulse rounded-xs bg-raised",
               round && "rounded-full",
             )}
           />

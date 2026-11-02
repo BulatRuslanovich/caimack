@@ -5,8 +5,8 @@
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Disc3Icon } from "lucide-react";
-import { useState, useSyncExternalStore } from "react";
-import { readStored, writeStored } from "@/lib/storage";
+import { useState } from "react";
+import { useAlbumView } from "@/lib/albumView";
 import { queries } from "@/lib/queries";
 import { AlbumCard } from "@/components/MediaCard";
 import { CardGrid, CardGridSkeleton, PageHeader, Section } from "@/components/PageHeader";
@@ -20,36 +20,12 @@ const sortKeys = { title: "sort.title", recent: "sort.dateAdded" } as const;
 
 type Sort = keyof typeof sortKeys;
 
-type View = "grid" | "crate";
-
-const VIEW_KEY = "music-streaming.albums-view";
-
-const viewListeners = new Set<() => void>();
-
-function useAlbumsView(): [View, (next: View) => void] {
-  const view = useSyncExternalStore<View>(
-    (listener) => {
-      viewListeners.add(listener);
-      return () => viewListeners.delete(listener);
-    },
-    () => (readStored(VIEW_KEY) === "crate" ? "crate" : "grid"),
-    () => "grid",
-  );
-
-  const setView = (next: View) => {
-    writeStored(VIEW_KEY, next);
-    for (const listener of viewListeners) listener();
-  };
-
-  return [view, setView];
-}
-
 export function AlbumsPage() {
   const t = useT();
 
   const [sort, setSort] = useState<Sort>("title");
   const [search, setSearch] = useState("");
-  const [view, setView] = useAlbumsView();
+  const view = useAlbumView();
 
   const albums = useInfiniteQuery(
     queries.albumsFeed({
@@ -72,12 +48,7 @@ export function AlbumsPage() {
         subtitle={albums.data ? t("count.albums", { count: total }) : undefined}
       />
 
-      <PageToolbar
-        search={search}
-        onSearch={setSearch}
-        placeholder={t("filter.albums")}
-        layout={{ value: view, onChange: setView }}
-      >
+      <PageToolbar search={search} onSearch={setSearch} placeholder={t("filter.albums")}>
         <SortSelect value={sort} onChange={setSort} options={sortKeys} />
       </PageToolbar>
 

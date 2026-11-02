@@ -55,4 +55,9 @@
     <string name="settings_help_visualizer">Show an animation that responds to music.</string>
     <string name="settings_help_leanBack">Open the listening screen automatically when idle.</string>
     <string name="settings_help_yandexMusic">Enable music search and import from Yandex Music.</string>
+    <string name="settings_album_layout">Album layout</string>
+    <string name="settings_library_density">Library density</string>
+    <string name="settings_density_compact">Compact</string>
+    <string name="settings_density_comfortable">Comfortable</string>
+    <string name="settings_density_spacious">Large covers</string>
 </resources>

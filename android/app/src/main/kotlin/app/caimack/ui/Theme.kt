@@ -342,7 +342,7 @@ object Type {
         fontSize = 18.sp, lineHeight = 23.sp, letterSpacing = (-0.01).em,
     )
     val heading = TextStyle(
-        fontFamily = Unbounded, fontWeight = FontWeight.Medium,
+        fontFamily = Onest, fontWeight = FontWeight.SemiBold,
         fontSize = 17.sp, lineHeight = 22.sp, letterSpacing = (-0.01).em,
     )
     val body = TextStyle(fontFamily = Onest, fontSize = 15.sp, lineHeight = 22.sp)

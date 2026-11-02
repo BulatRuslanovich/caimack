@@ -4,7 +4,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { cn } from "@/lib/cn";
 import { formatDuration } from "@/lib/format";
@@ -40,7 +40,7 @@ const SWIPE_OPEN_PX = 40;
 const SWIPE_SKIP_PX = 80;
 
 const shellClass =
-  "player-shell relative min-h-(--player-height) border-t border-border px-4 py-2.5 [grid-area:player] max-md:border-t-0 max-md:px-2.5 max-md:py-2";
+  "player-shell relative min-h-(--player-height) border-t border-border px-5 py-3 [grid-area:player] max-md:border-t-0 max-md:px-2.5 max-md:py-2";
 
 function ProgressRow({
   fallbackDuration,
@@ -113,11 +113,23 @@ export function Player() {
 
   usePlayerShortcuts(() => setQueueOpen((open) => !open));
 
-  const setExpanded = (next: boolean) => {
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (!document.startViewTransition || reduceMotion) return setExpandedNow(next);
+  useEffect(
+    () => () => {
+      transition.current?.skipTransition();
+      delete document.documentElement.dataset.playerTransition;
+    },
+    [],
+  );
 
+  const setExpanded = (next: boolean) => {
     transition.current?.skipTransition();
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!document.startViewTransition || reduceMotion) {
+      delete document.documentElement.dataset.playerTransition;
+      setExpandedNow(next);
+      return;
+    }
+
     document.documentElement.dataset.playerTransition = "true";
     const running = document.startViewTransition(() => flushSync(() => setExpandedNow(next)));
     transition.current = running;
@@ -179,7 +191,7 @@ export function Player() {
           setSwipeX(0);
         }}
       >
-        <div className="grid h-full grid-cols-[minmax(0,1fr)_minmax(0,36rem)_minmax(0,1fr)] items-center gap-6 max-md:h-auto max-md:grid-cols-1 max-md:gap-0">
+        <div className="grid h-full grid-cols-[minmax(0,1fr)_clamp(15rem,32vw,28rem)_minmax(0,1fr)] items-center gap-5 max-lg:gap-3 max-md:h-auto max-md:grid-cols-1 max-md:gap-0">
           <div
             className={cn(
               "relative flex min-w-0 items-center gap-3 max-md:gap-2.5",
@@ -211,16 +223,19 @@ export function Player() {
               />
             </button>
 
-            <div className="flex min-w-0 flex-col max-md:flex-1">
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
               {currentTrack.albumId ? (
                 <Link
                   href={`/albums/${currentTrack.albumId}`}
-                  className="truncate font-medium hover:underline"
+                  className="truncate text-sm font-medium hover:underline"
+                  title={currentTrack.title}
                 >
                   {currentTrack.title}
                 </Link>
               ) : (
-                <span className="truncate font-medium">{currentTrack.title}</span>
+                <span className="truncate text-sm font-medium" title={currentTrack.title}>
+                  {currentTrack.title}
+                </span>
               )}
               <ArtistLinks
                 track={currentTrack}
@@ -236,7 +251,10 @@ export function Player() {
             <Button
               variant="ghost"
               size="icon"
-              className={cn("relative", currentTrack.isFavorite && "text-primary")}
+              className={cn(
+                "relative shrink-0 md:hidden",
+                currentTrack.isFavorite && "text-primary",
+              )}
               onClick={likeCurrent}
               aria-label={favoriteLabel}
               aria-pressed={currentTrack.isFavorite}
@@ -268,45 +286,62 @@ export function Player() {
             </div>
           </div>
 
-          <div className="flex min-w-0 flex-col items-center gap-1 max-md:hidden">
+          <div className="flex min-w-0 flex-col items-center gap-1.5 max-md:hidden">
             <PlayerTransport />
             <ProgressRow tooltip fallbackDuration={currentTrack.durationSeconds} />
           </div>
 
-          <div className="flex min-w-0 items-center justify-end gap-1.5 max-md:hidden">
-            <StreamQuality track={currentTrack} className="max-xl:hidden" />
-
-            <SleepTimerButton />
-
-            <Button
-              variant="ghost"
-              size="icon"
-              className={cn(queueOpen && "text-primary")}
-              onClick={() => setQueueOpen((open) => !open)}
-              aria-label={t("queue.label")}
-              aria-pressed={queueOpen}
-              title={
-                state.nextTrack
-                  ? t("player.upNextNamed", { title: state.nextTrack.title })
-                  : t("queue.title")
-              }
-            >
-              <ListVideoIcon />
-            </Button>
-
-            <div className="flex items-center gap-1.5">
-              <PlayerVolume seekbarClassName="max-w-[7.5rem]" />
+          <div className="flex min-w-0 items-center justify-end gap-3 max-lg:gap-1 max-md:hidden">
+            <div className="flex shrink-0 items-center gap-0.5">
+              <StreamQuality
+                track={currentTrack}
+                className="border-transparent font-medium text-faint max-xl:hidden"
+              />
+              <SleepTimerButton className={state.sleepTimer ? "text-primary" : "text-faint"} />
             </div>
 
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setExpanded(true)}
-              aria-label={t("player.openFull")}
-              title={t("player.openFull")}
-            >
-              <Maximize2Icon size={18} />
-            </Button>
+            <div className="flex shrink-0 items-center gap-0.5">
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(currentTrack.isFavorite && "text-primary")}
+                onClick={likeCurrent}
+                aria-label={favoriteLabel}
+                aria-pressed={currentTrack.isFavorite}
+              >
+                <HeartIcon className={currentTrack.isFavorite ? "fill-current" : undefined} />
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(queueOpen && "text-primary")}
+                onClick={() => setQueueOpen((open) => !open)}
+                aria-label={t("queue.label")}
+                aria-pressed={queueOpen}
+                title={
+                  state.nextTrack
+                    ? t("player.upNextNamed", { title: state.nextTrack.title })
+                    : t("queue.title")
+                }
+              >
+                <ListVideoIcon />
+              </Button>
+
+              <div className="flex items-center gap-1">
+                <PlayerVolume seekbarClassName="w-20 max-w-20 max-lg:w-12 max-lg:max-w-12" />
+              </div>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setExpanded(true)}
+                aria-label={t("player.openFull")}
+                title={t("player.openFull")}
+              >
+                <Maximize2Icon size={18} />
+              </Button>
+            </div>
           </div>
         </div>
 

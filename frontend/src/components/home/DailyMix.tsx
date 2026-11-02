@@ -19,9 +19,8 @@ import { PlayAllButton } from "@/components/PlayAllButton";
 import { PlayBadge } from "@/components/PlayBadge";
 import { RadioButton } from "@/components/RadioButton";
 import { ShuffleButton } from "@/components/ShuffleButton";
-import { capFourOnMobile } from "./layout";
 
-export const HERO_PREVIEW_SIZE = 5;
+export const HERO_PREVIEW_SIZE = 3;
 
 const BYLINE_ARTISTS = 3;
 
@@ -86,8 +85,8 @@ export function DailyMix<T extends string>({
       data-tone=""
       style={toneStyle(tone)}
       className={cn(
-        "daily-mix grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-10 gap-y-7 p-8",
-        "max-md:-mx-1 max-md:grid-cols-1 max-md:gap-y-5 max-md:p-4",
+        "daily-mix grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-8 gap-y-4 p-7",
+        "max-md:-mx-1 max-md:gap-x-4 max-md:gap-y-3 max-md:p-4",
       )}
       aria-labelledby="daily-mix-heading"
     >
@@ -100,7 +99,7 @@ export function DailyMix<T extends string>({
         />
       )}
 
-      <div className="daily-record" data-spinning={Boolean(sounding)}>
+      <div className="daily-record row-span-2 max-md:row-span-1" data-spinning={Boolean(sounding)}>
         <div className="record" data-out="true">
           <div className="record-disc" aria-hidden="true">
             <div className="record-spin">
@@ -124,23 +123,34 @@ export function DailyMix<T extends string>({
         </div>
       </div>
 
-      <div className="flex min-w-0 flex-col gap-3">
-        <h2 id="daily-mix-heading" className={cn("line-clamp-2", displayTitleClass(title))}>
+      <div className="flex min-w-0 flex-col gap-2 self-end max-md:self-center">
+        <h2
+          id="daily-mix-heading"
+          className={cn(
+            "line-clamp-2",
+            displayTitleClass(title),
+            "max-xl:text-title",
+            "max-md:text-[clamp(1.125rem,4.5vw,1.5rem)] max-md:leading-tight",
+          )}
+        >
           {title}
         </h2>
-        <p className="text-muted-foreground">
-          <span className="line-clamp-2 md:inline">{who}</span>
+        <p className="text-sm text-muted-foreground">
+          <span className="line-clamp-2 max-md:line-clamp-1 md:inline" title={who}>
+            {who}
+          </span>
           <span className="max-md:hidden"> · </span>
           <span className="whitespace-nowrap max-md:block">{size}</span>
         </p>
-        <div className="mt-3 flex flex-wrap items-center gap-2.5 max-sm:gap-2 max-sm:[&_button]:px-3">
-          <PlayAllButton tracks={tracks} name={title} />
-          <ShuffleButton tracks={tracks} compact />
-          <RadioButton seed={null} label={t("radio.mine")} />
-        </div>
       </div>
 
-      <div className="col-span-full flex min-w-0 flex-col gap-2 border-t border-border pt-5">
+      <div className="col-start-2 flex flex-wrap items-center gap-2.5 self-start max-md:col-span-full max-md:col-start-1 max-md:gap-2 max-sm:[&_button]:px-3">
+        <PlayAllButton tracks={tracks} name={title} />
+        <ShuffleButton tracks={tracks} compact />
+        <RadioButton seed={null} label={t("radio.mine")} />
+      </div>
+
+      <div className="col-span-full flex min-w-0 flex-col gap-2 border-t border-border pt-4 max-md:pt-3">
         <div className="flex items-center justify-between gap-3">
           <p className="truncate text-sm text-muted-foreground">{t("home.mixStartsWith")}</p>
           {href && (
@@ -155,11 +165,7 @@ export function DailyMix<T extends string>({
         </div>
         <ol
           aria-label={title}
-          className={cn(
-            "-mx-2 grid grid-cols-5 gap-1",
-            "max-xl:grid-cols-3 md:max-xl:[&>*:nth-child(n+4)]:hidden max-md:grid-cols-1",
-            capFourOnMobile,
-          )}
+          className="-mx-2 grid grid-cols-3 gap-2 max-lg:grid-cols-1 max-lg:gap-0"
         >
           {tracks.slice(0, HERO_PREVIEW_SIZE).map((track) => {
             const current = currentTrackId === track.id;
@@ -174,10 +180,10 @@ export function DailyMix<T extends string>({
                   className={cn(
                     "group grid w-full grid-cols-[2.75rem_minmax(0,1fr)] items-center gap-3 rounded-md p-2 text-left",
                     "transition-colors duration-150 ease-brand hover:bg-raised",
-                    "max-md:grid-cols-[2.5rem_minmax(0,1fr)_auto] max-md:py-1.5",
+                    "max-lg:grid-cols-[2.5rem_minmax(0,1fr)_auto] max-lg:py-1.5",
                   )}
                 >
-                  <span className="relative size-11 overflow-hidden rounded-xs shadow-art max-md:size-10">
+                  <span className="relative size-11 overflow-hidden rounded-xs shadow-art max-lg:size-10">
                     <TrackCover track={track} />
                     <PlayBadge
                       size={8}
@@ -189,9 +195,10 @@ export function DailyMix<T extends string>({
                   <span className="min-w-0">
                     <span
                       className={cn(
-                        "block truncate text-sm font-medium",
+                        "line-clamp-2 text-sm leading-snug font-medium",
                         current && "text-primary",
                       )}
+                      title={track.title}
                     >
                       {track.title}
                     </span>
@@ -199,7 +206,7 @@ export function DailyMix<T extends string>({
                       {formatArtists(track)}
                     </span>
                   </span>
-                  <span className="text-xs text-faint tabular-nums md:hidden">
+                  <span className="text-xs text-faint tabular-nums lg:hidden">
                     {formatDuration(track.durationSeconds)}
                   </span>
                 </button>

@@ -37,13 +37,13 @@ export function PlayerTransport({ size = "bar" }: { size?: "bar" | "full" }) {
     <div
       className={cn(
         "flex items-center",
-        large ? "justify-center gap-4 max-[420px]:gap-1.5" : "gap-2",
+        large ? "justify-center gap-4 max-[420px]:gap-1.5" : "gap-1.5",
       )}
     >
       <Button
         variant="ghost"
         size={large ? "icon-lg" : "icon"}
-        className={cn(shuffle && "text-primary")}
+        className={cn(!large && "text-faint", shuffle && "text-primary")}
         onClick={toggleShuffle}
         aria-label={t("player.shuffle")}
         aria-pressed={shuffle}
@@ -89,7 +89,7 @@ export function PlayerTransport({ size = "bar" }: { size?: "bar" | "full" }) {
       <Button
         variant="ghost"
         size={large ? "icon-lg" : "icon"}
-        className={cn(repeat !== "off" && "text-primary")}
+        className={cn(!large && "text-faint", repeat !== "off" && "text-primary")}
         onClick={cycleRepeat}
         aria-label={repeatLabel}
         title={repeatLabel}

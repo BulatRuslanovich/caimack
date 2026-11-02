@@ -55,27 +55,24 @@ export function Card<T extends string>({
       <div
         {...tone}
         className={cn(
-          "card-art relative mb-2.5 aspect-square w-full overflow-hidden rounded-xs bg-accent",
+          "card-art relative mb-3.5 aspect-square w-full overflow-hidden rounded-xs bg-accent",
           round && "rounded-full",
         )}
       >
         {cover}
       </div>
       <span
-        className={cn(
-          "line-clamp-2 text-sm leading-snug font-medium",
-          bare && "line-clamp-1",
-          current && "text-primary",
-        )}
+        title={title}
+        className={cn("line-clamp-2 text-sm leading-snug font-medium", current && "text-primary")}
       >
         {title}
       </span>
-      <span className="library-secondary truncate text-sm">{subtitle}</span>
+      <span className="library-secondary line-clamp-2 text-sm leading-snug">{subtitle}</span>
     </>
   );
 
   const shell = cn(
-    "flex min-w-0 flex-col gap-0.5 text-left hover:no-underline",
+    "flex min-w-0 flex-col gap-1 text-left hover:no-underline",
     bare && "items-center text-center",
     active && "[&>div:first-child]:ring-2 [&>div:first-child]:ring-primary",
   );

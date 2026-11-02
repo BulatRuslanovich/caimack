@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useT } from "@/contexts/I18nContext";
 import { usePlayerUi } from "@/contexts/PlayerUiContext";
 import { isTypingTarget } from "@/lib/shortcuts";
+import { useLibraryDensity } from "@/lib/libraryDensity";
 import { signConsole } from "@/lib/signature";
 import { LeanBack } from "./LeanBack";
 import { Loading } from "./Loading";
@@ -23,6 +24,7 @@ import { Sidebar } from "./Sidebar";
 import { SecretCat } from "./SecretCat";
 
 export function AppShell({ children }: { children: ReactNode }) {
+  useLibraryDensity();
   const { user, loading } = useAuth();
   const t = useT();
   const pathname = usePathname();

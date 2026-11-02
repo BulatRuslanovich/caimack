@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
@@ -107,16 +108,16 @@ fun Card(
         Text(
             title,
             style = Type.small.copy(fontWeight = FontWeight.Medium),
-            maxLines = if (round) 1 else 2,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             textAlign = if (round) TextAlign.Center else TextAlign.Start,
-            modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 4.dp),
         )
         Text(
             subtitle,
             style = Type.small,
             color = palette.muted,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             textAlign = if (round) TextAlign.Center else TextAlign.Start,
             modifier = Modifier.fillMaxWidth(),
@@ -132,6 +133,7 @@ fun TrackRow(
     onRemoveFromPlaylist: (() -> Unit)? = null,
 ) {
     val palette = LocalPalette.current
+    val density = LocalLibraryDensity.current
     val playback = LocalContainer.current.player.state.collectAsState().value
     val current = playback.current?.id == track.id
     val playing = current && playback.playing
@@ -159,7 +161,8 @@ fun TrackRow(
                 },
             )
             .combinedClickable(onLongClick = { actions = true }, onClick = onClick)
-            .padding(start = inset, top = 6.dp, bottom = 6.dp, end = 4.dp),
+            .heightIn(min = 48.dp)
+            .padding(start = inset, top = density.rowPadding, bottom = density.rowPadding, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -169,7 +172,7 @@ fun TrackRow(
                 else Text("$it", style = Type.small, color = if (current) palette.primary else palette.faint, textAlign = TextAlign.End)
             }
         }
-        Box(Modifier.size(40.dp)) {
+        Box(Modifier.size(density.coverSize)) {
             Cover(trackCover(track), track.albumTitle ?: track.title, Modifier.fillMaxSize())
             if (playing && index == null) {
                 Box(Modifier.fillMaxSize().clip(Radius.cover).background(Color.Black.copy(alpha = 0.55f)), contentAlignment = Alignment.Center) {
@@ -182,7 +185,7 @@ fun TrackRow(
                 track.title,
                 style = Type.small.copy(fontWeight = FontWeight.Medium),
                 color = if (current) palette.primary else palette.foreground,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(artistsOf(track), style = Type.small, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)

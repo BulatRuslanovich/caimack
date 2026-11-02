@@ -160,7 +160,7 @@ fun MoodRadio() {
     val container = LocalContainer.current
     val context = LocalContext.current
     val activeMood by remember { container.radio.state.map { it.mood }.distinctUntilChanged() }
-        .collectAsState(container.radio.state.value.mood)
+        .collectAsState(initial = null)
     @Suppress("UNCHECKED_CAST")
     val moods by produceState(Remote.cache[MOODS] as List<Mood>? ?: emptyList()) {
         if (value.isEmpty()) {

@@ -356,6 +356,7 @@ export const ru: Dictionary = {
   "view.crate": "Ящик",
   "view.label": "Вид",
   "view.layout": "Отображение",
+  "view.albumLayout": "Вид альбомов",
   "view.densityGridOnly": "Плотность применяется к сетке.",
   "share.card": "Карточка для сторис",
   "share.title": "Поделиться тем, что слушаете",

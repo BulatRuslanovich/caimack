@@ -203,7 +203,7 @@ private fun RecapStory(recap: Recap, play: (List<Track>, Int) -> Unit, onClose: 
                     )
                 }
 
-                BoxWithConstraints(
+                Box(
                     Modifier
                         .weight(1f)
                         .fillMaxWidth()

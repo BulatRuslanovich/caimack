@@ -18,6 +18,7 @@ import { COLORWAYS } from "@/lib/themeScript";
 import { leanBack, useLeanBack } from "@/lib/leanBack";
 import { setVisualizer, useVisualizer } from "@/lib/visualizer";
 import { LIBRARY_DENSITIES, setLibraryDensity, useLibraryDensity } from "@/lib/libraryDensity";
+import { ALBUM_VIEWS, setAlbumView, useAlbumView } from "@/lib/albumView";
 import { SettingHelp } from "./SettingHelp";
 import { Switch } from "@/components/ui/switch";
 import { useI18n, useT } from "@/contexts/I18nContext";
@@ -34,6 +35,7 @@ export function Appearance() {
   const visualizer = useVisualizer();
   const coverTone = useCoverToneEnabled();
   const density = useLibraryDensity();
+  const albumView = useAlbumView();
 
   return (
     <Panel title={t("settings.appearance")}>
@@ -68,6 +70,13 @@ export function Appearance() {
         value={locale}
         onChange={setLocale}
         options={LOCALES.map((value) => ({ value, label: LOCALE_NAMES[value] }))}
+      />
+
+      <Choice
+        legend={t("view.albumLayout")}
+        value={albumView}
+        onChange={setAlbumView}
+        options={ALBUM_VIEWS.map((value) => ({ value, label: t(`view.${value}`) }))}
       />
 
       <Choice

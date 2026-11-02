@@ -183,7 +183,7 @@ export function FullScreenPlayer({
               if (from !== null && event.changedTouches[0].clientY - from > SWIPE_CLOSE_PX)
                 onClose();
             }}
-            className="fixed inset-0 z-90 flex animate-in flex-col bg-background duration-300 fade-in-0 px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))]"
+            className="fixed inset-0 z-90 flex flex-col bg-background px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))]"
           >
             <DialogPrimitive.Title className="sr-only">
               {t("player.nowPlaying")}
@@ -300,26 +300,47 @@ export function FullScreenPlayer({
                     panel !== "art" && "lg:mx-auto",
                   )}
                 >
-                  <div className="flex min-w-0 flex-col gap-2">
-                    <h2 className={cn("line-clamp-3 text-balance", displayTitleClass(track.title))}>
-                      {track.title}
-                    </h2>
-                    <p className="text-muted-foreground">
-                      <ArtistLinks
-                        track={track}
-                        onNavigate={onClose}
-                        className="font-medium text-foreground"
-                      />
-                      {track.albumId && (
-                        <>
-                          {", "}
-                          <Link href={`/albums/${track.albumId}`} onClick={onClose}>
-                            {track.albumTitle}
-                          </Link>
-                        </>
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="flex min-w-0 flex-1 flex-col gap-2">
+                      <h2
+                        className={cn("line-clamp-3 text-balance", displayTitleClass(track.title))}
+                      >
+                        {track.title}
+                      </h2>
+                      <p className="text-muted-foreground">
+                        <ArtistLinks
+                          track={track}
+                          onNavigate={onClose}
+                          className="font-medium text-foreground"
+                        />
+                        {track.albumId && (
+                          <>
+                            {", "}
+                            <Link href={`/albums/${track.albumId}`} onClick={onClose}>
+                              {track.albumTitle}
+                            </Link>
+                          </>
+                        )}
+                      </p>
+                      {reason && <p className="text-sm text-faint">{reasonLabel(reason, t)}</p>}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon-lg"
+                      className={cn(
+                        "shrink-0",
+                        track.isFavorite && "text-primary hover:text-primary",
                       )}
-                    </p>
-                    {reason && <p className="text-sm text-faint">{reasonLabel(reason, t)}</p>}
+                      onClick={onToggleFavorite}
+                      aria-label={
+                        track.isFavorite
+                          ? t("tracks.removeFromFavorites")
+                          : t("tracks.addToFavorites")
+                      }
+                      aria-pressed={track.isFavorite}
+                    >
+                      <HeartIcon className={track.isFavorite ? "fill-current" : undefined} />
+                    </Button>
                   </div>
 
                   <FullScreenProgress track={track} chrome={chrome} />
@@ -342,21 +363,6 @@ export function FullScreenPlayer({
                   )}
 
                   <div className={cn("flex items-center gap-2", chrome)}>
-                    <Button
-                      variant="ghost"
-                      size="icon-lg"
-                      className={cn(track.isFavorite && "text-primary hover:text-primary")}
-                      onClick={onToggleFavorite}
-                      aria-label={
-                        track.isFavorite
-                          ? t("tracks.removeFromFavorites")
-                          : t("tracks.addToFavorites")
-                      }
-                      aria-pressed={track.isFavorite}
-                    >
-                      <HeartIcon className={track.isFavorite ? "fill-current" : undefined} />
-                    </Button>
-
                     <TrackMenu
                       track={track}
                       open={menuOpen}

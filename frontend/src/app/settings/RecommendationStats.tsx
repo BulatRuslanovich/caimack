@@ -35,7 +35,7 @@ export function RecommendationStats() {
       <section className="flex flex-col gap-4 rounded-lg bg-card p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex max-w-[60ch] flex-col gap-1">
-            <h2 className="font-display text-heading">{t("stats.title")}</h2>
+            <h2 className="font-sans text-heading font-semibold">{t("stats.title")}</h2>
           </div>
           <ToggleGroup>
             {PERIODS.map((period) => (

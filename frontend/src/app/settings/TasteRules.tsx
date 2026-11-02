@@ -31,7 +31,7 @@ export function TasteRules() {
 
   return (
     <section className="flex flex-col gap-3 rounded-lg bg-card p-4">
-      <h2 className="font-display text-heading">{t("rules.title")}</h2>
+      <h2 className="font-sans text-heading font-semibold">{t("rules.title")}</h2>
       <Query
         result={rules}
         isEmpty={(data) => data.length === 0}

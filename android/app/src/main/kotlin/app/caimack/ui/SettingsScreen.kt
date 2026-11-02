@@ -20,6 +20,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -276,6 +280,26 @@ fun SettingsScreen() {
                         ) { container.appearance.setColorway(Colorway.of(it)) }
                     }
 
+                    if (SettingKey.AlbumLayout in visible) {
+                        val layout by container.appearance.albumLayout.collectAsStateWithLifecycle()
+                        Choice(
+                            stringResource(R.string.settings_album_layout), null, layout.key,
+                            listOf(Option("grid", stringResource(R.string.view_grid)), Option("crate", stringResource(R.string.view_crate))),
+                        ) { container.appearance.setAlbumLayout(AlbumLayout.of(it)) }
+                    }
+
+                    if (SettingKey.Density in visible) {
+                        val density by container.appearance.libraryDensity.collectAsStateWithLifecycle()
+                        Choice(
+                            stringResource(R.string.settings_library_density), null, density.key,
+                            listOf(
+                                Option("compact", stringResource(R.string.settings_density_compact)),
+                                Option("comfortable", stringResource(R.string.settings_density_comfortable)),
+                                Option("spacious", stringResource(R.string.settings_density_spacious)),
+                            ),
+                        ) { container.appearance.setLibraryDensity(LibraryDensity.of(it)) }
+                    }
+
                     if (SettingKey.Cover in visible) {
                         val coverTone by container.appearance.coverTone.collectAsStateWithLifecycle()
                         Row(
@@ -335,7 +359,7 @@ private fun Panel(title: String, action: (@Composable () -> Unit)? = null, conte
 @Composable
 private fun Choice(legend: String, hint: String?, value: String, options: List<Option>, onChange: (String) -> Unit) {
     val palette = LocalPalette.current
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (hint != null) {
             SettingLabel(legend, hint, Type.body.copy(fontWeight = FontWeight.SemiBold), Modifier.fillMaxWidth())
         } else {
@@ -356,7 +380,8 @@ private fun Choice(legend: String, hint: String?, value: String, options: List<O
                                     .clip(Radius.row)
                                     .background(if (checked) palette.primarySoft else palette.card)
                                     .border(1.dp, if (checked) palette.primary else palette.border, Radius.row)
-                                    .clickable { onChange(option.value) }
+                                    .selectable(selected = checked, role = Role.RadioButton, onClick = { onChange(option.value) })
+                                    .heightIn(min = 48.dp)
                                     .padding(12.dp),
                                 verticalArrangement = Arrangement.spacedBy(2.dp),
                             ) {

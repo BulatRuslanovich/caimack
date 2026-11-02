@@ -25,6 +25,22 @@ class Appearance(private val context: Context) {
 
     val coverTone: StateFlow<Boolean> = chosenCoverTone
 
+    private val chosenAlbumLayout = MutableStateFlow(AlbumLayout.of(preferences.getString(ALBUM_LAYOUT, null)))
+    val albumLayout: StateFlow<AlbumLayout> = chosenAlbumLayout
+
+    private val chosenLibraryDensity = MutableStateFlow(LibraryDensity.of(preferences.getString(LIBRARY_DENSITY, null)))
+    val libraryDensity: StateFlow<LibraryDensity> = chosenLibraryDensity
+
+    fun setAlbumLayout(value: AlbumLayout) {
+        preferences.edit { putString(ALBUM_LAYOUT, value.key) }
+        chosenAlbumLayout.value = value
+    }
+
+    fun setLibraryDensity(value: LibraryDensity) {
+        preferences.edit { putString(LIBRARY_DENSITY, value.key) }
+        chosenLibraryDensity.value = value
+    }
+
     val language: String get() = preferences.getString(LANGUAGE, "").orEmpty()
 
     fun setTheme(value: String) {
@@ -57,6 +73,8 @@ class Appearance(private val context: Context) {
         private const val COLORWAY = "colorway"
         private const val LANGUAGE = "language"
         private const val COVER_TONE = "cover_tone"
+        private const val ALBUM_LAYOUT = "album_layout"
+        private const val LIBRARY_DENSITY = "library_density"
 
         fun localized(base: Context): Context {
             val language = base.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(LANGUAGE, "").orEmpty()

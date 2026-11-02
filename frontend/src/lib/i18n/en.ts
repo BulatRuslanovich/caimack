@@ -333,6 +333,7 @@ export const en = {
   "view.crate": "Crate",
   "view.label": "View",
   "view.layout": "Layout",
+  "view.albumLayout": "Album layout",
   "view.densityGridOnly": "Density applies to the grid view.",
   "share.card": "Story card",
   "share.title": "Share what you are listening to",

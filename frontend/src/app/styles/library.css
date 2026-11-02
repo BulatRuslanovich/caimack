@@ -65,10 +65,6 @@
   border-color: var(--control-border);
 }
 
-.library-view-trigger {
-  border-color: var(--border-strong);
-}
-
 .queue-panel-docked {
   background: color-mix(in oklab, var(--background) 88%, var(--card));
 }
@@ -131,40 +127,41 @@
   animation-timing-function: cubic-bezier(0.22, 0.7, 0.2, 1);
   z-index: 2;
 }
+
 :root[data-player-transition="true"]::view-transition-old(player-artwork),
 :root[data-player-transition="true"]::view-transition-new(player-artwork) {
   height: 100%;
   object-fit: cover;
   mix-blend-mode: normal;
 }
-:root[data-player-transition="true"] [data-player-fullscreen] {
+
+/* Keep the outgoing image opaque while the incoming layer appears over it. */
+:root[data-player-transition="true"]::view-transition-old(root),
+:root[data-player-transition="true"]::view-transition-old(player-artwork) {
   animation: none;
-}
-
-:root[data-player-transition="true"]::view-transition-old(root) {
-  animation: player-background-out 180ms ease-out both;
+  opacity: 1;
   mix-blend-mode: normal;
 }
 
-:root[data-player-transition="true"]::view-transition-new(root) {
-  animation: player-background-in 220ms ease-out both;
+:root[data-player-transition="true"]::view-transition-new(root),
+:root[data-player-transition="true"]::view-transition-new(player-artwork) {
+  animation: player-layer-in 360ms var(--ease) both;
   mix-blend-mode: normal;
 }
 
-@keyframes player-background-in {
+@keyframes player-layer-in {
   from {
     opacity: 0;
   }
-}
-
-@keyframes player-background-out {
   to {
-    opacity: 0;
+    opacity: 1;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  ::view-transition-group(*) {
+  :root[data-player-transition="true"]::view-transition-group(*),
+  :root[data-player-transition="true"]::view-transition-old(*),
+  :root[data-player-transition="true"]::view-transition-new(*) {
     animation-duration: 0.01ms !important;
   }
 }

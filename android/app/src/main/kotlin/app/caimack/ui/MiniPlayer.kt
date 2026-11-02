@@ -29,6 +29,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,6 +41,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -64,8 +67,12 @@ internal fun clock(ms: Long) = durationOf((ms / 1000).toInt())
 @Composable
 fun MiniPlayer(state: PlayerState, onOpen: () -> Unit) {
     val palette = LocalPalette.current
-    val player = LocalContainer.current.player
+    val container = LocalContainer.current
+    val player = container.player
     val track = state.current ?: return
+    container.favorites.state.collectAsStateWithLifecycle().value
+    val liked = container.favorites.isFavorite(track)
+    val openLabel = stringResource(R.string.player_open_full)
     val position = rememberPosition(state)
     val duration = state.durationMs.takeIf { it > 0 } ?: (track.durationSeconds * 1000L)
     val swipe = remember { Animatable(0f) }
@@ -115,8 +122,8 @@ fun MiniPlayer(state: PlayerState, onOpen: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             val transition = LocalNowPlayingTransition.current
-            Box(Modifier.size(46.dp)) {
-                androidx.compose.animation.AnimatedVisibility(visible = transition?.full != true, enter = fadeIn(), exit = fadeOut()) {
+            Box(Modifier.size(46.dp).semantics { contentDescription = openLabel }.clickable(onClick = onOpen)) {
+                androidx.compose.animation.AnimatedVisibility(visible = transition?.full != true, enter = fadeIn(tween(NOW_PLAYING_TRANSITION_MS)), exit = fadeOut(tween(NOW_PLAYING_TRANSITION_MS))) {
                     Cover(trackCover(track), track.albumTitle ?: track.title, Modifier.fillMaxSize().nowPlayingCover(this))
                 }
             }
@@ -129,7 +136,11 @@ fun MiniPlayer(state: PlayerState, onOpen: () -> Unit) {
                 BufferingRing(state.buffering, Modifier.size(40.dp))
             }
             IconAction(Lucide.SkipForward, stringResource(R.string.player_next)) { player.next() }
-            IconAction(Lucide.ChevronUp, stringResource(R.string.player_open_full), onClick = onOpen)
+            IconAction(
+                if (liked) Lucide.HeartFilled else Lucide.Heart,
+                stringResource(if (liked) R.string.menu_unlike else R.string.menu_like),
+                tint = if (liked) palette.primary else palette.muted,
+            ) { container.favorites.toggle(track) }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(clock(position), style = Type.micro, color = palette.muted)

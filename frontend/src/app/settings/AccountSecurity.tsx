@@ -55,7 +55,7 @@ function Sessions() {
   return (
     <section className="flex flex-col gap-3 rounded-lg bg-card p-5 max-md:p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-display text-heading">{t("account.sessions")}</h2>
+        <h2 className="font-sans text-heading font-semibold">{t("account.sessions")}</h2>
         {list.some((session) => !session.current) && (
           <Button
             variant="outline"
@@ -131,7 +131,7 @@ function SignIns() {
 
   return (
     <section className="flex flex-col gap-3 rounded-lg bg-card p-5 max-md:p-4">
-      <h2 className="font-display text-heading">{t("account.signIns")}</h2>
+      <h2 className="font-sans text-heading font-semibold">{t("account.signIns")}</h2>
       <ul className="flex flex-col divide-y divide-border text-sm">
         {signIns.data.map((entry, index) => (
           <li

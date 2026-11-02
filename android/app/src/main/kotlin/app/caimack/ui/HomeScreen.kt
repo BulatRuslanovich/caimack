@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -62,8 +63,8 @@ import app.caimack.R
 import app.caimack.api.HomeBlock
 import app.caimack.api.Track
 
-private const val HERO_PREVIEW = 5
-private const val MOBILE_UP_NEXT = 4
+private const val HERO_PREVIEW = 3
+private const val MOBILE_UP_NEXT = 3
 private const val MOBILE_QUICK = 4
 private const val MOBILE_CHART = 5
 private const val MIN_DISTINCT = 3
@@ -168,7 +169,7 @@ private fun Block(block: HomeBlock, nav: NavController, shown: Set<String>, seen
 @Composable
 private fun Shelf(block: HomeBlock, nav: NavController, play: (List<Track>, Int) -> Unit) {
     val media = LocalContainer.current.media
-    val width = Modifier.width(116.dp)
+    val width = Modifier.width(LocalLibraryDensity.current.shelfWidth)
 
     LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         when {
@@ -251,21 +252,22 @@ private fun DailyMix(tracks: List<Track>, total: Int, title: String, play: (List
 
         Column(Modifier.padding(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Record(
-                    sounding ?: lead,
-                    spinning = sounding != null,
-                    out = true,
-                    modifier = Modifier.padding(top = 4.dp).width(176.dp),
-                    sleeve = { modifier -> Collage(collage, lead, modifier) },
-                )
-                Text(title, style = Type.display, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
-                Text(
-                    "${pluralStringResource(R.plurals.count_tracks, total, total)}, ${artistsOf(lead)}",
-                    style = Type.body,
-                    color = palette.muted,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Box(Modifier.width(108.dp)) {
+                        Record(
+                            sounding ?: lead,
+                            spinning = sounding != null,
+                            out = true,
+                            modifier = Modifier.width(76.dp),
+                            sleeve = { modifier -> Collage(collage, lead, modifier) },
+                        )
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(title, style = Type.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(artistsOf(lead), style = Type.small, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(pluralStringResource(R.plurals.count_tracks, total, total), style = Type.small, color = palette.muted)
+                    }
+                }
                 PlayActions(onPlay = { play(tracks, 0) }, onShuffle = { play(tracks.shuffled(), 0) })
                 Box(Modifier.fillMaxWidth().height(1.dp).background(palette.border))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -404,7 +406,7 @@ private fun Tile(label: String, sublabel: String, onClick: () -> Unit, toneUrl: 
     Row(
         Modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .heightIn(min = 64.dp)
             .clip(Radius.tile)
             .background(palette.card)
             .background(Brush.horizontalGradient(0f to tone.copy(alpha = tone.alpha * 0.3f), 0.55f to Color.Transparent))
@@ -413,7 +415,7 @@ private fun Tile(label: String, sublabel: String, onClick: () -> Unit, toneUrl: 
     ) {
         Box(Modifier.size(56.dp)) { art() }
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-            Text(label, style = Type.small.copy(fontWeight = FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(label, style = Type.small.copy(fontWeight = FontWeight.Medium), maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(sublabel, style = Type.tiny, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }

@@ -192,7 +192,10 @@ function Tile<T extends string>({
     <>
       <span className="size-14 shrink-0 overflow-hidden">{art}</span>
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className={cn("truncate text-sm font-medium", current && "text-primary")}>
+        <span
+          className={cn("line-clamp-2 text-sm leading-snug font-medium", current && "text-primary")}
+          title={label}
+        >
           {label}
         </span>
         {sublabel && <span className="truncate text-xs text-muted-foreground">{sublabel}</span>}
@@ -202,7 +205,7 @@ function Tile<T extends string>({
   );
 
   const shell =
-    "quick-tile flex h-14 w-full items-center gap-3 overflow-hidden rounded-sm bg-card pr-3 text-left transition-colors duration-150 ease-brand hover:bg-raised hover:no-underline";
+    "quick-tile flex min-h-16 w-full items-center gap-3 overflow-hidden rounded-sm bg-card py-1 pr-3 text-left transition-colors duration-150 ease-brand hover:bg-raised hover:no-underline";
 
   return (
     <div {...tone} className="group relative min-w-0">

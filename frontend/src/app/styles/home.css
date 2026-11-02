@@ -37,7 +37,7 @@
 }
 
 .daily-record {
-  --record-size: 16rem;
+  --record-size: 13rem;
   width: calc(var(--record-size) * 1.42);
 }
 
@@ -56,9 +56,15 @@
   animation: record-spin 1.8s linear infinite;
 }
 
+@media (56.25rem <= width < 75rem) {
+  .daily-record {
+    --record-size: 10rem;
+  }
+}
+
 @media (width < 56.25rem) {
   .daily-record {
-    --record-size: 12.5rem;
+    --record-size: clamp(4.75rem, 20vw, 7rem);
   }
 }
 

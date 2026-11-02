@@ -26,6 +26,9 @@ import app.caimack.CaimackApp
 import app.caimack.MainActivity
 import app.caimack.R
 import app.caimack.api.Paged
+import app.caimack.api.Album
+import app.caimack.api.HomeBlock
+import app.caimack.api.HomeFeed
 import app.caimack.api.Playlist
 import app.caimack.api.PlaylistDetail
 import app.caimack.api.Track
@@ -44,6 +47,8 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 
 class VisualReviewTest {
     @get:Rule
@@ -54,6 +59,8 @@ class VisualReviewTest {
     private val originalTheme = container.appearance.theme.value
     private val originalLanguage = container.appearance.language
     private val originalFontScale = context.resources.configuration.fontScale
+    private val originalLayout = container.appearance.albumLayout.value
+    private val originalDensity = container.appearance.libraryDensity.value
     private val user = User("visual-review", "Визуальная проверка")
     private val original = listOf(
         Track("first", "Ночной город", "artist", "Электрические сны", durationSeconds = 214),
@@ -106,6 +113,8 @@ class VisualReviewTest {
         container.player.stop()
         container.appearance.setTheme(originalTheme)
         container.appearance.setLanguage(originalLanguage)
+        container.appearance.setAlbumLayout(originalLayout)
+        container.appearance.setLibraryDensity(originalDensity)
         shell("settings put system font_scale $originalFontScale")
         container.session.expire()
         Remote.cache.clear()
@@ -117,13 +126,15 @@ class VisualReviewTest {
         android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { it.readBytes() }
     }
 
-    private fun capture(name: String) {
+    private fun capture(name: String, settle: Boolean = true) {
         compose.runOnIdle {
             (container.player.state as MutableStateFlow<PlayerState>).value = PlayerState(queue = original, index = 1)
         }
         compose.waitForIdle()
-        compose.mainClock.advanceTimeBy(500)
+        if (settle) compose.mainClock.advanceTimeBy(500)
         compose.waitForIdle()
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        Thread.sleep(80) // Let the emulator compositor present the frame before the system screenshot.
         val bitmap = checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
         val values = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, "$name.png")
@@ -170,4 +181,73 @@ class VisualReviewTest {
     @Test fun darkTheme() = review(dark = true, fontScale = 1f, prefix = "dark")
     @Test fun lightTheme() = review(dark = false, fontScale = 1f, prefix = "light")
     @Test fun largerText() = review(dark = true, fontScale = 1.3f, prefix = "large-text")
+
+    @Test
+    fun interfaceMatchesTheUpdatedWebClient() {
+        val previous = web.dispatcher
+        val albums = original.mapIndexed { index, track -> Album("album-$index", track.title, track.artistId, track.artistName, trackCount = 1) }
+        web.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val body = when (request.url.encodedPath) {
+                    "/api/home/feed" -> Json.encodeToString(HomeFeed(listOf(HomeBlock("daily", "dailyMix", "Hero", "Lead", tracks = original, totalCount = 26))))
+                    "/api/albums" -> Json.encodeToString(Paged(albums, albums.size, 1, 60))
+                    else -> return previous.dispatch(request)
+                }
+                return MockResponse.Builder().code(200).addHeader("Content-Type", "application/json").body(body).build()
+            }
+        }
+        Remote.cache.clear()
+        container.appearance.setLanguage("ru")
+        container.appearance.setTheme(Appearance.DARK)
+        container.appearance.setAlbumLayout(AlbumLayout.Grid)
+        container.appearance.setLibraryDensity(LibraryDensity.Comfortable)
+        compose.activityRule.scenario.recreate()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText(label(R.string.home_daily_mix)).fetchSemanticsNodes().isNotEmpty() }
+        capture("parity-home-dark")
+
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithContentDescription(label(R.string.player_open_full)).performClick()
+        compose.mainClock.advanceTimeBy(110)
+        capture("parity-cover-opening-110ms", settle = false)
+        compose.mainClock.advanceTimeBy(110)
+        capture("parity-cover-opening-220ms", settle = false)
+        compose.mainClock.advanceTimeBy(500)
+        compose.mainClock.autoAdvance = true
+        compose.onNodeWithText(original[1].title).assertIsDisplayed()
+        val title = compose.onNodeWithText(original[1].title).fetchSemanticsNode().boundsInRoot
+        val heart = compose.onNodeWithContentDescription(label(R.string.menu_like)).fetchSemanticsNode().boundsInRoot
+        assertTrue("Favorite belongs to the right of the title", heart.left >= title.right)
+        capture("parity-player-dark")
+        compose.onNodeWithContentDescription(label(R.string.player_close_full)).performClick()
+
+        compose.onNode(hasText("В") and hasClickAction()).performClick()
+        compose.onNodeWithText(label(R.string.settings_title)).performClick()
+        compose.onNodeWithContentDescription(label(R.string.settings_search)).performTextInput("альбом")
+        compose.onNodeWithText(label(R.string.view_crate)).performScrollTo().performClick()
+        assertEquals(AlbumLayout.Crate, Appearance(context).albumLayout.value)
+        capture("parity-layout-settings")
+        compose.onNodeWithContentDescription(label(R.string.search_clear)).performClick()
+        compose.onNodeWithContentDescription(label(R.string.settings_search)).performTextInput("плотность")
+        compose.onNodeWithText(label(R.string.settings_density_spacious)).performScrollTo().performClick()
+        assertEquals(LibraryDensity.Spacious, Appearance(context).libraryDensity.value)
+        capture("parity-density-settings")
+        compose.activityRule.scenario.recreate()
+        compose.onNodeWithText(label(R.string.nav_library)).performClick()
+        compose.onNodeWithText(label(R.string.nav_albums)).performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText(original[0].title).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(label(R.string.view_grid)).assertDoesNotExist()
+        compose.onNodeWithText(label(R.string.view_crate)).assertDoesNotExist()
+        capture("parity-albums-crate")
+        compose.onNodeWithText(label(R.string.nav_home)).performClick()
+        container.appearance.setTheme(Appearance.LIGHT)
+        capture("parity-home-light")
+        compose.onNodeWithContentDescription(label(R.string.player_open_full)).performClick()
+        capture("parity-player-light")
+        compose.onNodeWithContentDescription(label(R.string.player_close_full)).performClick()
+        container.appearance.setTheme(Appearance.DARK)
+        shell("settings put system font_scale 1.3")
+        compose.activityRule.scenario.recreate()
+        compose.onNodeWithText(label(R.string.nav_home)).performClick()
+        capture("parity-home-large-text")
+    }
 }

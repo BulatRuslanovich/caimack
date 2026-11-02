@@ -163,6 +163,7 @@ fun App(user: User) {
     }
 
     val full = expanded && playback.current != null
+    val libraryDensity by container.appearance.libraryDensity.collectAsStateWithLifecycle()
 
     val colorway = LocalColorway.current
     val toneEnabled by container.appearance.coverTone.collectAsStateWithLifecycle()
@@ -198,6 +199,7 @@ fun App(user: User) {
     SharedTransitionLayout {
     CompositionLocalProvider(
         LocalNowPlayingTransition provides NowPlayingTransition(this, full),
+        LocalLibraryDensity provides libraryDensity,
         LocalNavigate provides navigate,
         LocalNowPlayingTone provides nowPlayingTone,
         LocalToneEnabled provides toneEnabled,
@@ -258,7 +260,7 @@ fun App(user: User) {
         }
     }
 
-    AnimatedVisibility(full, enter = fadeIn(tween(250)), exit = fadeOut(tween(250))) {
+    AnimatedVisibility(full, enter = fadeIn(tween(360)), exit = fadeOut(tween(NOW_PLAYING_TRANSITION_MS))) {
         CompositionLocalProvider(LocalFullPlayerVisibility provides this) {
             FullPlayer(playback) { expanded = false }
         }

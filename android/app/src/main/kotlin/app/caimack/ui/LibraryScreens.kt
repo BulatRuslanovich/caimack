@@ -40,6 +40,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -130,11 +131,12 @@ fun <T : Any> PagedGrid(
     header: LazyGridScope.() -> Unit,
     cell: @Composable (T) -> Unit,
 ) {
+    val density = LocalLibraryDensity.current
     LazyVerticalGrid(
-        GridCells.Adaptive(140.dp),
+        GridCells.Adaptive(density.cardWidth),
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(density.gap),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         header()
@@ -203,19 +205,13 @@ fun RecentScreen(play: (List<Track>, Int) -> Unit) {
 fun AlbumsScreen(nav: NavController) {
     val container = LocalContainer.current
     val pager = rememberPager("albums") { container.api.albums(it, CARD_PAGE_SIZE) }
-    var crate by rememberSaveable { mutableStateOf(false) }
+    val layout by container.appearance.albumLayout.collectAsStateWithLifecycle()
+    val crate = layout == AlbumLayout.Crate
     val total = pager.total
 
     val header: @Composable () -> Unit = {
         Column {
             PageTitle(stringResource(R.string.nav_albums), total?.let { pluralStringResource(R.plurals.count_albums, it, it) }, inset = crate)
-            Tabs(
-                Modifier.padding(horizontal = if (crate) 16.dp else 0.dp).padding(bottom = 8.dp),
-                contentPadding = PaddingValues(0.dp),
-            ) {
-                Tab(stringResource(R.string.view_grid), !crate) { crate = false }
-                Tab(stringResource(R.string.view_crate), crate) { crate = true }
-            }
         }
     }
 
