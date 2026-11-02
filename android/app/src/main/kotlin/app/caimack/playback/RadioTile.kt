@@ -51,7 +51,7 @@ class RadioTile : TileService() {
             if (session !is SessionState.SignedIn) return@launch withContext(Dispatchers.Main) { openApp() }
 
             withContext(Dispatchers.Main) { note(R.string.radio_tile_starting) }
-            val batch = runCatching { container.api.radio(RadioRequest(null, emptyList())) }.getOrNull()
+            val batch = runCatching { container.radio(RadioRequest(null, emptyList())) }.getOrNull()
             withContext(Dispatchers.Main) {
                 if (batch == null || batch.tracks.isEmpty()) note(R.string.radio_tile_failed)
                 else container.player.playMyRadio(batch)

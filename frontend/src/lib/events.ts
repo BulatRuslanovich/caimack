@@ -43,6 +43,14 @@ let listenersAttached = false;
 let outbox: EventOutbox<QueuedEvent> | null = null;
 
 let currentDeviceId: string | null = null;
+const playbackListeners = new Set<(event: PlaybackEventInput) => void>();
+
+export function subscribePlaybackEvents(listener: (event: PlaybackEventInput) => void): () => void {
+  playbackListeners.add(listener);
+  return () => {
+    playbackListeners.delete(listener);
+  };
+}
 
 export function deviceId(): string {
   if (typeof window === "undefined") return "";
@@ -82,6 +90,9 @@ export function recordEvent(event: PlaybackEventInput): void {
 
   void getOutbox()
     .add(eventWithContext)
+    .then(() => {
+      for (const listener of playbackListeners) listener(event);
+    })
     .catch(() => {});
 
   flushTimer ??= setTimeout(() => {

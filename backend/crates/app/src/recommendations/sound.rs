@@ -101,7 +101,8 @@ async fn signature(db: &PgPool) -> sqlx::Result<Signature> {
 
 async fn load(db: &PgPool) -> sqlx::Result<Vec<Recording>> {
     let rows = sqlx::query!(
-        r#"SELECT t.id, t.duration_seconds, t.title, ar.name AS artist_name, f.fingerprint AS "fingerprint?"
+        r#"SELECT t.id AS "id!", t.duration_seconds AS "duration_seconds!", t.title AS "title!",
+                  ar.name AS "artist_name!", f.fingerprint AS "fingerprint?"
            FROM tracks t
            JOIN artists ar ON ar.id = t.artist_id
            LEFT JOIN track_fingerprints f ON f.track_id = t.id"#

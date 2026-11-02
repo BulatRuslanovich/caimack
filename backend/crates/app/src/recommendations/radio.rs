@@ -4,25 +4,24 @@
 use std::sync::Arc;
 
 use reco::radio::{self, Focus, RadioRequest};
+use reco::session::Session;
 use reco::taste;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use uuid::Uuid;
 
 use super::impressions::{self, Shown};
-use super::{ReasonDto, Recommendations, RecommendedTrackDto, SignalsDto, reasons};
+use super::{ReasonDto, Recommendations, RecommendedTrackDto, SignalsDto, reasons, session};
 use crate::catalog::tracks;
 use crate::{AppError, AppResult};
 
 pub const MAX_BATCH: i64 = 20;
 const DEFAULT_BATCH: i64 = 6;
 
-const RECENT_HOURS: i32 = 48;
-const RECENT_LIMIT: i64 = 120;
-
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RadioRequestDto {
+    pub session_id: Option<Uuid>,
     pub seed_track_id: Option<Uuid>,
     pub exclude: Option<Vec<Uuid>>,
     pub limit: Option<i64>,
@@ -69,16 +68,7 @@ impl Recommendations {
         }
 
         let listener = self.listeners.get(&self.db, user).await?;
-        let recent = sqlx::query_scalar!(
-            r#"SELECT track_id AS "track_id!" FROM playback_events
-               WHERE user_id = $1 AND track_id IS NOT NULL AND occurred_at >= now() - make_interval(hours => $2)
-               GROUP BY track_id ORDER BY max(occurred_at) DESC LIMIT $3"#,
-            user,
-            RECENT_HOURS,
-            RECENT_LIMIT
-        )
-        .fetch_all(&self.db)
-        .await?;
+        let events = session::load(&self.db, user, request.session_id).await?;
 
         let queue = request.exclude.unwrap_or_default();
         let computing_library = Arc::clone(&library);
@@ -87,11 +77,13 @@ impl Recommendations {
             .run(move || {
                 let snapshot = &computing_library.snapshot;
                 let taste = taste::taste(snapshot, &listener);
+                let session = Session::build(snapshot, &events, chrono::Utc::now().timestamp());
                 let mood = request.mood.as_deref().and_then(|mood| computing_library.moods.get(mood));
                 let request = RadioRequest {
                     seed: request.seed_track_id,
                     queue: &queue,
-                    recent: &recent,
+                    recent: &session.heard[session.heard.len().saturating_sub(3)..],
+                    session: Some(&session),
                     limit: usize::try_from(limit).unwrap_or(1),
                     mood,
                     focus,
@@ -125,10 +117,10 @@ impl Recommendations {
             .enumerate()
             .filter_map(|(index, pick)| {
                 let id = snapshot.meta(pick.row).track_id;
-                let reason = if batch.moved && index == 0 {
-                    ReasonDto::new(reasons::MATCHES_YOUR_TASTE)
-                } else if pick.explore {
+                let reason = if pick.explore {
                     ReasonDto { subject_id: anchor, ..ReasonDto::new(reasons::DISCOVERY) }
+                } else if batch.moved && index == 0 {
+                    ReasonDto::new(reasons::MATCHES_YOUR_TASTE)
                 } else if let Some(title) = &anchor_title {
                     ReasonDto { kind: reasons::SOUNDS_LIKE, subject: Some(title.clone()), subject_id: anchor }
                 } else {

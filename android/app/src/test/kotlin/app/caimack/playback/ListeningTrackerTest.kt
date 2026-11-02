@@ -8,6 +8,16 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ListeningTrackerTest {
+    @Test
+    fun `an automatic radio return is not a deliberate replay`() {
+        val recorded = mutableListOf<ListeningEvent>()
+        val radio = ListeningTracker(sourceOf = { "radio:track" }) { recorded += it }
+        radio.begin("song", 210)
+        radio.finish(ListeningTracker.COMPLETED)
+        radio.begin("song", 210)
+        assertEquals(listOf("trackStarted", "trackCompleted", "trackStarted"), recorded.map { it.type })
+    }
+
     private val events = mutableListOf<ListeningEvent>()
     private val tracker = ListeningTracker { events += it }
 

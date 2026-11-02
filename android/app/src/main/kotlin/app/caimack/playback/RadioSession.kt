@@ -10,15 +10,17 @@ import app.caimack.api.RecommendationReason
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import java.util.concurrent.atomic.AtomicLong
 
 data class RadioNote(val reason: RecommendationReason, val explore: Boolean)
 
-data class RadioState(val seedTrackId: String? = null, val notes: Map<String, RadioNote> = emptyMap(), val mood: String? = null)
+data class RadioState(val seedTrackId: String? = null, val notes: Map<String, RadioNote> = emptyMap(), val mood: String? = null, val generation: Long = 0)
 
 class RadioSession(context: Context) {
     private val preferences = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
     private val current = MutableStateFlow(RadioState())
     private val continuing = MutableStateFlow(preferences.getBoolean(AUTOPLAY, true))
+    private val generation = AtomicLong()
 
     val state: StateFlow<RadioState> = current
 
@@ -29,7 +31,7 @@ class RadioSession(context: Context) {
             batch.tracks.map { it.track.id }.filter { it != seedTrackId },
             PlaySources.radio(mood, seeded = seedTrackId != null),
         )
-        current.value = RadioState(seedTrackId, notesOf(batch), mood)
+        current.value = RadioState(seedTrackId, notesOf(batch), mood, generation.incrementAndGet())
     }
 
     fun extend(batch: RadioBatch) {
@@ -42,11 +44,11 @@ class RadioSession(context: Context) {
     }
 
     fun reset() {
-        current.value = RadioState()
+        current.value = RadioState(generation = generation.incrementAndGet())
     }
 
     fun restore(state: RadioState) {
-        current.value = state
+        current.value = state.copy(generation = generation.incrementAndGet())
     }
 
     fun setAutoplay(enabled: Boolean) {

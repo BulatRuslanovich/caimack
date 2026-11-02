@@ -13,8 +13,8 @@ import React, {
   useState,
 } from "react";
 import { api } from "@/lib/api";
-import { deviceId } from "@/lib/events";
-import { radioSource, tagSource, usePlaySource } from "@/lib/playback/playSource";
+import { deviceId, recordEvent } from "@/lib/events";
+import { radioSource, sourceOf, tagSource, usePlaySource } from "@/lib/playback/playSource";
 import { useRequiredContext } from "@/lib/useRequiredContext";
 import { advanceIn, buildOrder } from "@/lib/playback/playerQueue";
 import type {
@@ -96,6 +96,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     start: startRadioSession,
     stop: stopRadioSession,
     setFocus: setRadioFocus,
+    pin: pinRadioTrack,
     resetRadio,
     restore: restoreRadioSession,
     noteInsert: noteRadioInsert,
@@ -108,6 +109,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     queueRef,
     orderRef,
     applyQueue,
+    setCurrentIndex,
   });
 
   const {
@@ -307,10 +309,26 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const next = useCallback(() => advance(1), [advance]);
   const previous = useCallback(() => {
-    if (getPosition() > 3) {
+    const position = getPosition();
+    const current = live.current;
+    const replay = (index: number) => {
+      const track = queueRef.current[index];
+      if (track && sourceOf(track.id)?.startsWith("radio")) {
+        recordEvent({
+          type: "trackReplayed",
+          trackId: track.id,
+          durationSeconds: track.durationSeconds,
+          source: sourceOf(track.id),
+        });
+      }
+    };
+    if (position > 3) {
+      if (position >= 30) replay(current.currentIndex);
       seek(0);
       return;
     }
+    const step = advanceIn(orderRef.current, current.currentIndex, -1, current.repeat === "all");
+    if (step.kind === "play") replay(step.index);
     advance(-1);
   }, [advance, getPosition, seek]);
 
@@ -355,6 +373,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const { addToQueue, playNext, removeFromQueue, moveInQueue, patchTrack } = useQueueEditing({
+    pinRadioTrack,
     queueRef,
     orderRef,
     live,

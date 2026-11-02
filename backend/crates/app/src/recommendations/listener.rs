@@ -98,8 +98,8 @@ pub async fn load(db: &PgPool, user: Uuid, now: DateTime<Utc>) -> AppResult<List
            SELECT track_id AS "track_id!",
                   SUM(decay * CASE
                       WHEN type = 3 THEN 1.0
-                      WHEN early AND browsed THEN -0.15
-                      WHEN early THEN -0.5
+                      WHEN early AND browsed THEN -0.05
+                      WHEN early THEN -0.1
                       WHEN mostly THEN 0.3
                       WHEN type = 6 THEN 0.8
                       WHEN type = 7 THEN 1.5

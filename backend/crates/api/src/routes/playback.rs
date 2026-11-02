@@ -81,7 +81,11 @@ async fn record_signals(
     CurrentUser(user): CurrentUser,
     Json(request): Json<RecordEventsRequest>,
 ) -> ApiResult<impl IntoResponse> {
-    Ok((StatusCode::ACCEPTED, Json(signals::record(&state.db, user.user_id, request).await?)))
+    let result = signals::record(&state.db, user.user_id, request).await?;
+    if result.accepted > 0 {
+        state.recommendations.listeners.forget(user.user_id);
+    }
+    Ok((StatusCode::ACCEPTED, Json(result)))
 }
 
 #[derive(Serialize)]

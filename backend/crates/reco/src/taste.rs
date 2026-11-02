@@ -34,7 +34,7 @@ pub struct TrackSignal {
 
 impl TrackSignal {
     pub fn rejected(&self) -> bool {
-        self.score < REJECTED_SCORE || (self.early_skips >= 2 && self.plays == 0)
+        self.score < REJECTED_SCORE || (self.early_skips >= 4 && self.plays == 0)
     }
 
     pub fn familiar(&self) -> bool {
@@ -147,7 +147,7 @@ pub fn taste(snapshot: &Snapshot, listener: &Listener) -> Taste {
 }
 
 fn scale_to_unit(scores: &mut HashMap<Uuid, f64>) {
-    let reach = scores.values().fold(0.0_f64, |reach, score| reach.max(score.abs()));
+    let reach = scores.values().fold(1.0_f64, |reach, score| reach.max(score.abs()));
     if reach > 0.0 {
         scores.values_mut().for_each(|score| *score /= reach);
     }
@@ -350,5 +350,20 @@ mod tests {
         let taste = taste(&snapshot, &listener);
         assert!(score(&snapshot, &listener, &taste, 2, 0.0).is_none());
         assert!(taste.artists[&Uuid::from_u128(20)] < 0.0);
+    }
+
+    #[test]
+    fn an_isolated_skip_does_not_reject_a_song_but_repeated_rejection_does() {
+        let once = TrackSignal { score: -0.1, early_skips: 1, ..TrackSignal::default() };
+        assert!(!once.rejected());
+        let repeated = TrackSignal { score: -0.2, early_skips: 4, ..TrackSignal::default() };
+        assert!(repeated.rejected());
+        let library = library();
+        let listener = listener(&[(3, -0.1, 0)]);
+        let taste = taste(&library, &listener);
+        assert!(
+            behaviour(&taste, &[Uuid::from_u128(20)], None) > -0.2,
+            "a weak signal must not normalize into maximum artist rejection"
+        );
     }
 }

@@ -280,7 +280,7 @@ class WidgetActions : BroadcastReceiver() {
                             return@launch
                         }
                         if (intent.action == MY_RADIO) {
-                            runCatching { container.api.radio(RadioRequest(null, emptyList())) }.getOrNull()
+                            runCatching { container.radio(RadioRequest(null, emptyList())) }.getOrNull()
                                 ?.takeIf { it.tracks.isNotEmpty() }
                                 ?.let { player.playMyRadio(it) }
                         } else {

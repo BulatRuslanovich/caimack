@@ -200,7 +200,7 @@ class LibraryTree(
             container.radio.reset()
             val tracks = runCatching {
                 when {
-                    radio -> container.api.radio(RadioRequest(null, emptyList()))
+                    radio -> container.radio(RadioRequest(null, emptyList()))
                         .also { container.radio.extend(it) }
                         .tracks.map { it.track }
                         .onEach { container.tracks[it.id] = it }

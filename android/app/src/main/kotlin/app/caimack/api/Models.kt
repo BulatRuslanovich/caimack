@@ -213,7 +213,7 @@ data class HistoryEntryRequest(val trackId: String, val playbackPosition: Int)
 data class Mood(val key: String, val albumIds: List<String> = emptyList())
 
 @Serializable
-data class RadioRequest(val seedTrackId: String?, val exclude: List<String>, val mood: String? = null)
+data class RadioRequest(val seedTrackId: String?, val exclude: List<String>, val mood: String? = null, val sessionId: String? = null)
 
 @Serializable
 data class AddTracksRequest(val trackIds: List<String>)

@@ -190,7 +190,7 @@ fun MoodRadio() {
                 ) {
                     starting = mood
                     container.scope.launch {
-                        val batch = runCatching { container.api.radio(RadioRequest(null, emptyList(), mood)) }.getOrNull()
+                        val batch = runCatching { container.radio(RadioRequest(null, emptyList(), mood)) }.getOrNull()
                         withContext(Dispatchers.Main) {
                             starting = null
                             if (batch == null || batch.tracks.isEmpty()) {

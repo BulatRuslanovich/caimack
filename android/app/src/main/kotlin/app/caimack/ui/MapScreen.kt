@@ -231,7 +231,7 @@ private fun MapExplorer(map: LibraryMap) {
                     onPlay = { withTrack(point) { track -> container.player.play(listOf(track), 0, "map") } },
                     onRadio = {
                         withTrack(point) { track ->
-                            val radio = withContext(Dispatchers.IO) { runCatching { container.api.radio(RadioRequest(track.id, emptyList())) }.getOrNull() }
+                            val radio = withContext(Dispatchers.IO) { runCatching { container.radio(RadioRequest(track.id, emptyList())) }.getOrNull() }
                             if (radio == null) Toast.makeText(context, R.string.radio_failed, Toast.LENGTH_SHORT).show()
                             else container.player.startRadio(track, radio)
                         }

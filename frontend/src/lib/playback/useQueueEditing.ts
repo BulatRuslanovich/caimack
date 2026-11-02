@@ -21,6 +21,7 @@ interface QueueEditingInput {
   applyQueue: (queue: Track[], order: number[]) => void;
   setCurrentIndex: Dispatch<SetStateAction<number>>;
   noteRadioInsert: (at: number, previousLength: number) => void;
+  pinRadioTrack: (trackId: string) => void;
 }
 
 export function useQueueEditing({
@@ -30,18 +31,20 @@ export function useQueueEditing({
   applyQueue,
   setCurrentIndex,
   noteRadioInsert,
+  pinRadioTrack,
 }: QueueEditingInput) {
   const addToQueue = useCallback(
     (track: Track) => {
       recordEvent({ type: "trackAddedToQueue", trackId: track.id });
       tagSource([track.id], "queue");
+      pinRadioTrack(track.id);
 
       const next = appendTrack(queueRef.current, orderRef.current, track);
       applyQueue(next.queue, next.order);
 
       setCurrentIndex((index) => (index < 0 ? 0 : index));
     },
-    [applyQueue, orderRef, queueRef, setCurrentIndex],
+    [applyQueue, orderRef, queueRef, setCurrentIndex, pinRadioTrack],
   );
 
   const playNext = useCallback(
@@ -55,6 +58,7 @@ export function useQueueEditing({
 
       recordEvent({ type: "trackAddedToQueue", trackId: track.id });
       tagSource([track.id], "queue");
+      pinRadioTrack(track.id);
 
       const next = insertAfter(current, orderRef.current, currentIndex, track);
 
@@ -62,7 +66,7 @@ export function useQueueEditing({
 
       applyQueue(next.queue, next.order);
     },
-    [addToQueue, applyQueue, live, noteRadioInsert, orderRef, queueRef],
+    [addToQueue, applyQueue, live, noteRadioInsert, orderRef, queueRef, pinRadioTrack],
   );
 
   const removeFromQueue = useCallback(
@@ -83,11 +87,13 @@ export function useQueueEditing({
       const current = queueRef.current;
       const next = reorderQueue(current, orderRef.current, from, to, live.current.shuffle);
       if (next.queue === current) return;
+      tagSource([current[from].id], "queue");
+      pinRadioTrack(current[from].id);
 
       applyQueue(next.queue, next.order);
       setCurrentIndex((index) => (index < 0 ? index : remapIndexAfterMove(from, to, index)));
     },
-    [applyQueue, live, orderRef, queueRef, setCurrentIndex],
+    [applyQueue, live, orderRef, queueRef, setCurrentIndex, pinRadioTrack],
   );
 
   const patchTrack = useCallback(

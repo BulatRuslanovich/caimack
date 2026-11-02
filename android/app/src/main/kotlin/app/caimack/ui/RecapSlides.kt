@@ -252,7 +252,7 @@ internal fun MoodSlide(recap: Recap, lead: String) {
     Chip(stringResource(R.string.recap_mood_radio, moodLabel(lead)), active = true, icon = moodIcon(lead), enabled = !starting) {
         starting = true
         container.scope.launch {
-            val batch = runCatching { container.api.radio(RadioRequest(null, emptyList(), lead)) }.getOrNull()
+            val batch = runCatching { container.radio(RadioRequest(null, emptyList(), lead)) }.getOrNull()
             withContext(Dispatchers.Main) {
                 starting = false
                 if (batch == null || batch.tracks.isEmpty()) Toast.makeText(context, R.string.radio_failed, Toast.LENGTH_SHORT).show()

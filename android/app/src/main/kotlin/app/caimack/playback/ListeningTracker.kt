@@ -33,7 +33,10 @@ class ListeningTracker(
         source = sourceOf(id)
 
         record(ListeningEvent("trackStarted", id, durationSeconds, source = source))
-        if (!heard.add(id)) record(ListeningEvent("trackReplayed", id, durationSeconds, source = source))
+        // A song returned by radio must not manufacture its own positive feedback.
+        if (!heard.add(id) && source?.startsWith("radio") != true) {
+            record(ListeningEvent("trackReplayed", id, durationSeconds, source = source))
+        }
     }
 
     fun accumulate(seconds: Double) {

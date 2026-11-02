@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Bulat Ruslanovich
 
-import { flushEvents } from "@/lib/events";
+import { deviceId, flushEvents } from "@/lib/events";
 import { fileForm, qs, request, requestFile } from "@/lib/http";
 import { markImageChanged } from "@/lib/media";
 import type {
@@ -241,7 +241,10 @@ export const api = {
     focus?: RadioFocus | null;
   }) => {
     await flushEvents(EVENTS_FLUSH_WAIT_MS);
-    return request<RadioBatch>("/recommendations/radio", { method: "POST", body });
+    return request<RadioBatch>("/recommendations/radio", {
+      method: "POST",
+      body: { ...body, sessionId: deviceId() },
+    });
   },
   recommendationStats: (days: number) =>
     request<RecommendationStats>(`/recommendations/stats${qs({ days })}`),

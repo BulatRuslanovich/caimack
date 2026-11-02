@@ -68,6 +68,9 @@ class PlaybackService : MediaLibraryService() {
     private val fellBack = mutableSetOf<String>()
     private val ticks = Handler(Looper.getMainLooper())
     private var radioSeed: String? = null
+    private var radioRequest: Job? = null
+    private var radioReactions: Job? = null
+    private var radioRefresh: Job? = null
     private var listening: String? = null
     private var failures = 0
     private var reportTicks = 0
@@ -116,6 +119,19 @@ class PlaybackService : MediaLibraryService() {
             .build()
 
         signals = container.signals
+        radioReactions = container.scope.launch(Dispatchers.Main) {
+            val progressed = mutableSetOf<String>()
+            signals.reactions.collect { event ->
+                if (!RadioPolicy.reactsTo(event.type, event.listenedSeconds)) return@collect
+                if (event.type == "trackPlayed" && !progressed.add(event.trackId.orEmpty())) return@collect
+                if (container.radio.state.value.notes.isEmpty()) return@collect
+                radioRefresh?.cancel()
+                radioRefresh = container.scope.launch(Dispatchers.Main) {
+                    delay(350)
+                    continueWithRadio(container, player, refresh = true)
+                }
+            }
+        }
         exclusive = ExclusiveSession(
             container.http,
             container.server,
@@ -348,6 +364,9 @@ class PlaybackService : MediaLibraryService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
 
     override fun onDestroy() {
+        radioReactions?.cancel()
+        radioRefresh?.cancel()
+        radioRequest?.cancel()
         heart?.cancel()
         tone?.cancel()
         sleep?.cancel()
@@ -466,24 +485,63 @@ class PlaybackService : MediaLibraryService() {
         container.sleepTimer.cancel()
     }
 
-    private fun continueWithRadio(container: AppContainer, player: ExoPlayer) {
+    private fun continueWithRadio(container: AppContainer, player: ExoPlayer, refresh: Boolean = false) {
         if (!container.radio.autoplay.value || player.repeatMode != Player.REPEAT_MODE_OFF || player.mediaItemCount == 0) return
-        if (player.mediaItemCount - 1 - player.currentMediaItemIndex > RADIO_PREFETCH_AT) return
-
-        val seed = player.currentMediaItem?.mediaId ?: return
-        if (seed == radioSeed) return
-        radioSeed = seed
-
         val queued = idsOf(player)
-        val mood = container.radio.state.value.mood
-        container.scope.launch {
-            val batch = runCatching { withNetworkRetries { container.api.radio(RadioRequest(seed, queued, mood)) } }.getOrNull() ?: return@launch
-            val fresh = batch.tracks.map { it.track }.filter { it.id !in queued }
+        val shuffled = player.shuffleModeEnabled
+        val order = buildList {
+            var index = player.currentMediaItemIndex
+            // Use Media3's traversal order to protect history and the next item.
+            addAll(0 until player.mediaItemCount)
+            if (player.shuffleModeEnabled) {
+                clear()
+                val previous = mutableListOf<Int>()
+                while (index != C.INDEX_UNSET) {
+                    previous.add(index)
+                    index = player.currentTimeline.getPreviousWindowIndex(index, Player.REPEAT_MODE_OFF, true)
+                }
+                addAll(previous.reversed())
+                index = player.currentMediaItemIndex
+                while (index != C.INDEX_UNSET) {
+                    index = player.currentTimeline.getNextWindowIndex(index, Player.REPEAT_MODE_OFF, true)
+                    if (index != C.INDEX_UNSET) add(index)
+                }
+            }
+        }
+        if (!refresh && order.size - 1 - order.indexOf(player.currentMediaItemIndex) > RADIO_PREFETCH_AT) return
+        val seed = player.currentMediaItem?.mediaId ?: return
+        if (!refresh && (seed == radioSeed || radioRequest?.isActive == true)) return
+        radioRequest?.cancel()
+        radioSeed = seed
+        val state = container.radio.state.value
+        val notes = state.notes
+        val retained = if (refresh) RadioPolicy.retained(order, player.currentMediaItemIndex) { index ->
+            queued[index] in notes && PlaySources.of(queued[index]) != "queue"
+        } else queued.indices.toSet()
+        val excluded = RadioPolicy.exclusions(order, player.currentMediaItemIndex, retained).map { queued[it] }
+        val mood = state.mood
+        radioRequest = container.scope.launch(Dispatchers.Main) {
+            val batch = runCatching { withNetworkRetries { container.radio(RadioRequest(seed, excluded, mood)) } }.getOrNull()
+                ?: run { radioSeed = null; return@launch }
+            val fresh = batch.tracks.map { it.track }.filter { it.id !in excluded }
             if (fresh.isEmpty()) return@launch
 
             fresh.forEach { container.tracks[it.id] = it }
             withContext(Dispatchers.Main) {
-                if (idsOf(player) != queued) return@withContext
+                if (container.radio.state.value.generation != state.generation ||
+                    !container.radio.autoplay.value || player.repeatMode != Player.REPEAT_MODE_OFF) return@withContext
+                if (idsOf(player) != queued || player.currentMediaItem?.mediaId != seed || player.shuffleModeEnabled != shuffled) {
+                    radioSeed = null
+                    radioRefresh?.cancel()
+                    radioRefresh = container.scope.launch(Dispatchers.Main) {
+                        delay(350)
+                        continueWithRadio(container, player, refresh = true)
+                    }
+                    return@withContext
+                }
+                if (refresh) {
+                    queued.indices.reversed().filter { it !in retained }.forEach { player.removeMediaItem(it) }
+                }
                 container.radio.extend(batch)
                 player.addMediaItems(fresh.map { resolve(container, it.toMediaItem(container.media)) })
             }
@@ -599,7 +657,7 @@ class PlaybackService : MediaLibraryService() {
         private const val TICK_MS = 1_000L
         private const val REPORT_EVERY_TICKS = 10
         private const val WIDGET_EVERY_TICKS = 15
-        private const val RADIO_PREFETCH_AT = 1
+        private const val RADIO_PREFETCH_AT = 2
         private const val NETWORK_RETRIES = 10
         private const val MAX_SKIPS = 3
         private const val UNAUTHORIZED = 401

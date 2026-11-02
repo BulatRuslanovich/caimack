@@ -153,7 +153,7 @@ fun TrackSheet(track: Track, onRemoveFromPlaylist: (() -> Unit)? = null, positio
             SheetRow(stringResource(R.string.menu_radio), Lucide.Radio) {
                 onDismiss()
                 container.scope.launch {
-                    val radio = runCatching { container.api.radio(RadioRequest(track.id, emptyList())) }.getOrNull()
+                    val radio = runCatching { container.radio(RadioRequest(track.id, emptyList())) }.getOrNull()
                     withContext(Dispatchers.Main) {
                         if (radio == null) say(resources.getString(R.string.radio_failed))
                         else container.player.startRadio(track, radio)

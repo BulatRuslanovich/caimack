@@ -173,6 +173,15 @@ describe("historyThresholdFor", () => {
 });
 
 describe("source", () => {
+  it("does not mistake an automatic radio return for a deliberate replay", () => {
+    const radio = { ...song, id: "radio-return" };
+    tagSource([radio.id], "radio");
+    tracker.begin(radio);
+    tracker.finish("trackCompleted");
+    tracker.begin(radio);
+    expect(typesOf()).toEqual(["trackStarted", "trackCompleted", "trackStarted"]);
+  });
+
   it("travels with every event of a listen", () => {
     const tagged = { ...song, id: "tagged" };
     tagSource([tagged.id], "home:forYou");

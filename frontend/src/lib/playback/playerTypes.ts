@@ -15,6 +15,7 @@ export interface RadioSessionState {
   reasons: Record<string, RecommendationReason>;
 
   signals?: Record<string, QueueSignals>;
+  manualTrackIds?: string[];
 }
 
 export interface QueueSnapshot {

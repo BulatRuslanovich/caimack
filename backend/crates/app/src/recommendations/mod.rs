@@ -13,6 +13,7 @@ pub mod moods;
 pub mod radio;
 pub mod recap;
 pub mod rules;
+mod session;
 pub mod sound;
 pub mod stats;
 

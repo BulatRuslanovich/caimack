@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT t.id, t.duration_seconds, t.title, ar.name AS artist_name, f.fingerprint AS \"fingerprint?\"\n           FROM tracks t\n           JOIN artists ar ON ar.id = t.artist_id\n           LEFT JOIN track_fingerprints f ON f.track_id = t.id",
+  "query": "SELECT t.id AS \"id!\", t.duration_seconds AS \"duration_seconds!\", t.title AS \"title!\",\n                  ar.name AS \"artist_name!\", f.fingerprint AS \"fingerprint?\"\n           FROM tracks t\n           JOIN artists ar ON ar.id = t.artist_id\n           LEFT JOIN track_fingerprints f ON f.track_id = t.id",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id",
+        "name": "id!",
         "type_info": "Uuid",
         "origin": {
           "Table": {
@@ -16,7 +16,7 @@
       },
       {
         "ordinal": 1,
-        "name": "duration_seconds",
+        "name": "duration_seconds!",
         "type_info": "Int4",
         "origin": {
           "Table": {
@@ -27,7 +27,7 @@
       },
       {
         "ordinal": 2,
-        "name": "title",
+        "name": "title!",
         "type_info": "Varchar",
         "origin": {
           "Table": {
@@ -38,7 +38,7 @@
       },
       {
         "ordinal": 3,
-        "name": "artist_name",
+        "name": "artist_name!",
         "type_info": "Varchar",
         "origin": {
           "Table": {
@@ -63,12 +63,12 @@
       "Left": []
     },
     "nullable": [
-      false,
-      false,
-      false,
-      false,
-      true
+      true,
+      true,
+      true,
+      true,
+      false
     ]
   },
-  "hash": "dcf3e0e459ca0637b81edabbb7aadf2bfde5b1a6bc7320f841301d42d8139878"
+  "hash": "93da3b260af8b327b19b7dd8f222d71161977b2778a6731d5e0bd6d54805572d"
 }

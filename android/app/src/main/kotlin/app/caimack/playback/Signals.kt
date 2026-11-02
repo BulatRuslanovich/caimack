@@ -11,6 +11,8 @@ import java.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -20,6 +22,8 @@ class Signals(private val api: CaimackApi, private val scope: CoroutineScope, pr
     private val sending = Mutex()
     private var timer: Job? = null
     private var recorded: String? = null
+    private val changes = MutableSharedFlow<PlaybackSignal>(extraBufferCapacity = 64)
+    val reactions = changes.asSharedFlow()
 
     val tracker = ListeningTracker { event ->
         add(
@@ -32,11 +36,16 @@ class Signals(private val api: CaimackApi, private val scope: CoroutineScope, pr
 
     fun add(signal: PlaybackSignal) {
         synchronized(outbox) { outbox += signal }
+        changes.tryEmit(signal)
         timer = timer ?: scope.launch {
             delay(FLUSH_INTERVAL_MS)
             timer = null
             flush()
         }
+    }
+
+    fun choice(type: String, trackId: String, duration: Int) {
+        add(PlaybackSignal(type, trackId, duration, occurredAt = Instant.now().toString(), sessionId = sessionId, source = PlaySources.of(trackId)))
     }
 
     fun progress(trackId: String, durationSeconds: Int, positionSeconds: Double) {

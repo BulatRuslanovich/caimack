@@ -65,7 +65,8 @@ export function createListeningTracker(record = recordEvent): ListeningTracker {
         source,
       });
 
-      if (heard.has(track.id)) {
+      // An automatic radio return is not a deliberate request to replay it.
+      if (heard.has(track.id) && !source?.startsWith("radio")) {
         record({
           type: "trackReplayed",
           trackId: track.id,

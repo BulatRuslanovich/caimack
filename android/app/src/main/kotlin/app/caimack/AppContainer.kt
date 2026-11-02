@@ -19,6 +19,7 @@ import androidx.datastore.preferences.preferencesDataStoreFile
 import app.caimack.api.CaimackApi
 import app.caimack.api.Media
 import app.caimack.api.PlaybackSignal
+import app.caimack.api.RadioRequest
 import app.caimack.api.Track
 import app.caimack.api.UserSettings
 import app.caimack.playback.Downloads
@@ -107,18 +108,23 @@ class AppContainer(context: Context) {
 
     val listeningSession: String = UUID.randomUUID().toString()
 
-    val favorites = Favorites(api, scope)
+    val signals = Signals(api, scope, listeningSession)
+
+    val favorites = Favorites(api, scope, signals)
 
     val downloads by lazy { Downloads(context.applicationContext, http, server, json) }
 
-    val player = PlayerConnection(context.applicationContext, media, tracks, radio)
+    val player = PlayerConnection(context.applicationContext, media, tracks, radio, signals)
 
     val queue = AtomicFile(File(context.filesDir, "queue.json"))
 
-    val signals = Signals(api, scope, listeningSession)
-
     suspend fun flushSignals() {
         withTimeoutOrNull(SIGNALS_FLUSH_WAIT_MS) { signals.send() }
+    }
+
+    suspend fun radio(request: RadioRequest) = run {
+        flushSignals()
+        api.radio(request.copy(sessionId = listeningSession))
     }
 
     fun shelfShown(source: String) =

@@ -8,6 +8,7 @@ pub mod radio;
 pub mod random;
 pub mod recap;
 pub mod rules;
+pub mod session;
 pub mod shelves;
 pub mod snapshot;
 pub mod taste;

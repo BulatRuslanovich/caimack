@@ -45,6 +45,7 @@ class PlayerConnection(
     private val media: Media,
     private val known: MutableMap<String, Track>,
     private val radio: RadioSession,
+    private val signals: Signals,
 ) {
     private val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
     private var controller: ListenableFuture<MediaController>? = null
@@ -101,6 +102,7 @@ class PlayerConnection(
     fun enqueue(track: Track, next: Boolean) = withController {
         known[track.id] = track
         PlaySources.tag(listOf(track.id), "queue")
+        signals.choice("trackAddedToQueue", track.id, track.durationSeconds)
         val item = track.toMediaItem(media)
         when {
             it.mediaItemCount == 0 -> {
@@ -132,7 +134,16 @@ class PlayerConnection(
 
     fun next() = withController { it.seekToNext() }
 
-    fun previous() = withController { it.seekToPrevious() }
+    fun previous() = withController {
+        val index = if (it.currentPosition > 3_000) it.currentMediaItemIndex else it.previousMediaItemIndex
+        if (index in 0 until it.mediaItemCount && (index != it.currentMediaItemIndex || it.currentPosition >= 30_000)) {
+            val id = it.getMediaItemAt(index).mediaId
+            if (PlaySources.of(id)?.startsWith("radio") == true) {
+                known[id]?.let { track -> signals.choice("trackReplayed", id, track.durationSeconds) }
+            }
+        }
+        it.seekToPrevious()
+    }
 
     fun seekTo(positionMs: Long) = withController { it.seekTo(positionMs) }
 
@@ -141,7 +152,10 @@ class PlayerConnection(
     fun remove(index: Int) = withController { if (index in 0 until it.mediaItemCount) it.removeMediaItem(index) }
 
     fun move(from: Int, to: Int) = withController {
-        if (from != to && from in 0 until it.mediaItemCount && to in 0 until it.mediaItemCount) it.moveMediaItem(from, to)
+        if (from != to && from in 0 until it.mediaItemCount && to in 0 until it.mediaItemCount) {
+            PlaySources.tag(listOf(it.getMediaItemAt(from).mediaId), "queue")
+            it.moveMediaItem(from, to)
+        }
     }
 
     fun clearUpcoming() = withController { it.removeMediaItems(it.currentMediaItemIndex + 1, it.mediaItemCount) }
