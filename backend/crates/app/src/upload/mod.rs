@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Bulat Ruslanovich
 
 mod assemble;
+mod cover;
 mod probe;
 
 use media::formats::{self, AudioFormat};
@@ -21,6 +22,7 @@ use crate::transcode::{self, TranscodeQueue};
 use crate::{AppError, AppResult};
 
 use self::assemble::{Saved, assemble};
+use self::cover::PreparedCover;
 
 pub use self::probe::{ProbeBasis, ProbeFile, ProbeMatch, ProbeResult, ProbeVerdict, probe};
 
@@ -126,16 +128,7 @@ impl Uploads {
         format: AudioFormat,
         cover: Option<Vec<u8>>,
     ) -> AppResult<Imported> {
-        let mut written_covers = Vec::new();
-        let saved = match self.check_and_save(file_name, stored, format, cover, &mut written_covers).await {
-            Ok(saved) => saved,
-            Err(error) => {
-                for cover in written_covers {
-                    self.storage.delete_cover(&cover);
-                }
-                return Err(error);
-            }
-        };
+        let saved = self.check_and_save(file_name, stored, format, cover).await?;
 
         if let Some((old_path, old_hash)) = &saved.replaced {
             self.storage.delete(old_path);
@@ -162,7 +155,6 @@ impl Uploads {
         stored: &StoredFile,
         format: AudioFormat,
         cover: Option<Vec<u8>>,
-        written_covers: &mut Vec<String>,
     ) -> AppResult<Saved> {
         if stored.size_bytes == 0 {
             return Err(AppError::validation("The file is empty."));
@@ -191,9 +183,35 @@ impl Uploads {
             metadata.cover = cover;
         }
 
+        let mut artwork = metadata.album.as_deref().filter(|album| !album.trim().is_empty()).and(metadata.cover.take());
+        let names = if metadata.album_artists.is_empty() { &metadata.artists } else { &metadata.album_artists };
+        if artwork.is_some()
+            && let Some(artist) = names.iter().find(|name| !name.trim().is_empty())
+            && let Some(album) = &metadata.album
+        {
+            // Avoid encoding the same embedded art for every track of an existing album.
+            let covered: bool = sqlx::query_scalar(
+                "SELECT EXISTS (SELECT 1 FROM albums al JOIN artists ar ON ar.id = al.artist_id
+                 WHERE ar.normalized_name = $1 AND al.normalized_title = $2 AND al.cover_path IS NOT NULL)",
+            )
+            .bind(crate::text::normalize_key(artist))
+            .bind(crate::text::normalize_key(album))
+            .fetch_one(&self.db)
+            .await?;
+            if covered {
+                artwork = None;
+            }
+        }
+        let mut cover = PreparedCover::prepare(&self.storage, artwork).await?;
         let mut tx = self.db.begin().await?;
-        let saved = assemble(&mut tx, &self.storage, file_name, stored, metadata, format, written_covers).await?;
+        let saved =
+            assemble(&mut tx, file_name, stored, metadata, format, cover.as_ref().map(PreparedCover::path)).await?;
         tx.commit().await?;
+        if saved.cover_attached
+            && let Some(cover) = &mut cover
+        {
+            cover.persist();
+        }
         Ok(saved)
     }
 }

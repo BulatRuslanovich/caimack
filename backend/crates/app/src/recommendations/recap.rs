@@ -141,10 +141,17 @@ impl Recommendations {
         })
         .collect();
 
-        let totals = recap::totals(&plays, &facts, days_in(year, month), TOP, threshold);
         let library = self.index.library();
-        let moods = recap::mood_shares(&plays, &library.snapshot, &library.moods);
-        let sound = recap::sound_of(&plays, &library.snapshot);
+        let (totals, moods, sound) = self
+            .compute
+            .run(move || {
+                (
+                    recap::totals(&plays, &facts, days_in(year, month), TOP, threshold),
+                    recap::mood_shares(&plays, &library.snapshot, &library.moods),
+                    recap::sound_of(&plays, &library.snapshot),
+                )
+            })
+            .await?;
 
         let previous = sqlx::query_scalar!(
             r#"SELECT COALESCE(SUM(e.listened_seconds), 0)::bigint AS "seconds!"

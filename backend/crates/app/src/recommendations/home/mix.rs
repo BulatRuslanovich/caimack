@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Bulat Ruslanovich
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use reco::Listener;
 use reco::shelves;
@@ -72,7 +73,7 @@ impl Recommendations {
         Ok(ids.iter().filter_map(|id| found.remove(id)).collect())
     }
 
-    pub(super) async fn daily_mix_for(&self, user: Uuid, listener: &Listener) -> AppResult<Vec<TrackDto>> {
+    pub(super) async fn daily_mix_for(&self, user: Uuid, listener: &Arc<Listener>) -> AppResult<Vec<TrackDto>> {
         let day = i32::try_from(listener.day).unwrap_or_default();
         let stored = self.stored_daily_mix(user, day).await?;
 
@@ -119,12 +120,16 @@ impl Recommendations {
         Ok(stored.map(|ids| ids.0))
     }
 
-    async fn build_daily_mix(&self, user: Uuid, listener: &Listener) -> AppResult<Vec<Uuid>> {
+    async fn build_daily_mix(&self, user: Uuid, listener: &Arc<Listener>) -> AppResult<Vec<Uuid>> {
         let library = self.index.library();
-        let mut pool = {
-            let taste = taste::taste(&library.snapshot, listener);
-            shelves::mix_pool(&library.snapshot, listener, &taste)
-        };
+        let computing_listener = Arc::clone(listener);
+        let mut pool = self
+            .compute
+            .run(move || {
+                let taste = taste::taste(&library.snapshot, &computing_listener);
+                shelves::mix_pool(&library.snapshot, &computing_listener, &taste)
+            })
+            .await?;
         if pool.len() < DAILY_MIX_SIZE {
             let fallback = sqlx::query_scalar!(
                 r#"(SELECT track_id AS "id!" FROM favorites WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2)
@@ -138,6 +143,7 @@ impl Recommendations {
             let mut seen: HashSet<Uuid> = pool.iter().map(|(id, _)| *id).collect();
             pool.extend(fallback.into_iter().filter(|id| seen.insert(*id)).map(|id| (id, FALLBACK_WEIGHT)));
         }
-        Ok(reco::random::weighted_sample(&pool, DAILY_MIX_SIZE, reco::random::seed(user, "dailyMix", listener.day)))
+        let seed = reco::random::seed(user, "dailyMix", listener.day);
+        self.compute.run(move || reco::random::weighted_sample(&pool, DAILY_MIX_SIZE, seed)).await
     }
 }

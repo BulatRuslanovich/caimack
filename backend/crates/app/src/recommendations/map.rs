@@ -10,9 +10,9 @@ use serde_with::skip_serializing_none;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use super::Recommendations;
 use super::index::Library;
-use crate::{AppError, AppResult, json};
+use super::{Recommendations, compute::ComputePool};
+use crate::{AppResult, json};
 
 const LANDMARK_TRACKS: usize = 30;
 
@@ -73,17 +73,19 @@ fn rounded(value: f32) -> f64 {
     (f64::from(value) * 10_000.0).round() / 10_000.0
 }
 
-async fn build(library: Arc<Library>, previous: Option<Arc<MapLayout>>) -> AppResult<Arc<MapLayout>> {
+async fn build(
+    pool: &ComputePool,
+    library: Arc<Library>,
+    previous: Option<Arc<MapLayout>>,
+) -> AppResult<Arc<MapLayout>> {
     let started = std::time::Instant::now();
-    let layout = tokio::task::spawn_blocking(move || map::layout(&library.snapshot, previous.as_deref()))
-        .await
-        .map_err(AppError::internal)?;
+    let layout = pool.run(move || map::layout(&library.snapshot, previous.as_deref())).await?;
     tracing::info!("Library map laid out: {} tracks in {} ms", layout.len(), started.elapsed().as_millis());
     Ok(Arc::new(layout))
 }
 
 impl MapCache {
-    async fn layout(&self, library: &Arc<Library>) -> AppResult<Arc<MapLayout>> {
+    async fn layout(&self, pool: &ComputePool, library: &Arc<Library>) -> AppResult<Arc<MapLayout>> {
         let mut state = self.0.lock().await;
         if let Some(layout) = &state.layout {
             if state.generation == library.generation {
@@ -95,8 +97,9 @@ impl MapCache {
                 if !state.building {
                     state.building = true;
                     let (cache, library, previous) = (self.clone(), Arc::clone(library), Arc::clone(&stale));
+                    let pool = pool.clone();
                     tokio::spawn(async move {
-                        let built = build(Arc::clone(&library), Some(previous)).await;
+                        let built = build(&pool, Arc::clone(&library), Some(previous)).await;
                         let mut state = cache.0.lock().await;
                         state.building = false;
                         match built {
@@ -113,7 +116,7 @@ impl MapCache {
         }
 
         let previous = state.layout.clone().filter(|layout| !layout.is_empty());
-        let layout = build(Arc::clone(library), previous).await?;
+        let layout = build(pool, Arc::clone(library), previous).await?;
         state.generation = library.generation;
         state.layout = Some(Arc::clone(&layout));
         Ok(layout)
@@ -123,7 +126,7 @@ impl MapCache {
 impl Recommendations {
     pub async fn map(&self, user: Uuid) -> AppResult<LibraryMapDto> {
         let library = self.index.library();
-        let layout = self.map.layout(&library).await?;
+        let layout = self.map.layout(&self.compute, &library).await?;
 
         let tracks: HashMap<Uuid, PointTrack> = sqlx::query_as!(
             PointTrack,
@@ -146,43 +149,47 @@ impl Recommendations {
         .map(|row| (row.track_id, row.count))
         .collect();
 
-        let mut points = Vec::with_capacity(layout.len());
-        let mut positions: HashMap<Uuid, (f32, f32)> = HashMap::with_capacity(layout.len());
-        for (index, id) in layout.tracks.iter().enumerate() {
-            let Some(track) = tracks.get(id) else { continue };
-            let (x, y) = (layout.x[index], layout.y[index]);
-            positions.insert(*id, (x, y));
-            points.push(MapPointDto {
-                id: *id,
-                x: rounded(x),
-                y: rounded(y),
-                title: track.title.clone(),
-                artist: track.artist.clone(),
-                album_id: track.album_id,
-                has_cover: track.has_cover,
-                genre: track.genre.clone(),
-                plays: plays.get(id).copied().unwrap_or(0),
-            });
-        }
+        self.compute
+            .run(move || {
+                let mut points = Vec::with_capacity(layout.len());
+                let mut positions: HashMap<Uuid, (f32, f32)> = HashMap::with_capacity(layout.len());
+                for (index, id) in layout.tracks.iter().enumerate() {
+                    let Some(track) = tracks.get(id) else { continue };
+                    let (x, y) = (layout.x[index], layout.y[index]);
+                    positions.insert(*id, (x, y));
+                    points.push(MapPointDto {
+                        id: *id,
+                        x: rounded(x),
+                        y: rounded(y),
+                        title: track.title.clone(),
+                        artist: track.artist.clone(),
+                        album_id: track.album_id,
+                        has_cover: track.has_cover,
+                        genre: track.genre.clone(),
+                        plays: plays.get(id).copied().unwrap_or(0),
+                    });
+                }
 
-        let snapshot = &library.snapshot;
-        let landmarks = library
-            .moods
-            .playable()
-            .filter_map(|(mood, scores)| {
-                let spots: Vec<(f32, f32, f32)> = scores
-                    .top_members()
-                    .into_iter()
-                    .filter_map(|row| {
-                        positions.get(&snapshot.meta(row).track_id).map(|&(x, y)| (x, y, scores.ranks[row]))
+                let snapshot = &library.snapshot;
+                let landmarks = library
+                    .moods
+                    .playable()
+                    .filter_map(|(mood, scores)| {
+                        let spots: Vec<(f32, f32, f32)> = scores
+                            .top_members()
+                            .into_iter()
+                            .filter_map(|row| {
+                                positions.get(&snapshot.meta(row).track_id).map(|&(x, y)| (x, y, scores.ranks[row]))
+                            })
+                            .take(LANDMARK_TRACKS)
+                            .collect();
+                        let (x, y) = map::densest_spot(&spots)?;
+                        Some(MapLandmarkDto { mood: mood.to_owned(), x: rounded(x), y: rounded(y) })
                     })
-                    .take(LANDMARK_TRACKS)
                     .collect();
-                let (x, y) = map::densest_spot(&spots)?;
-                Some(MapLandmarkDto { mood: mood.to_owned(), x: rounded(x), y: rounded(y) })
-            })
-            .collect();
 
-        Ok(LibraryMapDto { points, landmarks, total_tracks: i64::try_from(tracks.len()).unwrap_or(i64::MAX) })
+                LibraryMapDto { points, landmarks, total_tracks: i64::try_from(tracks.len()).unwrap_or(i64::MAX) }
+            })
+            .await
     }
 }

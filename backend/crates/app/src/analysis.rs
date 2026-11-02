@@ -14,6 +14,7 @@ use sqlx::PgPool;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+use crate::config::ModelConfig;
 use crate::recommendations::index::EmbeddingIndex;
 use crate::storage::Storage;
 
@@ -25,11 +26,12 @@ const RETRY_FAILED_AFTER: chrono::Duration = chrono::Duration::days(7);
 pub fn spawn(
     db: PgPool,
     storage: Storage,
-    embedder: Arc<ClapEmbedder>,
+    model: ModelConfig,
     index: EmbeddingIndex,
     cancel: CancellationToken,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
+        let Some(embedder) = crate::clap_model::load_when_ready(&model, &cancel).await else { return };
         tokio::select! {
             () = cancel.cancelled() => return,
             () = tokio::time::sleep(STARTUP_DELAY) => {}

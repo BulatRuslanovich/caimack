@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Bulat Ruslanovich
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use reco::Listener;
 use reco::shelves::{self, Reason, Shelf, ShelfItems};
@@ -46,15 +47,21 @@ impl Recommendations {
     pub(super) async fn personal_shelves(
         &self,
         user: Uuid,
-        listener: &Listener,
+        listener: &Arc<Listener>,
         size: usize,
     ) -> AppResult<Vec<Hydrated>> {
         let library = self.index.library();
         let snapshot = &library.snapshot;
-        let shelves = {
-            let taste = taste::taste(snapshot, listener);
-            shelves::home(snapshot, listener, &taste)
-        };
+        let computing_library = Arc::clone(&library);
+        let listener = Arc::clone(listener);
+        let shelves = self
+            .compute
+            .run(move || {
+                let snapshot = &computing_library.snapshot;
+                let taste = taste::taste(snapshot, &listener);
+                shelves::home(snapshot, &listener, &taste)
+            })
+            .await?;
 
         let mut track_ids = Vec::new();
         let mut artist_ids = Vec::new();

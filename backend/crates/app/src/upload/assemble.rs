@@ -12,8 +12,7 @@ use uuid::Uuid;
 
 use crate::catalog::lyrics::{self, LyricsSource};
 use crate::catalog::tags::{self, TagResolver, split_artist_names};
-use crate::covers;
-use crate::storage::{COVER_DIRECTORY, Storage, StoredFile};
+use crate::storage::StoredFile;
 use crate::text::normalize_key;
 use crate::{AppError, AppResult};
 
@@ -28,6 +27,7 @@ pub(super) struct Saved {
     pub(super) replaced: Option<(String, String)>,
 
     pub(super) new_artists: Vec<Uuid>,
+    pub(super) cover_attached: bool,
 }
 
 fn names_from_file_name(file_name: &str) -> Option<(String, String)> {
@@ -45,12 +45,11 @@ fn names_from_file_name(file_name: &str) -> Option<(String, String)> {
 
 pub(super) async fn assemble(
     conn: &mut PgConnection,
-    storage: &Storage,
     file_name: &str,
     stored: &StoredFile,
     mut metadata: AudioMetadata,
     format: AudioFormat,
-    written_covers: &mut Vec<String>,
+    cover: Option<&str>,
 ) -> AppResult<Saved> {
     if metadata.title.is_none()
         && metadata.artists.is_empty()
@@ -131,6 +130,7 @@ pub(super) async fn assemble(
             bitrate_kbps: metadata.bitrate_kbps,
             replaced: Some((lossy.file_path.clone(), lossy.content_hash.clone())),
             new_artists: vec![],
+            cover_attached: false,
         });
     }
 
@@ -140,6 +140,7 @@ pub(super) async fn assemble(
     let track_artist = credits[0];
 
     let mut album_id = None;
+    let mut cover_attached = false;
     if let Some(album_title) = metadata.album.as_deref().map(str::trim).filter(|a| !a.is_empty()) {
         let album_artist = if metadata.album_artists.is_empty() {
             track_artist
@@ -149,7 +150,7 @@ pub(super) async fn assemble(
         };
         let id = tags::album(conn, album_title, album_artist, metadata.year).await?;
         album_id = Some(id);
-        attach_cover(conn, storage, id, metadata.cover.take(), written_covers).await?;
+        cover_attached = attach_cover(conn, id, cover).await?;
     }
 
     let genre_id = match metadata.genre.as_deref().map(str::trim).filter(|g| !g.is_empty()) {
@@ -218,35 +219,19 @@ pub(super) async fn assemble(
         bitrate_kbps: metadata.bitrate_kbps,
         replaced: None,
         new_artists: resolver.created().to_vec(),
+        cover_attached,
     })
 }
 
-async fn attach_cover(
-    conn: &mut PgConnection,
-    storage: &Storage,
-    album: Uuid,
-    cover: Option<Vec<u8>>,
-    written_covers: &mut Vec<String>,
-) -> AppResult<()> {
-    let Some(cover) = cover else { return Ok(()) };
-    let has_cover = sqlx::query_scalar!("SELECT cover_path IS NOT NULL AS \"has!\" FROM albums WHERE id = $1", album)
-        .fetch_one(&mut *conn)
-        .await?;
-    if has_cover {
-        return Ok(());
-    }
-
-    match covers::renditions(cover).await {
-        Ok(set) => {
-            let path = storage.save_renditions(COVER_DIRECTORY, album, &set).await?;
-            written_covers.push(path.clone());
-            sqlx::query!("UPDATE albums SET cover_path = $2 WHERE id = $1", album, path).execute(&mut *conn).await?;
-        }
-        Err(error) => {
-            tracing::warn!("Album {album} stays coverless: the embedded art could not be processed ({error})")
-        }
-    }
-    Ok(())
+async fn attach_cover(conn: &mut PgConnection, album: Uuid, cover: Option<&str>) -> AppResult<bool> {
+    let Some(path) = cover else { return Ok(false) };
+    Ok(sqlx::query("UPDATE albums SET cover_path = $2 WHERE id = $1 AND cover_path IS NULL")
+        .bind(album)
+        .bind(path)
+        .execute(conn)
+        .await?
+        .rows_affected()
+        == 1)
 }
 
 #[cfg(test)]

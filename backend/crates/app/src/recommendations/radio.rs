@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Bulat Ruslanovich
 
+use std::sync::Arc;
+
 use reco::radio::{self, Focus, RadioRequest};
 use reco::taste;
 use serde::{Deserialize, Serialize};
@@ -79,19 +81,24 @@ impl Recommendations {
         .await?;
 
         let queue = request.exclude.unwrap_or_default();
-        let batch = {
-            let taste = taste::taste(snapshot, &listener);
-            let mood = request.mood.as_deref().and_then(|mood| library.moods.get(mood));
-            let request = RadioRequest {
-                seed: request.seed_track_id,
-                queue: &queue,
-                recent: &recent,
-                limit: usize::try_from(limit).unwrap_or(1),
-                mood,
-                focus,
-            };
-            radio::next(snapshot, &listener, &taste, &request)
-        };
+        let computing_library = Arc::clone(&library);
+        let batch = self
+            .compute
+            .run(move || {
+                let snapshot = &computing_library.snapshot;
+                let taste = taste::taste(snapshot, &listener);
+                let mood = request.mood.as_deref().and_then(|mood| computing_library.moods.get(mood));
+                let request = RadioRequest {
+                    seed: request.seed_track_id,
+                    queue: &queue,
+                    recent: &recent,
+                    limit: usize::try_from(limit).unwrap_or(1),
+                    mood,
+                    focus,
+                };
+                radio::next(snapshot, &listener, &taste, &request)
+            })
+            .await?;
 
         let shown: Vec<Shown> = batch
             .picks

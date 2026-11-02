@@ -2,11 +2,13 @@
 // Copyright (c) 2026 Bulat Ruslanovich
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, bail};
 use sha2::{Digest, Sha256};
 use tokio::io::AsyncWriteExt;
+use tokio_util::sync::CancellationToken;
 
 use crate::config::ModelConfig;
 use crate::text::hex_lower;
@@ -34,6 +36,50 @@ const FILES: [ModelFile; 3] = [
 const ATTEMPTS: u32 = 3;
 const RETRY_DELAY: Duration = Duration::from_secs(5);
 const PROGRESS_FROM_BYTES: u64 = 16 * 1024 * 1024;
+const MODEL_RETRY_DELAY: Duration = Duration::from_secs(60);
+
+pub async fn load_when_ready(
+    config: &ModelConfig,
+    cancel: &CancellationToken,
+) -> Option<Arc<media::clap::ClapEmbedder>> {
+    retry_load(
+        || async {
+            ensure(config).await?;
+            let root = config.storage_root.clone();
+            let embedder = tokio::task::spawn_blocking(move || media::clap::ClapEmbedder::load(&root))
+                .await
+                .context("Loading the CLAP model was interrupted")??;
+            tracing::info!("CLAP model ready; starting track analysis");
+            Ok(Arc::new(embedder))
+        },
+        cancel,
+    )
+    .await
+}
+
+async fn retry_load<T, F: std::future::Future<Output = anyhow::Result<T>>>(
+    mut load: impl FnMut() -> F,
+    cancel: &CancellationToken,
+) -> Option<T> {
+    loop {
+        let result = tokio::select! {
+            biased;
+            () = cancel.cancelled() => return None,
+            result = load() => result,
+        };
+        match result {
+            Ok(value) => return Some(value),
+            Err(error) => tracing::warn!(
+                "CLAP model unavailable; track analysis is waiting, retrying in {}s: {error:#}",
+                MODEL_RETRY_DELAY.as_secs()
+            ),
+        }
+        tokio::select! {
+            () = cancel.cancelled() => return None,
+            () = tokio::time::sleep(MODEL_RETRY_DELAY) => {},
+        }
+    }
+}
 
 pub async fn ensure(config: &ModelConfig) -> anyhow::Result<()> {
     let missing: Vec<&ModelFile> = FILES.iter().filter(|file| !config.storage_root.join(file.path).is_file()).collect();
@@ -133,4 +179,66 @@ fn partial_path(target: &Path) -> PathBuf {
     let mut name = target.file_name().unwrap_or_default().to_os_string();
     name.push(".part");
     target.with_file_name(name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test(start_paused = true)]
+    async fn model_loading_recovers_after_a_failure_without_restarting_the_server() {
+        let mut attempts = 0;
+        let started = tokio::time::Instant::now();
+        let loaded = retry_load(
+            || {
+                attempts += 1;
+                std::future::ready(if attempts == 1 { Err(anyhow::anyhow!("model not downloaded")) } else { Ok(42) })
+            },
+            &CancellationToken::new(),
+        )
+        .await;
+        assert_eq!(loaded, Some(42));
+        assert_eq!(started.elapsed(), MODEL_RETRY_DELAY);
+    }
+
+    #[tokio::test]
+    async fn shutdown_interrupts_an_in_flight_model_download() {
+        let cancel = CancellationToken::new();
+        let (started, loading) = tokio::sync::oneshot::channel();
+        let stop = cancel.clone();
+        let task = tokio::spawn(async move {
+            let mut started = Some(started);
+            retry_load(
+                || {
+                    if let Some(started) = started.take() {
+                        let _ = started.send(());
+                    }
+                    std::future::pending::<anyhow::Result<()>>()
+                },
+                &stop,
+            )
+            .await
+        });
+        loading.await.unwrap();
+        cancel.cancel();
+        assert_eq!(task.await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn a_missing_local_model_waits_for_recovery_instead_of_ending_the_worker() {
+        let config = ModelConfig {
+            storage_root: std::env::temp_dir().join(format!("caimack-missing-model-{}", uuid::Uuid::now_v7())),
+            url: None,
+        };
+        let cancel = CancellationToken::new();
+        let mut loading = std::pin::pin!(load_when_ready(&config, &cancel));
+        assert!(
+            std::future::poll_fn(|cx| std::task::Poll::Ready(
+                std::future::Future::poll(loading.as_mut(), cx).is_pending()
+            ))
+            .await
+        );
+        cancel.cancel();
+        assert!(loading.await.is_none());
+    }
 }

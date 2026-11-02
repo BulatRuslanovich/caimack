@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Bulat Ruslanovich
 
+mod compute;
 pub mod duplicates;
 pub mod home;
 pub mod impressions;
@@ -35,6 +36,7 @@ pub struct Recommendations {
     pub moods: Arc<MoodCatalog>,
     pub listeners: Listeners,
     pub map: MapCache,
+    compute: compute::ComputePool,
 }
 
 impl Recommendations {
@@ -49,6 +51,7 @@ impl Recommendations {
             moods: Arc::new(moods),
             listeners: Listeners::default(),
             map: MapCache::default(),
+            compute: compute::ComputePool::default(),
         }
     }
 }

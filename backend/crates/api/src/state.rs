@@ -15,9 +15,11 @@ use app::streaming::HashCache;
 use app::transcode::TranscodeQueue;
 use app::upload::Uploads;
 use sqlx::PgPool;
+use tokio_util::sync::CancellationToken;
 
 #[derive(Clone)]
 pub struct AppState {
+    pub shutdown: CancellationToken,
     pub config: Arc<Config>,
     pub db: PgPool,
     pub auth: AuthService,

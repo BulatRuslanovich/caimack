@@ -23,15 +23,21 @@ pub struct MoodDto {
 impl Recommendations {
     pub async fn moods(&self) -> AppResult<Vec<MoodDto>> {
         let library = self.index.library();
-        let snapshot = &library.snapshot;
-        let ranked: Vec<(String, Vec<Uuid>)> = library
-            .moods
-            .playable()
-            .map(|(key, scores)| {
-                let tracks = scores.top_members().into_iter().take(CANDIDATES).map(|row| snapshot.meta(row).track_id);
-                (key.to_owned(), tracks.collect())
+        let ranked: Vec<(String, Vec<Uuid>)> = self
+            .compute
+            .run(move || {
+                let snapshot = &library.snapshot;
+                library
+                    .moods
+                    .playable()
+                    .map(|(key, scores)| {
+                        let tracks =
+                            scores.top_members().into_iter().take(CANDIDATES).map(|row| snapshot.meta(row).track_id);
+                        (key.to_owned(), tracks.collect())
+                    })
+                    .collect()
             })
-            .collect();
+            .await?;
         if ranked.is_empty() {
             return Ok(vec![]);
         }

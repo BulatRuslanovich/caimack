@@ -189,7 +189,9 @@ and from the Upload page. A file that disappears stays in the library for 30 day
 is briefly disconnected costs no likes or history; a moved file keeps its track.
 
 The first start downloads the CLAP audio model (about 280 MB, checked against a pinned SHA-256)
-into `storage/models`. To export it yourself instead, which takes PyTorch and several GB of RAM,
+into `storage/models` in the background. The library and playback are available while the model
+loads; track analysis starts when it is ready. If loading fails, the server retries without a restart.
+To export it yourself instead, which takes PyTorch and several GB of RAM,
 run `make model` on a workstation and copy `storage/models/` to the server before the first start.
 
 Then open `https://<PUBLIC_DOMAIN>` and sign in as the owner: the music folder is scanned on its
