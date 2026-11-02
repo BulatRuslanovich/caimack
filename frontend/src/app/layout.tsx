@@ -10,6 +10,8 @@ import { QueryProvider } from "@/components/QueryProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { I18nProvider } from "@/contexts/I18nContext";
 import { PlayerProvider } from "@/contexts/PlayerContext";
+import { PlayerUiProvider } from "@/contexts/PlayerUiContext";
+import { YandexMusicProvider } from "@/contexts/YandexMusicContext";
 import { Toaster } from "@/components/ui/sonner";
 import { UploadProvider } from "@/contexts/UploadContext";
 import { EARLY_FETCH_SCRIPT, SESSION_HINT_COOKIE } from "@/lib/earlyFetch";
@@ -75,7 +77,11 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               <AuthProvider initialUser={initialUser}>
                 <PlayerProvider>
                   <UploadProvider>
-                    <AppShell>{children}</AppShell>
+                    <PlayerUiProvider>
+                      <YandexMusicProvider>
+                        <AppShell>{children}</AppShell>
+                      </YandexMusicProvider>
+                    </PlayerUiProvider>
                   </UploadProvider>
                 </PlayerProvider>
               </AuthProvider>

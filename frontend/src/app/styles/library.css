@@ -1,0 +1,142 @@
+/* SPDX-License-Identifier: MIT */
+/* Copyright (c) 2026 Bulat Ruslanovich */
+
+:root {
+  --library-card-min: 11rem;
+  --library-card-gap: 1.5rem;
+  --library-shelf-width: 11rem;
+  --library-row-padding: 0.5rem;
+  --library-cover-size: 2.5rem;
+}
+
+:root[data-library-density="compact"] {
+  --library-card-min: 9rem;
+  --library-card-gap: 1rem;
+  --library-shelf-width: 9rem;
+  --library-row-padding: 0.25rem;
+  --library-cover-size: 2rem;
+}
+
+:root[data-library-density="spacious"] {
+  --library-card-min: 14rem;
+  --library-card-gap: 1.75rem;
+  --library-shelf-width: 14rem;
+  --library-row-padding: 0.75rem;
+  --library-cover-size: 3rem;
+}
+
+.library-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--library-card-min)), 1fr));
+  gap: var(--library-card-gap);
+}
+
+.library-card-shelf {
+  grid-auto-columns: var(--library-shelf-width);
+  gap: var(--library-card-gap);
+}
+
+.library-track-row {
+  padding-block: var(--library-row-padding);
+}
+
+.library-track-cover {
+  width: var(--library-cover-size) !important;
+  height: var(--library-cover-size) !important;
+}
+
+@media (768px <= width < 1280px) {
+  :root:not([data-library-density="compact"]):not([data-library-density="spacious"]) {
+    --library-card-min: 9.5rem;
+    --library-card-gap: 1rem;
+    --library-shelf-width: 9.5rem;
+  }
+}
+
+@media (width < 768px) {
+  :root {
+    --library-card-min: 8.75rem;
+    --library-card-gap: 0.75rem;
+    --library-shelf-width: 7.25rem;
+  }
+  :root[data-library-density="compact"] {
+    --library-card-min: 7rem;
+    --library-card-gap: 0.625rem;
+    --library-shelf-width: 6.5rem;
+    --library-cover-size: 2.25rem;
+  }
+  :root[data-library-density="spacious"] {
+    --library-card-min: 10rem;
+    --library-card-gap: 1rem;
+    --library-shelf-width: 10rem;
+  }
+  .library-track-row {
+    min-height: 3.5rem;
+  }
+}
+
+@media (width < 380px) {
+  :root:not([data-library-density="compact"]):not([data-library-density="spacious"]) {
+    --library-card-min: 7.6rem;
+    --library-shelf-width: 6.5rem;
+  }
+}
+
+@media (width >= 1280px) {
+  .app-shell[data-queue-docked="true"] {
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr) 21rem;
+    grid-template-areas: "sidebar content queue" "player player player";
+  }
+}
+
+@media (1280px <= width < 1536px) {
+  .app-shell[data-queue-docked="true"] .library-track-list > [role="row"] {
+    grid-template-columns: 2.75rem minmax(0, 1fr) 4.75rem 5.5rem;
+  }
+  .app-shell[data-queue-docked="true"] .library-track-list .track-extra-cell {
+    display: none;
+  }
+}
+
+:root[data-player-transition="true"]::view-transition-group(player-artwork) {
+  animation-duration: 440ms;
+  animation-timing-function: cubic-bezier(0.22, 0.7, 0.2, 1);
+  z-index: 2;
+}
+:root[data-player-transition="true"]::view-transition-old(player-artwork),
+:root[data-player-transition="true"]::view-transition-new(player-artwork) {
+  height: 100%;
+  object-fit: cover;
+  mix-blend-mode: normal;
+}
+:root[data-player-transition="true"] [data-player-fullscreen] {
+  animation: none;
+}
+
+:root[data-player-transition="true"]::view-transition-old(root) {
+  animation: player-background-out 180ms ease-out both;
+  mix-blend-mode: normal;
+}
+
+:root[data-player-transition="true"]::view-transition-new(root) {
+  animation: player-background-in 220ms ease-out both;
+  mix-blend-mode: normal;
+}
+
+@keyframes player-background-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes player-background-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*) {
+    animation-duration: 0.01ms !important;
+  }
+}

@@ -7,6 +7,7 @@ import { useEffect, useRef } from "react";
 import type { Track } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { useVisualizer } from "@/lib/visualizer";
+import { trackCoverUrl } from "@/lib/media";
 import { usePlayerActions } from "@/contexts/PlayerContext";
 import { TrackCover } from "./Cover";
 import { RecordAura } from "./RecordAura";
@@ -28,6 +29,7 @@ export function Record({
   aura = false,
   axis = "x",
   sizes,
+  transitionCover = false,
   className,
 }: {
   track: RecordTrack;
@@ -37,6 +39,7 @@ export function Record({
   aura?: boolean;
   axis?: "x" | "y";
   sizes?: string;
+  transitionCover?: boolean;
   className?: string;
 }) {
   const { scrubBy, holdScrub, commitScrub } = usePlayerActions();
@@ -147,8 +150,16 @@ export function Record({
         <div className="record-sheen" />
       </div>
 
-      <div className="record-sleeve">
-        <TrackCover track={track} variant={sizes ? "full" : "thumb"} sizes={sizes} />
+      <div
+        className="record-sleeve"
+        style={{ viewTransitionName: transitionCover ? "player-artwork" : undefined }}
+      >
+        <TrackCover
+          track={track}
+          variant={sizes ? "full" : "thumb"}
+          sizes={sizes}
+          preview={sizes ? trackCoverUrl(track, "thumb") : undefined}
+        />
       </div>
     </div>
   );

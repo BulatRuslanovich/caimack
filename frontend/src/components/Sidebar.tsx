@@ -4,7 +4,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { LogOutIcon } from "lucide-react";
+import { LogOutIcon, MusicIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
@@ -13,6 +13,9 @@ import { navigationPrefetch } from "@/lib/queries";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUpload } from "@/contexts/UploadContext";
 import { useT } from "@/contexts/I18nContext";
+import { useYandexMusicSettings } from "@/lib/useYandexMusic";
+import { useYandexImports } from "@/contexts/YandexMusicContext";
+import { YandexActivityButton } from "./yandex/YandexImports";
 import { BrandMark, BrandWordmark } from "./Brand";
 import { Pin } from "./Pin";
 import { Button } from "./ui/button";
@@ -126,6 +129,8 @@ function NavGroup({
 export function Sidebar() {
   const t = useT();
   const { isAdmin } = useAuth();
+  const yandex = useYandexMusicSettings();
+  const { jobs } = useYandexImports();
 
   return (
     <aside
@@ -151,7 +156,21 @@ export function Sidebar() {
       >
         <NavGroup entries={primaryNav} />
         <NavGroup label={t("nav.library")} entries={libraryNav} />
-        <NavGroup entries={serviceNav(isAdmin)} compact className="mt-auto" />
+        <div className="mt-auto flex flex-col gap-1">
+          {isAdmin && yandex.enabled && (
+            <div className="mb-2">
+              <Link
+                href="/search?tab=yandex"
+                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-raised hover:text-foreground hover:no-underline"
+              >
+                <MusicIcon size={16} />
+                {t("yandex.title")}
+              </Link>
+              {jobs.length > 0 && <YandexActivityButton compact />}
+            </div>
+          )}
+          <NavGroup entries={serviceNav(isAdmin)} compact />
+        </div>
       </nav>
 
       <div className="border-t border-border px-1 pt-3">

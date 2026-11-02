@@ -14,6 +14,7 @@ import { usePlaybackProgress } from "@/lib/playback/usePlaybackProgress";
 import { useToggleFavorite } from "@/lib/useToggleFavorite";
 import { usePlayerShortcuts } from "@/lib/playback/usePlayerShortcuts";
 import { usePlayerActions, usePlayerState } from "@/contexts/PlayerContext";
+import { usePlayerUi } from "@/contexts/PlayerUiContext";
 import { useT } from "@/contexts/I18nContext";
 import { ArtistLinks } from "./ArtistLinks";
 import { Record } from "./Record";
@@ -23,7 +24,6 @@ import { PlayerVolume } from "./PlayerVolume";
 import { StreamQuality } from "./StreamQuality";
 import { FullScreenPlayer } from "./FullScreenPlayer";
 import { BufferingRing } from "./PlaybackIndicators";
-import { QueuePanel } from "./QueuePanel";
 import { SleepTimerButton } from "./SleepTimerButton";
 import { Button } from "./ui/button";
 import {
@@ -105,7 +105,8 @@ export function Player() {
   const t = useT();
 
   const [expanded, setExpandedNow] = useState(false);
-  const [queueOpen, setQueueOpen] = useState(false);
+  const { queueOpen, setQueueOpen } = usePlayerUi();
+  const transition = useRef<ViewTransition | null>(null);
   const swipeFrom = useRef<{ x: number; y: number } | null>(null);
   const [swipeX, setSwipeX] = useState(0);
   const { currentTrack } = state;
@@ -116,7 +117,17 @@ export function Player() {
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!document.startViewTransition || reduceMotion) return setExpandedNow(next);
 
-    document.startViewTransition(() => flushSync(() => setExpandedNow(next)));
+    transition.current?.skipTransition();
+    document.documentElement.dataset.playerTransition = "true";
+    const running = document.startViewTransition(() => flushSync(() => setExpandedNow(next)));
+    transition.current = running;
+    void running.ready.catch(() => undefined);
+    const finish = () => {
+      if (transition.current !== running) return;
+      transition.current = null;
+      delete document.documentElement.dataset.playerTransition;
+    };
+    void running.finished.then(finish, finish);
   };
 
   const toggleFavorite = useToggleFavorite();
@@ -195,10 +206,8 @@ export function Player() {
                 track={currentTrack}
                 out={state.isPlaying}
                 spinning={state.isPlaying && !state.buffering}
-                className={cn(
-                  "w-(--player-cover) [--record-out:20%]",
-                  !expanded && "[view-transition-name:now-playing]",
-                )}
+                transitionCover={!expanded}
+                className="w-(--player-cover) [--record-out:20%]"
               />
             </button>
 
@@ -303,8 +312,6 @@ export function Player() {
 
         <ProgressLine fallbackDuration={currentTrack.durationSeconds} />
       </footer>
-
-      {queueOpen && <QueuePanel onClose={() => setQueueOpen(false)} />}
 
       {expanded && (
         <FullScreenPlayer onClose={() => setExpanded(false)} onToggleFavorite={likeCurrent} />

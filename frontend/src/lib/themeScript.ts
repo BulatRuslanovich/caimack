@@ -36,6 +36,8 @@ export const NO_FLASH_THEME_SCRIPT = `try {
   if (!colors[colorway]) colorway = "${DEFAULT_COLORWAY}";
   document.documentElement.dataset.theme = palette;
   document.documentElement.dataset.colorway = colorway;
+  var density = localStorage.getItem("music-streaming.library-density");
+  if (density === "compact" || density === "spacious") document.documentElement.dataset.libraryDensity = density;
   if (localStorage.getItem("${COVER_TONE_STORAGE_KEY}") === "off") document.documentElement.dataset.coverTone = "off";
   var meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute("content", colors[colorway][palette]);

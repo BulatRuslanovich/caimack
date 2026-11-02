@@ -14,12 +14,9 @@ import { Button } from "./ui/button";
 export const hiddenScrollbar = "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 
 const cardShelf = [
-  "grid grid-flow-col auto-cols-[11rem] gap-6 overflow-x-auto overscroll-x-contain",
-  "max-xl:auto-cols-[9.5rem] max-xl:gap-4",
+  "library-card-shelf grid grid-flow-col overflow-x-auto overscroll-x-contain",
   "[scroll-snap-type:x_proximity] [&>*]:[scroll-snap-align:start]",
   hiddenScrollbar,
-  "max-md:auto-cols-[7.25rem] max-md:gap-3",
-  "max-[380px]:auto-cols-[6.5rem]",
 ].join(" ");
 
 const scrollFade =

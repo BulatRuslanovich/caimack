@@ -247,7 +247,7 @@ export function TrackList({
   const body = (
     <div
       ref={bodyRef}
-      className="flex flex-col"
+      className="library-track-list flex flex-col"
       role="table"
       aria-label={t("tracks.tableLabel")}
       onKeyDown={onRowsKeyDown}
@@ -276,17 +276,17 @@ export function TrackList({
           {t("column.title")}
         </Caption>
         {showAlbum && (
-          <Caption role="columnheader" className="truncate max-md:hidden">
+          <Caption role="columnheader" className="track-extra-cell truncate max-md:hidden">
             {t("column.album")}
           </Caption>
         )}
         {playedAt && (
-          <Caption role="columnheader" className="truncate max-md:hidden">
+          <Caption role="columnheader" className="track-extra-cell truncate max-md:hidden">
             {t("column.played")}
           </Caption>
         )}
         {showTempoKey && (
-          <Caption role="columnheader" className="truncate max-md:hidden">
+          <Caption role="columnheader" className="track-extra-cell truncate max-md:hidden">
             {t("column.tempoKey")}
           </Caption>
         )}
@@ -415,7 +415,7 @@ const TrackRow = memo(function TrackRow({
       style={sortable ? { transform: CSS.Transform.toString(transform), transition } : undefined}
       className={cn(
         grid,
-        "group relative transition-colors outline-none",
+        "library-track-row group relative transition-colors outline-none",
         "hover:bg-card focus-within:bg-card focus-visible:bg-card focus-visible:inset-ring focus-visible:inset-ring-ring",
         isCurrent && "track-row-current bg-card",
         isDragging && "z-10 opacity-90 shadow-pop",
@@ -472,7 +472,7 @@ const TrackRow = memo(function TrackRow({
       </span>
 
       <span className="flex min-w-0 items-center gap-3" role="cell">
-        {showCover && <TrackCover track={track} size={40} />}
+        {showCover && <TrackCover track={track} size={40} className="library-track-cover" />}
         <span className="flex min-w-0 flex-col">
           <span className={cn("truncate font-semibold", isCurrent && "text-primary")}>
             {track.title}
@@ -494,13 +494,19 @@ const TrackRow = memo(function TrackRow({
       </span>
 
       {showAlbum && (
-        <span className="truncate text-sm text-muted-foreground max-md:hidden" role="cell">
+        <span
+          className="track-extra-cell truncate text-sm text-muted-foreground max-md:hidden"
+          role="cell"
+        >
           {track.albumId && <Link href={`/albums/${track.albumId}`}>{track.albumTitle}</Link>}
         </span>
       )}
 
       {showPlayedAt && (
-        <span className="truncate text-sm text-muted-foreground max-md:hidden" role="cell">
+        <span
+          className="track-extra-cell truncate text-sm text-muted-foreground max-md:hidden"
+          role="cell"
+        >
           {playedAt ? format.playedAt(playedAt) : ""}
         </span>
       )}
@@ -558,7 +564,7 @@ function TempoKeyCell({ track }: { track: Track }) {
 
   return (
     <span
-      className="truncate text-sm text-muted-foreground tabular-nums max-md:hidden"
+      className="track-extra-cell truncate text-sm text-muted-foreground tabular-nums max-md:hidden"
       role="cell"
       title={
         bpm && key && track.key

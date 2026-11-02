@@ -4,31 +4,19 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import { PlusIcon, SearchIcon } from "lucide-react";
+import { MusicIcon, SearchIcon } from "lucide-react";
 import { queries } from "@/lib/queries";
 import { formatDuration } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import type { YandexAlbum, YandexTrack } from "@/lib/types";
 import { CardGrid, Section } from "@/components/PageHeader";
 import { Query } from "@/components/Query";
-import { Button } from "@/components/ui/button";
 import { useT } from "@/contexts/I18nContext";
-import { useStartYandexImport } from "./useStartYandexImport";
+import { YandexImportButton } from "./YandexImportButton";
 
 export function YandexSearchResults({ query }: { query: string }) {
   const t = useT();
   const result = useQuery(queries.yandexSearch(query));
-  const start = useStartYandexImport();
-
-  const [queued, setQueued] = useState<ReadonlySet<string>>(new Set());
-
-  const add = (kind: "Track" | "Album", id: string) =>
-    start.mutate(
-      { kind, id },
-      { onSuccess: () => setQueued((previous) => new Set(previous).add(`${kind}:${id}`)) },
-    );
-
   return (
     <Query
       result={result}
@@ -41,27 +29,16 @@ export function YandexSearchResults({ query }: { query: string }) {
             <Section title={t("nav.tracks")}>
               <ul className="flex flex-col">
                 {data.tracks.map((track) => (
-                  <TrackRow
-                    key={track.id}
-                    track={track}
-                    queued={queued.has(`Track:${track.id}`)}
-                    onAdd={() => add("Track", track.id)}
-                  />
+                  <TrackRow key={track.id} track={track} />
                 ))}
               </ul>
             </Section>
           )}
-
           {data.albums.length > 0 && (
             <Section title={t("nav.albums")}>
               <CardGrid>
                 {data.albums.map((album) => (
-                  <AlbumCard
-                    key={album.id}
-                    album={album}
-                    queued={queued.has(`Album:${album.id}`)}
-                    onAdd={() => add("Album", album.id)}
-                  />
+                  <AlbumCard key={album.id} album={album} />
                 ))}
               </CardGrid>
             </Section>
@@ -76,88 +53,76 @@ function Artwork({ url, className }: { url?: string | null; className?: string }
   return url ? (
     <img src={url} alt="" loading="lazy" className={cn("bg-raised object-cover", className)} />
   ) : (
-    <span className={cn("bg-raised", className)} />
+    <span
+      aria-hidden="true"
+      className={cn("grid place-items-center bg-raised text-faint", className)}
+    >
+      <MusicIcon size={22} />
+    </span>
   );
 }
 
-function TrackRow({
-  track,
-  queued,
-  onAdd,
-}: {
-  track: YandexTrack;
-  queued: boolean;
-  onAdd: () => void;
-}) {
-  const t = useT();
-  const note = track.inLibrary
-    ? t("yandex.inLibrary")
-    : !track.available
-      ? t("yandex.unavailable")
-      : queued
-        ? t("yandex.queued")
-        : null;
-
+function TrackRow({ track }: { track: YandexTrack }) {
   return (
-    <li className="flex min-h-14 items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-raised">
-      <Artwork url={track.coverUrl} className="size-10 shrink-0 rounded-sm" />
-
+    <li className="library-track-row flex min-h-14 items-center gap-3 rounded-md px-2.5 text-sm hover:bg-card max-md:gap-2 max-md:px-0">
+      <Artwork url={track.coverUrl} className="library-track-cover size-10 shrink-0 rounded-xs" />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className={cn("truncate font-medium", !track.available && "text-muted-foreground")}>
+        <span className={cn("truncate font-semibold", !track.available && "text-muted-foreground")}>
           {track.title}
         </span>
-        <span className="truncate text-muted-foreground">
-          {track.album ? `${track.artist} · ${track.album}` : track.artist}
-        </span>
+        <span className="truncate text-muted-foreground">{track.artist}</span>
+        {track.album && (
+          <span className="truncate text-xs text-faint md:hidden">{track.album}</span>
+        )}
       </span>
-
-      <span className="shrink-0 text-muted-foreground tabular-nums max-md:hidden">
-        {formatDuration(track.durationSeconds)}
-      </span>
-
-      {note ? (
-        <span className="w-28 shrink-0 text-right text-xs text-muted-foreground">{note}</span>
-      ) : (
-        <span className="flex w-28 shrink-0 justify-end">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onAdd}
-            aria-label={t("yandex.addNamed", { name: track.title })}
-          >
-            <PlusIcon size={16} />
-          </Button>
+      {track.album && (
+        <span className="min-w-0 flex-1 truncate text-muted-foreground max-lg:hidden">
+          {track.album}
         </span>
       )}
+      <span className="mr-3 shrink-0 text-muted-foreground tabular-nums max-md:hidden">
+        {formatDuration(track.durationSeconds)}
+      </span>
+      <YandexImportButton
+        source={{
+          kind: "Track",
+          id: track.id,
+          title: track.title,
+          artist: track.artist,
+          coverUrl: track.coverUrl,
+        }}
+        inLibrary={track.inLibrary}
+        unavailable={!track.available && !track.inLibrary}
+      />
     </li>
   );
 }
 
-function AlbumCard({
-  album,
-  queued,
-  onAdd,
-}: {
-  album: YandexAlbum;
-  queued: boolean;
-  onAdd: () => void;
-}) {
+function AlbumCard({ album }: { album: YandexAlbum }) {
   const t = useT();
-
   return (
-    <div className="flex min-w-0 flex-col gap-2">
-      <Artwork url={album.coverUrl} className="aspect-square w-full rounded-md" />
-
-      <div className="flex min-w-0 flex-col">
-        <span className="truncate font-medium">{album.title}</span>
-        <span className="truncate text-sm text-muted-foreground">
-          {album.year ? `${album.artist} · ${album.year}` : album.artist}
+    <article className="flex min-w-0 flex-col gap-2.5">
+      <Artwork url={album.coverUrl} className="aspect-square w-full rounded-xs" />
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="line-clamp-2 text-sm font-medium">{album.title}</span>
+        <span className="truncate text-sm text-muted-foreground">{album.artist}</span>
+        <span className="text-xs text-faint">
+          {[album.year, album.trackCount ? t("count.tracks", { count: album.trackCount }) : null]
+            .filter(Boolean)
+            .join(" · ")}
         </span>
       </div>
-
-      <Button variant="outline" size="sm" className="self-start" disabled={queued} onClick={onAdd}>
-        {queued ? t("yandex.queued") : t("yandex.addAlbum")}
-      </Button>
-    </div>
+      <div className="max-w-full self-start">
+        <YandexImportButton
+          source={{
+            kind: "Album",
+            id: album.id,
+            title: album.title,
+            artist: album.artist,
+            coverUrl: album.coverUrl,
+          }}
+        />
+      </div>
+    </article>
   );
 }

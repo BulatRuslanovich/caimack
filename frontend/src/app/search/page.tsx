@@ -21,8 +21,10 @@ import { SearchIcon } from "lucide-react";
 import { hiddenScrollbar } from "@/components/Shelf";
 import { ToggleGroup, ToggleGroupButton } from "@/components/ui/toggle-group";
 import { useT } from "@/contexts/I18nContext";
-import { useYandexMusic } from "@/lib/useYandexMusic";
-import { YandexSearchResults } from "@/components/yandex/YandexSearchResults";
+import { useYandexMusicSettings } from "@/lib/useYandexMusic";
+import { useAuth } from "@/contexts/AuthContext";
+import { YandexSearchWorkspace } from "@/components/yandex/YandexSearchWorkspace";
+import { YandexActivityButton } from "@/components/yandex/YandexImports";
 import { GenreChips } from "./GenreChips";
 import { RecentSearches } from "./RecentSearches";
 import { TopResult } from "./TopResult";
@@ -71,7 +73,9 @@ function SearchView() {
   const router = useRouter();
   const params = useSearchParams();
 
-  const yandex = useYandexMusic();
+  const { isAdmin } = useAuth();
+  const yandexSettings = useYandexMusicSettings();
+  const yandex = isAdmin && yandexSettings.enabled;
 
   const query = (params.get("q") ?? "").trim();
   const tabParam = params.get("tab");
@@ -81,7 +85,7 @@ function SearchView() {
   const navigate = useCallback(
     (next: string, nextTab: Tab | null) => {
       if (!next) {
-        router.replace("/search");
+        router.replace(nextTab === YANDEX_TAB ? "/search?tab=yandex" : "/search");
         return;
       }
 
@@ -93,47 +97,58 @@ function SearchView() {
     [router],
   );
 
-  const results = useQuery(queries.search(query));
+  const results = useQuery({
+    ...queries.search(query),
+    enabled: !yandexTab && query.length >= SEARCH_MIN_LENGTH,
+  });
 
   const previewTracks = useMemo(() => results.data?.tracks.slice(0, PREVIEW) ?? [], [results.data]);
 
   return (
     <>
-      <PageHeader title={t("nav.search")} />
+      <PageHeader title={t("nav.search")} actions={yandex && <YandexActivityButton />} />
+
+      {yandex && (
+        <ToggleGroup aria-label={t("search.source")}>
+          <ToggleGroupButton active={!yandexTab} onClick={() => navigate(query, null)}>
+            {t("search.source.library")}
+          </ToggleGroupButton>
+          <ToggleGroupButton active={yandexTab} onClick={() => navigate(query, YANDEX_TAB)}>
+            {t("yandex.title")}
+          </ToggleGroupButton>
+        </ToggleGroup>
+      )}
 
       <PageToolbar
         search={query}
         onSearch={(next) => navigate(next, yandexTab ? YANDEX_TAB : tab)}
-        placeholder={t("search.placeholder")}
+        placeholder={t(yandexTab ? "yandex.searchPlaceholder" : "search.placeholder")}
         autoFocus
       />
 
-      {query.length < SEARCH_MIN_LENGTH ? (
+      {query.length < SEARCH_MIN_LENGTH && !yandexTab ? (
         <SearchStart />
       ) : (
         <>
-          <ToggleGroup aria-label={t("search.tabs")}>
-            <ToggleGroupButton
-              active={tab === null && !yandexTab}
-              onClick={() => navigate(query, null)}
-            >
-              {t("search.tab.all")}
-            </ToggleGroupButton>
-            {TABS.map((value) => (
+          {!yandexTab && (
+            <ToggleGroup aria-label={t("search.tabs")}>
               <ToggleGroupButton
-                key={value}
-                active={tab === value}
-                onClick={() => navigate(query, value)}
+                active={tab === null && !yandexTab}
+                onClick={() => navigate(query, null)}
               >
-                {t(TAB_LABELS[value])}
+                {t("search.tab.all")}
               </ToggleGroupButton>
-            ))}
-            {yandex && (
-              <ToggleGroupButton active={yandexTab} onClick={() => navigate(query, YANDEX_TAB)}>
-                {t("yandex.title")}
-              </ToggleGroupButton>
-            )}
-          </ToggleGroup>
+              {TABS.map((value) => (
+                <ToggleGroupButton
+                  key={value}
+                  active={tab === value}
+                  onClick={() => navigate(query, value)}
+                >
+                  {t(TAB_LABELS[value])}
+                </ToggleGroupButton>
+              ))}
+            </ToggleGroup>
+          )}
 
           <div
             className="contents"
@@ -142,7 +157,7 @@ function SearchView() {
             }}
           >
             {yandexTab ? (
-              <YandexSearchResults query={query} />
+              <YandexSearchWorkspace query={query} />
             ) : tab === null ? (
               <Query
                 result={results}

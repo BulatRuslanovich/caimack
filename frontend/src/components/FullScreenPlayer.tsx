@@ -183,7 +183,7 @@ export function FullScreenPlayer({
               if (from !== null && event.changedTouches[0].clientY - from > SWIPE_CLOSE_PX)
                 onClose();
             }}
-            className="fixed inset-0 z-90 flex animate-in flex-col bg-background duration-300 fade-in-0 slide-in-from-bottom-6 px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))]"
+            className="fixed inset-0 z-90 flex animate-in flex-col bg-background duration-300 fade-in-0 px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))]"
           >
             <DialogPrimitive.Title className="sr-only">
               {t("player.nowPlaying")}
@@ -271,7 +271,8 @@ export function FullScreenPlayer({
                     aura
                     axis="x"
                     sizes="min(48vh, 28rem)"
-                    className="w-[min(100%,48vh)] [view-transition-name:now-playing] max-lg:hidden"
+                    transitionCover
+                    className="w-[min(100%,48vh)] max-lg:hidden"
                   />
                   <Record
                     track={track}
@@ -281,7 +282,8 @@ export function FullScreenPlayer({
                     aura
                     axis="y"
                     sizes="min(76vw, 22rem)"
-                    className="w-[min(76vw,22rem)] [--record-out:22%] [view-transition-name:now-playing] lg:hidden"
+                    transitionCover
+                    className="w-[min(76vw,22rem)] [--record-out:22%] lg:hidden"
                   />
                 </div>
               )}

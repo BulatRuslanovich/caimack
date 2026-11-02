@@ -17,7 +17,6 @@ import { PageHeader, Section } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/contexts/I18nContext";
 import { useYandexMusic } from "@/lib/useYandexMusic";
-import { YandexImports } from "@/components/yandex/YandexImports";
 import { LibraryFolder } from "@/components/LibraryFolder";
 import { BlankRecord, type BlankRecordState } from "./BlankRecord";
 import { FileCheckBadge } from "./FileCheckBadge";
@@ -87,6 +86,18 @@ export default function UploadPage() {
                   : undefined
               }
             />
+
+            {yandex && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-card p-5">
+                <div>
+                  <h2 className="text-section font-semibold">{t("yandex.title")}</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">{t("yandex.uploadHint")}</p>
+                </div>
+                <Button asChild size="sm">
+                  <Link href="/search?tab=yandex">{t("yandex.findMusic")}</Link>
+                </Button>
+              </div>
+            )}
 
             <section
               className={cn(
@@ -212,8 +223,6 @@ export default function UploadPage() {
             </section>
 
             <LibraryFolder />
-
-            {yandex && <YandexImports />}
 
             {failed.length > 0 && (
               <Section

@@ -63,11 +63,6 @@
   cursor: grabbing;
 }
 
-::view-transition-group(now-playing) {
-  animation-duration: 450ms;
-  animation-timing-function: var(--ease);
-}
-
 .record-label {
   position: absolute;
   inset: 34%;

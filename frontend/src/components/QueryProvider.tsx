@@ -22,7 +22,11 @@ export function QueryProvider({ children }: { children: ReactNode }) {
         queryCache: new QueryCache({
           onError: (error) => notifyError(error, t("error.load")),
         }),
-        mutationCache: new MutationCache({ onError: (error) => notifyError(error) }),
+        mutationCache: new MutationCache({
+          onError: (error, _variables, _context, mutation) => {
+            if (!mutation.options.meta?.handlesError) notifyError(error);
+          },
+        }),
         defaultOptions: {
           queries: {
             staleTime: STALE_MS,

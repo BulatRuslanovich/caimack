@@ -104,12 +104,7 @@ export function Section<T extends string, U extends string>({
   );
 }
 
-const cardGrid = [
-  "grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-6",
-  "max-xl:grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] max-xl:gap-4",
-  "max-md:grid-cols-[repeat(auto-fill,minmax(8.75rem,1fr))] max-md:gap-3",
-  "max-[380px]:grid-cols-[repeat(auto-fill,minmax(7.6rem,1fr))]",
-].join(" ");
+const cardGrid = "library-card-grid";
 
 export function CardGrid({ children, className }: { children: ReactNode; className?: string }) {
   return <div className={cn(cardGrid, className)}>{children}</div>;

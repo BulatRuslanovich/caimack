@@ -32,6 +32,7 @@ interface CoverProps {
   rounded?: boolean;
   className?: string;
   fallback?: ReactNode;
+  preview?: string | null;
 }
 
 export function Cover({
@@ -48,6 +49,7 @@ export function Cover({
   rounded = false,
   className = "",
   fallback,
+  preview,
 }: CoverProps) {
   const [failed, setFailed] = useState(false);
   const [loadedSource, setLoadedSource] = useState<string | null>(null);
@@ -91,22 +93,32 @@ export function Cover({
       )}
     >
       {showImage ? (
-        <img
-          ref={attach}
-          src={source!}
-          srcSet={srcSet ?? undefined}
-          sizes={srcSet ? sizes : undefined}
-          alt={t("cover.alt", { name })}
-          loading="lazy"
-          decoding="async"
-          onLoad={() => setLoadedSource(source)}
-          onError={() => setFailed(true)}
-          className={cn(
-            "size-full object-cover",
-            "[transition:opacity_300ms_var(--ease),scale_150ms_var(--ease)]",
-            loaded ? "opacity-100" : "opacity-0",
+        <>
+          {preview && preview !== source && (
+            <img
+              src={preview}
+              alt=""
+              aria-hidden="true"
+              className="absolute inset-0 size-full object-cover"
+            />
           )}
-        />
+          <img
+            ref={attach}
+            src={source!}
+            srcSet={srcSet ?? undefined}
+            sizes={srcSet ? sizes : undefined}
+            alt={t("cover.alt", { name })}
+            loading="lazy"
+            decoding="async"
+            onLoad={() => setLoadedSource(source)}
+            onError={() => setFailed(true)}
+            className={cn(
+              "relative size-full object-cover",
+              "[transition:opacity_300ms_var(--ease),scale_150ms_var(--ease)]",
+              loaded ? "opacity-100" : "opacity-0",
+            )}
+          />
+        </>
       ) : fallback || rounded ? (
         <span
           aria-hidden="true"

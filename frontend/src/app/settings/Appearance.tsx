@@ -17,6 +17,7 @@ import {
 import { COLORWAYS } from "@/lib/themeScript";
 import { leanBack, useLeanBack } from "@/lib/leanBack";
 import { setVisualizer, useVisualizer } from "@/lib/visualizer";
+import { LIBRARY_DENSITIES, setLibraryDensity, useLibraryDensity } from "@/lib/libraryDensity";
 import { SettingHelp } from "./SettingHelp";
 import { Switch } from "@/components/ui/switch";
 import { useI18n, useT } from "@/contexts/I18nContext";
@@ -32,6 +33,7 @@ export function Appearance() {
   const leanBackState = useLeanBack();
   const visualizer = useVisualizer();
   const coverTone = useCoverToneEnabled();
+  const density = useLibraryDensity();
 
   return (
     <Panel title={t("settings.appearance")}>
@@ -66,6 +68,16 @@ export function Appearance() {
         value={locale}
         onChange={setLocale}
         options={LOCALES.map((value) => ({ value, label: LOCALE_NAMES[value] }))}
+      />
+
+      <Choice
+        legend={t("library.density")}
+        value={density}
+        onChange={setLibraryDensity}
+        options={LIBRARY_DENSITIES.map((value) => ({
+          value,
+          label: t(`library.density.${value}`),
+        }))}
       />
 
       <label className="flex cursor-pointer items-center gap-3">

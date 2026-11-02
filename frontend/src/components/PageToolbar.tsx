@@ -9,6 +9,7 @@ import type { Paged } from "@/lib/types";
 import type { TranslationKey } from "@/lib/i18n";
 import { useT } from "@/contexts/I18nContext";
 import { SearchField } from "./SearchField";
+import { LibraryDensityMenu } from "./LibraryDensityMenu";
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
@@ -35,6 +36,7 @@ export function PageToolbar({
         className="flex-[1_1_16rem]"
       />
       {children}
+      <LibraryDensityMenu />
     </div>
   );
 }
