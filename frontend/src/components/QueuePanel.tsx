@@ -65,10 +65,10 @@ export function QueuePanel({ onClose, docked = false }: { onClose: () => void; d
       aria-label={t("queue.label")}
       data-queue-panel={docked ? "docked" : "floating"}
       className={cn(
-        "flex min-h-0 min-w-0 flex-col bg-popover p-3.5",
+        "queue-panel flex min-h-0 min-w-0 flex-col p-3.5",
         docked
-          ? "border-l border-border [grid-area:queue]"
-          : "fixed right-4 bottom-[calc(var(--player-height)+0.75rem)] z-50 max-h-[min(60vh,32.5rem)] w-[min(22.5rem,calc(100vw-2rem))] rounded-lg shadow-pop animate-in duration-200 fade-in-0 slide-in-from-bottom-3 max-md:inset-x-3 max-md:bottom-[calc(var(--player-height)+var(--mobile-nav-height)+env(safe-area-inset-bottom)+0.625rem)] max-md:max-h-[min(52dvh,26rem)] max-md:w-auto",
+          ? "queue-panel-docked border-l border-border [grid-area:queue]"
+          : "fixed right-4 bottom-[calc(var(--player-height)+0.75rem)] z-50 max-h-[min(60vh,32.5rem)] w-[min(22.5rem,calc(100vw-2rem))] rounded-lg bg-popover shadow-pop animate-in duration-200 fade-in-0 slide-in-from-bottom-3 max-md:inset-x-3 max-md:bottom-[calc(var(--player-height)+var(--mobile-nav-height)+env(safe-area-inset-bottom)+0.625rem)] max-md:max-h-[min(52dvh,26rem)] max-md:w-auto",
       )}
     >
       <header className="mb-2 flex shrink-0 items-center justify-between">
@@ -345,7 +345,7 @@ function QueueRow({
         data-current={isCurrent ? "true" : undefined}
         style={{ transform: CSS.Transform.toString(transform), transition }}
         className={cn(
-          "group flex items-center gap-1 rounded-sm hover:bg-accent",
+          "queue-row group flex items-center gap-1 rounded-md hover:bg-card",
           isDragging && "z-10 opacity-90 shadow-pop",
         )}
       >
@@ -371,12 +371,12 @@ function QueueRow({
             )}
           </span>
           <span className="flex min-w-0 flex-1 flex-col">
-            <span className={cn("truncate text-sm font-semibold", isCurrent && "text-primary")}>
-              {track.title}
+            <span className="truncate text-sm font-semibold">{track.title}</span>
+            <span className="library-secondary truncate text-[0.8125rem] leading-5">
+              {formatArtists(track)}
             </span>
-            <span className="truncate text-xs text-muted-foreground">{formatArtists(track)}</span>
             {reason && (
-              <span className="flex min-w-0 items-center gap-1.5 text-2xs text-faint">
+              <span className="library-tertiary flex min-w-0 items-center gap-1.5 text-xs">
                 {signals?.explore && (
                   <span className="shrink-0 rounded-full bg-raised px-1.5 py-px font-medium text-primary">
                     {t("queue.explore")}

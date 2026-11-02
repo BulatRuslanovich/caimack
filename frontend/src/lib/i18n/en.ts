@@ -332,6 +332,8 @@ export const en = {
   "view.grid": "Grid",
   "view.crate": "Crate",
   "view.label": "View",
+  "view.layout": "Layout",
+  "view.densityGridOnly": "Density applies to the grid view.",
   "share.card": "Story card",
   "share.title": "Share what you are listening to",
   "share.caption": "now playing",

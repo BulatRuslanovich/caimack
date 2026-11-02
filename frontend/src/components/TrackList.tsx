@@ -51,14 +51,14 @@ interface TrackListProps {
 }
 
 const ROW_COLUMNS = {
-  "album+date": "grid-cols-[2.75rem_minmax(0,3fr)_minmax(0,2fr)_7rem_4.75rem_5.5rem]",
-  album: "grid-cols-[2.75rem_minmax(0,3fr)_minmax(0,2fr)_4.75rem_5.5rem]",
-  date: "grid-cols-[2.75rem_minmax(0,3fr)_7rem_4.75rem_5.5rem]",
-  plain: "grid-cols-[2.75rem_minmax(0,1fr)_4.75rem_5.5rem]",
-  "album+date+tempo": "grid-cols-[2.75rem_minmax(0,3fr)_minmax(0,2fr)_7rem_6.5rem_4.75rem_5.5rem]",
-  "album+tempo": "grid-cols-[2.75rem_minmax(0,3fr)_minmax(0,2fr)_6.5rem_4.75rem_5.5rem]",
-  "date+tempo": "grid-cols-[2.75rem_minmax(0,3fr)_7rem_6.5rem_4.75rem_5.5rem]",
-  tempo: "grid-cols-[2.75rem_minmax(0,1fr)_6.5rem_4.75rem_5.5rem]",
+  "album+date": "grid-cols-[2rem_minmax(0,1.65fr)_minmax(0,1fr)_7rem_4.5rem_3.5rem]",
+  album: "grid-cols-[2rem_minmax(0,1.65fr)_minmax(0,1fr)_4.5rem_3.5rem]",
+  date: "grid-cols-[2rem_minmax(0,1fr)_7rem_4.5rem_3.5rem]",
+  plain: "grid-cols-[2rem_minmax(0,1fr)_4.5rem_3.5rem]",
+  "album+date+tempo": "grid-cols-[2rem_minmax(0,1.65fr)_minmax(0,1fr)_7rem_6rem_4.5rem_3.5rem]",
+  "album+tempo": "grid-cols-[2rem_minmax(0,1.65fr)_minmax(0,1fr)_6rem_4.5rem_3.5rem]",
+  "date+tempo": "grid-cols-[2rem_minmax(0,1fr)_7rem_6rem_4.5rem_3.5rem]",
+  tempo: "grid-cols-[2rem_minmax(0,1fr)_6rem_4.5rem_3.5rem]",
 } as const;
 
 const revealOnRow =
@@ -96,7 +96,19 @@ export function TrackList({
   const [focused, setFocused] = useState(0);
   const [currentVisible, setCurrentVisible] = useState(true);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const [columns, setColumns] = useState<"narrow" | "album" | "tempo" | "all">("all");
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    const element = bodyRef.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const width = entry.contentRect.width;
+      setColumns(width < 600 ? "narrow" : width < 900 ? "album" : width < 1050 ? "tempo" : "all");
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [tracks.length]);
 
   const [renderedTracks, setRenderedTracks] = useState(tracks);
   if (tracks !== renderedTracks) {
@@ -210,7 +222,10 @@ export function TrackList({
     return <EmptyState icon={<MusicIcon size={24} />} title={emptyMessage ?? t("tracks.empty")} />;
   }
 
-  const grid = rowGridFor(showAlbum, playedAt !== undefined, showTempoKey);
+  const visibleAlbum = showAlbum && columns !== "narrow";
+  const visibleDate = playedAt !== undefined && columns === "all";
+  const visibleTempo = showTempoKey && (columns === "tempo" || columns === "all");
+  const grid = rowGridFor(visibleAlbum, visibleDate, visibleTempo);
 
   const rows = tracks.map((track, index) => (
     <TrackRow
@@ -221,13 +236,13 @@ export function TrackList({
       grid={grid}
       sortable={sortable}
       showCover={showCover}
-      showAlbum={showAlbum}
+      showAlbum={visibleAlbum}
       showArtist={showArtist}
       showAudioSpec={showAudioSpec}
-      showTempoKey={showTempoKey}
+      showTempoKey={visibleTempo}
       useTrackNumbers={useTrackNumbers}
       playedAt={playedAt?.[track.id]}
-      showPlayedAt={playedAt !== undefined}
+      showPlayedAt={visibleDate}
       playlistId={playlistId}
       playlistTrackIds={playlistTrackIds}
       isCurrent={currentTrackId === track.id}
@@ -275,18 +290,18 @@ export function TrackList({
         <Caption role="columnheader" className="truncate">
           {t("column.title")}
         </Caption>
-        {showAlbum && (
-          <Caption role="columnheader" className="track-extra-cell truncate max-md:hidden">
+        {visibleAlbum && (
+          <Caption role="columnheader" className="track-album-cell truncate max-md:hidden">
             {t("column.album")}
           </Caption>
         )}
-        {playedAt && (
-          <Caption role="columnheader" className="track-extra-cell truncate max-md:hidden">
+        {visibleDate && (
+          <Caption role="columnheader" className="track-date-cell truncate max-md:hidden">
             {t("column.played")}
           </Caption>
         )}
-        {showTempoKey && (
-          <Caption role="columnheader" className="track-extra-cell truncate max-md:hidden">
+        {visibleTempo && (
+          <Caption role="columnheader" className="track-tempo-cell truncate max-md:hidden">
             {t("column.tempoKey")}
           </Caption>
         )}
@@ -480,11 +495,11 @@ const TrackRow = memo(function TrackRow({
           {(showArtist || showSpec) && (
             <span className="flex min-w-0 items-center gap-2">
               {showArtist && (
-                <ArtistLinks track={track} className="truncate text-sm text-muted-foreground" />
+                <ArtistLinks track={track} className="library-secondary truncate text-sm" />
               )}
 
               {showSpec && (
-                <span className="shrink-0 text-2xs font-medium text-faint max-md:hidden">
+                <span className="library-tertiary shrink-0 text-xs max-md:hidden">
                   {formatAudioSpec(track)}
                 </span>
               )}
@@ -495,7 +510,7 @@ const TrackRow = memo(function TrackRow({
 
       {showAlbum && (
         <span
-          className="track-extra-cell truncate text-sm text-muted-foreground max-md:hidden"
+          className="track-album-cell library-secondary truncate text-sm max-md:hidden"
           role="cell"
         >
           {track.albumId && <Link href={`/albums/${track.albumId}`}>{track.albumTitle}</Link>}
@@ -504,7 +519,7 @@ const TrackRow = memo(function TrackRow({
 
       {showPlayedAt && (
         <span
-          className="track-extra-cell truncate text-sm text-muted-foreground max-md:hidden"
+          className="track-date-cell library-secondary truncate text-sm max-md:hidden"
           role="cell"
         >
           {playedAt ? format.playedAt(playedAt) : ""}
@@ -564,7 +579,7 @@ function TempoKeyCell({ track }: { track: Track }) {
 
   return (
     <span
-      className="track-extra-cell truncate text-sm text-muted-foreground tabular-nums max-md:hidden"
+      className="track-tempo-cell library-secondary truncate text-sm tabular-nums max-md:hidden"
       role="cell"
       title={
         bpm && key && track.key

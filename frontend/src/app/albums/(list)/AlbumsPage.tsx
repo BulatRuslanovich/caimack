@@ -4,7 +4,7 @@
 "use client";
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { ArchiveIcon, Disc3Icon, LayoutGridIcon } from "lucide-react";
+import { Disc3Icon } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 import { readStored, writeStored } from "@/lib/storage";
 import { queries } from "@/lib/queries";
@@ -14,7 +14,6 @@ import { Shelf } from "@/components/Shelf";
 import { PageToolbar, SortSelect } from "@/components/PageToolbar";
 import { InfiniteQuery } from "@/components/InfiniteQuery";
 import { RecordCrate } from "@/components/crate/RecordCrate";
-import { ToggleGroup, ToggleGroupButton } from "@/components/ui/toggle-group";
 import { useT } from "@/contexts/I18nContext";
 
 const sortKeys = { title: "sort.title", recent: "sort.dateAdded" } as const;
@@ -67,34 +66,19 @@ export function AlbumsPage() {
   const showShelf = view === "grid" && alphabetical && recent.length > 0 && total > recent.length;
 
   return (
-    <>
+    <div className="flex min-w-0 flex-col gap-8 [overflow-anchor:none] max-md:gap-6">
       <PageHeader
         title={t("nav.albums")}
         subtitle={albums.data ? t("count.albums", { count: total }) : undefined}
       />
 
-      <PageToolbar search={search} onSearch={setSearch} placeholder={t("filter.albums")}>
+      <PageToolbar
+        search={search}
+        onSearch={setSearch}
+        placeholder={t("filter.albums")}
+        layout={{ value: view, onChange: setView }}
+      >
         <SortSelect value={sort} onChange={setSort} options={sortKeys} />
-        <ToggleGroup aria-label={t("view.label")} className="gap-x-1">
-          <ToggleGroupButton
-            active={view === "grid"}
-            onClick={() => setView("grid")}
-            aria-label={t("view.grid")}
-            title={t("view.grid")}
-            className="px-3"
-          >
-            <LayoutGridIcon size={16} />
-          </ToggleGroupButton>
-          <ToggleGroupButton
-            active={view === "crate"}
-            onClick={() => setView("crate")}
-            aria-label={t("view.crate")}
-            title={t("view.crate")}
-            className="px-3"
-          >
-            <ArchiveIcon size={16} />
-          </ToggleGroupButton>
-        </ToggleGroup>
       </PageToolbar>
 
       {showShelf && (
@@ -135,6 +119,6 @@ export function AlbumsPage() {
           )
         }
       </InfiniteQuery>
-    </>
+    </div>
   );
 }

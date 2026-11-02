@@ -18,6 +18,8 @@ import { useT } from "@/contexts/I18nContext";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/EmptyState";
+import { useYandexMusicSettings } from "@/lib/useYandexMusic";
+import { YandexImportButton } from "./YandexImportButton";
 
 export function YandexActivityButton({ compact = false }: { compact?: boolean }) {
   const t = useT();
@@ -47,6 +49,7 @@ export function YandexActivityButton({ compact = false }: { compact?: boolean })
 
 export function YandexImports() {
   const t = useT();
+  const { hasToken } = useYandexMusicSettings();
   const { jobs, loading, failed, refresh, activityOpen, setActivityOpen } = useYandexImports();
   const active = jobs.filter(isYandexImportActive);
   const completed = jobs.filter((job) => !isYandexImportActive(job));
@@ -64,6 +67,11 @@ export function YandexImports() {
           </Button>
         }
       >
+        {hasToken && (
+          <div className="mb-5 flex">
+            <YandexImportButton source={{ kind: "Likes", title: t("yandex.likes") }} />
+          </div>
+        )}
         {loading ? (
           <p role="status" className="py-8 text-center text-sm text-muted-foreground">
             {t("common.loading")}

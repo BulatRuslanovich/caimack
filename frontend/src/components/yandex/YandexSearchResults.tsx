@@ -70,13 +70,13 @@ function TrackRow({ track }: { track: YandexTrack }) {
         <span className={cn("truncate font-semibold", !track.available && "text-muted-foreground")}>
           {track.title}
         </span>
-        <span className="truncate text-muted-foreground">{track.artist}</span>
+        <span className="library-secondary truncate">{track.artist}</span>
         {track.album && (
-          <span className="truncate text-xs text-faint md:hidden">{track.album}</span>
+          <span className="library-tertiary truncate text-xs md:hidden">{track.album}</span>
         )}
       </span>
       {track.album && (
-        <span className="min-w-0 flex-1 truncate text-muted-foreground max-lg:hidden">
+        <span className="library-secondary min-w-0 flex-1 truncate max-lg:hidden">
           {track.album}
         </span>
       )}

@@ -9,7 +9,7 @@ import type { Paged } from "@/lib/types";
 import type { TranslationKey } from "@/lib/i18n";
 import { useT } from "@/contexts/I18nContext";
 import { SearchField } from "./SearchField";
-import { LibraryDensityMenu } from "./LibraryDensityMenu";
+import { LibraryViewMenu, type LibraryViewLayout } from "./LibraryViewMenu";
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
@@ -18,25 +18,31 @@ export function PageToolbar({
   onSearch,
   placeholder,
   autoFocus = false,
+  layout,
   children,
 }: {
   search: string;
   onSearch: (value: string) => void;
   placeholder: string;
   autoFocus?: boolean;
+  layout?: LibraryViewLayout;
   children?: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className="library-toolbar flex flex-wrap items-center gap-2.5 max-md:gap-2">
       <SearchField
         value={search}
         onChange={onSearch}
         placeholder={placeholder}
         autoFocus={autoFocus}
-        className="flex-[1_1_16rem]"
+        className="min-w-0 flex-[1_1_16rem] max-md:flex-1 max-md:basis-0"
       />
-      {children}
-      <LibraryDensityMenu />
+      {children && (
+        <div className="flex flex-wrap items-center gap-2.5 max-md:order-2 max-md:w-full max-md:gap-2">
+          {children}
+        </div>
+      )}
+      <LibraryViewMenu layout={layout} />
     </div>
   );
 }

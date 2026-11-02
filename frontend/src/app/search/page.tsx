@@ -106,25 +106,27 @@ function SearchView() {
 
   return (
     <>
-      <PageHeader title={t("nav.search")} actions={yandex && <YandexActivityButton />} />
+      <div className="search-controls flex flex-col gap-4 max-md:gap-3">
+        <PageHeader title={t("nav.search")} actions={yandex && <YandexActivityButton />} />
 
-      {yandex && (
-        <ToggleGroup aria-label={t("search.source")}>
-          <ToggleGroupButton active={!yandexTab} onClick={() => navigate(query, null)}>
-            {t("search.source.library")}
-          </ToggleGroupButton>
-          <ToggleGroupButton active={yandexTab} onClick={() => navigate(query, YANDEX_TAB)}>
-            {t("yandex.title")}
-          </ToggleGroupButton>
-        </ToggleGroup>
-      )}
+        {yandex && (
+          <ToggleGroup aria-label={t("search.source")}>
+            <ToggleGroupButton active={!yandexTab} onClick={() => navigate(query, null)}>
+              {t("search.source.library")}
+            </ToggleGroupButton>
+            <ToggleGroupButton active={yandexTab} onClick={() => navigate(query, YANDEX_TAB)}>
+              {t("yandex.title")}
+            </ToggleGroupButton>
+          </ToggleGroup>
+        )}
 
-      <PageToolbar
-        search={query}
-        onSearch={(next) => navigate(next, yandexTab ? YANDEX_TAB : tab)}
-        placeholder={t(yandexTab ? "yandex.searchPlaceholder" : "search.placeholder")}
-        autoFocus
-      />
+        <PageToolbar
+          search={query}
+          onSearch={(next) => navigate(next, yandexTab ? YANDEX_TAB : tab)}
+          placeholder={t(yandexTab ? "yandex.searchPlaceholder" : "search.placeholder")}
+          autoFocus
+        />
+      </div>
 
       {query.length < SEARCH_MIN_LENGTH && !yandexTab ? (
         <SearchStart />

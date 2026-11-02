@@ -70,7 +70,7 @@ export function Card<T extends string>({
       >
         {title}
       </span>
-      <span className="truncate text-sm text-muted-foreground">{subtitle}</span>
+      <span className="library-secondary truncate text-sm">{subtitle}</span>
     </>
   );
 

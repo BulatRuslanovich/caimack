@@ -7,6 +7,8 @@
   --library-shelf-width: 11rem;
   --library-row-padding: 0.5rem;
   --library-cover-size: 2.5rem;
+  --library-secondary: color-mix(in oklab, var(--foreground) 80%, var(--background));
+  --library-tertiary: color-mix(in oklab, var(--foreground) 65%, var(--background));
 }
 
 :root[data-library-density="compact"] {
@@ -43,6 +45,41 @@
 .library-track-cover {
   width: var(--library-cover-size) !important;
   height: var(--library-cover-size) !important;
+}
+
+.library-secondary {
+  color: var(--library-secondary);
+}
+
+.library-tertiary {
+  color: var(--library-tertiary);
+}
+
+.library-toolbar [data-slot="select-trigger"] {
+  background: transparent;
+  border-color: var(--border-strong);
+}
+
+.library-toolbar [data-slot="select-trigger"]:hover {
+  background: var(--card);
+  border-color: var(--control-border);
+}
+
+.library-view-trigger {
+  border-color: var(--border-strong);
+}
+
+.queue-panel-docked {
+  background: color-mix(in oklab, var(--background) 88%, var(--card));
+}
+
+.queue-row[data-current="true"] {
+  background: color-mix(in oklab, var(--primary) 9%, var(--background));
+  box-shadow: inset 2px 0 0 var(--primary);
+}
+
+.queue-panel .text-muted-foreground {
+  color: var(--library-secondary);
 }
 
 @media (768px <= width < 1280px) {
@@ -86,15 +123,6 @@
   .app-shell[data-queue-docked="true"] {
     grid-template-columns: var(--sidebar-width) minmax(0, 1fr) 21rem;
     grid-template-areas: "sidebar content queue" "player player player";
-  }
-}
-
-@media (1280px <= width < 1536px) {
-  .app-shell[data-queue-docked="true"] .library-track-list > [role="row"] {
-    grid-template-columns: 2.75rem minmax(0, 1fr) 4.75rem 5.5rem;
-  }
-  .app-shell[data-queue-docked="true"] .library-track-list .track-extra-cell {
-    display: none;
   }
 }
 
