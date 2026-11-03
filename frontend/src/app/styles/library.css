@@ -9,6 +9,89 @@
   --library-cover-size: 2.5rem;
   --library-secondary: color-mix(in oklab, var(--foreground) 80%, var(--background));
   --library-tertiary: color-mix(in oklab, var(--foreground) 65%, var(--background));
+  --library-surface: color-mix(in oklab, var(--card) 65%, var(--background));
+  --library-edge: color-mix(in oklab, var(--foreground) 5%, transparent);
+  --library-lift: 0 8px 24px -18px rgb(0 0 0 / 48%);
+  --library-art-shadow: 0 1px 3px rgb(0 0 0 / 22%), 0 10px 20px -12px rgb(0 0 0 / 65%);
+  --library-art-hover: 0 16px 28px -14px rgb(0 0 0 / 65%);
+}
+
+:root[data-theme="light"] {
+  --library-edge: color-mix(in oklab, var(--foreground) 7%, transparent);
+  --library-lift: 0 8px 24px -18px rgb(45 31 20 / 22%);
+  --library-art-shadow: 0 1px 3px rgb(45 31 20 / 10%), 0 10px 20px -12px rgb(45 31 20 / 35%);
+  --library-art-hover: 0 16px 28px -14px rgb(45 31 20 / 35%);
+}
+
+.media-card[data-tone] {
+  transition: --tone-a 400ms var(--ease);
+}
+
+.media-card .card-art {
+  box-shadow: var(--library-art-shadow);
+  transition:
+    translate 220ms var(--ease),
+    box-shadow 220ms var(--ease);
+}
+
+.card-art::after {
+  position: absolute;
+  content: "";
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 6%);
+  pointer-events: none;
+}
+
+.library-card-shelf {
+  padding-bottom: 1rem;
+  margin-bottom: -0.5rem;
+}
+
+.listening-panel {
+  border: 1px solid var(--library-edge);
+  background: var(--library-surface);
+  box-shadow: var(--library-lift);
+}
+
+.quick-tile,
+.mood-tile {
+  box-shadow: var(--library-lift);
+}
+
+.quick-tile-art,
+.ranked-track-art,
+.library-track-cover {
+  border-radius: 3px;
+  box-shadow: 0 3px 6px -3px rgb(0 0 0 / 30%);
+}
+
+.quick-tile-art {
+  margin-left: 0.25rem;
+}
+
+.library-track-list {
+  padding: 0.5rem;
+  border: 1px solid var(--library-edge);
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--card) 30%, var(--background));
+}
+
+.library-track-row,
+.ranked-track {
+  transition:
+    background-color 160ms var(--ease),
+    box-shadow 160ms var(--ease);
+}
+
+.media-card:focus-within .card-art {
+  box-shadow: var(--library-art-hover);
+}
+
+@media (hover: hover) {
+  .media-card:hover .card-art {
+    box-shadow: var(--library-art-hover);
+  }
 }
 
 :root[data-library-density="compact"] {
@@ -87,6 +170,9 @@
 }
 
 @media (width < 768px) {
+  .library-track-list {
+    padding: 0.25rem;
+  }
   :root {
     --library-card-min: 8.75rem;
     --library-card-gap: 0.75rem;

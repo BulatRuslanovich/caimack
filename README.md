@@ -34,7 +34,7 @@ listening history and the recommendations.
   <tr>
     <td width="50%" valign="top">
       <h3>A radio that pays attention</h3>
-      <p>Radio combines your listening history with what is working in the current session.
+      <p>Radio learns from your listening history and adapts to your current session.
       Local audio analysis connects tracks by their sound, powering recommendations and
       an explorable map of your collection.</p>
     </td>
@@ -49,8 +49,8 @@ listening history and the recommendations.
     <td width="50%" valign="top">
       <h3>A player with character</h3>
       <p>Cover colours, a spinning record and synced lyrics give the music a place on screen.
-      Gapless album playback and carefully timed transitions carry that attention
-      into the listening itself.</p>
+      Albums flow without gaps, and carefully timed transitions keep the queue
+      moving naturally.</p>
     </td>
     <td width="50%" valign="top">
       <h3>At home and on the move</h3>

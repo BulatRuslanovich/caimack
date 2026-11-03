@@ -6,14 +6,12 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Disc3Icon } from "lucide-react";
 import { useState } from "react";
-import { useAlbumView } from "@/lib/albumView";
 import { queries } from "@/lib/queries";
 import { AlbumCard } from "@/components/MediaCard";
 import { CardGrid, CardGridSkeleton, PageHeader, Section } from "@/components/PageHeader";
 import { Shelf } from "@/components/Shelf";
 import { PageToolbar, SortSelect } from "@/components/PageToolbar";
 import { InfiniteQuery } from "@/components/InfiniteQuery";
-import { RecordCrate } from "@/components/crate/RecordCrate";
 import { useT } from "@/contexts/I18nContext";
 
 const sortKeys = { title: "sort.title", recent: "sort.dateAdded" } as const;
@@ -25,7 +23,6 @@ export function AlbumsPage() {
 
   const [sort, setSort] = useState<Sort>("title");
   const [search, setSearch] = useState("");
-  const view = useAlbumView();
 
   const albums = useInfiniteQuery(
     queries.albumsFeed({
@@ -39,7 +36,7 @@ export function AlbumsPage() {
   const recent = overview.data?.recentAlbums ?? [];
 
   const total = albums.data?.pages[0]?.total ?? 0;
-  const showShelf = view === "grid" && alphabetical && recent.length > 0 && total > recent.length;
+  const showShelf = alphabetical && recent.length > 0 && total > recent.length;
 
   return (
     <div className="flex min-w-0 flex-col gap-8 [overflow-anchor:none] max-md:gap-6">
@@ -68,27 +65,15 @@ export function AlbumsPage() {
           title: search ? t("filter.nothingMatched") : t("albums.empty"),
         }}
       >
-        {(items) =>
-          view === "crate" ? (
-            <RecordCrate
-              key={`${sort}:${search}`}
-              albums={items}
-              total={total}
-              hasMore={albums.hasNextPage}
-              onNeedMore={() => {
-                if (!albums.isFetchingNextPage) void albums.fetchNextPage();
-              }}
-            />
-          ) : (
-            <Section title={showShelf ? t("library.allAlbums") : undefined}>
-              <CardGrid>
-                {items.map((album) => (
-                  <AlbumCard key={album.id} album={album} />
-                ))}
-              </CardGrid>
-            </Section>
-          )
-        }
+        {(items) => (
+          <Section title={showShelf ? t("library.allAlbums") : undefined}>
+            <CardGrid>
+              {items.map((album) => (
+                <AlbumCard key={album.id} album={album} />
+              ))}
+            </CardGrid>
+          </Section>
+        )}
       </InfiniteQuery>
     </div>
   );

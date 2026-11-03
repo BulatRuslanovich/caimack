@@ -12,6 +12,7 @@ import { queries } from "@/lib/queries";
 import { useFormat } from "@/lib/useFormat";
 import { useUpload } from "@/contexts/UploadContext";
 import { cn } from "@/lib/cn";
+import { ACCEPTED_EXTENSIONS } from "@/lib/playback/audioFormats";
 import { TrackList } from "@/components/TrackList";
 import { PageHeader, Section } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -65,7 +66,7 @@ export default function UploadPage() {
     <FileDrop
       onFiles={add}
       disabled={uploading}
-      className="flex flex-1 flex-col gap-11 max-md:gap-8"
+      className="upload-page flex flex-1 flex-col gap-8 max-md:gap-6"
     >
       {({ dragging, choose, chooseFolder }) => {
         const recordState: BlankRecordState = uploading
@@ -88,7 +89,7 @@ export default function UploadPage() {
             />
 
             {yandex && (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-card p-5">
+              <div className="workspace-panel flex flex-wrap items-center justify-between gap-3 p-5 max-md:p-4">
                 <div>
                   <h2 className="text-section font-semibold">{t("yandex.title")}</h2>
                   <p className="mt-1 text-sm text-muted-foreground">{t("yandex.uploadHint")}</p>
@@ -100,15 +101,16 @@ export default function UploadPage() {
             )}
 
             <section
+              data-state={recordState}
+              data-queued={queue.length > 0}
               className={cn(
-                "grid items-start gap-x-12 gap-y-8 rounded-lg bg-card p-8 max-md:p-5",
-                "md:grid-cols-[auto_minmax(0,1fr)]",
+                "upload-workspace",
                 "outline-2 outline-offset-4 outline-transparent outline-dashed",
                 "transition-[outline-color] duration-150 ease-brand",
                 dragging && "outline-primary",
               )}
             >
-              <div className="flex flex-col items-start gap-6 md:sticky md:top-8">
+              <div className="upload-record-side">
                 <div
                   role={uploading ? "progressbar" : undefined}
                   aria-valuemin={uploading ? 0 : undefined}
@@ -121,9 +123,12 @@ export default function UploadPage() {
 
                 {queue.length > 0 &&
                   (progress ? (
-                    <p aria-hidden="true" className="text-sm font-medium tabular-nums">
-                      {progressLabel(progress)}
-                    </p>
+                    <div aria-hidden="true" className="upload-progress">
+                      <p className="text-sm font-medium tabular-nums">{progressLabel(progress)}</p>
+                      <div className="upload-progress-meter">
+                        <span style={{ width: `${progress.percent}%` }} />
+                      </div>
+                    </div>
                   ) : (
                     <Button
                       variant="primary"
@@ -141,10 +146,13 @@ export default function UploadPage() {
               </div>
 
               {queue.length === 0 ? (
-                <div className="flex flex-col items-start gap-5 self-center">
-                  <h2 className="text-title font-semibold text-balance">
-                    {dragging ? t("upload.dropRelease") : t("upload.dropHint")}
+                <div className="upload-empty">
+                  <h2 className="upload-title">
+                    {dragging ? t("upload.dropRelease") : t("upload.title")}
                   </h2>
+                  <p className="max-w-[38ch] text-sm leading-relaxed text-muted-foreground">
+                    {t("upload.hint")}
+                  </p>
                   <div className="flex flex-wrap gap-3">
                     <Button variant="primary" onClick={choose}>
                       {t("upload.chooseFiles")}
@@ -153,15 +161,24 @@ export default function UploadPage() {
                       {t("upload.chooseFolder")}
                     </Button>
                   </div>
+                  <p className="text-xs text-faint">
+                    {t("upload.formats", {
+                      formats: ACCEPTED_EXTENSIONS.map((extension) =>
+                        extension.slice(1).toUpperCase(),
+                      ).join(" · "),
+                    })}
+                  </p>
                 </div>
               ) : (
-                <div className="flex min-w-0 flex-col gap-4">
+                <div className="upload-queue flex min-w-0 flex-col gap-4">
                   <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
                     <div className="min-w-0">
                       <h2 className="text-section font-semibold">
                         {dragging
                           ? t("upload.dropRelease")
-                          : t("upload.ready", { count: pending.length })}
+                          : uploading
+                            ? t("upload.queue")
+                            : t("upload.ready", { count: pending.length })}
                       </h2>
                       <p className="flex flex-wrap gap-x-4 text-sm text-muted-foreground">
                         <span>{format.bytes(totalSize)}</span>

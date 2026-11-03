@@ -3,15 +3,15 @@
 
 :root,
 [data-theme-preview="dark"] {
-  --background: #1c1714;
-  --card: #2a221d;
-  --popover: #342a24;
-  --surface-raised: #3a2f28;
-  --accent: #463a31;
+  --background: #171819;
+  --card: #232527;
+  --popover: #2d3032;
+  --surface-raised: #343739;
+  --accent: #414547;
 
-  --foreground: #efe4d2;
-  --muted-foreground: #b3a595;
-  --faint-foreground: #9d9182;
+  --foreground: #f2eee7;
+  --muted-foreground: #aaa9a4;
+  --faint-foreground: #93958f;
   --popover-foreground: var(--foreground);
   --accent-foreground: var(--foreground);
 
@@ -19,13 +19,13 @@
   --border-strong: color-mix(in oklab, var(--foreground) 24%, transparent);
   --control-border: color-mix(in oklab, var(--foreground) 40%, transparent);
 
-  --primary: #d9a441;
-  --primary-foreground: #1c1714;
-  --primary-soft: rgb(217 164 65 / 14%);
+  --primary: #d3b278;
+  --primary-foreground: #201e1a;
+  --primary-soft: rgb(211 178 120 / 12%);
 
-  --action: #efe4d2;
-  --action-hover: #fff6e6;
-  --action-foreground: #1c1714;
+  --action: #eee6d7;
+  --action-hover: #fff9ef;
+  --action-foreground: #201e1a;
 
   --ring: var(--foreground);
 
@@ -48,25 +48,25 @@
 
 :root[data-theme="light"],
 [data-theme-preview="light"] {
-  --background: #e6dccb;
-  --card: #efe7da;
-  --popover: #f7f1e7;
-  --surface-raised: #f7f1e7;
-  --accent: #d9ceba;
+  --background: #eeefec;
+  --card: #f8f8f5;
+  --popover: #fffefb;
+  --surface-raised: #fffefb;
+  --accent: #e0e3dd;
 
-  --foreground: #2b221c;
-  --muted-foreground: #54493d;
-  --faint-foreground: #6a5c4e;
+  --foreground: #252729;
+  --muted-foreground: #5b625e;
+  --faint-foreground: #6a706b;
 
   --control-border: color-mix(in oklab, var(--foreground) 55%, transparent);
 
-  --primary: #79510c;
-  --primary-foreground: #f7f1e7;
-  --primary-soft: rgb(121 81 12 / 12%);
+  --primary: #7c5a24;
+  --primary-foreground: #fffaf0;
+  --primary-soft: rgb(124 90 36 / 9%);
 
-  --action: #2b221c;
-  --action-hover: #1c1714;
-  --action-foreground: #f7f1e7;
+  --action: #292b2d;
+  --action-hover: #171819;
+  --action-foreground: #f8f7f2;
 
   --destructive: #ae362a;
   --warning: #8a5d00;
@@ -87,8 +87,8 @@
 
 :root {
   --sidebar-width: 232px;
-  --player-height: 80px;
-  --player-cover: 56px;
+  --player-height: 96px;
+  --player-cover: 64px;
   --mobile-nav-height: 62px;
 
   --ease: cubic-bezier(0.2, 0, 0, 1);

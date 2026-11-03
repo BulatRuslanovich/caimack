@@ -87,6 +87,17 @@ export function centreOn(spot: Spot, k: number, width: number, height: number): 
   return { k, panX: width / 2 - spot.x * base * k, panY: height / 2 - spot.y * base * k };
 }
 
+export function resizeView(
+  view: MapView,
+  previous: { width: number; height: number },
+  next: { width: number; height: number },
+): MapView {
+  const base = Math.min(previous.width, previous.height);
+  if (base <= 0) return fitView(next.width, next.height);
+  const centre = toMap({ x: previous.width / 2, y: previous.height / 2 }, view, base);
+  return centreOn(centre, view.k, next.width, next.height);
+}
+
 export function easeOut(t: number): number {
   return 1 - (1 - t) ** 3;
 }

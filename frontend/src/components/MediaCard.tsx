@@ -48,12 +48,11 @@ export function Card<T extends string>({
   action?: ReactNode;
   toneSrc?: string | null | (string | null)[];
 }) {
-  const tone = useTone<HTMLDivElement>(toneSrc);
+  const tone = useTone<HTMLElement>(toneSrc);
 
   const body = (
     <>
       <div
-        {...tone}
         className={cn(
           "card-art relative mb-3.5 aspect-square w-full overflow-hidden rounded-xs bg-accent",
           round && "rounded-full",
@@ -79,7 +78,7 @@ export function Card<T extends string>({
 
   if (href) {
     return (
-      <div className="group relative flex min-w-0 flex-col">
+      <div {...tone} data-round={round} className="media-card group relative flex min-w-0 flex-col">
         <Link
           href={href}
           prefetch={false}
@@ -101,10 +100,12 @@ export function Card<T extends string>({
 
   return (
     <button
+      {...tone}
       type="button"
+      data-round={round}
       onClick={onClick}
       aria-pressed={active || undefined}
-      className={cn("group", shell)}
+      className={cn("media-card group relative", shell)}
     >
       {body}
     </button>

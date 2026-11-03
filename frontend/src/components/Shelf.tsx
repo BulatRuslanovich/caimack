@@ -100,7 +100,7 @@ export function Shelf<T extends string, U extends string>({
         }
       />
 
-      <div ref={shelf} className={cn(cardShelf, scrollFade, capEightOnMobile, "pb-2")}>
+      <div ref={shelf} className={cn(cardShelf, scrollFade, capEightOnMobile, "-mt-2 pt-2 pb-2")}>
         {children}
       </div>
     </section>

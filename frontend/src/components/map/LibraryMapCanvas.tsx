@@ -21,6 +21,7 @@ import {
   fitView,
   flight,
   pointInPolygon,
+  resizeView,
   toMap,
   toScreen,
   zoomAt,
@@ -325,6 +326,7 @@ export function LibraryMapCanvas({
 
     const resize = () => {
       const { width, height } = wrap.getBoundingClientRect();
+      if (width <= 0 || height <= 0) return;
       const ratio = window.devicePixelRatio || 1;
       const previous = sizeRef.current;
 
@@ -333,12 +335,9 @@ export function LibraryMapCanvas({
       sizeRef.current = { width, height };
 
       const view = viewRef.current;
+      tweenRef.current = null;
       viewRef.current = view
-        ? {
-            ...view,
-            panX: view.panX + (width - previous.width) / 2,
-            panY: view.panY + (height - previous.height) / 2,
-          }
+        ? resizeView(view, previous, { width, height })
         : fitView(width, height, latest.current.bounds);
 
       dirtyRef.current = true;
@@ -531,10 +530,7 @@ export function LibraryMapCanvas({
   const card = picked ?? hovered;
 
   return (
-    <div
-      ref={wrapRef}
-      className="absolute inset-0 overflow-hidden rounded-xl bg-[radial-gradient(ellipse_at_50%_45%,color-mix(in_oklab,var(--primary)_7%,var(--card)),var(--card)_75%)]"
-    >
+    <div ref={wrapRef} className="library-map-surface absolute inset-0 overflow-hidden">
       <canvas
         ref={canvasRef}
         tabIndex={0}
@@ -553,13 +549,12 @@ export function LibraryMapCanvas({
 
       {card && (
         <div
-          className={`absolute z-10 flex max-w-[17rem] items-center gap-2.5 rounded-lg bg-popover p-2 text-popover-foreground shadow-pop ${
+          className={`map-track-card absolute z-10 flex max-w-[17rem] items-center gap-2.5 rounded-lg bg-popover p-2 text-popover-foreground shadow-pop ${
             picked ? "" : "pointer-events-none"
           }`}
           style={{
-            left: card.at.x,
-            top: Math.max(8, card.at.y - 28),
-            translate: card.flip ? "calc(-100% - 14px) 0" : "14px 0",
+            left: `clamp(1rem, ${card.at.x + (card.flip ? -CARD_WIDTH_PX : 14)}px, calc(100% - var(--map-card-width) - 1rem))`,
+            top: `clamp(1rem, ${card.at.y - 28}px, calc(100% - 6rem))`,
           }}
           role={picked ? "dialog" : undefined}
           aria-label={picked ? card.point.title : undefined}

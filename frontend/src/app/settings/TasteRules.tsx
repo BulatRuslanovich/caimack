@@ -30,7 +30,7 @@ export function TasteRules() {
       : t(`rules.action.${rule.action === "downrank" ? "downrank" : "block"}`);
 
   return (
-    <section className="flex flex-col gap-3 rounded-lg bg-card p-4">
+    <section className="settings-panel flex flex-col gap-3">
       <h2 className="font-sans text-heading font-semibold">{t("rules.title")}</h2>
       <Query
         result={rules}

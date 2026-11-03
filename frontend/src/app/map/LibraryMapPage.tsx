@@ -87,21 +87,20 @@ export function LibraryMapPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5">
-      <PageHeader
-        title={t("map.title")}
-        subtitle={
-          map.data && map.data.points.length > 0 && map.data.points.length < map.data.totalTracks
-            ? t("map.coverage", { count: map.data.points.length, total: map.data.totalTracks })
-            : undefined
-        }
-      />
+      <PageHeader title={t("map.title")} subtitle={t("map.description")} />
 
       <Query
         result={map}
         isEmpty={(data) => data.points.length === 0}
         empty={{ icon: <MapIcon size={24} />, title: t("map.preparing") }}
       >
-        {(data) => <MapExplorer points={data.points} landmarks={data.landmarks} />}
+        {(data) => (
+          <MapExplorer
+            points={data.points}
+            landmarks={data.landmarks}
+            totalTracks={data.totalTracks}
+          />
+        )}
       </Query>
     </div>
   );
@@ -110,9 +109,11 @@ export function LibraryMapPage() {
 function MapExplorer({
   points,
   landmarks,
+  totalTracks,
 }: {
   points: MapPoint[];
   landmarks: { mood: string; x: number; y: number }[];
+  totalTracks: number;
 }) {
   const t = useT();
   const { notifyError } = useToast();
@@ -258,13 +259,14 @@ function MapExplorer({
 
   return (
     <div
+      data-expanded={expanded}
       className={cn(
-        "flex min-h-0 flex-1 flex-col gap-3",
+        "map-explorer flex min-h-0 flex-1 flex-col",
         expanded &&
           "fixed inset-0 z-45 bg-background px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]",
       )}
     >
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="map-toolbar">
         <Select
           value={genre ?? ALL_GENRES}
           onValueChange={(value) => setGenre(value === ALL_GENRES ? null : value)}
@@ -287,14 +289,17 @@ function MapExplorer({
         <Button
           variant={selecting ? "secondary" : "outline"}
           size="sm"
+          className="map-selection-toggle"
           aria-pressed={selecting}
+          aria-label={t("map.select")}
+          title={t("map.select")}
           onClick={() => setSelecting((on) => !on)}
         >
           <LassoSelectIcon size={14} />
-          {t("map.select")}
+          <span>{t("map.select")}</span>
         </Button>
 
-        <div className="ml-auto flex items-center gap-1">
+        <div className="map-tools">
           {route && (
             <Button
               variant="ghost"
@@ -346,7 +351,7 @@ function MapExplorer({
         </div>
       </div>
 
-      <div className="relative min-h-[22rem] flex-1 max-md:min-h-[60vh]">
+      <div className="map-stage">
         <LibraryMapCanvas
           points={points}
           labels={labels}
@@ -370,7 +375,7 @@ function MapExplorer({
         {selection && (
           <div
             className={cn(
-              "absolute inset-x-3 bottom-3 z-10 mx-auto flex max-w-[34rem] flex-wrap items-center gap-2 rounded-lg bg-popover p-2 pl-4 text-popover-foreground shadow-pop",
+              "map-selection absolute inset-x-3 bottom-3 z-10 mx-auto flex max-w-[34rem] flex-wrap items-center gap-2 rounded-lg bg-popover p-2 pl-4 text-popover-foreground shadow-pop",
             )}
             aria-live="polite"
           >
@@ -406,7 +411,14 @@ function MapExplorer({
         )}
       </div>
 
-      <PlaysLegend />
+      <div className="map-footer">
+        <span>
+          {points.length < totalTracks
+            ? t("map.coverage", { count: points.length, total: totalTracks })
+            : t("count.tracks", { count: points.length })}
+        </span>
+        <PlaysLegend />
+      </div>
     </div>
   );
 }

@@ -44,7 +44,7 @@ export function RankedList({
               type="button"
               onClick={() => playTrack(track, tracks)}
               className={cn(
-                "group grid w-full items-center gap-3 rounded-md px-2 text-left",
+                "ranked-track group grid w-full items-center gap-3 rounded-md px-2 text-left",
                 compact ? "py-1.5" : "py-2",
                 ranked
                   ? "grid-cols-[2.75rem_3.5rem_minmax(0,1fr)_auto] max-md:grid-cols-[2.25rem_3rem_minmax(0,1fr)_auto]"
@@ -67,7 +67,7 @@ export function RankedList({
 
               <span
                 className={cn(
-                  "relative justify-self-center overflow-hidden rounded-xs",
+                  "ranked-track-art relative justify-self-center overflow-hidden rounded-xs",
                   compact ? "size-10" : "size-11",
                 )}
               >

@@ -53,32 +53,42 @@ export function PlayingElsewhereBar() {
   };
 
   return (
-    <section
-      aria-label={t("handoff.region")}
-      className="flex h-9 items-center gap-2.5 border-t border-border bg-raised pr-2 pl-4 text-sm max-md:pl-2.5"
-    >
-      <MonitorSpeakerIcon aria-hidden className="size-4 shrink-0 text-primary" />
+    <section aria-label={t("handoff.region")} className="handoff-shell">
+      <span className="handoff-icon" aria-hidden="true">
+        <MonitorSpeakerIcon className="size-4" />
+      </span>
 
-      <p className="min-w-0 flex-1 truncate">
-        <span className="text-muted-foreground">
+      <p className="min-w-0" title={`${track.title} — ${formatArtists(track)} · ${device}`}>
+        <span className="block truncate text-sm font-medium">
+          {track.title}
+          <span className="font-normal text-muted-foreground max-md:hidden">
+            {" — "}
+            {formatArtists(track)}
+          </span>
+        </span>
+        <span className="block truncate text-xs text-muted-foreground">
           {t(elsewhere.isPlaying ? "handoff.playingOn" : "handoff.pausedOn", { device })}
           {!elsewhere.isPlaying && ` · ${formatDuration(elsewhere.positionSeconds)}`}
-          {": "}
         </span>
-        <span className="font-medium">{track.title}</span>
-        <span className="text-muted-foreground max-md:hidden"> — {formatArtists(track)}</span>
       </p>
 
       <Button
-        variant="text"
+        variant="secondary"
         size="sm"
-        className="h-7 shrink-0 px-2 font-medium text-primary hover:text-primary"
+        className="handoff-continue h-9 shrink-0"
         onClick={take}
         disabled={taking}
+        aria-busy={taking}
       >
         {t("handoff.continueHere")}
       </Button>
-      <Button variant="ghost" size="icon-sm" onClick={dismiss} aria-label={t("handoff.dismiss")}>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="size-8"
+        onClick={dismiss}
+        aria-label={t("handoff.dismiss")}
+      >
         <XIcon aria-hidden className="size-4" />
       </Button>
     </section>

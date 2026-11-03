@@ -25,6 +25,7 @@ import { MixCover } from "./MixCover";
 import { MoodRadio } from "./MoodRadio";
 import { RecapBanner } from "./RecapBanner";
 import { QuickTiles } from "./QuickTiles";
+import { RadioHero } from "./RadioHero";
 
 export function HomePage() {
   const t = useT();
@@ -51,6 +52,12 @@ export function HomePage() {
 
 function Blocks({ blocks }: { blocks: HomeBlock[] }) {
   const quick = blocks.filter((block) => block.zone === "Quick");
+  const lead = blocks.filter((block) => block.zone === "Lead");
+  const radioTracks = [
+    ...new Map(
+      blocks.flatMap((block) => block.tracks ?? []).map((track) => [track.id, track]),
+    ).values(),
+  ];
   const shown = new Set(
     blocks
       .filter((block) => block.zone !== "Browse" && block.layout !== "Tile")
@@ -89,20 +96,25 @@ function Blocks({ blocks }: { blocks: HomeBlock[] }) {
   }
 
   return (
-    <div className="contents [&_h2]:line-clamp-2 [&_h2]:whitespace-normal">
-      {blocks
-        .filter((block) => block.zone === "Lead")
-        .map((block) => (
-          <Block key={block.key} block={block} shown={shown} />
-        ))}
+    <div className="home-page [&_h2]:line-clamp-2 [&_h2]:whitespace-normal">
+      <div className="home-listening-stage">
+        <RadioHero tracks={radioTracks} />
+        <div className="home-daily-selection">
+          {lead.map((block) => (
+            <Block key={block.key} block={block} shown={shown} />
+          ))}
+        </div>
+      </div>
 
       {quick.length > 0 && <QuickTiles blocks={quick} />}
 
       <RecapBanner />
 
+      {browse[0]}
+
       <MoodRadio />
 
-      {browse}
+      {browse.slice(1)}
     </div>
   );
 }

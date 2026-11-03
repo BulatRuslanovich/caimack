@@ -49,6 +49,7 @@ export function LibraryFolder() {
 
   return (
     <Section
+      className="workspace-panel upload-library-folder p-5 max-md:p-4"
       title={t("library.folder")}
       actions={
         <Button variant="outline" size="sm" disabled={running} onClick={() => rescan.mutate()}>

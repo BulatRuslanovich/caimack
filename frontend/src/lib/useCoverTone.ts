@@ -93,6 +93,21 @@ export function toneStyle(tone: CoverTone | null | undefined): CSSProperties {
   };
 }
 
+// Keep the last sampled colour while the next cover loads. Animating a colour
+// (rather than its hue number) also avoids travelling around the colour wheel.
+export function useCoverLight(url: string | null | undefined): CSSProperties {
+  const sampled = useCoverTone(url);
+  const [settled, setSettled] = useState(sampled ?? null);
+  if (sampled !== undefined && sampled !== settled) setSettled(sampled);
+  const tone = sampled === undefined ? settled : sampled;
+
+  return {
+    ["--cover-light" as string]: url
+      ? `oklch(var(--cover-light-l) calc(min(${tone?.chroma ?? 0} * 1.5, var(--tone-c-max)) * var(--tone-strength)) ${tone?.hue ?? 0} / calc(var(--tone-on) * ${tone ? 1 : 0.3}))`
+      : "transparent",
+  };
+}
+
 export function useTone<T extends Element>(source: string | null | undefined | (string | null)[]) {
   const [seen, setSeen] = useState(false);
 

@@ -66,7 +66,7 @@ export function TopResult({ top }: { top: SearchTopResult }) {
 
 function Shell({ children }: { children: ReactNode }) {
   return (
-    <div className="relative flex min-w-0 flex-1 items-center gap-5 rounded-lg bg-card p-5 max-md:gap-4 max-md:p-4 lg:group-data-beside/top:flex-col lg:group-data-beside/top:items-start lg:group-data-beside/top:justify-between">
+    <div className="listening-panel relative flex min-w-0 flex-1 items-center gap-5 rounded-lg bg-card p-5 max-md:gap-4 max-md:p-4 lg:group-data-beside/top:flex-col lg:group-data-beside/top:items-start lg:group-data-beside/top:justify-between">
       {children}
     </div>
   );

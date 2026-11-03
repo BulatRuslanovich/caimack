@@ -26,7 +26,7 @@ export function FileRow({
   return (
     <li
       className={cn(
-        "flex min-h-12 items-center gap-3 rounded-md px-3 py-2 text-sm",
+        "upload-file-row flex min-h-12 items-center gap-3 rounded-md px-3 py-2 text-sm",
         tone === "destructive" ? "bg-destructive/10" : "hover:bg-raised",
       )}
     >
@@ -35,7 +35,10 @@ export function FileRow({
       )}
 
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className={cn("truncate font-medium", muted && "text-muted-foreground line-through")}>
+        <span
+          title={name}
+          className={cn("truncate font-medium", muted && "text-muted-foreground line-through")}
+        >
           {name}
         </span>
         {status}
@@ -48,5 +51,5 @@ export function FileRow({
 }
 
 export function FileList({ children }: { children: ReactNode }) {
-  return <ul className="flex flex-col">{children}</ul>;
+  return <ul className="upload-file-list flex flex-col">{children}</ul>;
 }

@@ -17,10 +17,11 @@
 @import "./styles/recap.css" layer(components);
 @import "./styles/mood.css" layer(components);
 @import "./styles/lean-back.css" layer(components);
-@import "./styles/crate.css" layer(components);
-@import "./styles/home.css" layer(components);
+@import "./styles/home.css";
 @import "./styles/ambient.css" layer(components);
+@import "./styles/listening.css" layer(components);
 @import "./styles/library.css";
+@import "./styles/workspaces.css";
 
 @layer base {
   html,

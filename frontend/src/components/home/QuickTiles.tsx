@@ -54,7 +54,7 @@ export function QuickTiles({ blocks }: { blocks: HomeBlock[] }) {
     <div
       ref={ref}
       className={cn(
-        "grid gap-2 max-md:grid-cols-1",
+        "home-quick-access grid gap-2 max-md:grid-cols-1",
         "grid-cols-[repeat(var(--per-row),minmax(0,1fr))] max-lg:grid-cols-2",
         capFourOnMobile,
       )}
@@ -110,7 +110,7 @@ function AlbumTile({ album }: { album: NonNullable<HomeBlock["albums"]>[number] 
           playing={isPlaying && currentAlbumId === album.id}
           load={async () => (await client.fetchQuery(queries.album(album.id))).tracks}
           size={8}
-          className="top-3 left-3 [@media(hover:none)]:hidden"
+          className="quick-tile-play top-1/2 left-4 -translate-y-1/2 [@media(hover:none)]:hidden"
         />
       }
     />
@@ -157,7 +157,7 @@ function PlaylistTile({ playlist }: { playlist: NonNullable<HomeBlock["playlists
             playing={false}
             load={async () => (await client.fetchQuery(queries.playlist(playlist.id))).tracks}
             size={8}
-            className="top-3 left-3 [@media(hover:none)]:hidden"
+            className="quick-tile-play top-1/2 left-4 -translate-y-1/2 [@media(hover:none)]:hidden"
           />
         )
       }
@@ -190,7 +190,7 @@ function Tile<T extends string>({
 
   const body = (
     <>
-      <span className="size-14 shrink-0 overflow-hidden">{art}</span>
+      <span className="quick-tile-art size-14 shrink-0 overflow-hidden">{art}</span>
       <span className="flex min-w-0 flex-1 flex-col">
         <span
           className={cn("line-clamp-2 text-sm leading-snug font-medium", current && "text-primary")}

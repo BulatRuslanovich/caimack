@@ -53,7 +53,7 @@ function Sessions() {
   const list = sessions.data ?? [];
 
   return (
-    <section className="flex flex-col gap-3 rounded-lg bg-card p-5 max-md:p-4">
+    <section className="settings-panel flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-sans text-heading font-semibold">{t("account.sessions")}</h2>
         {list.some((session) => !session.current) && (
@@ -130,7 +130,7 @@ function SignIns() {
   if (!signIns.data || signIns.data.length === 0) return null;
 
   return (
-    <section className="flex flex-col gap-3 rounded-lg bg-card p-5 max-md:p-4">
+    <section className="settings-panel flex flex-col gap-3">
       <h2 className="font-sans text-heading font-semibold">{t("account.signIns")}</h2>
       <ul className="flex flex-col divide-y divide-border text-sm">
         {signIns.data.map((entry, index) => (

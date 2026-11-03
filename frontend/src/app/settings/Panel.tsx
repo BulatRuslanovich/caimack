@@ -4,12 +4,13 @@
 "use client";
 
 import * as RadioGroup from "@radix-ui/react-radio-group";
+import { useId } from "react";
 import { cn } from "@/lib/cn";
 
 export function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="flex flex-col gap-5 rounded-lg bg-card p-5 max-md:p-4">
-      <h2 className="sr-only">{title}</h2>
+    <section className="settings-panel">
+      <h2 className="settings-section-title">{title}</h2>
       {children}
     </section>
   );
@@ -27,17 +28,17 @@ export function Choice<T extends string>({
   options: { value: T; label: string; hint?: string; preview?: React.ReactNode }[];
 }) {
   const previews = options.some((option) => option.preview);
+  const legendId = useId();
 
   return (
     <fieldset className="flex flex-col gap-2 border-0 p-0">
-      <legend className="font-semibold">{legend}</legend>
+      <legend id={legendId} className="font-semibold">
+        {legend}
+      </legend>
       <RadioGroup.Root
-        className={cn(
-          "mt-1 gap-2",
-          previews
-            ? "grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))]"
-            : "grid auto-cols-fr grid-flow-col md:flex md:flex-wrap md:[&>*]:min-w-24",
-        )}
+        aria-labelledby={legendId}
+        data-preview={previews}
+        className="settings-options mt-1 gap-2"
         value={value}
         onValueChange={(next) => onChange(next as T)}
       >
@@ -46,7 +47,7 @@ export function Choice<T extends string>({
             key={option.value}
             value={option.value}
             className={cn(
-              "flex cursor-pointer flex-col items-start gap-0.5 rounded-md border border-border text-left transition-colors outline-none",
+              "settings-option flex cursor-pointer flex-col items-start gap-0.5 rounded-md border border-border text-left transition-colors outline-none",
               previews ? "p-3" : "px-4 py-2.5",
               "hover:bg-raised focus-visible:ring-2 focus-visible:ring-ring/40",
               "data-[state=checked]:border-primary data-[state=checked]:bg-primary-soft",

@@ -130,7 +130,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "flex flex-col gap-6 overflow-y-auto bg-card px-3 pt-5 pb-4 [grid-area:sidebar] max-md:hidden",
+        "app-sidebar flex flex-col gap-6 overflow-y-auto px-3 pt-5 pb-4 [grid-area:sidebar] max-md:hidden",
         "[@media(max-height:52rem)]:gap-4 [@media(max-height:52rem)]:pt-4 [@media(max-height:52rem)]:pb-3",
       )}
     >

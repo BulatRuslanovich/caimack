@@ -46,7 +46,7 @@ export function SectionHeader<T extends string, U extends string>({
   const t = useT();
 
   return (
-    <div className="flex items-end justify-between gap-3">
+    <div className="section-heading flex items-end justify-between gap-3">
       <div className="min-w-0">
         <h2 className="line-clamp-2 font-sans text-heading font-semibold">
           {titleHref ? <Link href={titleHref}>{title}</Link> : title}

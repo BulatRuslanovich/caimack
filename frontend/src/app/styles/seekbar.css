@@ -14,7 +14,16 @@
   cursor: pointer;
 }
 
-.seekbar::-webkit-slider-runnable-track,
+.seekbar::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--seek-fill) var(--progress),
+    var(--border-strong) var(--progress)
+  );
+}
+
 .seekbar::-moz-range-track {
   height: 5px;
   border-radius: 999px;
@@ -70,7 +79,16 @@
   cursor: default;
 }
 
-.seekbar.player-seek::-webkit-slider-runnable-track,
+.seekbar.player-seek::-webkit-slider-runnable-track {
+  background: linear-gradient(
+    to right,
+    var(--seek-fill) var(--progress),
+    var(--border-strong) var(--progress),
+    var(--border-strong) var(--buffered, 0%),
+    color-mix(in srgb, var(--foreground) 12%, transparent) var(--buffered, 0%)
+  );
+}
+
 .seekbar.player-seek::-moz-range-track {
   background: linear-gradient(
     to right,

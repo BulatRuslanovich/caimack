@@ -36,7 +36,7 @@ export function PlayerTransport({ size = "bar" }: { size?: "bar" | "full" }) {
   return (
     <div
       className={cn(
-        "flex items-center",
+        "player-transport flex items-center",
         large ? "justify-center gap-4 max-[420px]:gap-1.5" : "gap-1.5",
       )}
     >
@@ -66,7 +66,7 @@ export function PlayerTransport({ size = "bar" }: { size?: "bar" | "full" }) {
       <Button
         variant="play"
         size={large ? "play-lg" : "play"}
-        className="relative"
+        className="transport-main relative"
         onClick={toggle}
         aria-label={isPlaying ? t("action.pause") : t("action.play")}
         aria-busy={buffering}

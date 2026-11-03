@@ -12,6 +12,7 @@ import {
   flight,
   playsLevel,
   pointInPolygon,
+  resizeView,
   smoothPath,
   soundPath,
   toMap,
@@ -54,6 +55,23 @@ describe("map view", () => {
 
   it("stops zooming at the limit", () => {
     expect(zoomAt(fitView(100, 100), 1000, { x: 0, y: 0 }).k).toBe(MAX_ZOOM);
+  });
+
+  it("keeps the viewed track centred and the zoom unchanged across screen orientations", () => {
+    const desktop = { width: 1200, height: 600 };
+    const phone = { width: 320, height: 480 };
+    const track = { x: 0.73, y: 0.24 };
+    const view = centreOn(track, 3.5, desktop.width, desktop.height);
+    const portrait = resizeView(view, desktop, phone);
+    const at = toScreen(track, portrait, phone.width);
+
+    expect(at.x).toBeCloseTo(phone.width / 2);
+    expect(at.y).toBeCloseTo(phone.height / 2);
+    expect(portrait.k).toBe(view.k);
+
+    const restored = resizeView(portrait, phone, desktop);
+    expect(restored.panX).toBeCloseTo(view.panX);
+    expect(restored.panY).toBeCloseTo(view.panY);
   });
 });
 

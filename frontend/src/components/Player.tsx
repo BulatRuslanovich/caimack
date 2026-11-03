@@ -12,6 +12,8 @@ import { reasonLabel } from "@/lib/recommendationReason";
 import { SEEK_STEP } from "@/lib/shortcuts";
 import { usePlaybackProgress } from "@/lib/playback/usePlaybackProgress";
 import { useToggleFavorite } from "@/lib/useToggleFavorite";
+import { trackCoverUrl } from "@/lib/media";
+import { useCoverLight } from "@/lib/useCoverTone";
 import { usePlayerShortcuts } from "@/lib/playback/usePlayerShortcuts";
 import { usePlayerActions, usePlayerState } from "@/contexts/PlayerContext";
 import { usePlayerUi } from "@/contexts/PlayerUiContext";
@@ -40,7 +42,7 @@ const SWIPE_OPEN_PX = 40;
 const SWIPE_SKIP_PX = 80;
 
 const shellClass =
-  "player-shell relative min-h-(--player-height) border-t border-border px-5 py-3 [grid-area:player] max-md:border-t-0 max-md:px-2.5 max-md:py-2";
+  "player-shell relative min-h-(--player-height) px-5 py-3 [grid-area:player] max-md:px-2.5 max-md:py-2";
 
 function ProgressRow({
   fallbackDuration,
@@ -90,10 +92,12 @@ function ProgressLine({ fallbackDuration }: { fallbackDuration: number }) {
   const { position, total } = usePlaybackProgress(fallbackDuration);
 
   return (
-    <span aria-hidden="true" className="absolute inset-x-0 top-0 h-0.5 bg-border md:hidden">
+    <span aria-hidden="true" className="player-progress md:hidden">
       <span
-        className="block h-full bg-foreground"
-        style={{ width: `${total > 0 ? Math.min(100, (position / total) * 100) : 0}%` }}
+        className="player-progress-fill"
+        style={{
+          width: `${total > 0 ? Math.max(0, Math.min(100, (position / total) * 100)) : 0}%`,
+        }}
       />
     </span>
   );
@@ -110,6 +114,7 @@ export function Player() {
   const swipeFrom = useRef<{ x: number; y: number } | null>(null);
   const [swipeX, setSwipeX] = useState(0);
   const { currentTrack } = state;
+  const light = useCoverLight(currentTrack ? trackCoverUrl(currentTrack, "thumb") : null);
 
   usePlayerShortcuts(() => setQueueOpen((open) => !open));
 
@@ -159,6 +164,7 @@ export function Player() {
     <>
       <footer
         className={shellClass}
+        style={light}
         onTouchStart={(event) => {
           const touch = event.touches[0];
           const onSlider = (event.target as Element).closest("input");
@@ -212,7 +218,7 @@ export function Player() {
               type="button"
               onClick={() => setExpanded(true)}
               aria-label={t("player.openFull")}
-              className="mr-2.5 shrink-0 leading-none"
+              className="player-artwork mr-2.5 shrink-0 leading-none"
             >
               <Record
                 track={currentTrack}
@@ -264,9 +270,9 @@ export function Player() {
 
             <div className="relative flex items-center gap-0.5 md:hidden">
               <Button
-                variant="ghost"
+                variant="play"
                 size="icon"
-                className="relative"
+                className="transport-main relative"
                 onClick={actions.toggle}
                 aria-label={state.isPlaying ? t("action.pause") : t("action.play")}
                 aria-busy={state.buffering}
