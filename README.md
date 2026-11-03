@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/hero.webp" alt="Caimack home screen in the browser next to the Android player" width="100%">
+  <img src="docs/screenshots/home-oled.webp" alt="Caimack home in OLED Black: personal radio, daily mix and new albums" width="100%">
 </p>
 
 Caimack gives your MP3 and FLAC collection a home of its own. Connect your music folder or upload
@@ -64,63 +64,31 @@ One Docker Compose setup brings up the app, database and HTTPS. No external acco
 
 ## A look around
 
-<p align="center">
-  <img src="docs/screenshots/lyrics.webp" alt="Full-screen player with synced lyrics" width="100%">
-</p>
-
-<p align="center"><sub>The full-screen player builds its backdrop from the cover art of whatever is
-playing; synced lyrics highlight the current line.</sub></p>
-
-<table>
-  <tr>
-    <td width="50%"><img src="docs/screenshots/artist.webp" alt="Artist page"></td>
-    <td width="50%"><img src="docs/screenshots/search.webp" alt="Search with best match"></td>
-  </tr>
-  <tr>
-    <td align="center"><sub>Artist pages pick their colours up from the artist photo</sub></td>
-    <td align="center"><sub>Search across tracks, albums, artists and genres</sub></td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/screenshots/queue.webp" alt="Playback queue"></td>
-    <td width="50%"><img src="docs/screenshots/daily-mix.webp" alt="Playlist of the day"></td>
-  </tr>
-  <tr>
-    <td align="center"><sub>The queue, with "keep going with similar tracks"</sub></td>
-    <td align="center"><sub>A new playlist of the day every morning</sub></td>
-  </tr>
-</table>
+A few screens from the live web client, in **OLED Black** and **Coffee**.
+The home screen above brings together personal radio, a daily mix and new additions to the library.
 
 <p align="center">
-  <img src="docs/screenshots/themes.webp" alt="The same screen in the dark and the light theme" width="100%">
+  <img src="docs/screenshots/player-coffee.webp" alt="Full-screen player in Coffee with vinyl artwork, a waveform and FLAC quality information" width="100%">
 </p>
 
-<p align="center"><sub>Dark and light themes, following the system by default.</sub></p>
+<p align="center"><sub>Coffee · The full-screen player takes its colours from the cover art.</sub></p>
+
+<p align="center">
+  <img src="docs/screenshots/album-coffee.webp" alt="AM by Arctic Monkeys in Coffee: album details, track list and more from the artist" width="100%">
+</p>
+
+<p align="center"><sub>Coffee · Albums, track lists and more from the same artist.</sub></p>
 
 ### On the phone
 
-The web app is a PWA with its own mobile layout, and there is a native Android client as well.
+The web app is a PWA with its own mobile layout. There is also a native Android client with
+background playback, offline downloads and Android Auto.
 
 <p align="center">
-  <img src="docs/screenshots/mobile-web.webp" alt="Mobile web layout" width="72%">
+  <img src="docs/screenshots/mobile-oled.webp" alt="Mobile web player in OLED Black with album artwork, waveform and playback controls" width="320">
 </p>
 
-<p align="center">
-  <img src="docs/screenshots/android.webp" alt="Android app: home, player, lyrics and an artist page" width="100%">
-</p>
-
-<details>
-<summary>More screens</summary>
-
-<br>
-
-| | |
-| --- | --- |
-| ![All tracks](docs/screenshots/tracks.webp) | ![Listening history](docs/screenshots/history.webp) |
-| All tracks, with sorting and bulk selection | Listening history |
-| ![Settings](docs/screenshots/settings.webp) | |
-| Stream quality, crossfade and equalizer | |
-
-</details>
+<p align="center"><sub>OLED Black · The same player, made for a smaller screen.</sub></p>
 
 ## Quick start
 
