@@ -8,7 +8,7 @@ use lofty::config::WriteOptions;
 use lofty::file::{AudioFile, FileType, TaggedFileExt};
 use lofty::picture::{MimeType, Picture, PictureType};
 use lofty::probe::Probe;
-use lofty::tag::{Accessor, ItemKey, ItemValue, Tag, TagItem};
+use lofty::tag::{Accessor, ItemKey, ItemValue, Tag, TagItem, TagType};
 
 #[derive(Debug, Clone, Default)]
 pub struct AudioMetadata {
@@ -111,6 +111,7 @@ pub struct AudioTags {
     pub track_number: Option<i32>,
     pub disc_number: Option<i32>,
     pub cover: Option<Vec<u8>>,
+    pub lyrics: Option<String>,
 }
 
 pub fn write(path: &Path, tags: &AudioTags) -> anyhow::Result<()> {
@@ -154,6 +155,12 @@ pub fn write(path: &Path, tags: &AudioTags) -> anyhow::Result<()> {
         let mime = if cover.starts_with(&[0x89, 0x50, 0x4E, 0x47]) { MimeType::Png } else { MimeType::Jpeg };
         tag.remove_picture_type(PictureType::CoverFront);
         tag.push_picture(Picture::unchecked(cover.clone()).pic_type(PictureType::CoverFront).mime_type(mime).build());
+    }
+    if let Some(lyrics) = tags.lyrics.as_ref().filter(|text| !text.trim().is_empty()) {
+        let key = if tag_type == TagType::Id3v2 { ItemKey::UnsyncLyrics } else { ItemKey::Lyrics };
+        tag.remove_key(ItemKey::Lyrics);
+        tag.remove_key(ItemKey::UnsyncLyrics);
+        tag.insert_text(key, lyrics.clone());
     }
 
     tagged.save_to_path(path, WriteOptions::default()).context("Could not write the tags")?;

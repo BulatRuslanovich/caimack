@@ -32,6 +32,7 @@ fn round_trip(extension: &str) {
         track_number: Some(7),
         disc_number: Some(2),
         cover: Some(vec![0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3]),
+        lyrics: Some("[00:01.250]Первая строка\n[00:02.500]Second line".to_owned()),
     };
 
     tags::write(&file, &written).expect("write");
@@ -50,6 +51,7 @@ fn round_trip(extension: &str) {
     );
     assert_eq!((read.year, read.track_number, read.disc_number), (Some(2024), Some(7), Some(2)));
     assert_eq!(read.cover, Some(vec![0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3]));
+    assert_eq!(read.lyrics, written.lyrics);
 }
 
 #[test]

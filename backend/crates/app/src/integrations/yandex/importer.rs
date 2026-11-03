@@ -120,6 +120,10 @@ impl Importer {
         }
 
         let album = track.album.as_ref();
+        let (cover, lyrics) = tokio::join!(
+            self.yandex.cover(album.and_then(|a| a.cover_uri.as_deref()).or(track.cover_uri.as_deref())),
+            self.yandex.lyrics(token, &track.id),
+        );
         let tags = AudioTags {
             title: track.title.clone(),
             artists: track.artists.clone(),
@@ -132,7 +136,8 @@ impl Importer {
             year: album.and_then(|a| a.year),
             track_number: album.and_then(|a| a.track_number),
             disc_number: album.and_then(|a| a.disc_number),
-            cover: self.yandex.cover(album.and_then(|a| a.cover_uri.as_deref()).or(track.cover_uri.as_deref())).await,
+            cover,
+            lyrics,
         };
         write_tags(audio.clone(), tags).await?;
 

@@ -412,6 +412,7 @@ mod tests {
                 track_number: None,
                 disc_number: None,
                 cover: Some(std::fs::read(&image)?),
+                lyrics: None,
             },
         )?;
         let artist = Uuid::now_v7();

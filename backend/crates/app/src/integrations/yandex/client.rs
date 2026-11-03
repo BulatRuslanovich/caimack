@@ -22,6 +22,10 @@ const TRACKS_PER_REQUEST: usize = 100;
 const COVER_SIZE: &str = "1000x1000";
 const THUMBNAIL_SIZE: &str = "200x200";
 const MAX_COVER_BYTES: usize = 8 * 1024 * 1024;
+const MAX_LYRICS_BYTES: usize = 256 * 1024;
+const LYRICS_TIMEOUT: Duration = Duration::from_secs(15);
+// Track lyrics use the Android request signature, independently of the web audio download signature.
+const LYRICS_SIGN_KEY: &str = "p93jhgh689SBReK6ghtw62";
 
 const TRANSPORT: &str = "raw";
 
@@ -191,6 +195,63 @@ impl YandexClient {
         }
     }
 
+    pub async fn lyrics(&self, token: &str, track_id: &str) -> Option<String> {
+        let track_id = track_id.split_once(':').map_or(track_id, |(id, _)| id);
+        let lookup = async {
+            for format in ["LRC", "TEXT"] {
+                match self.lyrics_format(token, track_id, format).await {
+                    Ok(Some(text)) => return Some(text),
+                    Ok(None) => {}
+                    Err(error) => tracing::warn!(track_id, format, "Yandex lyrics unavailable: {error}"),
+                }
+            }
+            None
+        };
+        match tokio::time::timeout(LYRICS_TIMEOUT, lookup).await {
+            Ok(lyrics) => lyrics,
+            Err(_) => {
+                tracing::warn!(track_id, "Yandex lyrics timed out; importing the audio without them");
+                None
+            }
+        }
+    }
+
+    async fn lyrics_format(&self, token: &str, track_id: &str, format: &str) -> AppResult<Option<String>> {
+        let timestamp = chrono::Utc::now().timestamp().to_string();
+        // SHA-256 always needs one '=' in padded Base64, unlike the file-info endpoint.
+        let signature = format!("{}=", sign(LYRICS_SIGN_KEY, &format!("{track_id}{timestamp}")));
+        let request = self.api.get(self.url(&format!("/tracks/{track_id}/lyrics"))).query(&[
+            ("format", format),
+            ("timeStamp", timestamp.as_str()),
+            ("sign", signature.as_str()),
+        ]);
+        let response = self.authorized(token, request).send().await.map_err(AppError::internal)?;
+        if matches!(response.status(), reqwest::StatusCode::NOT_FOUND | reqwest::StatusCode::NO_CONTENT) {
+            return Ok(None);
+        }
+        let root: Value = response
+            .error_for_status()
+            .map_err(|e| AppError::internal(e.without_url()))?
+            .json()
+            .await
+            .map_err(AppError::internal)?;
+        let result = root.get("result").unwrap_or(&root);
+        let Some(url) = text(result, "downloadUrl") else { return Ok(None) };
+        // The OAuth header belongs only to the API, never to the signed lyrics download URL.
+        let response = self
+            .images
+            .get(url)
+            .send()
+            .await
+            .map_err(|e| AppError::internal(e.without_url()))?
+            .error_for_status()
+            .map_err(|e| AppError::internal(e.without_url()))?;
+        let body = read_limited(response, MAX_LYRICS_BYTES).await.map_err(AppError::internal)?;
+        let body = String::from_utf8(body).map_err(AppError::internal)?;
+        let body = body.trim_start_matches('\u{feff}').trim();
+        Ok((!crate::catalog::lyrics::parse(Some(body)).is_empty()).then(|| body.to_owned()))
+    }
+
     pub async fn genre_titles(&self, token: &str) -> AppResult<HashMap<String, String>> {
         fn collect(genres: &[Value], titles: &mut HashMap<String, String>) {
             for genre in genres {
@@ -218,13 +279,7 @@ impl YandexClient {
     }
 
     async fn send(&self, token: &str, request: reqwest::RequestBuilder) -> AppResult<Value> {
-        let response = request
-            .header("Authorization", format!("OAuth {token}"))
-            .header("X-Yandex-Music-Client", &self.config.client)
-            .header("X-Yandex-Music-Without-Invocation-Info", "1")
-            .send()
-            .await
-            .map_err(AppError::internal)?;
+        let response = self.authorized(token, request).send().await.map_err(AppError::internal)?;
 
         let status = response.status();
         if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
@@ -239,6 +294,13 @@ impl YandexClient {
             Some(result) => result.take(),
             None => root,
         })
+    }
+
+    fn authorized(&self, token: &str, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        request
+            .header("Authorization", format!("OAuth {token}"))
+            .header("X-Yandex-Music-Client", &self.config.client)
+            .header("X-Yandex-Music-Without-Invocation-Info", "1")
     }
 }
 
@@ -326,8 +388,116 @@ fn read_track(track: &Value) -> YandexTrack {
 #[cfg(test)]
 mod tests {
     use serde_json::json;
+    use tokio::io::AsyncReadExt;
+    use tokio::net::TcpListener;
 
     use super::*;
+
+    async fn lyrics_server(
+        replies: Vec<(&'static str, &'static str, &'static str)>,
+    ) -> (YandexClient, tokio::task::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let client = YandexClient::new(YandexMusicConfig {
+            base_url: base_url.clone(),
+            client: "Caimack-Test".into(),
+            sign_key: "audio-key".into(),
+        });
+        let server = tokio::spawn(async move {
+            for (expected, status, body) in replies {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut request = Vec::new();
+                let mut buffer = [0; 1024];
+                while !request.ends_with(b"\r\n\r\n") {
+                    let length = socket.read(&mut buffer).await.unwrap();
+                    assert_ne!(length, 0);
+                    request.extend_from_slice(&buffer[..length]);
+                }
+                let request = String::from_utf8(request).unwrap();
+                let path = request.lines().next().unwrap().split_whitespace().nth(1).unwrap();
+                assert!(path.starts_with(expected), "expected {expected}, got {path}");
+                if path.starts_with("/tracks/") {
+                    assert!(request.to_ascii_lowercase().contains("authorization: oauth test-token\r\n"));
+                    let url = reqwest::Url::parse(&format!("{base_url}{path}")).unwrap();
+                    let parameters: HashMap<_, _> = url.query_pairs().collect();
+                    let timestamp = parameters.get("timeStamp").unwrap();
+                    let signature = format!("{}=", sign(LYRICS_SIGN_KEY, &format!("42{timestamp}")));
+                    assert_eq!(parameters.get("sign").unwrap().as_ref(), signature);
+                } else {
+                    assert!(
+                        !request.to_ascii_lowercase().contains("authorization:"),
+                        "OAuth must not reach the lyrics CDN"
+                    );
+                }
+                let body = body.replace("{url}", &base_url);
+                let response =
+                    format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+                socket.write_all(response.as_bytes()).await.unwrap();
+            }
+        });
+        (client, server)
+    }
+
+    #[tokio::test]
+    async fn synced_lyrics_keep_their_timestamps_and_do_not_request_plain_text() {
+        let (client, server) = lyrics_server(vec![
+            ("/tracks/42/lyrics?format=LRC", "200 OK", r#"{"result":{"downloadUrl":"{url}/synced"}}"#),
+            ("/synced", "200 OK", "\u{feff}[00:01.250]First\n[00:11.000]Second"),
+        ])
+        .await;
+        let text = client.lyrics("test-token", "42:7").await.unwrap();
+        let parsed = crate::catalog::lyrics::parse(Some(&text));
+        assert_eq!(parsed.lines.iter().map(|line| line.at).collect::<Vec<_>>(), [1250, 11000]);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn missing_lrc_falls_back_to_plain_text() {
+        let (client, server) = lyrics_server(vec![
+            ("/tracks/42/lyrics?format=LRC", "404 Not Found", "{}"),
+            ("/tracks/42/lyrics?format=TEXT", "200 OK", r#"{"result":{"downloadUrl":"{url}/plain"}}"#),
+            ("/plain", "200 OK", "First line\nSecond line"),
+        ])
+        .await;
+        assert_eq!(client.lyrics("test-token", "42").await.as_deref(), Some("First line\nSecond line"));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn empty_synced_text_does_not_hide_available_plain_lyrics() {
+        let (client, server) = lyrics_server(vec![
+            ("/tracks/42/lyrics?format=LRC", "200 OK", r#"{"result":{"downloadUrl":"{url}/synced"}}"#),
+            ("/synced", "200 OK", "[ar:Artist]\n[ti:Title]\n"),
+            ("/tracks/42/lyrics?format=TEXT", "200 OK", r#"{"result":{"downloadUrl":"{url}/plain"}}"#),
+            ("/plain", "200 OK", "Lyrics"),
+        ])
+        .await;
+        assert_eq!(client.lyrics("test-token", "42").await.as_deref(), Some("Lyrics"));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn tracks_without_lyrics_can_still_be_imported() {
+        let (client, server) = lyrics_server(vec![
+            ("/tracks/42/lyrics?format=LRC", "404 Not Found", "{}"),
+            ("/tracks/42/lyrics?format=TEXT", "200 OK", r#"{"result":null}"#),
+        ])
+        .await;
+        assert!(client.lyrics("test-token", "42").await.is_none());
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_failed_lyrics_download_is_optional() {
+        let (client, server) = lyrics_server(vec![
+            ("/tracks/42/lyrics?format=LRC", "200 OK", r#"{"result":{"downloadUrl":"{url}/synced"}}"#),
+            ("/synced", "503 Service Unavailable", "unavailable"),
+            ("/tracks/42/lyrics?format=TEXT", "404 Not Found", "{}"),
+        ])
+        .await;
+        assert!(client.lyrics("test-token", "42").await.is_none());
+        server.await.unwrap();
+    }
 
     #[test]
     fn artwork_uses_only_the_csp_allowed_yandex_hosts() {
