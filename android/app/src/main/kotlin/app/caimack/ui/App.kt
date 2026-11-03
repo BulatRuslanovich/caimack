@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
@@ -321,13 +322,19 @@ private fun Header(nav: NavController, user: User, onAccount: () -> Unit) {
             } else {
                 BrandMark(palette.foreground, palette.primary, Modifier.size(28.dp))
             }
-            Text(
-                stringResource(if (isSettings) R.string.settings_title else R.string.app_name),
-                style = Type.title.copy(fontSize = 18.sp, letterSpacing = (-0.025).em),
-                modifier = Modifier.padding(start = 8.dp).weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (isSettings) {
+                Text(
+                    stringResource(R.string.settings_title),
+                    style = Type.title.copy(fontSize = 18.sp, letterSpacing = (-0.025).em),
+                    modifier = Modifier.padding(start = 8.dp).weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            } else {
+                Box(Modifier.padding(start = 8.dp).weight(1f)) {
+                    BrandWordmark(palette.foreground, Modifier.width(127.dp).height(24.dp))
+                }
+            }
             Box(
                 Modifier.size(48.dp).clip(CircleShape).clickable(onClickLabel = stringResource(R.string.nav_account), onClick = onAccount),
                 contentAlignment = Alignment.Center,

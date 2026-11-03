@@ -1,28 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <group
-        android:scaleX="2.2"
-        android:scaleY="2.2"
-        android:translateX="18.8"
-        android:translateY="18.8">
-        <path
-            android:pathData="M23.955,23.955A11.25,11.25 0,1 1,23.955 8.045"
-            android:strokeWidth="4.25"
-            android:strokeColor="#F3EFE8"
-            android:strokeLineCap="round" />
-        <path
-            android:pathData="M8.8,14V18M12,12V20M24.8,12.5V19.5M28,14V18"
-            android:strokeWidth="2.1"
-            android:strokeColor="#F3EFE8"
-            android:strokeLineCap="round" />
-        <path
-            android:pathData="M15.2,10V22M18.4,8.5V23.5M21.6,11.5V20.5"
-            android:strokeWidth="2.1"
-            android:strokeColor="#E9B44C"
-            android:strokeLineCap="round" />
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <group android:scaleX="0.065" android:scaleY="0.065" android:translateX="13.245" android:translateY="13.245">
+        <path android:pathData="M 841,396 C 822,399 812,392 826,374 C 851,343 875,310 871,286 C 867,256 822,248 779,250 C 624,256 461,352 382,492 C 333,580 318,678 345,755 C 379,855 475,913 589,918 C 740,925 907,838 1025,735 C 1045,718 1054,730 1040,752 C 955,897 814,1006 658,1034 C 492,1065 344,1022 262,907 C 197,815 193,688 226,575 C 271,417 374,299 521,225 C 641,164 771,151 862,174 C 925,189 967,223 970,270 C 974,319 929,365 880,388 C 866,394 851,396 841,396 Z" android:fillColor="#F2EEE6" />
+        <path android:pathData="M 394,661 C 406,512 502,384 702,327" android:strokeColor="#F2EEE6" android:strokeWidth="19" android:strokeLineCap="round" />
+        <path android:pathData="M 470,627 C 485,535 552,456 669,415" android:strokeColor="#F2EEE6" android:strokeWidth="19" android:strokeLineCap="round" />
+        <path android:pathData="M 782,636 A 90,90 0 1 1 602,636 A 90,90 0 1 1 782,636 Z M 713,636 A 21,21 0 1 0 671,636 A 21,21 0 1 0 713,636 Z" android:fillColor="#EAB844" android:fillType="evenOdd" />
     </group>
 </vector>

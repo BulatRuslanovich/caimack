@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="frontend/public/logo.svg" alt="Caimack vinyl C logo" width="96" height="96">
+</p>
+
 <h1 align="center">Caimack</h1>
 
 <p align="center"><strong>Your music. Your server. Your next favourite.</strong></p>
