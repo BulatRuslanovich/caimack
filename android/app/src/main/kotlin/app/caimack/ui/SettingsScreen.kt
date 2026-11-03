@@ -68,6 +68,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.caimack.R
+import app.caimack.BuildConfig
 import app.caimack.playback.RadioTile
 import app.caimack.api.SettingsChanges
 import kotlinx.coroutines.launch
@@ -329,6 +330,12 @@ fun SettingsScreen() {
                     Text(stringResource(R.string.sign_out), color = palette.muted)
                 }
             }
+            Text(
+                text = "Caimack v${BuildConfig.VERSION_NAME}",
+                style = Type.tiny,
+                color = palette.muted,
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+            )
         }
     }
 }

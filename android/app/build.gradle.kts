@@ -39,7 +39,8 @@ android {
         minSdk = 33
         targetSdk = 37
         versionName = appVersion
-        versionCode = appVersion.split('.').map(String::toInt).fold(0) { code, part -> code * 100 + part }
+        // Keep 1.0.0 installable over the pre-release 2.4.0 (20400).
+        versionCode = 1000000 + appVersion.split('.').map(String::toInt).fold(0) { code, part -> code * 100 + part }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
@@ -73,6 +74,7 @@ android {
     }
 
     buildFeatures {
+        buildConfig = true
         compose = true
     }
 

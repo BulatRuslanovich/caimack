@@ -32,7 +32,8 @@ export default function SettingsPage() {
       <Suspense fallback={null}>
         <SettingsSections />
       </Suspense>
-      <Copyright className="mt-auto" />
+      <p className="text-2xs text-faint mt-auto">Caimack v{process.env.APP_VERSION}</p>
+      <Copyright />
     </>
   );
 }

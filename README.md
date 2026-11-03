@@ -232,6 +232,28 @@ To work on the frontend against another backend, point the dev proxy at it:
 cd frontend && BACKEND_INTERNAL_URL=https://music.example.com npm run dev
 ```
 
+### Releases
+
+From a clean checkout, run from the repository root (Node.js and Git required):
+
+```bash
+node scripts/release.mjs 1.0.1 --check  # preview without changing files
+node scripts/release.mjs 1.0.1          # update versions, commit, tag v1.0.1
+```
+
+The first release is `1.0.0`. The script synchronizes the frontend package and npm lockfile,
+Rust workspace and Cargo lockfile. Android reads the frontend package version; both clients
+show their build version in Settings. Versions use `X.Y.Z`, with each component from 0 to 99.
+Android uses an offset for its numeric version code so `1.0.0` updates the earlier `2.4.0` builds.
+Existing tags are never overwritten. Commit application changes before running the script.
+If the requested version is already set and has no tag, the script tags the current commit.
+
+To publish the commit and tag, run `git push origin HEAD && git push origin v1.0.1`.
+The tag triggers the existing Images workflow to publish versioned Docker images.
+Pin these with `CAIMACK_VERSION=1.0.1`. The script itself does not push anything.
+
+Test the release script with `node --test scripts/release.test.mjs`.
+
 ### Android
 
 ```bash
