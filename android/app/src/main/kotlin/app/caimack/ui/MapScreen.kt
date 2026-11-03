@@ -8,21 +8,26 @@ import android.widget.Toast
 import androidx.core.content.edit
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -33,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -46,6 +52,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -56,6 +64,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Constraints
 import app.caimack.R
 import app.caimack.api.LibraryMap
 import app.caimack.api.MapPoint
@@ -149,96 +158,101 @@ private fun MapExplorer(map: LibraryMap) {
     Column(Modifier.fillMaxSize()) {
         PageTitle(stringResource(R.string.nav_map), if (points.size < map.totalTracks) stringResource(R.string.map_coverage, points.size, map.totalTracks) else null)
 
-        Row(
-            Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, bottom = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Row(
-                Modifier.weight(1f).padding(end = 8.dp).horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Chip(stringResource(R.string.map_all_genres), genre == null) { genre = null }
-                genres.forEach { name ->
-                    Chip(name.replaceFirstChar { it.uppercase() }, genre == name) { genre = if (genre == name) null else name }
+        Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+            .weight(1f).fillMaxWidth().musicSurface(palette)) {
+            Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                GenreMenu(genres, genre, Modifier.weight(1f)) { genre = it }
+                MapLayersMenu(hiddenLayers, Modifier.weight(1f)) { layer ->
+                    hiddenLayers = if (layer.key in hiddenLayers) hiddenLayers - layer.key else hiddenLayers + layer.key
+                    layerPreferences.edit { putStringSet("hidden", hiddenLayers) }
                 }
             }
-            MapLayersMenu(hiddenLayers) { layer ->
-                hiddenLayers = if (layer.key in hiddenLayers) hiddenLayers - layer.key else hiddenLayers + layer.key
-                layerPreferences.edit { putStringSet("hidden", hiddenLayers) }
-            }
-            if (current != null) {
-                MapButton(Lucide.Crosshair, stringResource(R.string.map_locate)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                MapButton(Lucide.Minus, stringResource(R.string.map_zoom_out)) {
+                    view?.let { view = zoomAt(it, 0.8f, Spot(size.width / 2, size.height / 2)) }
+                }
+                MapButton(Lucide.Plus, stringResource(R.string.map_zoom_in)) {
+                    view?.let { view = zoomAt(it, 1.25f, Spot(size.width / 2, size.height / 2)) }
+                }
+                Spacer(Modifier.weight(1f))
+                if (current != null) MapButton(Lucide.Crosshair, stringResource(R.string.map_locate)) {
                     view = centreOn(Spot(current.x, current.y), LOCATE_ZOOM, size.width, size.height)
                 }
+                MapButton(Lucide.Scan, stringResource(R.string.map_reset)) { reset() }
             }
-            MapButton(Lucide.Scan, stringResource(R.string.map_reset)) { reset() }
-        }
-
-        Box(
-            Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(start = 12.dp, end = 12.dp, bottom = 12.dp)
-                .musicSurface(palette)
-                .background(Brush.radialGradient(listOf(lerpTowards(palette.cabinet, palette.primary, 0.025f), palette.cabinet)))
-                .onSizeChanged {
-                    val next = Size(it.width.toFloat(), it.height.toFloat())
-                    if (size == Size.Zero || view == null) view = fitView(next.width, next.height, bounds)
-                    size = next
-                },
-        ) {
-            Canvas(
+            HorizontalDivider(color = palette.cabinetEdge)
+            Box(
                 Modifier
-                    .fillMaxSize()
-                    .semantics { contentDescription = description }
-                    .pointerInput(bounds) {
-                        detectTransformGestures { centroid, pan, zoom, _ ->
-                            val shown = view ?: return@detectTransformGestures
-                            val zoomed = zoomAt(shown, zoom, Spot(centroid.x, centroid.y))
-                            view = zoomed.copy(panX = zoomed.panX + pan.x, panY = zoomed.panY + pan.y)
-                        }
-                    }
-                    .pointerInput(points) {
-                        detectTapGestures(
-                            onDoubleTap = { at -> view?.let { view = zoomAt(it, 2f, Spot(at.x, at.y)) } },
-                            onTap = { at ->
-                                val shown = view ?: return@detectTapGestures
-                                val base = min(size.width, size.height)
-                                picked = points.minByOrNull { point ->
-                                    val spot = toScreen(Spot(point.x, point.y), shown, base)
-                                    (spot.x - at.x) * (spot.x - at.x) + (spot.y - at.y) * (spot.y - at.y)
-                                }?.takeIf { point ->
-                                    val spot = toScreen(Spot(point.x, point.y), shown, base)
-                                    (spot.x - at.x) * (spot.x - at.x) + (spot.y - at.y) * (spot.y - at.y) <= hitRadius * hitRadius
-                                }
-                            },
-                        )
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .testTag("library-map-canvas")
+                    .clipToBounds()
+                    .background(Brush.radialGradient(listOf(lerpTowards(palette.cabinet, palette.primary, 0.025f), palette.cabinet)))
+                    .onSizeChanged {
+                        val next = Size(it.width.toFloat(), it.height.toFloat())
+                        if (size != next || view == null) view = fitView(next.width, next.height, bounds)
+                        size = next
                     },
             ) {
-                val shown = view ?: return@Canvas
-                drawMap(
-                    shown, points, visibleLinks, maxPlays, palette, genre, plates,
-                    current?.id,
-                    picked?.id,
-                    measurer,
-                )
-            }
-
-            picked?.let { point ->
-                PickedCard(
-                    point,
-                    Modifier.align(Alignment.BottomCenter).padding(10.dp),
-                    onPlay = { withTrack(point) { track -> container.player.play(listOf(track), 0, "map") } },
-                    onRadio = {
-                        withTrack(point) { track ->
-                            val radio = withContext(Dispatchers.IO) { runCatching { container.radio(RadioRequest(track.id, emptyList())) }.getOrNull() }
-                            if (radio == null) Toast.makeText(context, R.string.radio_failed, Toast.LENGTH_SHORT).show()
-                            else container.player.startRadio(track, radio)
+                Canvas(
+                    Modifier
+                        .fillMaxSize()
+                        .semantics { contentDescription = description }
+                        .pointerInput(bounds) {
+                            detectTransformGestures { centroid, pan, zoom, _ ->
+                                val shown = view ?: return@detectTransformGestures
+                                val zoomed = zoomAt(shown, zoom, Spot(centroid.x, centroid.y))
+                                view = zoomed.copy(panX = zoomed.panX + pan.x, panY = zoomed.panY + pan.y)
+                            }
                         }
-                    },
-                    onClose = { picked = null },
-                )
+                        .pointerInput(points) {
+                            detectTapGestures(
+                                onDoubleTap = { at -> view?.let { view = zoomAt(it, 2f, Spot(at.x, at.y)) } },
+                                onTap = { at ->
+                                    val shown = view ?: return@detectTapGestures
+                                    val base = min(size.width, size.height)
+                                    picked = points.minByOrNull { point ->
+                                        val spot = toScreen(Spot(point.x, point.y), shown, base)
+                                        (spot.x - at.x) * (spot.x - at.x) + (spot.y - at.y) * (spot.y - at.y)
+                                    }?.takeIf { point ->
+                                        val spot = toScreen(Spot(point.x, point.y), shown, base)
+                                        (spot.x - at.x) * (spot.x - at.x) + (spot.y - at.y) * (spot.y - at.y) <= hitRadius * hitRadius
+                                    }
+                                },
+                            )
+                        },
+                ) {
+                    val shown = view ?: return@Canvas
+                    drawMap(
+                        shown, points, visibleLinks, maxPlays, palette, genre, plates,
+                        current?.id,
+                        picked?.id,
+                        measurer,
+                    )
+                }
+
+                picked?.let { point ->
+                    PickedCard(
+                        point,
+                        Modifier.align(Alignment.BottomCenter).padding(10.dp),
+                        onPlay = { withTrack(point) { track -> container.player.play(listOf(track), 0, "map") } },
+                        onRadio = {
+                            withTrack(point) { track ->
+                                val radio = withContext(Dispatchers.IO) { runCatching { container.radio(RadioRequest(track.id, emptyList())) }.getOrNull() }
+                                if (radio == null) Toast.makeText(context, R.string.radio_failed, Toast.LENGTH_SHORT).show()
+                                else container.player.startRadio(track, radio)
+                            }
+                        },
+                        onClose = { picked = null },
+                    )
+                }
             }
+            HorizontalDivider(color = palette.cabinetEdge)
+            Text(stringResource(R.string.map_hint), style = Type.micro, color = palette.muted,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                maxLines = 2)
         }
     }
 }
@@ -249,7 +263,7 @@ private fun lerpTowards(from: Color, to: Color, amount: Float) = androidx.compos
 
 private fun moodTint(hue: Float, dark: Boolean, alpha: Float) = oklch(if (dark) 0.72f else 0.58f, 0.11f, hue).copy(alpha = alpha)
 
-private fun dotRadius(k: Float, density: Float) = min(6f, 2.2f + 0.9f * (ln(k + 1) / ln(2f))) * density
+private fun dotRadius(k: Float, density: Float) = min(3.6f, 1.4f + 0.55f * (ln(k + 1) / ln(2f))) * density
 
 private fun DrawScope.drawMap(
     view: MapView,
@@ -275,7 +289,7 @@ private fun DrawScope.drawMap(
         var gy = kotlin.math.floor(from.y / step) * step
         while (gy <= to.y) {
             val spot = toScreen(Spot(gx, gy), view, base)
-            drawCircle(palette.faint.copy(alpha = if (palette.dark) 0.2f else 0.3f), 1.dp.toPx(), Offset(spot.x, spot.y))
+            drawCircle(palette.faint.copy(alpha = if (palette.dark) 0.14f else 0.18f), 0.5.dp.toPx(), Offset(spot.x, spot.y))
             gy += step
         }
         gx += step
@@ -287,7 +301,7 @@ private fun DrawScope.drawMap(
         val reach = TERRITORY * base * view.k
         drawCircle(
             Brush.radialGradient(
-                listOf(moodTint(hue, palette.dark, if (palette.dark) 0.16f else 0.2f), moodTint(hue, palette.dark, 0f)),
+                listOf(moodTint(hue, palette.dark, if (palette.dark) 0.09f else 0.12f), moodTint(hue, palette.dark, 0f)),
                 center = centre,
                 radius = reach,
             ),
@@ -312,11 +326,11 @@ private fun DrawScope.drawMap(
         val level = playsLevel(point.plays, maxPlays)
         if (level <= 0f) return@forEach
         val centre = screen(point)
-        val reach = radius * (2f + 3.5f * level)
+        val reach = radius * (1.8f + 2f * level)
         drawCircle(
             Brush.radialGradient(
-                0f to palette.primary.copy(alpha = if (palette.dark) 0.4f else 0.3f),
-                0.4f to palette.primary.copy(alpha = if (palette.dark) 0.14f else 0.1f),
+                0f to palette.primary.copy(alpha = if (palette.dark) 0.24f else 0.18f),
+                0.4f to palette.primary.copy(alpha = if (palette.dark) 0.08f else 0.06f),
                 1f to palette.primary.copy(alpha = 0f),
                 center = centre,
                 radius = reach,
@@ -364,24 +378,23 @@ private fun DrawScope.drawPlates(plates: List<Plate>, view: MapView, base: Float
             fontWeight = if (plate.strong) FontWeight.Bold else FontWeight.SemiBold,
             color = if (plate.strong) palette.onPrimary else palette.foreground,
         )
-        val text = measurer.measure(plate.text, style)
+        val margin = 8.dp.toPx()
         val mark = if (plate.hue == null) 0f else 13.dp.toPx()
+        val text = measurer.measure(plate.text, style, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            constraints = Constraints(maxWidth = (size.width - margin * 2 - 20.dp.toPx() - mark).toInt().coerceAtLeast(1)))
         val width = text.size.width + 20.dp.toPx() + mark
         val height = text.size.height + 10.dp.toPx()
         val spot = toScreen(plate.at, view, base)
-        var top = spot.y - height / 2
-
-        for (attempt in 0 until 6) {
-            val box = androidx.compose.ui.geometry.Rect(spot.x - width / 2 - 4, top - 2, spot.x + width / 2 + 4, top + height + 2)
-            val hit = placed.firstOrNull { it.overlaps(box) }
-            if (hit == null) {
-                placed += box
-                break
-            }
-            top = hit.bottom + 2
-        }
-
-        val left = spot.x - width / 2
+        if (spot.x !in 0f..size.width || spot.y !in 0f..size.height || height > size.height - margin * 2) return@forEach
+        val left = (spot.x - width / 2).coerceIn(margin, (size.width - width - margin).coerceAtLeast(margin))
+        val box = listOf(0, 1, -1, 2, -2, 3, -3, 4, -4).firstNotNullOfOrNull { shift ->
+            val top = (spot.y - height / 2 + shift * (height + 6.dp.toPx()))
+                .coerceIn(margin, size.height - height - margin)
+            val candidate = androidx.compose.ui.geometry.Rect(left, top, left + width, top + height)
+            candidate.takeIf { placed.none { it.overlaps(candidate.inflate(3.dp.toPx())) } }
+        } ?: return@forEach
+        placed += box
+        val top = box.top
         val corner = CornerRadius(height / 2, height / 2)
         drawRoundRect(if (plate.strong) palette.primary else palette.card.copy(alpha = 0.86f), Offset(left, top), Size(width, height), corner)
         if (!plate.strong) {
@@ -399,8 +412,35 @@ private fun DrawScope.drawPlates(plates: List<Plate>, view: MapView, base: Float
 }
 
 @Composable
+private fun GenreMenu(genres: List<String>, selected: String?, modifier: Modifier, onSelect: (String?) -> Unit) {
+    val palette = LocalPalette.current
+    var expanded by remember { mutableStateOf(false) }
+    val all = stringResource(R.string.map_all_genres)
+    Box(modifier) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(CircleShape)
+            .background(palette.primarySoft).border(1.dp, palette.cabinetEdge, CircleShape)
+            .clickable(role = Role.Button) { expanded = true }.padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(selected?.replaceFirstChar { it.uppercase() } ?: all, style = Type.small,
+                color = palette.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f))
+            Icon(Lucide.ChevronDown, null, tint = palette.muted, modifier = Modifier.size(16.dp))
+        }
+        DropdownMenu(expanded, onDismissRequest = { expanded = false },
+            shape = Radius.hero, containerColor = palette.popover) {
+            (listOf<String?>(null) + genres).forEach { genre ->
+                DropdownMenuItem(text = {
+                    Text(genre?.replaceFirstChar { it.uppercase() } ?: all, style = Type.small,
+                        color = if (genre == selected) palette.primary else palette.foreground)
+                }, onClick = { onSelect(genre); expanded = false })
+            }
+        }
+    }
+}
+
+@Composable
 private fun MapButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
-    Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = label, onClick = onClick), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(48.dp).clip(CircleShape).clickable(onClickLabel = label, onClick = onClick), contentAlignment = Alignment.Center) {
         Icon(icon, label, tint = LocalPalette.current.muted, modifier = Modifier.size(20.dp))
     }
 }
@@ -414,19 +454,36 @@ private fun PickedCard(point: MapPoint, modifier: Modifier, onPlay: () -> Unit, 
         if (point.plays > 0) pluralStringResource(R.plurals.map_plays, point.plays, point.plays) else stringResource(R.string.map_never_played),
     ).joinToString(" · ")
 
-    Row(
-        modifier.fillMaxWidth().clip(Radius.panel).background(palette.popover).padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    Column(
+        modifier.fillMaxWidth().testTag("map-picked-card").clip(Radius.hero).background(palette.popover)
+            .border(1.dp, palette.cabinetEdge, Radius.hero).padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Cover(media.cover(point.albumId, point.id, point.hasCover, small = true), point.title, Modifier.size(48.dp))
-        Column(Modifier.weight(1f)) {
-            Text(point.title, style = Type.small.copy(fontWeight = FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(point.artist, style = Type.tiny, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(details, style = Type.tiny, color = palette.faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Cover(media.cover(point.albumId, point.id, point.hasCover, small = true), point.title, Modifier.size(40.dp))
+            Column(Modifier.weight(1f)) {
+                Text(point.title, style = Type.small.copy(fontWeight = FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(point.artist, style = Type.tiny, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(details, style = Type.tiny, color = palette.faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            MapButton(Lucide.X, stringResource(R.string.action_close), onClose)
         }
-        MapButton(Lucide.Play, stringResource(R.string.action_play), onPlay)
-        MapButton(Lucide.Radio, stringResource(R.string.map_radio_from), onRadio)
-        MapButton(Lucide.X, stringResource(R.string.action_close), onClose)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.weight(1f).heightIn(min = 48.dp).clip(CircleShape).background(palette.action)
+                .clickable(role = Role.Button, onClick = onPlay).padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
+                Icon(Lucide.Play, null, tint = palette.onAction, modifier = Modifier.size(18.dp))
+                Text(stringResource(R.string.radio_hero_start), style = Type.small, color = palette.onAction,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Row(Modifier.weight(1f).heightIn(min = 48.dp).clip(CircleShape).background(palette.accent)
+                .clickable(role = Role.Button, onClickLabel = stringResource(R.string.map_radio_from), onClick = onRadio)
+                .padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
+                Icon(Lucide.Radio, null, tint = palette.foreground, modifier = Modifier.size(18.dp))
+                Text(stringResource(R.string.map_radio_short), style = Type.small, color = palette.foreground,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
     }
 }

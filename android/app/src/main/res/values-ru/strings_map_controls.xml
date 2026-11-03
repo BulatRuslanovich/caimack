@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="map_zoom_in">Приблизить</string>
+    <string name="map_zoom_out">Отдалить</string>
+    <string name="map_hint">Похожие по звучанию треки — рядом</string>
+    <string name="map_radio_short">Радио</string>
+</resources>

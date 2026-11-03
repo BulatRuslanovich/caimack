@@ -15,6 +15,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -50,6 +51,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 
@@ -136,11 +138,8 @@ fun Tabs(
 @Composable
 fun Tab(label: String, active: Boolean, onClick: () -> Unit) {
     val palette = LocalPalette.current
-    Text(
-        label,
-        style = Type.small.copy(fontWeight = FontWeight.Medium),
-        color = if (active) palette.foreground else palette.muted,
-        modifier = Modifier
+    Box(
+        Modifier
             .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
             .selectable(selected = active, role = Role.Tab, onClick = onClick)
             .drawBehind {
@@ -148,8 +147,13 @@ fun Tab(label: String, active: Boolean, onClick: () -> Unit) {
                 val line = 2.dp.toPx()
                 drawRect(palette.primary, topLeft = Offset(0f, size.height - line), size = Size(size.width, line))
             }
-            .padding(top = 10.dp, bottom = 12.dp),
-    )
+            .padding(vertical = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, style = Type.small.copy(fontWeight = FontWeight.Medium),
+            color = if (active) palette.foreground else palette.muted,
+            textAlign = TextAlign.Center, maxLines = 1)
+    }
 }
 @Composable
 fun Chip(

@@ -21,6 +21,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.graphics.toPixelMap
@@ -86,6 +87,7 @@ class VisualReviewTest {
     private val originalFontScale = context.resources.configuration.fontScale
     private val originalDensity = container.appearance.libraryDensity.value
     private val originalColorway = container.appearance.colorway.value
+    private val originalMapLayers = context.getSharedPreferences("map_layers", 0).getStringSet("hidden", emptySet())?.toSet()
     private val user = User("visual-review", "Визуальная проверка")
     private val original = listOf(
         Track("first", "Ночной город", "artist", "Электрические сны", durationSeconds = 214),
@@ -141,6 +143,7 @@ class VisualReviewTest {
         container.appearance.setLanguage(originalLanguage)
         container.appearance.setLibraryDensity(originalDensity)
         container.appearance.setColorway(originalColorway)
+        context.getSharedPreferences("map_layers", 0).edit().putStringSet("hidden", originalMapLayers).apply()
         shell("settings put system font_scale $originalFontScale")
         container.session.expire()
         Remote.cache.clear()
@@ -336,6 +339,56 @@ class VisualReviewTest {
         compose.activityRule.scenario.recreate()
         compose.onNodeWithText(label(R.string.nav_home)).performClick()
         capture("parity-home-large-text")
+    }
+
+    @Test
+    fun libraryMapLayoutOnPhone() {
+        container.appearance.setLanguage("ru")
+        container.appearance.setTheme(Appearance.DARK)
+        context.getSharedPreferences("map_layers", 0).edit().remove("hidden").apply()
+        val moods = listOf("chill", "sleep", "workout", "party", "happy", "sad")
+        val random = kotlin.random.Random(42)
+        val centres = listOf(0.25f to 0.25f, 0.65f to 0.2f, 0.35f to 0.55f, 0.75f to 0.55f, 0.25f to 0.8f, 0.7f to 0.85f)
+        val points = (0 until 180).map { index ->
+            val centre = centres[index % centres.size]
+            app.caimack.api.MapPoint(
+                original.getOrNull(index)?.id ?: "map-$index",
+                centre.first + random.nextFloat() * 0.18f - 0.09f,
+                centre.second + random.nextFloat() * 0.18f - 0.09f,
+                original[index % original.size].title,
+                original[index % original.size].artistName,
+                genre = listOf("Electronic", "Ambient", "Indie rock")[index % 3], plays = index % 27,
+            )
+        }
+        val map = app.caimack.api.LibraryMap(points, centres.mapIndexed { index, at -> app.caimack.api.MapLandmark(moods[index], at.first, at.second) }, points.size)
+        val previous = web.dispatcher
+        web.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when (request.url.encodedPath) {
+                "/api/library/map" -> MockResponse.Builder().code(200).addHeader("Content-Type", "application/json").body(Json.encodeToString(map)).build()
+                else -> previous.dispatch(request)
+            }
+        }
+        Remote.cache.clear()
+        compose.activityRule.scenario.recreate()
+        compose.onNodeWithText(label(R.string.nav_library)).performClick()
+        capture("library-tabs")
+        compose.onNode(hasText(label(R.string.nav_map)) and hasClickAction()).performScrollTo().performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription(localized.getString(R.string.map_region, points.size)).fetchSemanticsNodes().isNotEmpty() }
+        capture("library-map-dark")
+        val canvas = compose.onNodeWithContentDescription(localized.getString(R.string.map_region, points.size))
+        val bounds = canvas.fetchSemanticsNode().boundsInRoot
+        val view = fitView(bounds.width, bounds.height, boundsOf(points.map { Spot(it.x, it.y) }))
+        val spot = toScreen(Spot(points[0].x, points[0].y), view, minOf(bounds.width, bounds.height))
+        canvas.performTouchInput { click(Offset(spot.x, spot.y)) }
+        capture("library-map-picked")
+        compose.onNodeWithText(localized.getString(R.string.map_layers_count, MapLayer.entries.size)).performClick()
+        capture("library-map-layers")
+        compose.onNodeWithText(label(R.string.map_layer_links)).performClick()
+        compose.activityRule.scenario.recreate()
+        compose.onNodeWithText(label(R.string.nav_library)).performClick()
+        compose.onNode(hasText(label(R.string.nav_map)) and hasClickAction()).performScrollTo().performClick()
+        container.appearance.setTheme(Appearance.LIGHT)
+        capture("library-map-light")
     }
 
     @Test

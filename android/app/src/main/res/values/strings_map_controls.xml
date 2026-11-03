@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="map_zoom_in">Zoom in</string>
+    <string name="map_zoom_out">Zoom out</string>
+    <string name="map_hint">Similar sounds, closer together</string>
+    <string name="map_radio_short">Radio</string>
+</resources>

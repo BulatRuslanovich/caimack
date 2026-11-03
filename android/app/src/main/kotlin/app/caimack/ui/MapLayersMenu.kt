@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextOverflow
 import app.caimack.R
 
 internal enum class MapLayer(val key: String, @param:StringRes val label: Int) {
@@ -44,19 +45,20 @@ internal enum class MapLayer(val key: String, @param:StringRes val label: Int) {
 }
 
 @Composable
-internal fun MapLayersMenu(hidden: Set<String>, onToggle: (MapLayer) -> Unit) {
+internal fun MapLayersMenu(hidden: Set<String>, modifier: Modifier = Modifier, onToggle: (MapLayer) -> Unit) {
     val palette = LocalPalette.current
     var expanded by remember { mutableStateOf(false) }
     val label = stringResource(R.string.map_layers_count, MapLayer.entries.count { it.key !in hidden })
     val state = stringResource(if (expanded) R.string.map_layers_expanded else R.string.map_layers_collapsed)
 
-    Box {
+    Box(modifier) {
         Row(
             Modifier
+                .fillMaxWidth()
                 .heightIn(min = 48.dp)
                 .clip(CircleShape)
                 .background(if (expanded) palette.raised else androidx.compose.ui.graphics.Color.Transparent)
-                .border(1.dp, palette.controlBorder, CircleShape)
+                .border(1.dp, palette.cabinetEdge, CircleShape)
                 .clickable(role = Role.Button) { expanded = !expanded }
                 .semantics { stateDescription = state }
                 .padding(horizontal = 12.dp),
@@ -64,7 +66,8 @@ internal fun MapLayersMenu(hidden: Set<String>, onToggle: (MapLayer) -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Icon(Lucide.Layers, null, tint = palette.muted, modifier = Modifier.size(16.dp))
-            Text(label, style = Type.small, color = palette.foreground)
+            Text(label, style = Type.small, color = palette.foreground, maxLines = 1,
+                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             Icon(if (expanded) Lucide.ChevronUp else Lucide.ChevronDown, null, tint = palette.muted, modifier = Modifier.size(14.dp))
         }
         DropdownMenu(
