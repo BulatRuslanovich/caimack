@@ -75,14 +75,13 @@ fun HandoffBar(playing: Boolean) {
         stringResource(R.string.handoff_paused_on, shown.deviceName, durationOf(shown.positionSeconds.toInt()))
     }
 
-    Column(Modifier.background(palette.raised)) {
-        HorizontalDivider(color = palette.border)
+    Column(Modifier.padding(horizontal = 8.dp, vertical = 3.dp).musicSurface(palette)) {
         Row(
             Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Cover(trackCover(track), track.albumTitle ?: track.title, Modifier.size(36.dp))
+            Cover(trackCover(track), track.albumTitle ?: track.title, Modifier.size(40.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Icon(Lucide.MonitorSpeaker, null, tint = palette.faint, modifier = Modifier.size(13.dp))
@@ -99,10 +98,10 @@ fun HandoffBar(playing: Boolean) {
             Text(
                 stringResource(R.string.handoff_continue_here),
                 style = Type.tiny.copy(fontWeight = FontWeight.SemiBold),
-                color = palette.onAction,
+                color = palette.foreground,
                 modifier = Modifier
                     .clip(CircleShape)
-                    .background(if (taking) palette.action.copy(alpha = 0.5f) else palette.action)
+                    .background(palette.accent)
                     .clickable(enabled = !taking) {
                         taking = true
                         scope.launch {
@@ -111,13 +110,13 @@ fun HandoffBar(playing: Boolean) {
                             taking = false
                         }
                     }
-                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                    .padding(horizontal = 12.dp, vertical = 14.dp),
             )
             Icon(
                 Lucide.X,
                 stringResource(R.string.handoff_dismiss),
                 tint = palette.muted,
-                modifier = Modifier.clip(CircleShape).clickable { dismissed = key }.padding(8.dp).size(16.dp),
+                modifier = Modifier.clip(CircleShape).clickable { dismissed = key }.padding(16.dp).size(16.dp),
             )
         }
     }

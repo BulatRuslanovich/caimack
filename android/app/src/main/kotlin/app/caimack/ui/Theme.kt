@@ -15,6 +15,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -46,6 +47,8 @@ data class Palette(
     val sleeves: List<Color>,
     val dark: Boolean,
 ) {
+    val cabinet: Color get() = lerp(card, raised, if (dark) 0.3f else 0.18f)
+    val cabinetEdge: Color get() = foreground.copy(alpha = if (dark) 0.09f else 0.11f)
     val border = foreground.copy(alpha = 0.12f)
     val borderStrong = foreground.copy(alpha = 0.24f)
     val controlBorder = foreground.copy(alpha = if (dark) 0.40f else 0.55f)
@@ -63,19 +66,19 @@ enum class Colorway(val key: String) {
     }
 }
 private val CoffeeDark = Palette(
-    background = Color(0xFF1C1714),
-    card = Color(0xFF2A221D),
-    popover = Color(0xFF342A24),
-    raised = Color(0xFF3A2F28),
-    accent = Color(0xFF463A31),
-    foreground = Color(0xFFEFE4D2),
-    muted = Color(0xFFB3A595),
-    faint = Color(0xFF9D9182),
-    primary = Color(0xFFD9A441),
-    onPrimary = Color(0xFF1C1714),
-    primarySoft = Color(0x24D9A441),
-    action = Color(0xFFEFE4D2),
-    onAction = Color(0xFF1C1714),
+    background = Color(0xFF171819),
+    card = Color(0xFF232527),
+    popover = Color(0xFF2D3032),
+    raised = Color(0xFF343739),
+    accent = Color(0xFF414547),
+    foreground = Color(0xFFF2EEE7),
+    muted = Color(0xFFAAA9A4),
+    faint = Color(0xFF93958F),
+    primary = Color(0xFFD3B278),
+    onPrimary = Color(0xFF201E1A),
+    primarySoft = Color(0x1FD3B278),
+    action = Color(0xFFEEE6D7),
+    onAction = Color(0xFF201E1A),
     destructive = Color(0xFFF07A6A),
     warning = Color(0xFFE0A93A),
     success = Color(0xFF8FC27A),
@@ -87,19 +90,19 @@ private val CoffeeDark = Palette(
 )
 
 private val CoffeeLight = Palette(
-    background = Color(0xFFE6DCCB),
-    card = Color(0xFFEFE7DA),
-    popover = Color(0xFFF7F1E7),
-    raised = Color(0xFFF7F1E7),
-    accent = Color(0xFFD9CEBA),
-    foreground = Color(0xFF2B221C),
-    muted = Color(0xFF54493D),
-    faint = Color(0xFF6A5C4E),
-    primary = Color(0xFF79510C),
-    onPrimary = Color(0xFFF7F1E7),
-    primarySoft = Color(0x1F79510C),
-    action = Color(0xFF2B221C),
-    onAction = Color(0xFFF7F1E7),
+    background = Color(0xFFEEEFEC),
+    card = Color(0xFFF8F8F5),
+    popover = Color(0xFFFFFEFB),
+    raised = Color(0xFFFFFEFB),
+    accent = Color(0xFFE0E3DD),
+    foreground = Color(0xFF252729),
+    muted = Color(0xFF5B625E),
+    faint = Color(0xFF6A706B),
+    primary = Color(0xFF7C5A24),
+    onPrimary = Color(0xFFFFFAF0),
+    primarySoft = Color(0x177C5A24),
+    action = Color(0xFF292B2D),
+    onAction = Color(0xFFF8F7F2),
     destructive = Color(0xFFAE362A),
     warning = Color(0xFF8A5D00),
     success = Color(0xFF3F7A2C),

@@ -6,6 +6,7 @@ package app.caimack.ui
 import android.provider.Settings
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.Canvas
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,6 +36,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -44,6 +52,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.caimack.api.Track
@@ -70,9 +79,18 @@ private const val SWIPE_COMMIT = 0.25f
 private const val SWIPE_RESISTANCE = 0.25f
 
 private const val FLING_DP_PER_SECOND = 800
+private const val SKIP_ACK_TIMEOUT_MS = 1_500L
 
 @Composable
 fun Deck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Modifier = Modifier) {
+    val track = state.current ?: return
+    // The new song and its neutral position must be installed in the same composition.
+    // Resetting the old offset in an effect briefly puts the next neighbour in the centre.
+    key(track.id, state.index) { TrackDeck(state, onScrub, modifier.testTag("player-deck")) }
+}
+
+@Composable
+private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Modifier) {
     val track = state.current ?: return
     val player = LocalContainer.current.player
     val view = LocalView.current
@@ -84,8 +102,6 @@ fun Deck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Modifier = Modi
     var twist by remember(track.id) { mutableFloatStateOf(0f) }
     val layout = remember { DeckLayout() }
 
-    LaunchedEffect(track.id) { swipe.snapTo(0f) }
-
     val tick = { view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK) }
 
     Box(
@@ -94,6 +110,7 @@ fun Deck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Modifier = Modi
             .pointerInput(Unit) {
                 awaitEachGesture {
                     val down = awaitFirstDown()
+                    if (swiping) return@awaitEachGesture
                     val sleeve = layout.sleeve() ?: return@awaitEachGesture
                     val gap = 24.dp.toPx()
                     val step = sleeve.width * (1 + RECORD_OUT) + gap
@@ -156,7 +173,7 @@ fun Deck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Modifier = Modi
                     var armed = committing(dragged)
                     scope.launch { swipe.snapTo(shown(dragged)) }
 
-                    horizontalDrag(start.id) { change ->
+                    val released = horizontalDrag(start.id) { change ->
                         dragged += change.positionChange().x
                         change.consume()
                         velocity.addPosition(change.uptimeMillis, change.position)
@@ -171,16 +188,23 @@ fun Deck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Modifier = Modi
                     val flung = abs(speed) > FLING_DP_PER_SECOND.dp.toPx() && sign(speed) == sign(dragged)
                     val toNext = dragged < 0
                     val index = if (toNext) latest.nextIndex else latest.previousIndex
-                    val commit = neighbour(dragged) != null && (armed || flung)
+                    val commit = released && neighbour(dragged) != null && (armed || flung)
 
                     scope.launch {
                         if (commit) {
                             swipe.animateTo(if (toNext) -step else step, tween(220))
                             player.skipTo(index)
+                            // Keep the incoming sleeve in place until the player acknowledges
+                            // the new song. The keyed deck then replaces both art and offset.
+                            if (index != latest.index) delay(SKIP_ACK_TIMEOUT_MS)
+                            // A failed command (or repeating the same queue item) must not
+                            // leave the deck outside its resting position indefinitely.
+                            swipe.animateTo(0f, spring())
+                            swiping = false
                         } else {
                             swipe.animateTo(0f, spring())
+                            swiping = false
                         }
-                        swiping = false
                     }
                 }
             },
@@ -192,6 +216,7 @@ fun Deck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Modifier = Modi
                 .widthIn(max = 300.dp)
                 .offset(x = (-48).dp)
                 .aspectRatio(1f)
+                .testTag("player-record")
                 .onGloballyPositioned { layout.record = it },
         ) {
             val offset = swipe.value
@@ -219,36 +244,67 @@ fun Deck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Modifier = Modi
 @Composable
 private fun BeatGlow(track: Track, playing: Boolean, modifier: Modifier) {
     val player = LocalContainer.current.player
-    val primary = LocalPalette.current.primary
+    val palette = LocalPalette.current
+    val tone = LocalNowPlayingTone.current
+    val light = if (tone.alpha > 0f) tone.copy(alpha = 1f) else palette.primary
     val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     val bpm = track.cues?.bpm
-    var pulse by remember { mutableFloatStateOf(0f) }
-
+    var pulse by remember(track.id) { mutableFloatStateOf(0f) }
+    var phase by remember { mutableFloatStateOf(0f) }
     val still = remember(context) {
         Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
     }
+    val opacity by animateFloatAsState(if (playing && !still) 1f else 0f, tween(500), label = "record-aura")
 
-    LaunchedEffect(track.id, playing, bpm, still) {
-        pulse = 0f
-        if (!playing || bpm == null || bpm <= 0 || still) return@LaunchedEffect
-
-        while (true) {
-            withFrameNanos { }
-            val beats = player.position / 1000.0 * bpm / 60.0
-            pulse = exp(-(beats - floor(beats)) * BEAT_DECAY).toFloat()
+    LaunchedEffect(track.id, playing, bpm, still, lifecycle) {
+        if (!playing || still) return@LaunchedEffect
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            var origin = 0L
+            while (true) {
+                withFrameNanos { time ->
+                    if (origin == 0L) origin = time
+                    phase = ((time - origin) / 1_000_000_000.0 % 120).toFloat()
+                    pulse = if (bpm != null && bpm > 0) {
+                        val beats = player.position / 1000.0 * bpm / 60.0
+                        exp(-(beats - floor(beats)) * BEAT_DECAY).toFloat()
+                    } else 0f
+                }
+                delay(32)
+            }
         }
     }
 
     Canvas(modifier) {
-        if (pulse < 0.01f) return@Canvas
-
+        if (opacity < 0.01f) return@Canvas
         val centre = Offset(size.width * (RECORD_OUT + 0.5f), size.height / 2)
-        val radius = size.width * 0.5f * (1.15f + 0.2f * pulse)
-        drawCircle(
-            Brush.radialGradient(listOf(primary.copy(alpha = 0.45f * pulse), Color.Transparent), centre, radius),
-            radius,
-            centre,
-        )
+        val disc = size.width * 0.5f
+        val radius = disc * (1.6f + 0.1f * pulse)
+        drawCircle(Brush.radialGradient(listOf(light.copy(alpha = opacity * (0.07f + 0.035f * pulse)),
+            Color.Transparent), centre, radius), radius, centre)
+        // Slow broken orbits; the wider bass arc follows the track BPM when available.
+        repeat(3) { ring ->
+            val r = disc * (1.12f + ring * 0.15f + pulse * 0.025f)
+            val direction = if (ring == 1) -1 else 1
+            val start = phase * (2.5f + ring) * direction + ring * 108f
+            repeat(2) { segment ->
+                drawArc(light.copy(alpha = opacity * (0.16f - ring * 0.03f)), start + segment * 180f,
+                    64f + ring * 12f, false, Offset(centre.x - r, centre.y - r), Size(r * 2, r * 2),
+                    style = Stroke((0.8f + (2 - ring) * 0.25f).dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
+            }
+        }
+        if (pulse > 0.02f) {
+            val r = disc * (1.08f + (1 - pulse) * 0.48f)
+            drawArc(light.copy(alpha = opacity * pulse * 0.15f), -58f, 116f, false,
+                Offset(centre.x - r, centre.y - r), Size(r * 2, r * 2), style = Stroke(2.dp.toPx()))
+        }
+        repeat(3) { glint ->
+            val angle = (phase * (3.0 + glint) + glint * 123) * Math.PI / 180
+            val r = disc * (1.15f + glint * 0.12f)
+            val shimmer = (0.5 + 0.5 * kotlin.math.sin(phase * 0.8 + glint * 2)).toFloat()
+            drawCircle(light.copy(alpha = opacity * shimmer * 0.35f), (0.8f + shimmer * 0.5f).dp.toPx(),
+                centre + Offset(kotlin.math.cos(angle).toFloat() * r, kotlin.math.sin(angle).toFloat() * r))
+        }
     }
 }
 
@@ -258,6 +314,7 @@ private fun Neighbour(track: Track, x: Float) {
         trackCover(track, small = false),
         track.albumTitle ?: track.title,
         Modifier.fillMaxSize().offset { IntOffset(x.roundToInt(), 0) }.shadow(18.dp, Radius.cover),
+        fadeIn = false,
     )
 }
 

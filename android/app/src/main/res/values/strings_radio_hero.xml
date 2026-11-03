@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="radio_hero_description">Familiar favourites and fresh finds from your collection.</string>
+    <string name="radio_hero_start">Listen</string>
+    <string name="radio_hero_resume">Resume</string>
+    <string name="radio_hero_ready">From your collection</string>
+    <string name="radio_hero_hint">A stream shaped by your listening</string>
+</resources>

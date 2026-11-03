@@ -19,14 +19,12 @@
     <string name="error_load">Не удалось загрузить данные.</string>
     <string name="home_empty_title">Здесь пока пусто</string>
     <string name="home_daily_mix">Плейлист дня</string>
-    <string name="home_daily_mix_subtitle">Собрано для вас на сегодня</string>
     <string name="home_new_arrivals">Новинки</string>
     <string name="home_liked_songs">Любимые треки</string>
     <string name="home_top_this_week">Ваш топ за неделю</string>
     <string name="home_top_period">За 7 дней</string>
     <string name="home_new_albums">Новые альбомы</string>
     <string name="home_quick_picks">Снова к ним</string>
-    <string name="home_up_next">Дальше</string>
     <string name="home_your_playlists">Ваши плейлисты</string>
     <string name="rec_for_you">Для вас</string>
     <string name="rec_because_you_listened">Потому что вы слушали %1$s</string>
@@ -196,9 +194,4 @@
     <string name="action_done">Готово</string>
     <string name="view_grid">Сетка</string>
     <string name="view_crate">Ящик</string>
-    <string name="crate_label">Ящик с пластинками: свайп вверх листает, тап вытаскивает пластинку</string>
-    <string name="crate_previous">Предыдущая пластинка</string>
-    <string name="crate_next">Следующая пластинка</string>
-    <string name="crate_position">%1$d из %2$d</string>
-    <string name="crate_play">Слушать «%1$s»</string>
 </resources>

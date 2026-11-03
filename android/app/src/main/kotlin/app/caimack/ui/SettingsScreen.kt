@@ -280,14 +280,6 @@ fun SettingsScreen() {
                         ) { container.appearance.setColorway(Colorway.of(it)) }
                     }
 
-                    if (SettingKey.AlbumLayout in visible) {
-                        val layout by container.appearance.albumLayout.collectAsStateWithLifecycle()
-                        Choice(
-                            stringResource(R.string.settings_album_layout), null, layout.key,
-                            listOf(Option("grid", stringResource(R.string.view_grid)), Option("crate", stringResource(R.string.view_crate))),
-                        ) { container.appearance.setAlbumLayout(AlbumLayout.of(it)) }
-                    }
-
                     if (SettingKey.Density in visible) {
                         val density by container.appearance.libraryDensity.collectAsStateWithLifecycle()
                         Choice(
@@ -345,7 +337,7 @@ fun SettingsScreen() {
 private fun Panel(title: String, action: (@Composable () -> Unit)? = null, content: @Composable () -> Unit) {
     val palette = LocalPalette.current
     Column(
-        Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().clip(Radius.panel).background(palette.card).padding(16.dp),
+        Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().clip(Radius.hero).background(palette.cabinet).border(1.dp, palette.cabinetEdge, Radius.hero).padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {

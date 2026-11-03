@@ -3,6 +3,7 @@
 
 package app.caimack.ui
 
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.core.Animatable
@@ -70,6 +71,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -313,9 +315,13 @@ fun Record(
 ) {
     val slid by animateFloatAsState(if (out) RECORD_OUT else 0f, tween(650), label = "record-out")
     val angle = remember(track.id) { Animatable(0f) }
+    val context = LocalContext.current
+    val reducedMotion = remember(context) {
+        Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+    }
 
-    LaunchedEffect(spinning, track.id) {
-        while (spinning) {
+    LaunchedEffect(spinning, track.id, reducedMotion) {
+        while (spinning && !reducedMotion) {
             angle.animateTo(angle.value + 360f, tween(1800, easing = LinearEasing))
             angle.snapTo(angle.value % 360f)
         }
@@ -337,7 +343,7 @@ fun Record(
                     }
                     drawCircle(Color(0xFF121010), radius * 0.66f * 0.5f, style = Stroke(width = radius * 0.015f))
                 }
-                Cover(trackCover(track), track.albumTitle ?: track.title, Modifier.align(Alignment.Center).fillMaxSize(0.32f), round = true)
+                Cover(trackCover(track), track.albumTitle ?: track.title, Modifier.align(Alignment.Center).fillMaxSize(0.32f), round = true, fadeIn = false)
                 Box(Modifier.align(Alignment.Center).fillMaxSize(0.032f).clip(CircleShape).background(LocalPalette.current.background))
             }
             Canvas(Modifier.fillMaxSize()) {
@@ -360,7 +366,7 @@ fun Record(
         }
         val sleeveModifier = jacket.fillMaxSize().shadow(18.dp, Radius.cover)
         if (sleeve != null) sleeve(sleeveModifier.clip(Radius.cover))
-        else Cover(trackCover(track, small = false), track.albumTitle ?: track.title, sleeveModifier)
+        else Cover(trackCover(track, small = false), track.albumTitle ?: track.title, sleeveModifier, fadeIn = false)
     }
 }
 @Composable

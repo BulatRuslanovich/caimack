@@ -81,11 +81,12 @@ fun MiniPlayer(state: PlayerState, onOpen: () -> Unit) {
     val openPx = with(LocalDensity.current) { 40.dp.toPx() }
 
     val tone = LocalNowPlayingTone.current
-    val wash = tone.copy(alpha = tone.alpha * if (palette.dark) 0.4f else 0.5f)
+    val wash = tone.copy(alpha = tone.alpha * if (palette.dark) 0.16f else 0.12f)
 
     Column(
         Modifier
-            .background(palette.card)
+            .padding(horizontal = 8.dp, vertical = 5.dp)
+            .musicSurface(palette)
             .background(Brush.horizontalGradient(0f to wash, 0.75f to Color.Transparent))
             .clickable(onClick = onOpen)
             .pointerInput(Unit) {
@@ -109,7 +110,6 @@ fun MiniPlayer(state: PlayerState, onOpen: () -> Unit) {
                 }
             },
     ) {
-        HorizontalDivider(color = palette.foreground.copy(alpha = 0.07f))
         Row(
             Modifier
                 .fillMaxWidth()
@@ -117,9 +117,9 @@ fun MiniPlayer(state: PlayerState, onOpen: () -> Unit) {
                     translationX = swipe.value
                     alpha = 1f - (abs(swipe.value) / (skipPx * 3)).coerceAtMost(0.5f)
                 }
-                .padding(start = 12.dp, end = 8.dp, top = 8.dp),
+                .padding(start = 10.dp, end = 4.dp, top = 9.dp, bottom = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             val transition = LocalNowPlayingTransition.current
             Box(Modifier.size(46.dp).semantics { contentDescription = openLabel }.clickable(onClick = onOpen)) {
@@ -131,29 +131,33 @@ fun MiniPlayer(state: PlayerState, onOpen: () -> Unit) {
                 Text(track.title, style = Type.body.copy(fontWeight = FontWeight.Medium), color = palette.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(artistsOf(track), style = Type.small, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Box(contentAlignment = Alignment.Center) {
-                IconAction(if (state.playing) Lucide.Pause else Lucide.Play, stringResource(if (state.playing) R.string.action_pause else R.string.action_play)) { player.toggle() }
-                BufferingRing(state.buffering, Modifier.size(40.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconAction(
+                    if (liked) Lucide.HeartFilled else Lucide.Heart,
+                    stringResource(if (liked) R.string.menu_unlike else R.string.menu_like),
+                    tint = if (liked) palette.primary else palette.muted,
+                    size = 19,
+                ) { container.favorites.toggle(track) }
+                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(40.dp).clip(CircleShape).background(palette.action))
+                    IconAction(if (state.playing) Lucide.Pause else Lucide.Play,
+                        stringResource(if (state.playing) R.string.action_pause else R.string.action_play),
+                        tint = palette.onAction, size = 20) { player.toggle() }
+                    BufferingRing(state.buffering, Modifier.size(40.dp))
+                }
+                IconAction(Lucide.SkipForward, stringResource(R.string.player_next), size = 20) { player.next() }
             }
-            IconAction(Lucide.SkipForward, stringResource(R.string.player_next)) { player.next() }
-            IconAction(
-                if (liked) Lucide.HeartFilled else Lucide.Heart,
-                stringResource(if (liked) R.string.menu_unlike else R.string.menu_like),
-                tint = if (liked) palette.primary else palette.muted,
-            ) { container.favorites.toggle(track) }
         }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(clock(position), style = Type.micro, color = palette.muted)
-            Box(Modifier.weight(1f).height(3.dp).clip(CircleShape).background(palette.borderStrong)) {
-                Box(Modifier.fillMaxWidth((position.toFloat() / duration).coerceIn(0f, 1f)).height(3.dp).background(palette.foreground))
-            }
-            Text(clock(duration), style = Type.micro, color = palette.muted)
+        Box(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 3.dp)
+            .fillMaxWidth().height(2.dp).clip(CircleShape).background(palette.border)) {
+            val progress = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
+            Box(Modifier.fillMaxWidth(progress).height(2.dp).background(palette.primary))
         }
     }
 }
 @Composable
 internal fun IconAction(icon: ImageVector, label: String, tint: Color = LocalPalette.current.foreground, size: Int = 22, onClick: () -> Unit) {
-    Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(48.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
         Icon(icon, label, tint = tint, modifier = Modifier.size(size.dp))
     }
 }

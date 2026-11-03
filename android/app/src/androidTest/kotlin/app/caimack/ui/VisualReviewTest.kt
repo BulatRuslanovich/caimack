@@ -20,6 +20,11 @@ import android.graphics.Bitmap
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipe
+import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
@@ -27,6 +32,7 @@ import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
@@ -42,6 +48,8 @@ import app.caimack.api.HomeFeed
 import app.caimack.api.Playlist
 import app.caimack.api.PlaylistDetail
 import app.caimack.api.Track
+import app.caimack.api.RadioBatch
+import app.caimack.api.RecommendedTrack
 import app.caimack.api.User
 import app.caimack.playback.PlayerState
 import app.caimack.playback.toMediaItem
@@ -76,7 +84,6 @@ class VisualReviewTest {
     private val originalTheme = container.appearance.theme.value
     private val originalLanguage = container.appearance.language
     private val originalFontScale = context.resources.configuration.fontScale
-    private val originalLayout = container.appearance.albumLayout.value
     private val originalDensity = container.appearance.libraryDensity.value
     private val originalColorway = container.appearance.colorway.value
     private val user = User("visual-review", "Визуальная проверка")
@@ -86,6 +93,7 @@ class VisualReviewTest {
         Track("third", "На последнем поезде", "artist", "Электрические сны", durationSeconds = 247),
     )
     @Volatile private var tracks = original
+    private var screenshotTracks = original
     private val configuration = Configuration(context.resources.configuration).apply { setLocale(Locale.forLanguageTag("ru")) }
     private val localized = context.createConfigurationContext(configuration)
     private fun label(id: Int) = localized.getString(id)
@@ -131,7 +139,6 @@ class VisualReviewTest {
         container.player.stop()
         container.appearance.setTheme(originalTheme)
         container.appearance.setLanguage(originalLanguage)
-        container.appearance.setAlbumLayout(originalLayout)
         container.appearance.setLibraryDensity(originalDensity)
         container.appearance.setColorway(originalColorway)
         shell("settings put system font_scale $originalFontScale")
@@ -145,9 +152,9 @@ class VisualReviewTest {
         android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { it.readBytes() }
     }
 
-    private fun capture(name: String, settle: Boolean = true) {
-        compose.runOnIdle {
-            (container.player.state as MutableStateFlow<PlayerState>).value = PlayerState(queue = original, index = 1)
+    private fun capture(name: String, settle: Boolean = true, seedPlayback: Boolean = true) {
+        if (seedPlayback) compose.runOnIdle {
+            (container.player.state as MutableStateFlow<PlayerState>).value = PlayerState(queue = screenshotTracks, index = 1)
         }
         compose.waitForIdle()
         if (settle) compose.mainClock.advanceTimeBy(500)
@@ -156,7 +163,7 @@ class VisualReviewTest {
         Thread.sleep(80) // Let the emulator compositor present the frame before the system screenshot.
         val bitmap = checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
         val values = ContentValues().apply {
-            put(MediaStore.Downloads.DISPLAY_NAME, "$name.png")
+            put(MediaStore.Downloads.DISPLAY_NAME, "${InstrumentationRegistry.getArguments().getString("visualPrefix").orEmpty()}$name.png")
             put(MediaStore.Downloads.MIME_TYPE, "image/png")
             put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/CaimackReview/checked")
             put(MediaStore.Downloads.IS_PENDING, 1)
@@ -204,11 +211,46 @@ class VisualReviewTest {
     @Test
     fun interfaceMatchesTheUpdatedWebClient() {
         val previous = web.dispatcher
-        val albums = original.mapIndexed { index, track -> Album("album-$index", track.title, track.artistId, track.artistName, trackCount = 1) }
+        screenshotTracks = original.mapIndexed { index, track -> track.copy(albumId = "album-$index", hasCover = true) }
+        val albums = original.mapIndexed { index, track -> Album("album-$index", track.title, track.artistId, track.artistName, trackCount = 1, hasCover = true) }
+        val covers = listOf(0xFF385A68.toInt(), 0xFF9B593F.toInt(), 0xFF595B84.toInt()).mapIndexed { index, colour ->
+            val bitmap = Bitmap.createBitmap(320, 320, Bitmap.Config.ARGB_8888)
+            val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+            val canvas = Canvas(bitmap)
+            canvas.drawColor(colour)
+            paint.color = 0xFFE2CB9E.toInt()
+            canvas.drawCircle(230f - index * 42f, 125f + index * 30f, 104f, paint)
+            paint.color = 0xFF202B32.toInt()
+            paint.strokeWidth = 12f
+            repeat(8) { line -> canvas.drawLine(-20f, 210f + line * 18, 340f, 80f + line * 18, paint) }
+            paint.color = 0xFFF6EBDD.toInt()
+            paint.textSize = 22f
+            canvas.drawText("CAIMACK / 0${index + 1}", 20f, 294f, paint)
+            java.io.ByteArrayOutputStream().use { output ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+                bitmap.recycle()
+                output.toByteArray()
+            }
+        }
+        val samples = 8000 * 30
+        val audio = ByteBuffer.allocate(44 + samples * 2).order(ByteOrder.LITTLE_ENDIAN).apply {
+            put("RIFF".toByteArray()); putInt(36 + samples * 2); put("WAVEfmt ".toByteArray())
+            putInt(16); putShort(1); putShort(1); putInt(8000); putInt(16000); putShort(2); putShort(16)
+            put("data".toByteArray()); putInt(samples * 2)
+            repeat(samples) { putShort(0) }
+        }.array()
         web.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
+                if (request.url.encodedPath.endsWith("/stream")) {
+                    return MockResponse.Builder().code(200).addHeader("Content-Type", "audio/wav").body(Buffer().write(audio)).build()
+                }
+                if (request.url.encodedPath.endsWith("/cover")) {
+                    val index = request.url.encodedPath.substringBeforeLast('/').substringAfterLast('-').toIntOrNull() ?: 0
+                    return MockResponse.Builder().code(200).addHeader("Content-Type", "image/png").body(Buffer().write(covers[index % covers.size])).build()
+                }
                 val body = when (request.url.encodedPath) {
-                    "/api/home/feed" -> Json.encodeToString(HomeFeed(listOf(HomeBlock("daily", "dailyMix", "Hero", "Lead", tracks = original, totalCount = 26))))
+                    "/api/home/feed" -> Json.encodeToString(HomeFeed(listOf(HomeBlock("daily", "dailyMix", "Hero", "Lead", tracks = screenshotTracks, totalCount = 26))))
+                    "/api/recommendations/radio" -> Json.encodeToString(RadioBatch((listOf(screenshotTracks[1]) + screenshotTracks.filterIndexed { index, _ -> index != 1 }).map { RecommendedTrack(it) }))
                     "/api/albums" -> Json.encodeToString(Paged(albums, albums.size, 1, 60))
                     else -> return previous.dispatch(request)
                 }
@@ -218,32 +260,58 @@ class VisualReviewTest {
         Remote.cache.clear()
         container.appearance.setLanguage("ru")
         container.appearance.setTheme(Appearance.DARK)
-        container.appearance.setAlbumLayout(AlbumLayout.Grid)
         container.appearance.setLibraryDensity(LibraryDensity.Comfortable)
         compose.activityRule.scenario.recreate()
         compose.waitUntil(10_000) { compose.onAllNodesWithText(label(R.string.home_daily_mix)).fetchSemanticsNodes().isNotEmpty() }
         capture("parity-home-dark")
 
+        val radioBounds = compose.onNodeWithTag("personal-radio").fetchSemanticsNode().boundsInRoot
         compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("radio-toggle").performClick()
+        compose.waitUntil(10_000) {
+            compose.mainClock.advanceTimeByFrame()
+            container.player.state.value.playing && !container.player.state.value.buffering
+        }
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(1000)
+        assertEquals(radioBounds, compose.onNodeWithTag("personal-radio").fetchSemanticsNode().boundsInRoot)
+        capture("parity-radio-playing", settle = false, seedPlayback = false)
+        compose.onNodeWithTag("radio-toggle").performClick()
+        compose.waitUntil(5_000) { !container.player.state.value.playing }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("radio-toggle").performClick()
+        compose.waitUntil(10_000) {
+            compose.mainClock.advanceTimeByFrame()
+            container.player.state.value.playing && !container.player.state.value.buffering
+        }
+        compose.mainClock.advanceTimeBy(1000)
+
         compose.onNodeWithContentDescription(label(R.string.player_open_full)).performClick()
         compose.mainClock.advanceTimeBy(110)
-        capture("parity-cover-opening-110ms", settle = false)
+        capture("parity-cover-opening-110ms", settle = false, seedPlayback = false)
         compose.mainClock.advanceTimeBy(110)
-        capture("parity-cover-opening-220ms", settle = false)
+        capture("parity-cover-opening-220ms", settle = false, seedPlayback = false)
         compose.mainClock.advanceTimeBy(500)
-        compose.mainClock.autoAdvance = true
         compose.onNodeWithText(original[1].title).assertIsDisplayed()
         val title = compose.onNodeWithText(original[1].title).fetchSemanticsNode().boundsInRoot
         val heart = compose.onNodeWithContentDescription(label(R.string.menu_like)).fetchSemanticsNode().boundsInRoot
         assertTrue("Favorite belongs to the right of the title", heart.left >= title.right)
-        capture("parity-player-dark")
+        capture("parity-player-dark", settle = false, seedPlayback = false)
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(1000)
+        capture("parity-player-playing", settle = false, seedPlayback = false)
+        compose.runOnIdle { container.player.pause() }
+        compose.waitUntil(5_000) { !container.player.state.value.playing }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.mainClock.autoAdvance = true
         compose.onNodeWithContentDescription(label(R.string.player_close_full)).performClick()
 
         compose.onNode(hasText("В") and hasClickAction()).performClick()
         compose.onNodeWithText(label(R.string.settings_title)).performClick()
         compose.onNodeWithContentDescription(label(R.string.settings_search)).performTextInput("альбом")
-        compose.onNodeWithText(label(R.string.view_crate)).performScrollTo().performClick()
-        assertEquals(AlbumLayout.Crate, Appearance(context).albumLayout.value)
+        compose.onNodeWithText(label(R.string.view_crate)).assertDoesNotExist()
         capture("parity-layout-settings")
         compose.onNodeWithContentDescription(label(R.string.search_clear)).performClick()
         compose.onNodeWithContentDescription(label(R.string.settings_search)).performTextInput("плотность")
@@ -256,7 +324,7 @@ class VisualReviewTest {
         compose.waitUntil(10_000) { compose.onAllNodesWithText(original[0].title).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText(label(R.string.view_grid)).assertDoesNotExist()
         compose.onNodeWithText(label(R.string.view_crate)).assertDoesNotExist()
-        capture("parity-albums-crate")
+        capture("parity-albums-grid")
         compose.onNodeWithText(label(R.string.nav_home)).performClick()
         container.appearance.setTheme(Appearance.LIGHT)
         capture("parity-home-light")
@@ -268,6 +336,83 @@ class VisualReviewTest {
         compose.activityRule.scenario.recreate()
         compose.onNodeWithText(label(R.string.nav_home)).performClick()
         capture("parity-home-large-text")
+    }
+
+    @Test
+    fun swipingTheFullPlayerNeverFlashesAnotherSongsArtwork() {
+        val previous = web.dispatcher
+        val colours = listOf(android.graphics.Color.RED, android.graphics.Color.GREEN, android.graphics.Color.BLUE)
+        val pictured = original.map { it.copy(hasCover = true) }
+        val covers = colours.map { colour ->
+            val bitmap = Bitmap.createBitmap(320, 320, Bitmap.Config.ARGB_8888).apply { eraseColor(colour) }
+            java.io.ByteArrayOutputStream().use { output ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+                bitmap.recycle()
+                output.toByteArray()
+            }
+        }
+        val samples = 8000 * 30
+        val audio = ByteBuffer.allocate(44 + samples * 2).order(ByteOrder.LITTLE_ENDIAN).apply {
+            put("RIFF".toByteArray()); putInt(36 + samples * 2); put("WAVEfmt ".toByteArray())
+            putInt(16); putShort(1); putShort(1); putInt(8000); putInt(16000); putShort(2); putShort(16)
+            put("data".toByteArray()); putInt(samples * 2)
+            repeat(samples) { putShort(0) }
+        }.array()
+        web.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val path = request.url.encodedPath
+                if (path.endsWith("/stream")) return MockResponse.Builder().code(200)
+                    .addHeader("Content-Type", "audio/wav").body(Buffer().write(audio)).build()
+                if (path.endsWith("/cover")) {
+                    val index = pictured.indexOfFirst { path.contains("/${it.id}/") }.coerceAtLeast(0)
+                    return MockResponse.Builder().code(200).addHeader("Content-Type", "image/png")
+                        .body(Buffer().write(covers[index])).build()
+                }
+                return previous.dispatch(request)
+            }
+        }
+        // All three colours are ready, including the third song that used to flash on A -> B.
+        runBlocking {
+            pictured.forEach { track ->
+                coil3.SingletonImageLoader.get(context).execute(coil3.request.ImageRequest.Builder(context)
+                    .data(container.media.cover(null, track.id, true, small = false)).size(1024).build())
+            }
+        }
+        compose.runOnIdle { container.player.play(pictured, 0) }
+        compose.waitUntil(10_000) { container.player.state.value.playing && !container.player.state.value.buffering }
+        compose.runOnIdle { container.player.pause() }
+        compose.waitUntil(5_000) { !container.player.state.value.playing }
+        compose.onNodeWithContentDescription(label(R.string.player_open_full)).performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        compose.waitForIdle()
+        val deck = compose.onNodeWithTag("player-deck")
+        val bounds = deck.fetchSemanticsNode().boundsInRoot
+        val centre = compose.onNodeWithTag("player-record").fetchSemanticsNode().boundsInRoot.center - bounds.topLeft
+        fun pixel() = deck.captureToImage().toPixelMap()[centre.x.toInt(), centre.y.toInt()].toArgb()
+        compose.waitUntil(5_000) { pixel() == colours[0] }
+        compose.mainClock.autoAdvance = false
+
+        for ((target, direction) in listOf(1 to -1, 0 to 1, 1 to -1, 2 to -1)) {
+            val outgoing = container.player.state.value.index
+            deck.performTouchInput { swipe(centre, centre + Offset(direction * bounds.width * 0.38f, 0f), 300) }
+            var acknowledged = false
+            repeat(28) {
+                compose.mainClock.advanceTimeBy(16)
+                val shown = pixel()
+                if (container.player.state.value.index == target) acknowledged = true
+                if (acknowledged) {
+                    assertEquals("The acknowledged song must own the centre on every frame", colours[target], shown)
+                } else {
+                    colours.indices.filter { it != target && it != outgoing }.forEach { other ->
+                        assertTrue("An unrelated song flashed during the swipe", shown != colours[other])
+                    }
+                }
+                Thread.sleep(12) // MediaController delivers its acknowledgement on the real main looper.
+            }
+            assertTrue("The swipe must change the queue item", acknowledged)
+            assertEquals(colours[target], pixel())
+        }
+        compose.mainClock.autoAdvance = true
     }
 
     @Test

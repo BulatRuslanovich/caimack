@@ -205,33 +205,12 @@ fun RecentScreen(play: (List<Track>, Int) -> Unit) {
 fun AlbumsScreen(nav: NavController) {
     val container = LocalContainer.current
     val pager = rememberPager("albums") { container.api.albums(it, CARD_PAGE_SIZE) }
-    val layout by container.appearance.albumLayout.collectAsStateWithLifecycle()
-    val crate = layout == AlbumLayout.Crate
     val total = pager.total
 
     val header: @Composable () -> Unit = {
         Column {
-            PageTitle(stringResource(R.string.nav_albums), total?.let { pluralStringResource(R.plurals.count_albums, it, it) }, inset = crate)
+            PageTitle(stringResource(R.string.nav_albums), total?.let { pluralStringResource(R.plurals.count_albums, it, it) }, inset = false)
         }
-    }
-
-    if (crate) {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            header()
-            when {
-                pager.items.isNotEmpty() -> RecordCrate(
-                    albums = pager.items,
-                    total = total ?: pager.items.size,
-                    hasMore = pager.items.size < (total ?: 0),
-                    onNeedMore = { pager.more() },
-                    nav = nav,
-                )
-                pager.failed -> Failure { pager.more() }
-                total == 0 -> Empty(stringResource(R.string.albums_empty))
-                else -> Box(Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) { RecordLoading(44.dp) }
-            }
-        }
-        return
     }
 
     PagedGrid(pager, stringResource(R.string.albums_empty), header = {

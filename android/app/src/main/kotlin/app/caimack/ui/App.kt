@@ -232,13 +232,6 @@ fun App(user: User) {
             }
         },
     ) { padding ->
-        Box(
-            Modifier
-                .padding(padding)
-                .fillMaxWidth()
-                .height(360.dp)
-                .background(Brush.verticalGradient(listOf(nowPlayingTone.copy(alpha = nowPlayingTone.alpha * if (palette.dark) 0.22f else 0.3f), Color.Transparent))),
-        )
         NavHost(nav, startDestination = HomeRoute, modifier = Modifier.padding(padding)) {
             composable<HomeRoute> { HomeScreen(nav) }
             composable<SearchRoute> { SearchScreen(nav, play) }

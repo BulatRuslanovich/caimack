@@ -96,14 +96,13 @@ fun Card(
     cover: @Composable (Modifier) -> Unit,
 ) {
     val palette = LocalPalette.current
-    val tone = rememberToneColor(toneUrl)
     val shape = if (round) CircleShape else Radius.cover
     Column(modifier.clickable(onClick = onClick)) {
         cover(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .shadow(if (tone.alpha > 0f) 14.dp else 0.dp, shape, clip = false, ambientColor = tone, spotColor = tone),
+                .shadow(6.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.16f), spotColor = Color.Black.copy(alpha = 0.18f)),
         )
         Text(
             title,
@@ -111,7 +110,7 @@ fun Card(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             textAlign = if (round) TextAlign.Center else TextAlign.Start,
-            modifier = Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 4.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 3.dp),
         )
         Text(
             subtitle,

@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicLong
 
 data class RadioNote(val reason: RecommendationReason, val explore: Boolean)
 
-data class RadioState(val seedTrackId: String? = null, val notes: Map<String, RadioNote> = emptyMap(), val mood: String? = null, val generation: Long = 0)
+data class RadioState(val seedTrackId: String? = null, val notes: Map<String, RadioNote> = emptyMap(), val mood: String? = null, val generation: Long = 0, val active: Boolean = false)
 
 class RadioSession(context: Context) {
     private val preferences = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -31,7 +31,7 @@ class RadioSession(context: Context) {
             batch.tracks.map { it.track.id }.filter { it != seedTrackId },
             PlaySources.radio(mood, seeded = seedTrackId != null),
         )
-        current.value = RadioState(seedTrackId, notesOf(batch), mood, generation.incrementAndGet())
+        current.value = RadioState(seedTrackId, notesOf(batch), mood, generation.incrementAndGet(), active = true)
     }
 
     fun extend(batch: RadioBatch) {

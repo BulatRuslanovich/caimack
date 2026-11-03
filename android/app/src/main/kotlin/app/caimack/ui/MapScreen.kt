@@ -179,8 +179,8 @@ private fun MapExplorer(map: LibraryMap) {
                 .weight(1f)
                 .fillMaxWidth()
                 .padding(start = 12.dp, end = 12.dp, bottom = 12.dp)
-                .clip(Radius.hero)
-                .background(Brush.radialGradient(listOf(lerpTowards(palette.card, palette.primary, 0.07f), palette.card)))
+                .musicSurface(palette)
+                .background(Brush.radialGradient(listOf(lerpTowards(palette.cabinet, palette.primary, 0.025f), palette.cabinet)))
                 .onSizeChanged {
                     val next = Size(it.width.toFloat(), it.height.toFloat())
                     if (size == Size.Zero || view == null) view = fitView(next.width, next.height, bounds)

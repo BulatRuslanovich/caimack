@@ -19,14 +19,12 @@
     <string name="error_load">Failed to load data.</string>
     <string name="home_empty_title">Nothing here yet</string>
     <string name="home_daily_mix">Daily mix</string>
-    <string name="home_daily_mix_subtitle">Picked for you today</string>
     <string name="home_new_arrivals">Fresh arrivals</string>
     <string name="home_liked_songs">Liked songs</string>
     <string name="home_top_this_week">Your top this week</string>
     <string name="home_top_period">Last 7 days</string>
     <string name="home_new_albums">New albums</string>
     <string name="home_quick_picks">Jump back in</string>
-    <string name="home_up_next">Up next</string>
     <string name="home_your_playlists">Your playlists</string>
     <string name="rec_for_you">Made for you</string>
     <string name="rec_because_you_listened">Because you listened to %1$s</string>
@@ -179,9 +177,4 @@
     <string name="action_done">Done</string>
     <string name="view_grid">Grid</string>
     <string name="view_crate">Crate</string>
-    <string name="crate_label">Record crate: swipe up to flip, tap to pull out the record</string>
-    <string name="crate_previous">Previous record</string>
-    <string name="crate_next">Next record</string>
-    <string name="crate_position">%1$d of %2$d</string>
-    <string name="crate_play">Play “%1$s”</string>
 </resources>

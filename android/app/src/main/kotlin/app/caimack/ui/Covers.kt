@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -17,9 +19,12 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import app.caimack.api.Track
 import coil3.compose.SubcomposeAsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 
 @Composable
-fun Cover(url: String?, name: String, modifier: Modifier = Modifier, round: Boolean = false) {
+fun Cover(url: String?, name: String, modifier: Modifier = Modifier, round: Boolean = false, fadeIn: Boolean = true) {
     val palette = LocalPalette.current
     val shape: Shape = if (round) CircleShape else Radius.cover
 
@@ -37,13 +42,21 @@ fun Cover(url: String?, name: String, modifier: Modifier = Modifier, round: Bool
         if (url == null) {
             fallback()
         } else {
-            SubcomposeAsyncImage(
-                model = url,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-                error = { fallback() },
-            )
+            val context = LocalPlatformContext.current
+            val request = remember(url, context, fadeIn) {
+                ImageRequest.Builder(context).data(url).crossfade(fadeIn).build()
+            }
+            // A recycled image painter must never display the previous song while loading.
+            key(url) {
+                SubcomposeAsyncImage(
+                    model = request,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                    loading = { fallback() },
+                    error = { fallback() },
+                )
+            }
         }
     }
 }

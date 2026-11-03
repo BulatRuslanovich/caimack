@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="radio_hero_description">Любимые треки и новые находки из вашей коллекции.</string>
+    <string name="radio_hero_start">Слушать</string>
+    <string name="radio_hero_resume">Продолжить</string>
+    <string name="radio_hero_ready">Из вашей коллекции</string>
+    <string name="radio_hero_hint">Поток, который подстраивается под вас</string>
+</resources>
