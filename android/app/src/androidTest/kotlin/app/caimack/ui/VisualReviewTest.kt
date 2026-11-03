@@ -340,6 +340,9 @@ class VisualReviewTest {
 
     @Test
     fun swipingTheFullPlayerNeverFlashesAnotherSongsArtwork() {
+        container.appearance.setLanguage("ru")
+        container.appearance.setTheme(Appearance.DARK)
+        compose.activityRule.scenario.recreate()
         val previous = web.dispatcher
         val colours = listOf(android.graphics.Color.RED, android.graphics.Color.GREEN, android.graphics.Color.BLUE)
         val pictured = original.map { it.copy(hasCover = true) }
@@ -394,7 +397,7 @@ class VisualReviewTest {
 
         for ((target, direction) in listOf(1 to -1, 0 to 1, 1 to -1, 2 to -1)) {
             val outgoing = container.player.state.value.index
-            deck.performTouchInput { swipe(centre, centre + Offset(direction * bounds.width * 0.38f, 0f), 300) }
+            deck.performTouchInput { swipe(centre, centre + Offset(direction * bounds.width * 0.30f, 0f), 300) }
             var acknowledged = false
             repeat(28) {
                 compose.mainClock.advanceTimeBy(16)
