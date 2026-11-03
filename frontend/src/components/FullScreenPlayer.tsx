@@ -212,7 +212,7 @@ export function FullScreenPlayer({
               </span>
 
               <div className="flex items-center gap-1 justify-self-end">
-                <StreamQuality track={track} className="mr-1" />
+                <StreamQuality track={track} className="mr-1 max-sm:hidden" />
 
                 <SleepTimerButton size="icon-lg" />
 
@@ -221,7 +221,7 @@ export function FullScreenPlayer({
                 <Button
                   variant="ghost"
                   size="icon-lg"
-                  className="pointer-coarse:hidden"
+                  className="max-sm:hidden pointer-coarse:hidden"
                   onClick={() => {
                     onClose();
                     leanBack.show();
