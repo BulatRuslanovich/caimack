@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Bulat Ruslanovich
 
 #![expect(clippy::expect_used, reason = "a test without ffmpeg or a temp dir cannot run at all")]

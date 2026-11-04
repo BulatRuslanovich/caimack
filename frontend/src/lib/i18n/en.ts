@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Bulat Ruslanovich
 
 import type { Phrase, PluralPhrase } from "./types";
@@ -604,6 +604,7 @@ export const en = {
   "nav.settings": "Settings",
 
   "settings.title": "Settings",
+  "app.sourceCode": "Source code",
   "settings.appearance": "Appearance",
   "settings.theme": "Theme",
   "settings.theme.system": "Match system",

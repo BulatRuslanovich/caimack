@@ -1,8 +1,10 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Bulat Ruslanovich
 
 package app.caimack.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.shape.CircleShape
 import kotlin.math.abs
 import androidx.compose.ui.semantics.stateDescription
@@ -82,6 +84,7 @@ private data class Option(
 
 @Composable
 fun SettingsScreen() {
+    val sourceContext = LocalContext.current
     val palette = LocalPalette.current
     val container = LocalContainer.current
     val settings by container.settings.collectAsStateWithLifecycle()
@@ -336,6 +339,12 @@ fun SettingsScreen() {
                 color = palette.muted,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
             )
+            TextButton(
+                onClick = { sourceContext.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.SOURCE_URL))) },
+                modifier = Modifier.padding(horizontal = 8.dp),
+            ) {
+                Text(stringResource(R.string.settings_source_code) + " · AGPL-3.0", color = palette.muted)
+            }
         }
     }
 }

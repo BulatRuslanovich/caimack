@@ -1,8 +1,10 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Bulat Ruslanovich
 
 import groovy.json.JsonSlurper
+import groovy.json.JsonOutput
 import java.util.Properties
+import java.net.URI
 
 plugins {
     alias(libs.plugins.android.application)
@@ -14,6 +16,14 @@ val appVersion = providers.fileContents(rootProject.layout.projectDirectory.file
     .asText
     .map { (JsonSlurper().parseText(it) as Map<*, *>)["version"] as String }
     .get()
+
+val appSourceUrl = providers.gradleProperty("caimackSourceUrl")
+    .orElse(providers.environmentVariable("CAIMACK_SOURCE_URL"))
+    .getOrElse("https://github.com/BulatRuslanovich/music-streaming")
+val sourceUri = URI(appSourceUrl)
+require(sourceUri.scheme in listOf("http", "https") && sourceUri.host != null) {
+    "CAIMACK_SOURCE_URL must be an HTTP(S) URL to this build's source code."
+}
 
 val releaseSigning: Map<String, String> = run {
     val properties = Properties()
@@ -39,6 +49,7 @@ android {
         minSdk = 33
         targetSdk = 37
         versionName = appVersion
+        buildConfigField("String", "SOURCE_URL", JsonOutput.toJson(appSourceUrl))
         // Keep 1.0.0 installable over the pre-release 2.4.0 (20400).
         versionCode = 1000000 + appVersion.split('.').map(String::toInt).fold(0) { code, part -> code * 100 + part }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

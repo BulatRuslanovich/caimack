@@ -14,7 +14,7 @@
 <p align="center">
   <a href="#quick-start"><img src="https://img.shields.io/badge/Self--hosted-Docker_Compose-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Self-hosted with Docker Compose"></a>
   <a href="#on-the-phone"><img src="https://img.shields.io/badge/Listen-Web_%2B_Android-3DDC84?style=flat-square&logo=android&logoColor=white" alt="Web and native Android"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-555555?style=flat-square" alt="MIT license"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-555555?style=flat-square" alt="AGPL-3.0 license"></a>
 </p>
 
 <p align="center">
@@ -256,4 +256,7 @@ keyPassword=...
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+AGPL-3.0-only — see [LICENSE](LICENSE) and [LICENSING.md](LICENSING.md).
+
+Releases through v1.0.1 remain available under their original MIT terms.
+The Caimack name and visual identity are covered by the [brand policy](TRADEMARKS.md).

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Bulat Ruslanovich
 
 import { readFileSync } from "node:fs";
@@ -6,6 +6,12 @@ import type { NextConfig } from "next";
 
 const backendUrl = process.env.BACKEND_INTERNAL_URL ?? "http://127.0.0.1:5199";
 const proxyApiInDev = process.env.NEXT_DISABLE_API_PROXY !== "1";
+const sourceUrl = new URL(
+  process.env.CAIMACK_SOURCE_URL || "https://github.com/BulatRuslanovich/music-streaming",
+);
+if (!["http:", "https:"].includes(sourceUrl.protocol)) {
+  throw new Error("CAIMACK_SOURCE_URL must be an HTTP(S) URL to this build's source code.");
+}
 
 function resolveVersion(): string {
   try {
@@ -36,6 +42,7 @@ const nextConfig: NextConfig = {
 
   env: {
     APP_VERSION: resolveVersion(),
+    APP_SOURCE_URL: sourceUrl.href,
   },
 
   typescript: { ignoreBuildErrors: true },

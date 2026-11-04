@@ -63,6 +63,8 @@ jobs:
           context: ${{ matrix.context }}
           target: ${{ matrix.target }}
           build-contexts: ${{ matrix.contexts }}
+          build-args: |
+            CAIMACK_SOURCE_URL=https://github.com/${{ github.repository }}/tree/${{ github.sha }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

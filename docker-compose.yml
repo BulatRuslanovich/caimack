@@ -143,6 +143,8 @@ services:
   frontend:
     build:
       context: ./frontend
+      args:
+        CAIMACK_SOURCE_URL: ${CAIMACK_SOURCE_URL:-https://github.com/BulatRuslanovich/music-streaming}
     restart: unless-stopped
     depends_on:
       backend:

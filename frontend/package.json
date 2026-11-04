@@ -2,7 +2,7 @@
   "name": "frontend",
   "version": "1.0.1",
   "private": true,
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "author": "Bulat Ruslanovich",
   "scripts": {
     "dev": "next dev",
