@@ -32,17 +32,12 @@ Do not publish passwords, signing keys or private user data as part of an offer.
 - The default upstream repository link is a development convenience. Publishers
   must ensure the link actually provides the source for their deployed build.
 
-## Brand and non-code material
-
-The Caimack name, logo and handwritten wordmark identify the official project.
-See [TRADEMARKS.md](TRADEMARKS.md) for the brand policy. The code license does not
-grant trademark rights beyond what applicable law otherwise allows.
+## Third-party and non-code material
 
 The AGPL declaration is for software, not a blanket relicensing of third-party
 album covers, music, fonts, models, dependencies or other material. These retain
 their respective licenses and rights. Artwork appearing in product screenshots
-is not a separately licensed asset pack. Previously granted rights in earlier
-branding assets are not withdrawn by the new policy.
+is not a separately licensed asset pack.
 
 Third-party license notices must be retained. In particular, the optional landing
 page includes OFL-licensed fonts; its animation uses native browser APIs. See

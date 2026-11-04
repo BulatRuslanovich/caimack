@@ -257,6 +257,3 @@ keyPassword=...
 ## License
 
 AGPL-3.0-only — see [LICENSE](LICENSE) and [LICENSING.md](LICENSING.md).
-
-Releases through v1.0.1 remain available under their original MIT terms.
-The Caimack name and visual identity are covered by the [brand policy](TRADEMARKS.md).

@@ -13,5 +13,4 @@ or a grant for unrestricted proprietary relicensing.
 Before sending a pull request, run the relevant checks documented in README.md.
 Keep changes focused and describe what changed and how you verified it.
 
-See [LICENSING.md](LICENSING.md) for the transition from earlier MIT releases and
-[TRADEMARKS.md](TRADEMARKS.md) for use of the Caimack name and visual identity.
+See [LICENSING.md](LICENSING.md) for the project's licensing details.
