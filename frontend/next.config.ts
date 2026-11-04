@@ -7,7 +7,7 @@ import type { NextConfig } from "next";
 const backendUrl = process.env.BACKEND_INTERNAL_URL ?? "http://127.0.0.1:5199";
 const proxyApiInDev = process.env.NEXT_DISABLE_API_PROXY !== "1";
 const sourceUrl = new URL(
-  process.env.CAIMACK_SOURCE_URL || "https://github.com/BulatRuslanovich/music-streaming",
+  process.env.CAIMACK_SOURCE_URL || "https://github.com/BulatRuslanovich/caimack",
 );
 if (!["http:", "https:"].includes(sourceUrl.protocol)) {
   throw new Error("CAIMACK_SOURCE_URL must be an HTTP(S) URL to this build's source code.");

@@ -94,7 +94,7 @@ services:
         condition: service_completed_successfully
     environment:
       STORAGE_ROOT: /storage
-      CLAP_MODEL_URL: ${CLAP_MODEL_URL:-https://github.com/BulatRuslanovich/music-streaming/releases/download/clap-model-v1}
+      CLAP_MODEL_URL: ${CLAP_MODEL_URL:-https://github.com/BulatRuslanovich/caimack/releases/download/clap-model-v1}
       RUST_LOG: ${RUST_LOG:-info}
     volumes:
       - ${MUSIC_STORAGE_PATH:-./storage}:/storage
@@ -127,7 +127,7 @@ services:
       OWNER_RESET_PASSWORD: ${OWNER_RESET_PASSWORD:-false}
       LIBRARY_SCAN_INTERVAL_MINUTES: ${LIBRARY_SCAN_INTERVAL_MINUTES:-60}
       BACKGROUND_HEAVY_JOBS: ${BACKGROUND_HEAVY_JOBS:-}
-      CLAP_MODEL_URL: ${CLAP_MODEL_URL-https://github.com/BulatRuslanovich/music-streaming/releases/download/clap-model-v1}
+      CLAP_MODEL_URL: ${CLAP_MODEL_URL-https://github.com/BulatRuslanovich/caimack/releases/download/clap-model-v1}
       RUST_LOG: ${RUST_LOG:-info}
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
@@ -144,7 +144,7 @@ services:
     build:
       context: ./frontend
       args:
-        CAIMACK_SOURCE_URL: ${CAIMACK_SOURCE_URL:-https://github.com/BulatRuslanovich/music-streaming}
+        CAIMACK_SOURCE_URL: ${CAIMACK_SOURCE_URL:-https://github.com/BulatRuslanovich/caimack}
     restart: unless-stopped
     depends_on:
       backend:

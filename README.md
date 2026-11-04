@@ -99,8 +99,8 @@ background playback, offline downloads and Android Auto.
 You'll need Docker with Compose v2 and a domain pointing at your server.
 
 ```bash
-git clone https://github.com/BulatRuslanovich/music-streaming.git
-cd music-streaming
+git clone https://github.com/BulatRuslanovich/caimack.git
+cd caimack
 ./setup.sh
 ```
 

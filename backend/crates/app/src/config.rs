@@ -54,7 +54,7 @@ impl DatabaseConfig {
 }
 
 pub const CLAP_MODEL_RELEASE_URL: &str =
-    "https://github.com/BulatRuslanovich/music-streaming/releases/download/clap-model-v1";
+    "https://github.com/BulatRuslanovich/caimack/releases/download/clap-model-v1";
 
 #[derive(Debug, Clone)]
 pub struct ModelConfig {

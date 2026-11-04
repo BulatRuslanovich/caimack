@@ -19,7 +19,7 @@ val appVersion = providers.fileContents(rootProject.layout.projectDirectory.file
 
 val appSourceUrl = providers.gradleProperty("caimackSourceUrl")
     .orElse(providers.environmentVariable("CAIMACK_SOURCE_URL"))
-    .getOrElse("https://github.com/BulatRuslanovich/music-streaming")
+    .getOrElse("https://github.com/BulatRuslanovich/caimack")
 val sourceUri = URI(appSourceUrl)
 require(sourceUri.scheme in listOf("http", "https") && sourceUri.host != null) {
     "CAIMACK_SOURCE_URL must be an HTTP(S) URL to this build's source code."
