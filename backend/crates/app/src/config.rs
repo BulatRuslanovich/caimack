@@ -53,8 +53,7 @@ impl DatabaseConfig {
     }
 }
 
-pub const CLAP_MODEL_RELEASE_URL: &str =
-    "https://github.com/BulatRuslanovich/caimack/releases/download/clap-model-v1";
+pub const CLAP_MODEL_RELEASE_URL: &str = "https://github.com/BulatRuslanovich/caimack/releases/download/clap-model-v1";
 
 #[derive(Debug, Clone)]
 pub struct ModelConfig {
