@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n                       SELECT 1 FROM refresh_tokens\n                       WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > $2 AND session_id = $3\n                   ) AS \"exists!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "712fc88674d03a4d2fa567a2bdd7b54cf0fd2f89c15bfb0ca48cffe36d069da8"
+}

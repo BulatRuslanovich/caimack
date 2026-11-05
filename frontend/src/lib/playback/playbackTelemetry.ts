@@ -8,6 +8,8 @@ import type { Track } from "@/lib/types";
 export interface ListeningTracker {
   begin(track: Track): void;
   accumulate(currentTime: number): void;
+  reposition(currentTime: number): void;
+  listenedSeconds(): number;
   finish(type: "trackCompleted" | "trackSkipped"): void;
 }
 
@@ -47,6 +49,10 @@ export function createListeningTracker(record = recordEvent): ListeningTracker {
     });
 
   return {
+    listenedSeconds: () => Math.floor(played.seconds),
+    reposition(currentTime) {
+      played.position = currentTime;
+    },
     begin(track) {
       const source = sourceOf(track.id);
       played = {

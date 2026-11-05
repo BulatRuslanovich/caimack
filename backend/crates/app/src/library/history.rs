@@ -31,6 +31,7 @@ pub struct HistoryEntryDto {
 pub struct RecordPlayRequest {
     pub track_id: Uuid,
     pub playback_position: i32,
+    pub listened_seconds: i32,
 }
 
 pub async fn list(db: &PgPool, user: Uuid, page: PageRequest) -> AppResult<Paged<HistoryEntryDto>> {
@@ -87,12 +88,14 @@ pub async fn recent(db: &PgPool, user: Uuid, page: PageRequest) -> AppResult<Pag
 }
 
 pub async fn record(db: &PgPool, user: Uuid, request: RecordPlayRequest) -> AppResult<()> {
-    if request.playback_position < THRESHOLD_SECONDS {
-        return Err(
-            AppError::validation("A play is only recorded after {0} seconds of listening.").arg(THRESHOLD_SECONDS)
-        );
+    let duration = sqlx::query_scalar!("SELECT duration_seconds FROM tracks WHERE id = $1", request.track_id)
+        .fetch_optional(db)
+        .await?
+        .ok_or_else(|| AppError::not_found("Track not found."))?;
+    let threshold = THRESHOLD_SECONDS.min(duration.saturating_sub(1).max(1));
+    if request.playback_position < 0 || request.listened_seconds < threshold {
+        return Err(AppError::validation("A play is only recorded after {0} seconds of listening.").arg(threshold));
     }
-    tracks::require(db, request.track_id).await?;
 
     let now = Utc::now();
     let mut tx = db.begin().await?;

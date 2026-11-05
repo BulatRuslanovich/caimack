@@ -82,7 +82,9 @@ fn russian(template: &str) -> Option<&'static str> {
         "Use 5–20 characters for the username: lower-case letters, digits, . - _" => {
             "Имя пользователя — 5–20 символов: строчные латинские буквы, цифры, . - _"
         }
-        "The password must be 8 to 72 characters long." => "Пароль — от 8 до 72 символов.",
+        "The password must contain at least 8 characters and at most 72 UTF-8 bytes." => {
+            "Пароль должен содержать не меньше 8 символов и не больше 72 байт UTF-8."
+        }
         "The current password is not correct." => "Текущий пароль неверный.",
         "Missing refresh token." => "Нужно войти заново.",
         "Refresh token is invalid or expired." => "Нужно войти заново.",
@@ -94,6 +96,12 @@ fn russian(template: &str) -> Option<&'static str> {
         "Artist not found." => "Исполнитель не найден.",
         "Genre not found." => "Жанр не найден.",
         "Playlist not found." => "Плейлист не найден.",
+        "The playlist name must contain 1 to 200 characters." => {
+            "Название плейлиста должно содержать от 1 до 200 символов."
+        }
+        "The playlist description must not exceed 1000 characters." => {
+            "Описание плейлиста не должно превышать 1000 символов."
+        }
         "The track is not in this playlist." => "Этого трека нет в плейлисте.",
         "At least one track id is required." => "Не выбрано ни одного трека.",
         "No tracks were selected." => "Не выбрано ни одного трека.",

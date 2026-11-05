@@ -17,7 +17,6 @@ use crate::{AppError, AppResult, json};
 
 const DEFAULT_DAYS: i64 = 7;
 const MAX_DAYS: i64 = 30;
-const PASSWORD_LENGTH: std::ops::RangeInclusive<usize> = 8..=72;
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -147,9 +146,7 @@ impl AuthService {
                 "Use 5–20 characters for the username: lower-case letters, digits, . - _",
             ));
         }
-        if !PASSWORD_LENGTH.contains(&request.password.len()) {
-            return Err(AppError::validation("The password must be 8 to 72 characters long."));
-        }
+        password::validate(&request.password)?;
 
         let mut tx = self.db.begin().await?;
         let invitation = sqlx::query!(

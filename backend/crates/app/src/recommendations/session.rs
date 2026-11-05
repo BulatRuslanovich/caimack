@@ -61,7 +61,10 @@ mod tests {
     use chrono::Utc;
 
     #[sqlx::test(migrations = "../../../db/migrations")]
-    #[ignore = "requires a local PostgreSQL DATABASE_URL with CREATE DATABASE permission"]
+    #[cfg_attr(
+        not(feature = "integration-tests"),
+        ignore = "requires a local PostgreSQL DATABASE_URL with CREATE DATABASE permission"
+    )]
     async fn sessions_are_ordered_and_isolated_between_users_and_devices(db: PgPool) -> crate::AppResult<()> {
         assert!(load(&db, Uuid::now_v7(), None).await?.is_empty());
         let (user, other_user, device, other_device, track, artist) =

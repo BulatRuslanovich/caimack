@@ -86,6 +86,8 @@ export function AuthProvider({
   useEffect(
     () =>
       onSessionExpired(() => {
+        cachedHint = null;
+        void clearStreamCache().catch(() => {});
         client.clear();
         setResolved({ user: null });
         router.replace("/login");

@@ -71,6 +71,15 @@ class ListeningTrackerTest {
     }
 
     @Test
+    fun `short seeks and restored positions do not count towards history`() {
+        tracker.begin("song", 210)
+        tracker.reposition(60.0)
+        tracker.accumulate(61.0)
+        tracker.reposition(62.0)
+        assertEquals(1, tracker.listenedSeconds)
+    }
+
+    @Test
     fun `backwards movement is not counted`() {
         tracker.begin("song", 210)
         tracker.accumulate(1.5)

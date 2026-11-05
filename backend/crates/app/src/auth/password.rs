@@ -5,14 +5,24 @@ use std::sync::LazyLock;
 
 use anyhow::Context;
 
-use crate::AppResult;
+use crate::{AppError, AppResult};
 
 const COST: u32 = 12;
 
 static ABSENT_ACCOUNT_HASH: LazyLock<String> =
     LazyLock::new(|| bcrypt::hash(uuid::Uuid::new_v4().to_string(), COST).unwrap_or_default());
 
+pub fn validate(password: &str) -> AppResult<()> {
+    if password.chars().count() < 8 || password.len() > 72 {
+        return Err(AppError::validation(
+            "The password must contain at least 8 characters and at most 72 UTF-8 bytes.",
+        ));
+    }
+    Ok(())
+}
+
 pub async fn hash(password: String) -> AppResult<String> {
+    validate(&password)?;
     let hashed = tokio::task::spawn_blocking(move || bcrypt::hash(password, COST))
         .await
         .context("Password hashing was interrupted")?
@@ -59,5 +69,19 @@ mod tests {
         let hashed = hash("correct horse".to_owned()).await?;
         assert!(verify("correct horse".to_owned(), Some(hashed)).await);
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn rejects_passwords_outside_the_policy_before_hashing() {
+        for password in [String::new(), "short".to_owned(), "я".repeat(4), "é".repeat(37)] {
+            assert!(matches!(hash(password).await, Err(crate::AppError::Validation(_))));
+        }
+    }
+
+    #[test]
+    fn accepts_passwords_at_the_utf8_length_boundaries() {
+        for password in ["password".to_owned(), "a".repeat(72), "я".repeat(36), "🔑".repeat(18)] {
+            assert!(validate(&password).is_ok());
+        }
     }
 }

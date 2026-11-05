@@ -160,7 +160,12 @@ class PlaybackService : MediaLibraryService() {
             override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) = showButtons(container)
 
             override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
-                if (reason == Player.DISCONTINUITY_REASON_SEEK) NowPlayingWidget.progress(this@PlaybackService, player.currentPosition, player.duration)
+                if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                    if (oldPosition.mediaItem?.mediaId == newPosition.mediaItem?.mediaId) {
+                        signals.tracker.reposition(newPosition.positionMs / 1000.0)
+                    }
+                    NowPlayingWidget.progress(this@PlaybackService, player.currentPosition, player.duration)
+                }
             }
 
             override fun onRepeatModeChanged(repeatMode: Int) = showButtons(container)
@@ -607,6 +612,7 @@ class PlaybackService : MediaLibraryService() {
         if (item.mediaId == listening) return
         listening = item.mediaId
         signals.begin(item.mediaId, secondsOf(item))
+        signals.tracker.reposition(player.currentPosition / 1000.0)
     }
 
     private fun save(container: AppContainer, player: Player) {

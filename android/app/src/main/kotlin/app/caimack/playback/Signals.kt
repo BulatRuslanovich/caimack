@@ -50,10 +50,11 @@ class Signals(private val api: CaimackApi, private val scope: CoroutineScope, pr
 
     fun progress(trackId: String, durationSeconds: Int, positionSeconds: Double) {
         tracker.accumulate(positionSeconds)
-        if (recorded == trackId || positionSeconds < ListeningTracker.historyThreshold(durationSeconds)) return
+        val listened = tracker.listenedSeconds
+        if (recorded == trackId || listened < ListeningTracker.historyThreshold(durationSeconds)) return
 
         recorded = trackId
-        scope.launch { runCatching { api.recordPlay(HistoryEntryRequest(trackId, positionSeconds.toInt())) } }
+        scope.launch { runCatching { api.recordPlay(HistoryEntryRequest(trackId, positionSeconds.toInt(), listened)) } }
     }
 
     fun begin(trackId: String, durationSeconds: Int) {

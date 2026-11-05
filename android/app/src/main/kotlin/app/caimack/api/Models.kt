@@ -207,7 +207,7 @@ data class PlaybackSignal(
 data class SignalBatch(val events: List<PlaybackSignal>)
 
 @Serializable
-data class HistoryEntryRequest(val trackId: String, val playbackPosition: Int)
+data class HistoryEntryRequest(val trackId: String, val playbackPosition: Int, val listenedSeconds: Int)
 
 @Serializable
 data class Mood(val key: String, val albumIds: List<String> = emptyList())

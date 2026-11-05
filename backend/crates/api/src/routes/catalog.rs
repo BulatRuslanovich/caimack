@@ -64,11 +64,31 @@ struct TrackListQuery {
     paging: Paging,
     q: Option<String>,
     sort: Option<String>,
+    #[serde(flatten)]
+    filter: TrackFilterQuery,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TrackFilterQuery {
     #[serde(default, deserialize_with = "optional")]
     bpm_min: Option<f64>,
     #[serde(default, deserialize_with = "optional")]
     bpm_max: Option<f64>,
     key: Option<String>,
+}
+
+impl TrackFilterQuery {
+    fn parse(&self) -> Result<TrackFilter, Box<Response>> {
+        let mut keys = Vec::new();
+        for code in self.key.iter().flat_map(|list| list.split(',')).map(str::trim).filter(|code| !code.is_empty()) {
+            match MusicalKey::from_camelot(code) {
+                Some(key) => keys.push(key),
+                None => return Err(Box::new(invalid_query("key", code))),
+            }
+        }
+        Ok(TrackFilter { bpm_min: self.bpm_min, bpm_max: self.bpm_max, keys })
+    }
 }
 
 async fn list_tracks(
@@ -83,14 +103,10 @@ async fn list_tracks(
             None => return invalid_query("sort", text),
         },
     };
-    let mut keys = Vec::new();
-    for code in query.key.iter().flat_map(|list| list.split(',')).map(str::trim).filter(|code| !code.is_empty()) {
-        match MusicalKey::from_camelot(code) {
-            Some(key) => keys.push(key),
-            None => return invalid_query("key", code),
-        }
-    }
-    let filter = TrackFilter { bpm_min: query.bpm_min, bpm_max: query.bpm_max, keys };
+    let filter = match query.filter.parse() {
+        Ok(filter) => filter,
+        Err(error) => return *error,
+    };
     let result = tracks::list(&state.db, user.user_id, query.paging.request(), sort, query.q.as_deref(), &filter).await;
     respond(result)
 }
@@ -107,14 +123,20 @@ struct ShuffleQuery {
     #[serde(default, deserialize_with = "optional")]
     limit: Option<i64>,
     q: Option<String>,
+    #[serde(flatten)]
+    filter: TrackFilterQuery,
 }
 
 async fn shuffle_tracks(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     Query(query): Query<ShuffleQuery>,
-) -> ApiResult<impl IntoResponse> {
-    Ok(Json(tracks::shuffle(&state.db, user.user_id, query.limit, query.q.as_deref()).await?))
+) -> Response {
+    let filter = match query.filter.parse() {
+        Ok(filter) => filter,
+        Err(error) => return *error,
+    };
+    respond(tracks::shuffle(&state.db, user.user_id, query.limit, query.q.as_deref(), &filter).await)
 }
 
 #[derive(Deserialize)]

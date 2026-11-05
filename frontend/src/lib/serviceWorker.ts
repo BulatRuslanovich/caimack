@@ -9,7 +9,9 @@ export async function clearStreamCache(): Promise<void> {
     await Promise.all([
       caches.delete("caimack-shell-v1"),
       caches.delete("caimack-hls-v1"),
+      caches.delete("caimack-hls-v2"),
       caches.delete("caimack-data-v1"),
+      caches.delete("caimack-data-v2"),
       caches.delete("caimack-images-v1"),
     ]);
   }

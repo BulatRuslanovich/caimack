@@ -94,16 +94,28 @@ pub async fn set_active(db: &PgPool, auth: &AuthService, id: Uuid, active: bool)
     Ok(user)
 }
 
-pub async fn set_admin(db: &PgPool, id: Uuid, is_admin: bool) -> AppResult<AuthUserDto> {
+pub async fn set_admin(db: &PgPool, auth: &AuthService, id: Uuid, is_admin: bool) -> AppResult<AuthUserDto> {
+    let mut tx = db.begin().await?;
+    let previous = sqlx::query_scalar!("SELECT is_admin FROM users WHERE id = $1 FOR UPDATE", id)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| AppError::not_found("User not found."))?;
     let user = sqlx::query_as!(
         AuthUserDto,
         "UPDATE users SET is_admin = $2 WHERE id = $1 RETURNING id, username, is_admin, is_active, created_at",
         id,
         is_admin
     )
-    .fetch_optional(db)
+    .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| AppError::not_found("User not found."))?;
+    if previous != is_admin {
+        revoke_tokens(&mut tx, id).await?;
+    }
+    tx.commit().await?;
+    if previous != is_admin {
+        auth.forget_user_sessions(id);
+    }
 
     tracing::info!("User {} is {} an administrator", user.username, if is_admin { "now" } else { "no longer" });
     Ok(user)
@@ -129,8 +141,10 @@ pub async fn revoke_sessions(db: &PgPool, auth: &AuthService, id: Uuid) -> AppRe
         .fetch_optional(db)
         .await?
         .ok_or_else(|| AppError::not_found("User not found."))?;
-    let mut conn = db.acquire().await?;
-    revoke_tokens(&mut conn, id).await?;
+    let mut tx = db.begin().await?;
+    crate::auth::lock_user(&mut tx, id).await?;
+    revoke_tokens(&mut tx, id).await?;
+    tx.commit().await?;
     auth.forget_user_sessions(id);
 
     tracing::info!("All sessions of user {} were revoked", user.username);

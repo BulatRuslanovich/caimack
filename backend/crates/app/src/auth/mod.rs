@@ -53,6 +53,25 @@ fn clip(value: Option<&str>, limit: usize) -> Option<String> {
     value.map(str::trim).filter(|value| !value.is_empty()).map(|value| value.chars().take(limit).collect())
 }
 
+pub(crate) async fn lock_user(conn: &mut PgConnection, user: Uuid) -> AppResult<()> {
+    // Rotation and revocation lock the user first, so a refresh cannot survive a concurrent logout.
+    sqlx::query!("SELECT id FROM users WHERE id = $1 FOR UPDATE", user)
+        .fetch_optional(conn)
+        .await?
+        .map(|_| ())
+        .ok_or_else(|| AppError::not_found("User not found."))
+}
+
+async fn lock_token_owner(conn: &mut PgConnection, token_hash: &str) -> AppResult<Option<Uuid>> {
+    let owner = sqlx::query_scalar!("SELECT user_id FROM refresh_tokens WHERE token_hash = $1", token_hash)
+        .fetch_optional(&mut *conn)
+        .await?;
+    if let Some(user) = owner {
+        lock_user(conn, user).await?;
+    }
+    Ok(owner)
+}
+
 struct SessionStart {
     session_id: Uuid,
     device_name: Option<String>,
@@ -162,13 +181,21 @@ impl AuthService {
             return Err(AppError::forbidden("This account has been deactivated."));
         }
 
-        tracing::info!("User {} signed in", user.username);
-        journal::record(&self.db, attempt(Some(user.id), None), client).await;
-
         let mut tx = self.db.begin().await?;
-        let user = UserDto { id: user.id, username: user.username, is_admin: user.is_admin };
+        let current = sqlx::query!(
+            "SELECT id, username, password_hash, is_admin, is_active FROM users WHERE id = $1 FOR UPDATE",
+            user.id
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+        if current.password_hash != user.password_hash || !current.is_active {
+            return Err(AppError::authentication("Invalid username or password."));
+        }
+        let user = UserDto { id: current.id, username: current.username, is_admin: current.is_admin };
         let result = self.issue(&mut tx, user, SessionStart::new(client)).await?;
         tx.commit().await?;
+        tracing::info!("User {} signed in", result.user.username);
+        journal::record(&self.db, attempt(Some(result.user.id), None), client).await;
         Ok(result)
     }
 
@@ -180,6 +207,10 @@ impl AuthService {
 
         let now = Utc::now();
         let mut tx = self.db.begin().await?;
+        let token_hash = hash_refresh_token(raw);
+        if lock_token_owner(&mut tx, &token_hash).await?.is_none() {
+            return Err(AppError::authentication("Refresh token is invalid or expired."));
+        }
 
         let stored = sqlx::query!(
             r#"SELECT t.id, t.user_id, t.expires_at, t.revoked_at, t.session_id, t.device_name, t.user_agent, t.ip,
@@ -187,7 +218,7 @@ impl AuthService {
                FROM refresh_tokens t JOIN users u ON u.id = t.user_id
                WHERE t.token_hash = $1
                FOR UPDATE OF t"#,
-            hash_refresh_token(raw)
+            token_hash
         )
         .fetch_optional(&mut *tx)
         .await?;
@@ -201,10 +232,11 @@ impl AuthService {
             let session_lives_on = sqlx::query_scalar!(
                 r#"SELECT EXISTS (
                        SELECT 1 FROM refresh_tokens
-                       WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > $2
+                       WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > $2 AND session_id = $3
                    ) AS "exists!""#,
                 stored.user_id,
-                now
+                now,
+                stored.session_id
             )
             .fetch_one(&mut *tx)
             .await?;
@@ -285,27 +317,33 @@ impl AuthService {
     }
 
     pub async fn end_session(&self, user: Uuid, session: Uuid) -> AppResult<()> {
+        let mut tx = self.db.begin().await?;
+        lock_user(&mut tx, user).await?;
         let ended = sqlx::query!("DELETE FROM refresh_tokens WHERE user_id = $1 AND session_id = $2", user, session)
-            .execute(&self.db)
+            .execute(&mut *tx)
             .await?
             .rows_affected();
         if ended == 0 {
             return Err(AppError::not_found("The requested resource was not found."));
         }
+        tx.commit().await?;
         self.sessions.forget_user(user);
         Ok(())
     }
 
     pub async fn end_other_sessions(&self, user: Uuid, current_token: Uuid) -> AppResult<u64> {
+        let mut tx = self.db.begin().await?;
+        lock_user(&mut tx, user).await?;
         let ended = sqlx::query!(
             "DELETE FROM refresh_tokens WHERE user_id = $1
                AND session_id IS DISTINCT FROM (SELECT session_id FROM refresh_tokens WHERE id = $2)",
             user,
             current_token
         )
-        .execute(&self.db)
+        .execute(&mut *tx)
         .await?
         .rows_affected();
+        tx.commit().await?;
         self.sessions.forget_user(user);
         Ok(ended)
     }
@@ -319,17 +357,23 @@ impl AuthService {
             return Ok(());
         };
 
-        let removed = sqlx::query!(
-            "DELETE FROM refresh_tokens WHERE token_hash = $1 RETURNING id, user_id",
-            hash_refresh_token(raw)
+        let mut tx = self.db.begin().await?;
+        let token_hash = hash_refresh_token(raw);
+        let Some(user) = lock_token_owner(&mut tx, &token_hash).await? else {
+            return Ok(());
+        };
+        sqlx::query!(
+            "DELETE FROM refresh_tokens WHERE user_id = $1 AND session_id =
+                (SELECT session_id FROM refresh_tokens WHERE token_hash = $2)",
+            user,
+            token_hash
         )
-        .fetch_optional(&self.db)
+        .execute(&mut *tx)
         .await?;
+        tx.commit().await?;
 
-        if let Some(removed) = removed {
-            self.sessions.forget(removed.id);
-            tracing::info!("User {} signed out", removed.user_id);
-        }
+        self.sessions.forget_user(user);
+        tracing::info!("User {user} signed out");
         Ok(())
     }
 
@@ -346,7 +390,7 @@ impl AuthService {
             .ok_or_else(|| AppError::not_found("User not found."))?;
 
         self.throttle.check_password_change(user_id)?;
-        if !password::verify(current.to_owned(), Some(user.password_hash)).await {
+        if !password::verify(current.to_owned(), Some(user.password_hash.clone())).await {
             self.throttle.password_change_failed(user_id);
             return Err(AppError::forbidden("The current password is not correct."));
         }
@@ -355,6 +399,12 @@ impl AuthService {
         let new_hash = password::hash(new.to_owned()).await?;
 
         let mut tx = self.db.begin().await?;
+        let locked = sqlx::query!("SELECT password_hash, is_admin FROM users WHERE id = $1 FOR UPDATE", user_id)
+            .fetch_one(&mut *tx)
+            .await?;
+        if locked.password_hash != user.password_hash {
+            return Err(AppError::forbidden("The current password is not correct."));
+        }
         let start = sqlx::query!(
             "SELECT session_id, device_name, user_agent, ip, long_lived, signed_in_at FROM refresh_tokens
              WHERE user_id = $1 AND id = $2",
@@ -376,7 +426,7 @@ impl AuthService {
         );
         sqlx::query!("UPDATE users SET password_hash = $2 WHERE id = $1", user_id, new_hash).execute(&mut *tx).await?;
         sqlx::query!("DELETE FROM refresh_tokens WHERE user_id = $1", user_id).execute(&mut *tx).await?;
-        let user = UserDto { id: user.id, username: user.username, is_admin: user.is_admin };
+        let user = UserDto { id: user.id, username: user.username, is_admin: locked.is_admin };
         let result = self.issue(&mut tx, user, start).await?;
         tx.commit().await?;
 

@@ -175,7 +175,7 @@ export const ru: Dictionary = {
 
   "form.required": "Заполните это поле.",
   "form.tooLong": "Слишком длинно.",
-  "form.passwordShort": "Не короче {count} символов.",
+  "form.passwordShort": "Не меньше {count} символов и не больше 72 байт UTF-8.",
   "form.username": "5–20 символов: строчные латинские буквы, цифры, . - _",
   "form.year": "Год от {min} до {max}.",
 

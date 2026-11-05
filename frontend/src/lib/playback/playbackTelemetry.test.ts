@@ -159,6 +159,23 @@ describe("record", () => {
 });
 
 describe("historyThresholdFor", () => {
+  it("does not count small seeks or restored positions as heard time", () => {
+    tracker.begin(song);
+    tracker.reposition(60);
+    tracker.accumulate(61);
+    tracker.reposition(62);
+    expect(tracker.listenedSeconds()).toBe(1);
+  });
+  it("counts heard time separately from the position after seeking", () => {
+    tracker.begin(song);
+    tracker.accumulate(1);
+    tracker.accumulate(2);
+    tracker.accumulate(60);
+    expect(tracker.listenedSeconds()).toBe(2);
+    for (let at = 61; at <= 88; at += 1) tracker.accumulate(at);
+    expect(tracker.listenedSeconds()).toBe(30);
+  });
+
   it("uses the full threshold for a track long enough to reach it", () => {
     expect(historyThresholdFor(240)).toBe(30);
   });

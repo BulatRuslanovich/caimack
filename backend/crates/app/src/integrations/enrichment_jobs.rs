@@ -91,7 +91,10 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "../../../db/migrations")]
-    #[ignore = "requires a local PostgreSQL DATABASE_URL with CREATE DATABASE permission"]
+    #[cfg_attr(
+        not(feature = "integration-tests"),
+        ignore = "requires a local PostgreSQL DATABASE_URL with CREATE DATABASE permission"
+    )]
     async fn durable_jobs_recover_leases_deduplicate_and_reject_stale_completion(db: PgPool) -> sqlx::Result<()> {
         let artist = Uuid::now_v7();
         sqlx::query("INSERT INTO artists(id,name,normalized_name,created_at) VALUES ($1,'Test','test',now())")
@@ -123,7 +126,10 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "../../../db/migrations")]
-    #[ignore = "requires a local PostgreSQL DATABASE_URL with CREATE DATABASE permission"]
+    #[cfg_attr(
+        not(feature = "integration-tests"),
+        ignore = "requires a local PostgreSQL DATABASE_URL with CREATE DATABASE permission"
+    )]
     async fn historical_tracks_are_discovered_without_reimporting_audio(db: PgPool) -> sqlx::Result<()> {
         let artist = Uuid::now_v7();
         let track = Uuid::now_v7();

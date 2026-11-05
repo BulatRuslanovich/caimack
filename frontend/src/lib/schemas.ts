@@ -17,6 +17,13 @@ export const limits = {
 
 const trimmed = (max: number) => z.string().trim().max(max);
 const required = (max: number) => trimmed(max).min(1);
+const newPassword = z
+  .string()
+  .refine(
+    (value) =>
+      Array.from(value).length >= limits.password.min &&
+      new TextEncoder().encode(value).byteLength <= limits.password.max,
+  );
 
 const optionalNumber = z
   .string()
@@ -67,7 +74,7 @@ export const newUserSchema = z.object({
     .trim()
     .toLowerCase()
     .regex(/^[a-z0-9][a-z0-9._-]{4,19}$/),
-  password: z.string().min(limits.password.min).max(limits.password.max),
+  password: newPassword,
   isAdmin: z.boolean(),
 });
 
@@ -78,7 +85,7 @@ export const inviteSchema = z
       .trim()
       .toLowerCase()
       .regex(/^[a-z0-9][a-z0-9._-]{4,19}$/),
-    password: z.string().min(limits.password.min).max(limits.password.max),
+    password: newPassword,
     repeat: z.string(),
   })
   .refine((values) => values.password === values.repeat, {
@@ -95,7 +102,7 @@ export const signInSchema = z.object({
 
 export const passwordResetSchema = z
   .object({
-    next: z.string().min(limits.password.min).max(limits.password.max),
+    next: newPassword,
     repeat: z.string(),
   })
   .refine((values) => values.next === values.repeat, {
@@ -106,7 +113,7 @@ export const passwordResetSchema = z
 export const passwordChangeSchema = z
   .object({
     current: z.string().min(1),
-    next: z.string().min(limits.password.min).max(limits.password.max),
+    next: newPassword,
     repeat: z.string(),
   })
   .refine((values) => values.next === values.repeat, {

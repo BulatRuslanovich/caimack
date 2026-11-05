@@ -20,6 +20,7 @@ class ListeningTracker(
     private var source: String? = null
     private var duration = 0
     private var listened = 0.0
+    val listenedSeconds: Int get() = listened.toInt()
     private var position = 0.0
     private var heartbeatAt = 0.0
     private val heard = mutableSetOf<String>()
@@ -50,6 +51,10 @@ class ListeningTracker(
             heartbeatAt = listened
             progress("trackPlayed")
         }
+    }
+
+    fun reposition(seconds: Double) {
+        position = seconds
     }
 
     fun finish(type: String) {

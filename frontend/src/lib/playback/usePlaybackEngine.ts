@@ -156,11 +156,12 @@ export function usePlaybackEngine({
       clearSwitchTimer();
 
       const clamped = Math.max(0, Math.min(seconds, audio.duration || seconds));
+      tracker.reposition(clamped);
       audio.currentTime = clamped;
       setPosition(clamped);
       positionRef.current = clamped;
     },
-    [crossfader, clearSwitchTimer],
+    [crossfader, clearSwitchTimer, tracker],
   );
 
   const seekBy = useCallback(
@@ -344,6 +345,7 @@ export function usePlaybackEngine({
       recordedRef.current = null;
       tracker.finish("trackSkipped");
       tracker.begin(currentTrack);
+      tracker.reposition(incoming.currentTime);
 
       pendingSeekRef.current = null;
       positionRef.current = incoming.currentTime;
@@ -380,6 +382,7 @@ export function usePlaybackEngine({
     const startAt = staysOnSameTrack
       ? (pendingSeekRef.current ?? (audio.currentTime || positionRef.current))
       : (pendingSeekRef.current ?? 0);
+    tracker.reposition(startAt);
     pendingSeekRef.current = null;
 
     audio.dataset.trackId = currentTrack.id;
@@ -443,17 +446,20 @@ export function usePlaybackEngine({
     if (standby && standby.trackId !== nextTrack?.id) dropStandby();
   }, [nextTrack, dropStandby]);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    const primary = primaryRef.current;
+    const secondary = secondaryRef.current;
+    return () => {
+      primary?.pause();
+      secondary?.pause();
       if (retryTimerRef.current !== null) window.clearTimeout(retryTimerRef.current);
       if (switchTimerRef.current !== null) window.clearTimeout(switchTimerRef.current);
       clearWaitingTimer();
       crossfader.finish();
       standbyRef.current?.playback.destroy();
       adaptiveRef.current?.destroy();
-    },
-    [crossfader, clearWaitingTimer],
-  );
+    };
+  }, [crossfader, clearWaitingTimer]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -587,7 +593,8 @@ export function usePlaybackEngine({
     if (!audio) return;
 
     const at = audio.currentTime;
-    tracker.accumulate(at);
+    if (audio.paused || audio.seeking) tracker.reposition(at);
+    else tracker.accumulate(at);
     crossfader.tick();
     if (!audio.paused && audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) setWaiting(false);
     if (scrubRef.current !== null) return;
@@ -598,11 +605,15 @@ export function usePlaybackEngine({
     const track = currentTrack;
     if (!track) return;
 
-    if (recordedRef.current !== track.id && at >= historyThresholdFor(track.durationSeconds)) {
+    const listened = tracker.listenedSeconds();
+    if (
+      recordedRef.current !== track.id &&
+      listened >= historyThresholdFor(track.durationSeconds)
+    ) {
       recordedRef.current = track.id;
 
       void api
-        .recordPlay(track.id, Math.floor(at))
+        .recordPlay(track.id, Math.floor(at), listened)
         .then(() => invalidate("history"))
         .catch(() => {});
     }
@@ -783,6 +794,7 @@ export function usePlaybackEngine({
   const audioProps: ComponentPropsWithoutRef<"audio"> = {
     preload: "auto",
     onTimeUpdate: (event) => fromActive(event) && handleTimeUpdate(),
+    onSeeking: (event) => fromActive(event) && tracker.reposition(event.currentTarget.currentTime),
     onProgress: (event) => fromActive(event) && handleProgress(),
     onLoadedMetadata: (event) =>
       fromActive(event) && setDuration(event.currentTarget.duration || 0),

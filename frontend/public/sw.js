@@ -81,7 +81,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (IMAGE.test(url.pathname)) {
-    event.respondWith(cacheFirst(event, request, IMAGE_CACHE));
+    event.respondWith(image(event, request));
     return;
   }
 
@@ -236,6 +236,25 @@ async function cacheFirst(event, request, cacheName) {
     if (cacheName === IMAGE_CACHE) event.waitUntil(trimEntries(cache, IMAGE_ENTRY_BUDGET));
   }
   return response;
+}
+
+async function image(event, request) {
+  const cache = await caches.open(IMAGE_CACHE);
+  try {
+    const response = await fetch(new Request(request, { cache: "no-cache" }));
+    if (response.ok) {
+      const saved = response.clone();
+      event.waitUntil(
+        cache
+          .put(request, saved)
+          .then(() => trimEntries(cache, IMAGE_ENTRY_BUDGET))
+          .catch(() => {}),
+      );
+    }
+    return response;
+  } catch {
+    return (await cache.match(request)) ?? Response.error();
+  }
 }
 
 async function shell(event, request) {

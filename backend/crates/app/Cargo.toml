@@ -6,6 +6,9 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[features]
+integration-tests = []
+
 [dependencies]
 anyhow.workspace = true
 base64.workspace = true

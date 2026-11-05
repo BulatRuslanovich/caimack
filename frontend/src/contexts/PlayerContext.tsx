@@ -36,6 +36,7 @@ import { readPersistedPlayer, usePersistedPlayer } from "@/lib/playback/usePlaye
 import { useQueueEditing } from "@/lib/playback/useQueueEditing";
 import { useSleepTimer } from "@/lib/playback/useSleepTimer";
 import { useT } from "./I18nContext";
+import { useAuth } from "./AuthContext";
 import { useToast } from "@/lib/useToast";
 
 export type { RepeatMode } from "@/lib/playback/playerTypes";
@@ -49,6 +50,22 @@ const PlayerProgressContext = createContext<PlayerProgress | null>(null);
 const PlayerNowPlayingContext = createContext<PlayerNowPlaying | null>(null);
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  return (
+    <PlayerSessionProvider key={userId ?? "signed-out"} userId={userId}>
+      {children}
+    </PlayerSessionProvider>
+  );
+}
+
+function PlayerSessionProvider({
+  children,
+  userId,
+}: {
+  children: React.ReactNode;
+  userId: string | null;
+}) {
   const { notify, notifyError } = useToast();
   const t = useT();
 
@@ -152,7 +169,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect */
-    const saved = readPersistedPlayer();
+    const saved = readPersistedPlayer(userId);
     if (saved) {
       applyQueue(
         saved.queue,
@@ -176,9 +193,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
     setRestored(true);
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [applyQueue, restoreRadioSession, resumeAt]);
+  }, [userId, applyQueue, restoreRadioSession, resumeAt]);
 
   usePersistedPlayer(
+    userId,
     {
       queue,
       index: currentIndex,

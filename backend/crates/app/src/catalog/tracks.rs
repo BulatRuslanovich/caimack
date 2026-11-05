@@ -223,6 +223,23 @@ pub struct TrackFilter {
     pub keys: Vec<MusicalKey>,
 }
 
+fn push_filters(query: &mut QueryBuilder<Postgres>, term: Option<&SearchTerm>, filter: &TrackFilter) {
+    if let Some(term) = term {
+        query.push(" AND ");
+        push_track_match(query, term);
+    }
+    if let Some(min) = filter.bpm_min {
+        query.push(" AND c.tempo_bpm >= ").push_bind(min);
+    }
+    if let Some(max) = filter.bpm_max {
+        query.push(" AND c.tempo_bpm <= ").push_bind(max);
+    }
+    if !filter.keys.is_empty() {
+        let keys: Vec<i16> = filter.keys.iter().map(|key| i16::from(key.index)).collect();
+        query.push(" AND c.musical_key = ANY(").push_bind(keys).push(")");
+    }
+}
+
 pub async fn list(
     db: &PgPool,
     user: Uuid,
@@ -232,31 +249,12 @@ pub async fn list(
     filter: &TrackFilter,
 ) -> AppResult<Paged<TrackDto>> {
     let term = SearchTerm::for_filter(search);
-    let keys: Vec<i16> = filter.keys.iter().map(|key| i16::from(key.index)).collect();
     page(
         db,
         user,
         |query| {
-            let mut first = true;
-            let mut and = |query: &mut QueryBuilder<Postgres>| {
-                query.push(if std::mem::take(&mut first) { " WHERE " } else { " AND " });
-            };
-            if let Some(term) = &term {
-                and(query);
-                push_track_match(query, term);
-            }
-            if let Some(min) = filter.bpm_min {
-                and(query);
-                query.push("c.tempo_bpm >= ").push_bind(min);
-            }
-            if let Some(max) = filter.bpm_max {
-                and(query);
-                query.push("c.tempo_bpm <= ").push_bind(max);
-            }
-            if !keys.is_empty() {
-                and(query);
-                query.push("c.musical_key = ANY(").push_bind(keys.clone()).push(")");
-            }
+            query.push(" WHERE TRUE");
+            push_filters(query, term.as_ref(), filter);
         },
         |query| {
             query.push(sort.order_by());
@@ -266,7 +264,13 @@ pub async fn list(
     .await
 }
 
-pub async fn shuffle(db: &PgPool, user: Uuid, limit: Option<i64>, search: Option<&str>) -> AppResult<Vec<TrackDto>> {
+pub async fn shuffle(
+    db: &PgPool,
+    user: Uuid,
+    limit: Option<i64>,
+    search: Option<&str>,
+    filter: &TrackFilter,
+) -> AppResult<Vec<TrackDto>> {
     let take = match limit {
         Some(limit) if limit >= 1 => limit.min(MAX_SHUFFLE_TRACKS),
         _ => MAX_SHUFFLE_TRACKS,
@@ -278,10 +282,7 @@ pub async fn shuffle(db: &PgPool, user: Uuid, limit: Option<i64>, search: Option
         let mut query = select(user);
         query.push(if at_or_after { " WHERE t.shuffle_key >= " } else { " WHERE t.shuffle_key < " });
         query.push_bind(pivot);
-        if let Some(term) = &term {
-            query.push(" AND ");
-            push_track_match(&mut query, term);
-        }
+        push_filters(&mut query, term.as_ref(), filter);
         query.push(" ORDER BY t.shuffle_key, t.id LIMIT ").push_bind(take);
         query
     };

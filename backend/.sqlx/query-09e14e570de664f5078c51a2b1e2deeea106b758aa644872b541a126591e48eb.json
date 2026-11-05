@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT duration_seconds FROM tracks WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "duration_seconds",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "tracks",
+            "name": "duration_seconds"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "09e14e570de664f5078c51a2b1e2deeea106b758aa644872b541a126591e48eb"
+}

@@ -303,7 +303,7 @@ async fn set_user_role(
     RoutePath(id): RoutePath<Uuid>,
     Json(request): Json<RoleRequest>,
 ) -> ApiResult<impl IntoResponse> {
-    Ok(Json(admin::set_admin(&state.db, id, request.is_admin).await?))
+    Ok(Json(admin::set_admin(&state.db, &state.auth, id, request.is_admin).await?))
 }
 
 #[derive(Deserialize)]

@@ -66,6 +66,10 @@ export function TracksPage() {
   const [tempo, setTempo] = useState(ANY);
   const [key, setKey] = useState(ANY);
   const [page, setPage] = usePage([sort, search, tempo, key]);
+  const filter: TrackFilter = {
+    ...TEMPOS[tempo]?.filter,
+    key: key === ANY ? undefined : key,
+  };
 
   const tracks = useQuery(
     queries.tracks({
@@ -73,8 +77,7 @@ export function TracksPage() {
       pageSize: TRACK_PAGE_SIZE,
       sort,
       q: search || undefined,
-      ...TEMPOS[tempo]?.filter,
-      key: key === ANY ? undefined : key,
+      ...filter,
     }),
   );
   const filtered = Boolean(search) || tempo !== ANY || key !== ANY;
@@ -108,7 +111,7 @@ export function TracksPage() {
   }, [selecting, stopSelecting]);
 
   const shuffle = useMutation({
-    mutationFn: () => api.shuffleTracks({ q: search || undefined }),
+    mutationFn: () => api.shuffleTracks({ q: search || undefined, ...filter }),
     onSuccess: (shuffled) => {
       if (shuffled.length === 0) return;
 

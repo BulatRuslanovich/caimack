@@ -126,7 +126,7 @@ export const api = {
     params: PageParams & TrackFilter & { sort?: TrackSort; q?: string },
     signal?: AbortSignal,
   ) => request<Paged<Track>>(`/tracks${qs(params)}`, { signal }),
-  shuffleTracks: (params: { limit?: number; q?: string } = {}) =>
+  shuffleTracks: (params: TrackFilter & { limit?: number; q?: string } = {}) =>
     request<Track[]>(`/tracks/shuffle${qs(params)}`),
   artists: (params: PageParams & { q?: string }, signal?: AbortSignal) =>
     request<Paged<Artist>>(`/artists${qs(params)}`, { signal }),
@@ -224,8 +224,11 @@ export const api = {
 
   history: (params: PageParams) => request<Paged<HistoryEntry>>(`/history${qs(params)}`),
   recentlyPlayed: (params: PageParams) => request<Paged<Track>>(`/history/recent${qs(params)}`),
-  recordPlay: (trackId: string, playbackPosition: number) =>
-    request<void>("/history", { method: "POST", body: { trackId, playbackPosition } }),
+  recordPlay: (trackId: string, playbackPosition: number, listenedSeconds: number) =>
+    request<void>("/history", {
+      method: "POST",
+      body: { trackId, playbackPosition, listenedSeconds },
+    }),
   clearHistory: () => request<void>("/history", { method: "DELETE" }),
   reportPlayback: (report: PlaybackStateReport) =>
     request<void>("/playback/state", { method: "PUT", body: report }),

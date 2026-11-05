@@ -354,7 +354,7 @@ mod tests {
     use super::*;
 
     #[sqlx::test(migrations = "../../../db/migrations")]
-    #[ignore = "requires local PostgreSQL and ffmpeg"]
+    #[cfg_attr(not(feature = "integration-tests"), ignore = "requires local PostgreSQL and ffmpeg")]
     async fn embedded_art_repairs_old_tracks_and_missing_files_without_replacing_existing_art(
         db: PgPool,
     ) -> anyhow::Result<()> {

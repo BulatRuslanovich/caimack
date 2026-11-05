@@ -193,10 +193,20 @@ make backend
 make frontend
 ```
 
-`make help` lists everything. The one that matters before a push is `make check`: formatting,
-lint and both test suites, the same as CI. SQL in the backend is checked against the database at
+`make help` lists everything. Before a push, run `make check` for formatting, lint and the Rust/web
+tests, and `make test-db` for the PostgreSQL integration checks used by CI. SQL in the backend is checked against the database at
 compile time; after changing a query, run `make sqlx` so builds without a database (CI,
 Docker) see it.
+
+`make test-db` runs the Rust tests with PostgreSQL, including session revocation, catalog filters,
+history validation and background job recovery. CI runs this group automatically using
+`cargo test --workspace --all-features --locked`. The two tests that contact the real Deezer and
+LRCLIB services remain opt-in. Plain `cargo test --workspace --locked` also works without a database
+when compiled with `SQLX_OFFLINE=true`.
+
+Playback clients include accumulated `listenedSeconds` alongside `playbackPosition` in
+`POST /api/history`; seeking alone does not count as listening. Deploy matching web and Android
+clients with a backend that requires this field so history recording continues to work.
 
 To work on the frontend against another backend, point the dev proxy at it:
 

@@ -10,8 +10,6 @@ use crate::auth::password;
 use crate::config::OwnerConfig;
 use crate::text::normalize_username;
 
-const MIN_PASSWORD_LENGTH: usize = 8;
-
 pub async fn ensure_owner(db: &PgPool, owner: &OwnerConfig) -> anyhow::Result<()> {
     let username = normalize_username(&owner.username);
 
@@ -30,7 +28,10 @@ pub async fn ensure_owner(db: &PgPool, owner: &OwnerConfig) -> anyhow::Result<()
 
         if let Some(password) = owner.password.as_ref().filter(|_| owner.reset_password) {
             let hash = password::hash(password.clone()).await?;
-            sqlx::query!("UPDATE users SET password_hash = $2 WHERE id = $1", user.id, hash).execute(db).await?;
+            let mut tx = db.begin().await?;
+            sqlx::query!("UPDATE users SET password_hash = $2 WHERE id = $1", user.id, hash).execute(&mut *tx).await?;
+            sqlx::query!("DELETE FROM refresh_tokens WHERE user_id = $1", user.id).execute(&mut *tx).await?;
+            tx.commit().await?;
             tracing::warn!("Password for user {username} was reset from configuration");
         }
 
@@ -42,10 +43,6 @@ pub async fn ensure_owner(db: &PgPool, owner: &OwnerConfig) -> anyhow::Result<()
             "No user exists yet and OWNER_PASSWORD is not set. Set it (see .env.example) so the first account can be created."
         );
     };
-
-    if password.chars().count() < MIN_PASSWORD_LENGTH {
-        bail!("OWNER_PASSWORD must be at least {MIN_PASSWORD_LENGTH} characters long.");
-    }
 
     let hash = password::hash(password.clone()).await?;
     sqlx::query!(

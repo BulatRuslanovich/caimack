@@ -6,7 +6,7 @@
 import { useEffect, useRef } from "react";
 import { CROSSFADE_CHOICES } from "@/lib/playback/crossfade";
 import { validRadioSession } from "@/lib/playback/radioSession";
-import { readStoredJson, writeStoredJson } from "@/lib/storage";
+import { readStoredJson, writeStored, writeStoredJson } from "@/lib/storage";
 import type { RadioSessionState, RepeatMode } from "@/lib/playback/playerTypes";
 import type { Track } from "@/lib/types";
 
@@ -29,8 +29,11 @@ interface PersistedPlayer {
   radioSession?: RadioSessionState | null;
 }
 
-export function readPersistedPlayer(): PersistedPlayer | null {
-  const stored = readStoredJson(STORAGE_KEY);
+export function readPersistedPlayer(userId: string | null): PersistedPlayer | null {
+  // The old shared queue has no owner and cannot safely be assigned to a signed-in user.
+  writeStored(STORAGE_KEY, null);
+  if (!userId) return null;
+  const stored = readStoredJson(`${STORAGE_KEY}:${userId}`);
   if (stored === null || typeof stored !== "object") return null;
 
   const saved = stored as Partial<PersistedPlayer>;
@@ -55,7 +58,13 @@ export function readPersistedPlayer(): PersistedPlayer | null {
   };
 }
 
-export function usePersistedPlayer(snapshot: PersistedPlayer, ready: boolean, isPlaying: boolean) {
+export function usePersistedPlayer(
+  userId: string | null,
+  snapshot: PersistedPlayer,
+  ready: boolean,
+  isPlaying: boolean,
+) {
+  const key = userId ? `${STORAGE_KEY}:${userId}` : null;
   const latest = useRef(snapshot);
 
   useEffect(() => {
@@ -77,9 +86,10 @@ export function usePersistedPlayer(snapshot: PersistedPlayer, ready: boolean, is
   } = snapshot;
 
   useEffect(() => {
-    if (ready) write(latest.current);
+    if (ready && key) writeStoredJson(key, latest.current);
   }, [
     ready,
+    key,
     queue,
     index,
     volume,
@@ -94,29 +104,28 @@ export function usePersistedPlayer(snapshot: PersistedPlayer, ready: boolean, is
   ]);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !key) return;
 
-    const save = () => write(latest.current);
+    const save = () => writeStoredJson(key, latest.current);
     window.addEventListener("pagehide", save);
 
     return () => {
       window.removeEventListener("pagehide", save);
       save();
     };
-  }, [ready]);
+  }, [ready, key]);
 
   useEffect(() => {
-    if (!ready || !isPlaying) return;
+    if (!ready || !isPlaying || !key) return;
 
-    const timer = window.setInterval(() => write(latest.current), POSITION_SAVE_INTERVAL_MS);
+    const timer = window.setInterval(
+      () => writeStoredJson(key, latest.current),
+      POSITION_SAVE_INTERVAL_MS,
+    );
 
     return () => {
       window.clearInterval(timer);
-      write(latest.current);
+      writeStoredJson(key, latest.current);
     };
-  }, [ready, isPlaying]);
-}
-
-function write(snapshot: PersistedPlayer) {
-  writeStoredJson(STORAGE_KEY, snapshot);
+  }, [ready, isPlaying, key]);
 }

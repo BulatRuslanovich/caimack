@@ -1,4 +1,4 @@
-.PHONY: db migrate model backend frontend test fmt lint check sqlx apk
+.PHONY: db migrate model backend frontend test test-db fmt lint check sqlx apk
 
 db:
 	@docker start caimack-rust-dev-db >/dev/null 2>&1 || MSYS_NO_PATHCONV=1 docker run -d --name caimack-rust-dev-db \
@@ -22,6 +22,9 @@ frontend:
 test:
 	cd backend && cargo test --workspace
 	cd frontend && npm test
+
+test-db: migrate
+	cd backend && cargo test --workspace --all-features --locked
 
 fmt:
 	cd backend && cargo fmt --all

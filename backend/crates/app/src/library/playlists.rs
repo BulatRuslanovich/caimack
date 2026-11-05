@@ -62,6 +62,18 @@ pub struct PlaylistRequest {
     pub is_public: bool,
 }
 
+impl PlaylistRequest {
+    fn validate(&self) -> AppResult<()> {
+        if !(1..=200).contains(&self.name.trim().chars().count()) {
+            return Err(AppError::validation("The playlist name must contain 1 to 200 characters."));
+        }
+        if self.description.as_deref().is_some_and(|text| text.trim().chars().count() > 1000) {
+            return Err(AppError::validation("The playlist description must not exceed 1000 characters."));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackIdsRequest {
@@ -144,6 +156,7 @@ fn trim_to_none(value: Option<&str>) -> Option<String> {
 }
 
 pub async fn create(db: &PgPool, user: Uuid, request: PlaylistRequest) -> AppResult<PlaylistDto> {
+    request.validate()?;
     let id = Uuid::now_v7();
     let now = Utc::now();
     sqlx::query!(
@@ -162,6 +175,7 @@ pub async fn create(db: &PgPool, user: Uuid, request: PlaylistRequest) -> AppRes
 }
 
 pub async fn update(db: &PgPool, user: Uuid, id: Uuid, request: PlaylistRequest) -> AppResult<PlaylistDto> {
+    request.validate()?;
     let updated = sqlx::query!(
         "UPDATE playlists SET name = $3, description = $4, is_public = $5, updated_at = $6 WHERE id = $1 AND user_id = $2",
         id,
