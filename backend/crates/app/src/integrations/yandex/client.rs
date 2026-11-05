@@ -24,8 +24,10 @@ const THUMBNAIL_SIZE: &str = "200x200";
 const MAX_COVER_BYTES: usize = 8 * 1024 * 1024;
 const MAX_LYRICS_BYTES: usize = 256 * 1024;
 const LYRICS_TIMEOUT: Duration = Duration::from_secs(15);
-// Track lyrics use the Android request signature, independently of the web audio download signature.
-const LYRICS_SIGN_KEY: &str = "p93jhgh689SBReK6ghtw62";
+// The signing key and client header must be a matching pair. Lyrics use the desktop
+// signature independently of the configured web audio download signature.
+const LYRICS_SIGN_KEY: &str = "kzqU4XhfCaY6B6JTHODeq5";
+const LYRICS_CLIENT: &str = "YandexMusicDesktopAppWindows/5.95.0";
 
 const TRANSPORT: &str = "raw";
 
@@ -225,7 +227,10 @@ impl YandexClient {
             ("timeStamp", timestamp.as_str()),
             ("sign", signature.as_str()),
         ]);
-        let response = self.authorized(token, request).send().await.map_err(AppError::internal)?;
+        let response = Self::authorized(token, request, LYRICS_CLIENT)
+            .send()
+            .await
+            .map_err(|e| AppError::internal(e.without_url()))?;
         if matches!(response.status(), reqwest::StatusCode::NOT_FOUND | reqwest::StatusCode::NO_CONTENT) {
             return Ok(None);
         }
@@ -279,7 +284,8 @@ impl YandexClient {
     }
 
     async fn send(&self, token: &str, request: reqwest::RequestBuilder) -> AppResult<Value> {
-        let response = self.authorized(token, request).send().await.map_err(AppError::internal)?;
+        let response =
+            Self::authorized(token, request, &self.config.client).send().await.map_err(AppError::internal)?;
 
         let status = response.status();
         if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
@@ -296,10 +302,10 @@ impl YandexClient {
         })
     }
 
-    fn authorized(&self, token: &str, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+    fn authorized(token: &str, request: reqwest::RequestBuilder, client: &str) -> reqwest::RequestBuilder {
         request
             .header("Authorization", format!("OAuth {token}"))
-            .header("X-Yandex-Music-Client", &self.config.client)
+            .header("X-Yandex-Music-Client", client)
             .header("X-Yandex-Music-Without-Invocation-Info", "1")
     }
 }
@@ -418,10 +424,16 @@ mod tests {
                 assert!(path.starts_with(expected), "expected {expected}, got {path}");
                 if path.starts_with("/tracks/") {
                     assert!(request.to_ascii_lowercase().contains("authorization: oauth test-token\r\n"));
+                    assert_eq!(request.to_ascii_lowercase().matches("x-yandex-music-client:").count(), 1);
+                    assert!(
+                        request
+                            .to_ascii_lowercase()
+                            .contains("x-yandex-music-client: yandexmusicdesktopappwindows/5.95.0\r\n")
+                    );
                     let url = reqwest::Url::parse(&format!("{base_url}{path}")).unwrap();
                     let parameters: HashMap<_, _> = url.query_pairs().collect();
                     let timestamp = parameters.get("timeStamp").unwrap();
-                    let signature = format!("{}=", sign(LYRICS_SIGN_KEY, &format!("42{timestamp}")));
+                    let signature = format!("{}=", sign("kzqU4XhfCaY6B6JTHODeq5", &format!("42{timestamp}")));
                     assert_eq!(parameters.get("sign").unwrap().as_ref(), signature);
                 } else {
                     assert!(

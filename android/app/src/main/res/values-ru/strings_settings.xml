@@ -32,6 +32,15 @@
     <string name="settings_equalizer_bass">Бас</string>
     <string name="settings_equalizer_vocal">Вокал</string>
     <string name="settings_equalizer_treble">Верха</string>
+    <string name="settings_equalizer_rock">Рок</string>
+    <string name="settings_equalizer_electronic">Электроника</string>
+    <string name="settings_equalizer_acoustic">Акустика</string>
+    <string name="settings_equalizer_warm">Тёплый звук</string>
+    <string name="settings_equalizer_preamp">Предусиление</string>
+    <string name="settings_equalizer_headroom">Автоматический запас громкости</string>
+    <string name="settings_equalizer_headroom_hint">Снижает предусиление при подъёме частот, чтобы уменьшить искажения. Звук может стать тише.</string>
+    <string name="settings_equalizer_output">Итоговое предусиление: %1$s дБ</string>
+    <string name="settings_equalizer_reset">Сбросить эквалайзер</string>
     <string name="settings_equalizer_hz">%1$d Гц</string>
     <string name="settings_equalizer_khz">%1$s кГц</string>
     <string name="settings_equalizer_db">%1$s дБ</string>
@@ -53,7 +62,7 @@
     <string name="settings_help_language">Меняет язык интерфейса.</string>
     <string name="settings_help_visualizer">Показывает анимацию, реагирующую на музыку.</string>
     <string name="settings_help_normalizeVolume">Уменьшает разницу громкости между треками.</string>
-    <string name="settings_help_equalizer">Меняет баланс низких, средних и высоких частот.</string>
+    <string name="settings_help_equalizer">Десять полос от 31 Гц до 16 кГц. Перетаскивайте точки для настройки звука. График можно прокручивать вбок.</string>
     <string name="settings_library_density">Плотность библиотеки</string>
     <string name="settings_density_compact">Компактно</string>
     <string name="settings_density_comfortable">Обычно</string>

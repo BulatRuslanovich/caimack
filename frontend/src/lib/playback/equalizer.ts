@@ -3,43 +3,24 @@
 
 import { useSyncExternalStore } from "react";
 import { readStoredJson, writeStored } from "@/lib/storage";
-
-export const EQ_BANDS = [60, 230, 910, 3600, 14000] as const;
-
-export const EQ_LIMIT_DB = 12;
-
-export const EQ_PRESETS = {
-  flat: [0, 0, 0, 0, 0],
-  bass: [6, 4, 0, 0, 0],
-  vocal: [-2, 0, 3, 3, 0],
-  treble: [0, 0, 0, 3, 6],
-} as const satisfies Record<string, readonly number[]>;
-
-export type EqualizerPreset = keyof typeof EQ_PRESETS;
-
-interface EqualizerState {
-  enabled: boolean;
-  gains: readonly number[];
-}
+import {
+  EQ_BANDS,
+  EQ_PRESETS,
+  DEFAULT_EQUALIZER,
+  clampGain,
+  equalizerState,
+  effectivePreamp,
+  type EqualizerState,
+  type EqualizerPreset,
+} from "./equalizer-model";
+export { EQ_BANDS, EQ_LIMIT_DB, EQ_PRESETS, type EqualizerPreset } from "./equalizer-model";
 
 const STORAGE_KEY = "music-streaming.equalizer";
 
-const OFF: EqualizerState = { enabled: false, gains: EQ_PRESETS.flat };
-
-function clampGain(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value)
-    ? Math.max(-EQ_LIMIT_DB, Math.min(EQ_LIMIT_DB, Math.round(value)))
-    : 0;
-}
+const OFF = DEFAULT_EQUALIZER;
 
 function readState(): EqualizerState {
-  const saved = readStoredJson(STORAGE_KEY) as Partial<EqualizerState> | null;
-  if (!saved || typeof saved !== "object") return OFF;
-
-  return {
-    enabled: saved.enabled === true,
-    gains: EQ_BANDS.map((_, band) => clampGain(saved.gains?.[band])),
-  };
+  return equalizerState(readStoredJson(STORAGE_KEY));
 }
 
 let state: EqualizerState = OFF;
@@ -89,7 +70,7 @@ function ensureGraph(): void {
       filter.type =
         band === 0 ? "lowshelf" : band === EQ_BANDS.length - 1 ? "highshelf" : "peaking";
       filter.frequency.value = frequency;
-      filter.Q.value = 1;
+      filter.Q.value = Math.SQRT2;
       return filter;
     });
     preamp = context.createGain();
@@ -104,7 +85,7 @@ function ensureGraph(): void {
     attached.add(element);
   }
 
-  void context.resume();
+  void context.resume().catch(() => {});
   apply();
 }
 
@@ -116,8 +97,7 @@ function apply(): void {
     filters[band].gain.setTargetAtTime(gain, context!.currentTime, 0.02),
   );
 
-  const headroom = Math.max(0, ...gains);
-  preamp.gain.setTargetAtTime(10 ** (-headroom / 20), context.currentTime, 0.02);
+  preamp.gain.setTargetAtTime(10 ** (effectivePreamp(state) / 20), context.currentTime, 0.02);
 }
 
 export function audioAnalyser(): AnalyserNode | null {
@@ -157,7 +137,8 @@ function attachOnGesture(): void {
 export function connectEqualizer(media: HTMLMediaElement[]): void {
   elements = media;
 
-  if (current().enabled && !context) attachOnGesture();
+  if (context) ensureGraph();
+  else if (current().enabled) attachOnGesture();
 }
 
 function subscribe(listener: () => void): () => void {
@@ -177,6 +158,7 @@ export function useEqualizer() {
 
   return {
     ...snapshot,
+    effectivePreampDb: effectivePreamp(snapshot),
     supported,
     preset,
     setEnabled(enabled: boolean) {
@@ -191,6 +173,15 @@ export function useEqualizer() {
     },
     applyPreset(name: EqualizerPreset) {
       update({ ...current(), gains: EQ_PRESETS[name] });
+    },
+    setPreamp(preampDb: number) {
+      update({ ...current(), preampDb: clampGain(preampDb) });
+    },
+    setAutoHeadroom(autoHeadroom: boolean) {
+      update({ ...current(), autoHeadroom });
+    },
+    reset() {
+      update({ ...DEFAULT_EQUALIZER, enabled: current().enabled });
     },
   };
 }

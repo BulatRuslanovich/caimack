@@ -231,7 +231,9 @@ Existing tags are never overwritten. Commit application changes before running t
 If the requested version is already set and has no tag, the script tags the current commit.
 
 To publish the commit and tag, run `git push origin HEAD && git push origin v1.0.1`.
-The tag triggers the existing Images workflow to publish versioned Docker images.
+Only pushing a `v*` tag triggers the Images workflow; regular branch pushes do not build or
+publish Docker images. A stable tag such as `v1.0.1` publishes `1.0.1`, `1.0`, `latest`, and
+a commit SHA tag for both images. Prerelease tags do not update `latest`.
 Pin these with `CAIMACK_VERSION=1.0.1`. The script itself does not push anything.
 
 Test the release script with `node --test scripts/release.test.mjs`.

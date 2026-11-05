@@ -7,7 +7,9 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Network
-import android.media.audiofx.Equalizer
+import android.media.audiofx.DynamicsProcessing
+import android.util.Log
+import kotlin.math.sqrt
 import android.os.Bundle
 import android.os.PowerManager
 import android.os.Handler
@@ -82,7 +84,7 @@ class PlaybackService : MediaLibraryService() {
     private var sleep: Job? = null
     private var leveling: Job? = null
     private var qualityChanges: Job? = null
-    private var equalizer: Equalizer? = null
+    private var equalizer: DynamicsProcessing? = null
     private var normalization = 1f
     private var sleepLevel = 1f
     private var networkRecovery: Job? = null
@@ -560,16 +562,27 @@ class PlaybackService : MediaLibraryService() {
             return
         }
 
-        val effect = equalizer ?: runCatching { Equalizer(0, audioSessionId) }.getOrNull()?.also { equalizer = it } ?: return
-        val (lowest, highest) = effect.bandLevelRange.let { it[0].toInt() to it[1].toInt() }
+        val effect = equalizer ?: runCatching {
+            val config = DynamicsProcessing.Config.Builder(
+                DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
+                2, true, EqualizerState.BANDS_HZ.size, false, 0, false, 0, false,
+            ).setPreferredFrameDuration(40f).build()
+            DynamicsProcessing(0, audioSessionId, config)
+        }.onFailure { Log.w("Equalizer", "Cannot attach dynamics processing", it) }
+            .getOrNull()?.also { equalizer = it } ?: return
 
         runCatching {
-            for (band in 0 until effect.numberOfBands) effect.setBandLevel(band.toShort(), 0)
+            effect.setInputGainAllChannelsTo(state.effectivePreampDb.toFloat())
             EqualizerState.BANDS_HZ.forEachIndexed { index, hz ->
-                val millibels = (state.gains[index] * 100).coerceIn(lowest, highest)
-                effect.setBandLevel(effect.getBand(hz * 1000), millibels.toShort())
+                // DynamicsProcessing expects the upper edge of each band, not its centre.
+                val upper = EqualizerState.BANDS_HZ.getOrNull(index + 1)
+                    ?.let { sqrt(hz.toDouble() * it).toFloat() } ?: 24_000f
+                effect.setPreEqBandAllChannelsTo(index, DynamicsProcessing.EqBand(true, upper, state.gains[index].toFloat()))
             }
             effect.enabled = true
+        }.onFailure {
+            runCatching { effect.enabled = false }
+            Log.w("Equalizer", "Cannot update dynamics processing", it)
         }
     }
 

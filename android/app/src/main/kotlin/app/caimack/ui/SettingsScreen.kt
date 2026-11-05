@@ -38,6 +38,8 @@ import app.caimack.playback.EqualizerState
 import androidx.compose.ui.text.style.TextAlign
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -51,6 +53,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -220,12 +224,16 @@ fun SettingsScreen() {
                     Text(stringResource(R.string.settings_help_equalizer), style = Type.small, color = palette.muted)
 
                     if (equalizer.enabled) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf(
                                 "flat" to R.string.settings_equalizer_flat,
                                 "bass" to R.string.settings_equalizer_bass,
                                 "vocal" to R.string.settings_equalizer_vocal,
                                 "treble" to R.string.settings_equalizer_treble,
+                                "rock" to R.string.settings_equalizer_rock,
+                                "electronic" to R.string.settings_equalizer_electronic,
+                                "acoustic" to R.string.settings_equalizer_acoustic,
+                                "warm" to R.string.settings_equalizer_warm,
                             ).forEach { (preset, label) ->
                                 val active = equalizer.preset == preset
                                 Text(
@@ -235,12 +243,11 @@ fun SettingsScreen() {
                                     textAlign = TextAlign.Center,
                                     maxLines = 1,
                                     modifier = Modifier
-                                        .weight(1f)
                                         .clip(CircleShape)
                                         .background(if (active) palette.primarySoft else palette.raised)
                                         .then(if (active) Modifier.border(1.dp, palette.primary, CircleShape) else Modifier)
-                                        .clickable { container.equalizer.applyPreset(preset) }
-                                        .padding(vertical = 8.dp),
+                                        .selectable(active, role = Role.RadioButton) { container.equalizer.applyPreset(preset) }
+                                        .padding(horizontal = 16.dp, vertical = 14.dp),
                                 )
                             }
                         }
@@ -251,7 +258,38 @@ fun SettingsScreen() {
                             else stringResource(R.string.settings_equalizer_khz, String.format(locale, "%.1f", hz / 1000.0).trimEnd('0').trimEnd('.', ','))
                         }
                         val decibels = equalizer.gains.map { stringResource(R.string.settings_equalizer_db, if (it > 0) "+$it" else "$it") }
-                        EqualizerCurve(equalizer.gains, frequencies, decibels) { band, gain -> container.equalizer.setGain(band, gain) }
+                        BoxWithConstraints(Modifier.fillMaxWidth()) {
+                            val curveWidth = maxOf(maxWidth, 600.dp)
+                            Box(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 12.dp)) {
+                                Column(Modifier.width(curveWidth)) {
+                                    EqualizerCurve(equalizer.gains, frequencies, decibels) { band, gain -> container.equalizer.setGain(band, gain) }
+                                }
+                            }
+                        }
+                        val preampLabel = stringResource(R.string.settings_equalizer_preamp)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(preampLabel, style = Type.body)
+                            Text(stringResource(R.string.settings_equalizer_db, signedGain(equalizer.preampDb)), color = palette.primary, style = Type.body)
+                        }
+                        Slider(
+                            value = equalizer.preampDb.toFloat(),
+                            onValueChange = { container.equalizer.setPreamp(it.roundToInt()) },
+                            valueRange = -EqualizerState.LIMIT_DB.toFloat()..EqualizerState.LIMIT_DB.toFloat(),
+                            steps = EqualizerState.LIMIT_DB * 2 - 1,
+                            modifier = Modifier.semantics { contentDescription = preampLabel },
+                            colors = SliderDefaults.colors(thumbColor = palette.primary, activeTrackColor = palette.primary, inactiveTrackColor = palette.raised),
+                        )
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Column(Modifier.weight(1f)) {
+                                Text(stringResource(R.string.settings_equalizer_headroom), style = Type.body)
+                                Text(stringResource(R.string.settings_equalizer_headroom_hint), color = palette.muted, style = Type.small)
+                            }
+                            Toggle(equalizer.autoHeadroom) { container.equalizer.setAutoHeadroom(it) }
+                        }
+                        Text(stringResource(R.string.settings_equalizer_output, signedGain(equalizer.effectivePreampDb)), style = Type.small, color = palette.muted)
+                        TextButton(onClick = { container.equalizer.reset() }) {
+                            Text(stringResource(R.string.settings_equalizer_reset), color = palette.primary)
+                        }
                     }
                 }
             }
@@ -424,6 +462,8 @@ private fun ColorwaySwatch(palette: Palette) {
         }
     }
 }
+
+private fun signedGain(value: Int): String = if (value > 0) "+$value" else "$value"
 
 @Composable
 private fun EqualizerCurve(gains: List<Int>, frequencies: List<String>, decibels: List<String>, onChange: (Int, Int) -> Unit) {

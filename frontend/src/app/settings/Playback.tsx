@@ -135,13 +135,66 @@ function Equalizer() {
             }))}
           />
 
-          <EqualizerCurve
-            gains={eq.gains}
-            onChange={eq.setGain}
-            frequency={frequency}
-            decibels={decibels}
-            bandLabel={(hz) => t("settings.equalizerBand", { band: frequency(hz) })}
-          />
+          <div className="min-w-0 overflow-x-auto px-1 py-3">
+            <div className="min-w-[600px]">
+              <EqualizerCurve
+                gains={eq.gains}
+                onChange={eq.setGain}
+                frequency={frequency}
+                decibels={decibels}
+                bandLabel={(hz) => t("settings.equalizerBand", { band: frequency(hz) })}
+              />
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground sm:hidden">
+            {t("settings.equalizerScrollHint")}
+          </p>
+
+          <div className="flex flex-col gap-4 rounded-md border border-border p-4">
+            <label className="flex flex-col gap-3">
+              <span className="flex items-center justify-between gap-3 font-medium">
+                {t("settings.equalizerPreamp")}
+                <span className="text-sm text-primary tabular-nums">{decibels(eq.preampDb)}</span>
+              </span>
+              <input
+                type="range"
+                min={-EQ_LIMIT_DB}
+                max={EQ_LIMIT_DB}
+                step={1}
+                value={eq.preampDb}
+                aria-label={t("settings.equalizerPreamp")}
+                aria-valuetext={decibels(eq.preampDb)}
+                onChange={(event) => eq.setPreamp(Number(event.target.value))}
+                className="h-6 w-full cursor-pointer accent-primary"
+              />
+            </label>
+            <label className="flex cursor-pointer items-start gap-3">
+              <Switch
+                checked={eq.autoHeadroom}
+                onCheckedChange={eq.setAutoHeadroom}
+                className="mt-0.5"
+              />
+              <span className="flex flex-col gap-1">
+                <span className="font-medium">{t("settings.equalizerAutoHeadroom")}</span>
+                <span className="text-sm text-muted-foreground">
+                  {t("settings.equalizerHeadroomHint")}
+                </span>
+              </span>
+            </label>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-sm text-muted-foreground">
+                {t("settings.equalizerOutput", { value: decibels(eq.effectivePreampDb) })}
+              </span>
+              <button
+                type="button"
+                onClick={eq.reset}
+                className="rounded-sm px-3 py-2 text-sm font-medium text-primary hover:bg-primary-soft focus-visible:outline-2 focus-visible:outline-ring"
+              >
+                {t("settings.equalizerReset")}
+              </button>
+            </div>
+          </div>
         </>
       )}
     </div>
@@ -276,6 +329,7 @@ function EqualizerCurve({
             aria-valuetext={decibels(gains[band])}
             onFocus={() => setFocused(band)}
             onBlur={() => setFocused(null)}
+            onDoubleClick={() => onChange(band, 0)}
             onPointerDown={(event) => {
               const onHandle = (event.target as HTMLElement).dataset.handle !== undefined;
               if (event.pointerType !== "mouse" && !onHandle) return;
@@ -289,18 +343,27 @@ function EqualizerCurve({
               }
             }}
             onKeyDown={(event) => {
+              if (event.key === "Home" || event.key === "End") {
+                event.preventDefault();
+                onChange(band, event.key === "Home" ? EQ_MIN_DB : EQ_LIMIT_DB);
+                return;
+              }
               const step =
-                event.key === "ArrowUp" || event.key === "ArrowRight"
-                  ? 1
-                  : event.key === "ArrowDown" || event.key === "ArrowLeft"
-                    ? -1
-                    : 0;
+                event.key === "PageUp"
+                  ? 3
+                  : event.key === "PageDown"
+                    ? -3
+                    : event.key === "ArrowUp" || event.key === "ArrowRight"
+                      ? 1
+                      : event.key === "ArrowDown" || event.key === "ArrowLeft"
+                        ? -1
+                        : 0;
               if (step === 0) return;
 
               event.preventDefault();
               onChange(band, gains[band] + step);
             }}
-            className="absolute inset-y-0 cursor-ns-resize touch-pan-y outline-none"
+            className="absolute inset-y-0 cursor-ns-resize touch-auto outline-none"
             style={{
               left: `${(band / EQ_BANDS.length) * 100}%`,
               width: `${100 / EQ_BANDS.length}%`,

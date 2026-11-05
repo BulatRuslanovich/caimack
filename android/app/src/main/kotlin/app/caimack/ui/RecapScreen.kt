@@ -14,6 +14,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -105,9 +106,9 @@ fun RecapBanner() {
             .fillMaxWidth()
             .clip(Radius.panel)
             .background(palette.card)
+            .border(1.dp, palette.border, Radius.panel)
             .clickable { open = true },
     ) {
-        covers.firstOrNull()?.let { ArtBackdrop(trackCover(it, small = false), BackdropMode.Header, Modifier.matchParentSize()) }
         Row(
             Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -131,7 +132,8 @@ fun RecapBanner() {
                 Text(
                     stringResource(R.string.recap_banner, monthName(shown.year, shown.month)),
                     style = Type.section,
-                    maxLines = 1,
+                    color = palette.foreground,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
@@ -142,7 +144,7 @@ fun RecapBanner() {
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Icon(Lucide.ChevronRight, null, tint = palette.foreground, modifier = Modifier.size(18.dp))
+            Icon(Lucide.ChevronRight, null, tint = palette.primary, modifier = Modifier.size(18.dp))
         }
     }
 }

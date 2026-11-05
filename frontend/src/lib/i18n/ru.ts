@@ -667,6 +667,17 @@ export const ru: Dictionary = {
   "settings.equalizerPreset.bass": "Бас",
   "settings.equalizerPreset.vocal": "Вокал",
   "settings.equalizerPreset.treble": "Верха",
+  "settings.equalizerPreset.rock": "Рок",
+  "settings.equalizerPreset.electronic": "Электроника",
+  "settings.equalizerPreset.acoustic": "Акустика",
+  "settings.equalizerPreset.warm": "Тёплый звук",
+  "settings.equalizerPreamp": "Предусиление",
+  "settings.equalizerAutoHeadroom": "Автоматический запас громкости",
+  "settings.equalizerHeadroomHint":
+    "Снижает предусиление при подъёме частот, чтобы уменьшить искажения. Звук может стать тише.",
+  "settings.equalizerOutput": "Итоговое предусиление: {value}",
+  "settings.equalizerReset": "Сбросить эквалайзер",
+  "settings.equalizerScrollHint": "Прокрутите график вбок, чтобы увидеть все полосы.",
   "settings.equalizerBand": "Усиление на {band}",
   "settings.equalizerHz": "{value} Гц",
   "settings.equalizerKhz": "{value} кГц",
@@ -987,5 +998,6 @@ export const ru: Dictionary = {
   "settings.help.language": "Меняет язык интерфейса.",
   "settings.help.visualizer": "Показывает анимацию, реагирующую на музыку.",
   "settings.help.normalizeVolume": "Уменьшает разницу громкости между треками.",
-  "settings.help.equalizer": "Меняет баланс низких, средних и высоких частот.",
+  "settings.help.equalizer":
+    "Десять полос от 31 Гц до 16 кГц. Перетаскивайте точки или используйте стрелки; двойной щелчок сбрасывает полосу. На небольшом экране график можно прокручивать вбок.",
 };

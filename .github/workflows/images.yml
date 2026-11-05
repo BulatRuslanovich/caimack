@@ -2,14 +2,7 @@ name: Images
 
 on:
   push:
-    branches: [master]
     tags: ["v*"]
-    paths:
-      - "backend/**"
-      - "db/**"
-      - "frontend/**"
-      - ".github/workflows/images.yml"
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -52,8 +45,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ steps.owner.outputs.name }}/caimack-${{ matrix.name }}
+          flavor: latest=auto
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha

@@ -34,6 +34,15 @@
     <string name="settings_equalizer_bass">Bass</string>
     <string name="settings_equalizer_vocal">Vocal</string>
     <string name="settings_equalizer_treble">Treble</string>
+    <string name="settings_equalizer_rock">Rock</string>
+    <string name="settings_equalizer_electronic">Electronic</string>
+    <string name="settings_equalizer_acoustic">Acoustic</string>
+    <string name="settings_equalizer_warm">Warm</string>
+    <string name="settings_equalizer_preamp">Preamp</string>
+    <string name="settings_equalizer_headroom">Automatic headroom</string>
+    <string name="settings_equalizer_headroom_hint">Lowers the preamp when bands are boosted to reduce distortion. The sound may become quieter.</string>
+    <string name="settings_equalizer_output">Effective preamp: %1$s dB</string>
+    <string name="settings_equalizer_reset">Reset equalizer</string>
     <string name="settings_equalizer_hz">%1$d Hz</string>
     <string name="settings_equalizer_khz">%1$s kHz</string>
     <string name="settings_equalizer_db">%1$s dB</string>
@@ -48,7 +57,7 @@
     <string name="settings_help_crossfade">Blend the end of a track with the start of the next.</string>
     <string name="settings_help_smartTransitions">Adapt transitions to the sound of each track.</string>
     <string name="settings_help_normalizeVolume">Reduce loudness differences between tracks.</string>
-    <string name="settings_help_equalizer">Adjust bass, midrange and treble.</string>
+    <string name="settings_help_equalizer">Ten bands from 31 Hz to 16 kHz. Drag the points to adjust the sound. Scroll sideways to see all bands.</string>
     <string name="settings_help_theme">Use light, dark or your system appearance.</string>
     <string name="settings_help_colorway">Change the colours of backgrounds, surfaces and accents.</string>
     <string name="settings_help_language">Change the interface language.</string>
