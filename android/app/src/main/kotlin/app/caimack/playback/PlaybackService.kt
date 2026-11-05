@@ -526,9 +526,8 @@ class PlaybackService : MediaLibraryService() {
             queued[index] in notes && PlaySources.of(queued[index]) != "queue"
         } else queued.indices.toSet()
         val excluded = RadioPolicy.exclusions(order, player.currentMediaItemIndex, retained).map { queued[it] }
-        val mood = state.mood
         radioRequest = container.scope.launch(Dispatchers.Main) {
-            val batch = runCatching { withNetworkRetries { container.radio(RadioRequest(seed, excluded, mood)) } }.getOrNull()
+            val batch = runCatching { withNetworkRetries { container.radio(RadioRequest(seed, excluded)) } }.getOrNull()
                 ?: run { radioSeed = null; return@launch }
             val fresh = batch.tracks.map { it.track }.filter { it.id !in excluded }
             if (fresh.isEmpty()) return@launch

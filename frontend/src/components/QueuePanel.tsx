@@ -17,7 +17,6 @@ import { usePlayerUi } from "@/contexts/PlayerUiContext";
 import { useT } from "@/contexts/I18nContext";
 import { useInvalidate } from "@/lib/useInvalidate";
 import { useToast } from "@/lib/useToast";
-import { moodLabel } from "@/lib/moods";
 import { reasonLabel } from "@/lib/recommendationReason";
 import { TrackCover } from "./Cover";
 import { EmptyState } from "./EmptyState";
@@ -143,12 +142,7 @@ export function QueueList() {
   const seedTitle = player.queue.find(
     (track) => track.id === player.radioSession?.seedTrackId,
   )?.title;
-  const radioMood = player.radioSession?.mood;
-  const radioLabel = radioMood
-    ? t("queue.radioMood", { mood: moodLabel(radioMood, t) })
-    : seedTitle
-      ? t("queue.radioFrom", { title: seedTitle })
-      : t("queue.similar");
+  const radioLabel = seedTitle ? t("queue.radioFrom", { title: seedTitle }) : t("queue.similar");
 
   const saveAsPlaylist = async (playlistId: string) => {
     try {
@@ -191,7 +185,7 @@ export function QueueList() {
         <Switch checked={player.autoplay} onCheckedChange={player.setAutoplay} />
       </label>
 
-      {player.radioSession && !radioMood && (
+      {player.radioSession && (
         <ToggleGroup aria-label={t("radio.focus")} className="mb-2 gap-x-4 px-0.5">
           {RADIO_FOCUSES.map((focus) => (
             <ToggleGroupButton

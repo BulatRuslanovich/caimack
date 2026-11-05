@@ -30,7 +30,11 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-music} -d ${POSTGRES_DB:-music}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-music} -d ${POSTGRES_DB:-music}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -52,17 +56,56 @@ services:
       - ${MUSIC_STORAGE_PATH:-./storage}:/storage
     networks: [internal]
 
-  clap-model:
-    profiles: [model]
+  mert-init:
+    image: busybox:1.37.0
+    user: root
+    command:
+      [
+        "sh",
+        "-c",
+        "mkdir -p /models/hub /models/modules && chown ${PUID:-1000}:${PGID:-1000} /models /models/hub /models/modules",
+      ]
+    volumes:
+      - ${MERT_CACHE_PATH:-./storage/models/mert}:/models
+    networks: [internal]
+
+  mert:
     build:
       context: ./backend/scripts
-      dockerfile: Dockerfile.clap
+      dockerfile: Dockerfile.mert
+      target: runtime
+    restart: unless-stopped
     user: "${PUID:-1000}:${PGID:-1000}"
+    entrypoint: ["python", "serve_mert.py"]
     depends_on:
-      storage-init:
+      mert-init:
         condition: service_completed_successfully
+    environment:
+      HF_HOME: /models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+        limits:
+          memory: ${MERT_MEMORY_LIMIT:-4g}
+          cpus: "2"
     volumes:
-      - ${MUSIC_STORAGE_PATH:-./storage}:/storage
+      - ${MERT_CACHE_PATH:-./storage/models/mert}:/models
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=4).read()",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 30m
+      retries: 3
     networks: [internal]
 
   migrate:
@@ -83,30 +126,13 @@ services:
       disable: true
     networks: [internal]
 
-  model:
-    profiles: [model]
-    build: *backend-build
-    command: ["model"]
-    restart: "no"
-    user: "${PUID:-1000}:${PGID:-1000}"
-    depends_on:
-      storage-init:
-        condition: service_completed_successfully
-    environment:
-      STORAGE_ROOT: /storage
-      CLAP_MODEL_URL: ${CLAP_MODEL_URL:-https://github.com/BulatRuslanovich/caimack/releases/download/clap-model-v1}
-      RUST_LOG: ${RUST_LOG:-info}
-    volumes:
-      - ${MUSIC_STORAGE_PATH:-./storage}:/storage
-    healthcheck:
-      disable: true
-    networks: [internal]
-
   backend:
     build: *backend-build
     restart: unless-stopped
     user: "${PUID:-1000}:${PGID:-1000}"
     depends_on:
+      mert:
+        condition: service_started
       postgres:
         condition: service_healthy
       migrate:
@@ -127,7 +153,7 @@ services:
       OWNER_RESET_PASSWORD: ${OWNER_RESET_PASSWORD:-false}
       LIBRARY_SCAN_INTERVAL_MINUTES: ${LIBRARY_SCAN_INTERVAL_MINUTES:-60}
       BACKGROUND_HEAVY_JOBS: ${BACKGROUND_HEAVY_JOBS:-}
-      CLAP_MODEL_URL: ${CLAP_MODEL_URL-https://github.com/BulatRuslanovich/caimack/releases/download/clap-model-v1}
+      MERT_URL: http://mert:8090
       RUST_LOG: ${RUST_LOG:-info}
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
@@ -167,7 +193,15 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8081/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://127.0.0.1:8081/health",
+        ]
       interval: 15s
       timeout: 5s
       retries: 5

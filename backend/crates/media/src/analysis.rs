@@ -12,11 +12,11 @@ use symphonia::core::formats::{FormatOptions, TrackType};
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 
-use crate::clap::{self, windows};
 use crate::cues::{self, CueDetector, TrackCuePoints};
 use crate::fingerprint::{self, FingerprintBuilder};
 use crate::key::{self, KeyDetector, MusicalKey};
 use crate::loudness::{Loudness, LoudnessMeter};
+use crate::mert::{self, windows};
 use crate::resample::Resampler;
 
 pub struct Analysis {
@@ -36,7 +36,7 @@ struct Window {
 
 impl Window {
     fn take(&mut self, position: usize, chunk: &[f32]) {
-        let end = self.start + clap::WINDOW_SAMPLES;
+        let end = self.start + mert::WINDOW_SAMPLES;
         let from = self.start.max(position);
         let to = end.min(position + chunk.len());
         if from < to {
@@ -68,7 +68,7 @@ pub fn analyze(path: &Path, duration_seconds: f64, embed: bool) -> anyhow::Resul
     let plan = if embed { windows::plan(duration_seconds) } else { Vec::new() };
     let mut windows: Vec<Window> = plan
         .into_iter()
-        .map(|offset| Window { start: (offset * f64::from(clap::SAMPLE_RATE)).round() as usize, samples: Vec::new() })
+        .map(|offset| Window { start: (offset * f64::from(mert::SAMPLE_RATE)).round() as usize, samples: Vec::new() })
         .collect();
 
     let mut detector = CueDetector::default();
@@ -79,8 +79,8 @@ pub fn analyze(path: &Path, duration_seconds: f64, embed: bool) -> anyhow::Resul
     let mut interleaved: Vec<f32> = Vec::new();
     let mut mono: Vec<f32> = Vec::new();
     let mut for_cues: Vec<f32> = Vec::new();
-    let mut for_clap: Vec<f32> = Vec::new();
-    let mut clap_position = 0usize;
+    let mut for_mert: Vec<f32> = Vec::new();
+    let mut mert_position = 0usize;
 
     loop {
         let packet = match format.next_packet() {
@@ -106,9 +106,9 @@ pub fn analyze(path: &Path, duration_seconds: f64, embed: bool) -> anyhow::Resul
         mono.clear();
         mono.extend(interleaved.chunks_exact(channels).map(downmix));
 
-        let (to_cues, to_clap) = streams.get_or_insert_with(|| {
-            let to_clap = (!windows.is_empty()).then(|| Resampler::new(rate, clap::SAMPLE_RATE));
-            (Resampler::new(rate, cues::SAMPLE_RATE), to_clap)
+        let (to_cues, to_mert) = streams.get_or_insert_with(|| {
+            let to_mert = (!windows.is_empty()).then(|| Resampler::new(rate, mert::SAMPLE_RATE));
+            (Resampler::new(rate, cues::SAMPLE_RATE), to_mert)
         });
         for_cues.clear();
         to_cues.process(&mono, &mut for_cues);
@@ -116,17 +116,17 @@ pub fn analyze(path: &Path, duration_seconds: f64, embed: bool) -> anyhow::Resul
         key.feed(&for_cues);
         fingerprint.feed(&for_cues);
 
-        if let Some(to_clap) = to_clap {
-            for_clap.clear();
-            to_clap.process(&mono, &mut for_clap);
+        if let Some(to_mert) = to_mert {
+            for_mert.clear();
+            to_mert.process(&mono, &mut for_mert);
             for window in &mut windows {
-                window.take(clap_position, &for_clap);
+                window.take(mert_position, &for_mert);
             }
-            clap_position += for_clap.len();
+            mert_position += for_mert.len();
         }
     }
 
-    let Some((mut to_cues, to_clap)) = streams else {
+    let Some((mut to_cues, to_mert)) = streams else {
         bail!("The file holds no decodable audio");
     };
     for_cues.clear();
@@ -135,11 +135,11 @@ pub fn analyze(path: &Path, duration_seconds: f64, embed: bool) -> anyhow::Resul
     key.feed(&for_cues);
     fingerprint.feed(&for_cues);
 
-    if let Some(mut to_clap) = to_clap {
-        for_clap.clear();
-        to_clap.finish(&mut for_clap);
+    if let Some(mut to_mert) = to_mert {
+        for_mert.clear();
+        to_mert.finish(&mut for_mert);
         for window in &mut windows {
-            window.take(clap_position, &for_clap);
+            window.take(mert_position, &for_mert);
         }
     }
 

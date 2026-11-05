@@ -118,11 +118,15 @@ The music folder is rescanned every hour (`LIBRARY_SCAN_INTERVAL_MINUTES`, `0` f
 and from the Upload page. A file that disappears stays in the library for 30 days, so a drive that
 is briefly disconnected costs no likes or history; a moved file keeps its track.
 
-The first start downloads the CLAP audio model (about 280 MB, checked against a pinned SHA-256)
-into `storage/models` in the background. The library and playback are available while the model
-loads; track analysis starts when it is ready. If loading fails, the server retries without a restart.
-To export it yourself instead, which takes PyTorch and several GB of RAM,
-run `make model` on a workstation and copy `storage/models/` to the server before the first start.
+Track analysis uses **MERT-Large v1 (330M)** on an NVIDIA GPU. The `mert` container
+downloads the pinned, ready-to-use weights (about 1.26 GB) from Hugging Face once
+and keeps them in `storage/models/mert`. No training or model export runs on the server.
+The library and playback are available while the model loads. Existing CLAP vectors
+are automatically replaced in the background; recommendations and the map use only
+compatible MERT vectors. Mood radio and mood labels have been removed.
+
+See [MERT deployment and cache reuse](docs/mert.md) and the optional
+[GPU benchmark](docs/mert-gpu-experiment.md).
 
 </details>
 
@@ -159,7 +163,7 @@ flowchart LR
     android["Android app<br/>Compose · Media3"]
     caddy["Caddy<br/>automatic HTTPS"]
     api["API<br/>Rust · axum"]
-    workers["Background workers<br/>ffmpeg HLS · CLAP embeddings · cue points<br/>recommendations · enrichment"]
+    workers["Background workers<br/>ffmpeg HLS · MERT GPU embeddings · cue points<br/>recommendations · enrichment"]
     db[("PostgreSQL 17")]
     disk[("storage/<br/>music · covers · hls · models")]
 
@@ -173,13 +177,13 @@ flowchart LR
     workers --> disk
 ```
 
-| Part | What it does |
-| --- | --- |
-| `backend/` | Rust API (axum, sqlx). Background workers transcode uploads to HLS with ffmpeg, analyse each track once for its CLAP audio embedding (ONNX Runtime), cue points and tempo, and look up lyrics (LRCLIB) and artist photos (Deezer). Recommendations, the library map and duplicate detection run in memory over a snapshot of the embeddings. |
-| `frontend/` | Next.js app with TanStack Query and hls.js. A service worker caches the shell, artwork and stream segments. |
-| `android/` | Kotlin client using Jetpack Compose and Media3: background playback, downloads, Android Auto and a quick-settings radio tile. |
-| `db/` | The database schema as numbered SQL migrations, applied by `caimack migrate` (the `migrate` service in Compose); the server only checks that the schema is current. See [db/README.md](db/README.md). |
-| `deploy/` | Caddyfile for the reverse proxy. |
+| Part        | What it does                                                                                                                                                                                                                                                                                                            |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `backend/`  | Rust API (axum, sqlx). Workers transcode uploads to HLS, analyse cue points and tempo, send audio fragments to the local MERT GPU service, and look up lyrics (LRCLIB) and artist photos (Deezer). Recommendations and the library map use an in-memory embedding snapshot; sound duplicate detection uses Chromaprint. |
+| `frontend/` | Next.js app with TanStack Query and hls.js. A service worker caches the shell, artwork and stream segments.                                                                                                                                                                                                             |
+| `android/`  | Kotlin client using Jetpack Compose and Media3: background playback, downloads, Android Auto and a quick-settings radio tile.                                                                                                                                                                                           |
+| `db/`       | The database schema as numbered SQL migrations, applied by `caimack migrate` (the `migrate` service in Compose); the server only checks that the schema is current. See [db/README.md](db/README.md).                                                                                                                   |
+| `deploy/`   | Caddyfile for the reverse proxy.                                                                                                                                                                                                                                                                                        |
 
 </details>
 

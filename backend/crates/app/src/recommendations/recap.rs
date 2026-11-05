@@ -142,12 +142,11 @@ impl Recommendations {
         .collect();
 
         let library = self.index.library();
-        let (totals, moods, sound) = self
+        let (totals, sound) = self
             .compute
             .run(move || {
                 (
                     recap::totals(&plays, &facts, days_in(year, month), TOP, threshold),
-                    recap::mood_shares(&plays, &library.snapshot, &library.moods),
                     recap::sound_of(&plays, &library.snapshot),
                 )
             })
@@ -250,7 +249,7 @@ impl Recommendations {
                 })
                 .collect(),
             top_genre,
-            moods: moods.into_iter().map(|(key, share)| RecapMoodDto { key, share }).collect(),
+            moods: vec![],
             day_seconds: totals.day_seconds,
             hour_seconds: totals.hour_seconds,
             sound_of_month: sound.and_then(|id| found_tracks.get(&id).cloned()),

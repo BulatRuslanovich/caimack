@@ -25,7 +25,6 @@ pub struct RadioRequestDto {
     pub seed_track_id: Option<Uuid>,
     pub exclude: Option<Vec<Uuid>>,
     pub limit: Option<i64>,
-    pub mood: Option<String>,
     pub focus: Option<String>,
 }
 
@@ -43,23 +42,13 @@ impl Recommendations {
         if !(1..=MAX_BATCH).contains(&limit) {
             return Err(AppError::validation("Radio limit must be between 1 and {0}.").arg(MAX_BATCH));
         }
-        if let Some(mood) = request.mood.as_deref()
-            && self.moods.find(mood).is_none()
-        {
-            return Err(AppError::validation("Unknown mood '{0}'.").arg(mood));
-        }
-
         let focus = match request.focus.as_deref() {
             None | Some("" | "balanced") => Focus::Balanced,
             Some("closer") => Focus::Closer,
             Some("wider") => Focus::Wider,
             Some(other) => return Err(AppError::validation("Unknown radio focus '{0}'.").arg(other)),
         };
-        let source = match (&request.mood, request.seed_track_id) {
-            (Some(mood), _) => format!("radio:mood:{mood}"),
-            (None, Some(_)) => "radio:track".to_owned(),
-            (None, None) => "radio".to_owned(),
-        };
+        let source = if request.seed_track_id.is_some() { "radio:track" } else { "radio" };
 
         let library = self.index.library();
         let snapshot = &library.snapshot;
@@ -78,14 +67,12 @@ impl Recommendations {
                 let snapshot = &computing_library.snapshot;
                 let taste = taste::taste(snapshot, &listener);
                 let session = Session::build(snapshot, &events, chrono::Utc::now().timestamp());
-                let mood = request.mood.as_deref().and_then(|mood| computing_library.moods.get(mood));
                 let request = RadioRequest {
                     seed: request.seed_track_id,
                     queue: &queue,
                     recent: &session.heard[session.heard.len().saturating_sub(3)..],
                     session: Some(&session),
                     limit: usize::try_from(limit).unwrap_or(1),
-                    mood,
                     focus,
                 };
                 radio::next(snapshot, &listener, &taste, &request)
@@ -102,7 +89,7 @@ impl Recommendations {
                 features: pick.features,
             })
             .collect();
-        if let Err(error) = impressions::record(&self.db, user, &source, &shown).await {
+        if let Err(error) = impressions::record(&self.db, user, source, &shown).await {
             tracing::error!("Recording radio impressions failed: {error}");
         }
 

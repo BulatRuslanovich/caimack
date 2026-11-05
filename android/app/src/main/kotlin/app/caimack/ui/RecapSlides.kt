@@ -229,39 +229,6 @@ internal fun HoursSlide(recap: Recap) {
     }
 }
 @Composable
-internal fun MoodSlide(recap: Recap, lead: String) {
-    val palette = LocalPalette.current
-    val container = LocalContainer.current
-    val context = LocalContext.current
-    var starting by remember { mutableStateOf(false) }
-
-    Eyebrow(stringResource(R.string.recap_mood_eyebrow))
-    Icon(moodIcon(lead), null, tint = palette.primary, modifier = Modifier.size(56.dp))
-    Text(moodLabel(lead), style = Huge)
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        recap.moods.take(4).forEach { mood ->
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(moodLabel(mood.key), style = Type.small, modifier = Modifier.width(96.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Box(Modifier.weight(1f).height(8.dp).clip(CircleShape).background(palette.foreground.copy(alpha = 0.15f))) {
-                    Box(Modifier.fillMaxWidth(mood.share.toFloat()).fillMaxHeight().clip(CircleShape).background(palette.primary))
-                }
-                Text("${(mood.share * 100).roundToInt()}%", style = Type.small, color = palette.muted, textAlign = TextAlign.End, modifier = Modifier.width(40.dp))
-            }
-        }
-    }
-    Chip(stringResource(R.string.recap_mood_radio, moodLabel(lead)), active = true, icon = moodIcon(lead), enabled = !starting) {
-        starting = true
-        container.scope.launch {
-            val batch = runCatching { container.radio(RadioRequest(null, emptyList(), lead)) }.getOrNull()
-            withContext(Dispatchers.Main) {
-                starting = false
-                if (batch == null || batch.tracks.isEmpty()) Toast.makeText(context, R.string.radio_failed, Toast.LENGTH_SHORT).show()
-                else container.player.playMyRadio(batch, lead)
-            }
-        }
-    }
-}
-@Composable
 internal fun SoundSlide(track: Track, play: (List<Track>, Int) -> Unit) {
     Eyebrow(stringResource(R.string.recap_sound_eyebrow))
     PlayableCover(track) { play(listOf(track), 0) }
@@ -297,7 +264,6 @@ internal fun SummarySlide(recap: Recap, onClose: () -> Unit, onRestart: () -> Un
     val facts = listOfNotNull(
         recap.topArtists.firstOrNull()?.let { stringResource(R.string.recap_summary_artist) to it.artist.name },
         recap.topTracks.firstOrNull()?.let { stringResource(R.string.recap_summary_track) to it.track.title },
-        recap.moods.firstOrNull()?.let { stringResource(R.string.recap_summary_mood) to moodLabel(it.key) },
         recap.topGenre?.let { stringResource(R.string.recap_summary_genre) to it },
     )
 

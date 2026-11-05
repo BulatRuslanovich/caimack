@@ -1,0 +1,34 @@
+# Optional experiment; run explicitly with -f docker-compose.mert.yml.
+services:
+  mert-init:
+    image: busybox:1.37.0
+    user: "0:0"
+    command:
+      - sh
+      - -c
+      - mkdir -p /output/huggingface /output/runs && chown ${PUID:-1000}:${PGID:-1000} /output /output/huggingface /output/runs
+    volumes:
+      - ${MERT_EXPERIMENT_PATH:-./storage/experiments/mert}:/output
+
+  mert-check:
+    build:
+      context: ./backend/scripts
+      dockerfile: Dockerfile.mert
+      target: runtime
+    user: "${PUID:-1000}:${PGID:-1000}"
+    depends_on:
+      mert-init:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    cpus: 2
+    mem_limit: 4g
+    volumes:
+      - ${MUSIC_STORAGE_PATH:-./storage}/music:/input/music:ro
+      - ${MUSIC_LIBRARY_PATH:-./library}:/input/library:ro
+      - ${MERT_EXPERIMENT_PATH:-./storage/experiments/mert}:/output

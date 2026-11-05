@@ -52,8 +52,6 @@ interface CaimackApi {
     @POST("api/recommendations/rules")
     suspend fun addTasteRule(@Body request: TasteRuleRequest): TasteRule
 
-    @GET("api/recommendations/moods")
-    suspend fun moods(): List<Mood>
 
     @GET("api/recap")
     suspend fun recap(): Response<Recap>

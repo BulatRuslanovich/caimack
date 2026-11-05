@@ -5,9 +5,9 @@ services:
     build: !reset null
     image: *backend-image
 
-  model:
+  mert:
     build: !reset null
-    image: *backend-image
+    image: ghcr.io/bulatruslanovich/caimack-mert:${CAIMACK_VERSION:-latest}
 
   backend:
     build: !reset null

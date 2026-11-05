@@ -52,9 +52,8 @@ async fn run() -> anyhow::Result<()> {
     match std::env::args().nth(1).as_deref() {
         Some("healthcheck") => std::process::exit(if healthcheck::healthy() { 0 } else { 1 }),
         Some("migrate") => return migrate().await,
-        Some("model") => return model().await,
         Some("serve") | None => {}
-        Some(other) => anyhow::bail!("Unknown command '{other}'. Commands: serve, migrate, model, healthcheck."),
+        Some(other) => anyhow::bail!("Unknown command '{other}'. Commands: serve, migrate, healthcheck."),
     }
 
     let _ = dotenvy::dotenv();
@@ -78,12 +77,7 @@ async fn run() -> anyhow::Result<()> {
         app::transcode::spawn(db.clone(), storage.clone(), transcodes.clone(), receivers, background.clone());
 
     let recommendations = Recommendations::new(db.clone());
-    workers.push(app::recommendations::index::spawn(
-        db.clone(),
-        recommendations.index.clone(),
-        Arc::clone(&recommendations.moods),
-        background.clone(),
-    ));
+    workers.push(app::recommendations::index::spawn(db.clone(), recommendations.index.clone(), background.clone()));
     workers.push(app::recommendations::sound::spawn(db.clone(), recommendations.index.clone(), background.clone()));
     workers.push(app::recommendations::maintenance::spawn(
         db.clone(),
@@ -93,7 +87,7 @@ async fn run() -> anyhow::Result<()> {
     workers.push(app::analysis::spawn(
         db.clone(),
         storage.clone(),
-        ModelConfig::from_env()?,
+        app::mert::MertClient::new(&ModelConfig::from_env()?)?,
         recommendations.index.clone(),
         background.clone(),
     ));
@@ -157,13 +151,6 @@ async fn migrate() -> anyhow::Result<()> {
 
     let db = app::db::connect(&DatabaseConfig::from_env()?).await?;
     app::schema::migrate(&db).await
-}
-
-async fn model() -> anyhow::Result<()> {
-    let _ = dotenvy::dotenv();
-    logging::init();
-
-    app::clap_model::ensure(&ModelConfig::from_env()?).await
 }
 
 async fn shutdown_signal() {

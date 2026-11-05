@@ -79,8 +79,7 @@ fun QueuePanel(state: PlayerState, onUndoable: (String, QueueSnapshot) -> Unit) 
     val current = order.indexOf(state.index).coerceAtLeast(0)
     val firstShown = if (showHistory) 0 else current
     val seedTitle = state.queue.firstOrNull { it.id == radio.seedTrackId }?.title
-    val radioLabel = radio.mood?.let { stringResource(R.string.queue_radio_mood, moodLabel(it)) }
-        ?: seedTitle?.let { stringResource(R.string.queue_radio_from, it) }
+    val radioLabel = seedTitle?.let { stringResource(R.string.queue_radio_from, it) }
         ?: stringResource(R.string.queue_similar)
     val upNextLabel = stringResource(R.string.queue_up_next)
 

@@ -6,7 +6,6 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
-use reco::moods::{LibraryMoods, MoodCatalog};
 use reco::snapshot::{self, Snapshot, TrackMeta};
 use sqlx::PgPool;
 use tokio::sync::Notify;
@@ -20,7 +19,6 @@ const CHECK_EVERY: Duration = Duration::from_secs(60);
 pub struct Library {
     pub generation: u64,
     pub snapshot: Snapshot,
-    pub moods: LibraryMoods,
 }
 
 #[derive(Clone)]
@@ -51,12 +49,8 @@ impl EmbeddingIndex {
         self.reload.notify_one();
     }
 
-    fn publish(&self, snapshot: Snapshot, moods: &MoodCatalog) {
-        let library = Library {
-            generation: self.generation.fetch_add(1, Ordering::Relaxed) + 1,
-            moods: moods.score(&snapshot),
-            snapshot,
-        };
+    fn publish(&self, snapshot: Snapshot) {
+        let library = Library { generation: self.generation.fetch_add(1, Ordering::Relaxed) + 1, snapshot };
         match self.current.write() {
             Ok(mut current) => *current = Arc::new(library),
             Err(poisoned) => *poisoned.into_inner() = Arc::new(library),
@@ -96,9 +90,12 @@ pub async fn load(db: &PgPool) -> sqlx::Result<Snapshot> {
            JOIN artists ar ON ar.id = t.artist_id
            LEFT JOIN track_stats s ON s.track_id = t.id
            LEFT JOIN track_cues c ON c.track_id = t.id
-           WHERE e.succeeded AND e.model_id = $1
+           WHERE e.succeeded AND e.model_id = $1 AND e.strategy = $2 AND e.dimension = $3
+             AND e.source_hash = t.content_hash
            ORDER BY e.track_id"#,
-        media::clap::MODEL_ID
+        media::mert::MODEL_ID,
+        media::mert::windows::STRATEGY,
+        media::mert::DIMENSION as i32
     )
     .fetch_all(db)
     .await?;
@@ -133,12 +130,7 @@ pub async fn load(db: &PgPool) -> sqlx::Result<Snapshot> {
     Ok(Snapshot::new(dimension, entries))
 }
 
-pub fn spawn(
-    db: PgPool,
-    index: EmbeddingIndex,
-    moods: Arc<MoodCatalog>,
-    cancel: CancellationToken,
-) -> tokio::task::JoinHandle<()> {
+pub fn spawn(db: PgPool, index: EmbeddingIndex, cancel: CancellationToken) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut last: Option<Signature> = None;
         let mut forced = true;
@@ -155,9 +147,8 @@ pub fn spawn(
                                 Err(error) => tracing::error!("Loading dismissed duplicates failed: {error}"),
                             }
                             let (count, dimension) = (snapshot.len(), snapshot.dimension());
-                            let moods = Arc::clone(&moods);
                             let index = index.clone();
-                            let published = tokio::task::spawn_blocking(move || index.publish(snapshot, &moods)).await;
+                            let published = tokio::task::spawn_blocking(move || index.publish(snapshot)).await;
                             if let Err(error) = published {
                                 tracing::error!("Publishing the embedding index failed: {error}");
                             } else {

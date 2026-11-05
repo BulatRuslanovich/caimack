@@ -20,7 +20,7 @@ export function RadioHero({ tracks }: { tracks: Track[] }) {
   const state = usePlayerState();
   const player = usePlayerActions();
   const start = useMutation({ mutationFn: () => player.startRadio() });
-  const active = Boolean(state.radioSession && !state.radioSession.mood);
+  const active = Boolean(state.radioSession);
   const playing = active && state.isPlaying;
   const art =
     (active ? state.currentTrack : null) ?? tracks.find((track) => track.hasCover) ?? tracks[0];

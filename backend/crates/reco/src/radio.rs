@@ -7,7 +7,6 @@ use uuid::Uuid;
 
 use serde::Serialize;
 
-use crate::moods::MoodScores;
 use crate::random::{self, Rng};
 use crate::rules::Verdict;
 use crate::session::Session;
@@ -42,7 +41,6 @@ pub struct RadioRequest<'a> {
     pub recent: &'a [Uuid],
     pub session: Option<&'a Session>,
     pub limit: usize,
-    pub mood: Option<&'a MoodScores>,
     pub focus: Focus,
 }
 
@@ -50,6 +48,7 @@ pub struct RadioRequest<'a> {
 pub struct Features {
     pub similarity: f32,
     pub fit: f32,
+    // Kept at zero for the historical impression feature schema.
     pub mood: f32,
     pub behaviour: f32,
     pub transition: f32,
@@ -78,21 +77,15 @@ pub struct RadioBatch {
 struct Weights {
     similarity: f64,
     fit: f64,
-    mood: f64,
     behaviour: f64,
     transition: f64,
     sameness: f64,
 }
 
-fn weights(mood: bool, taste: bool, focus: Focus) -> Weights {
-    let base = match (mood, taste) {
-        (true, _) => Weights { similarity: 0.4, fit: 0.15, mood: 0.3, behaviour: 0.05, transition: 0.1, sameness: 0.3 },
-        (false, false) => {
-            Weights { similarity: 0.85, fit: 0.0, mood: 0.0, behaviour: 0.0, transition: 0.15, sameness: 0.3 }
-        }
-        (false, true) => {
-            Weights { similarity: 0.55, fit: 0.2, mood: 0.0, behaviour: 0.1, transition: 0.15, sameness: 0.3 }
-        }
+fn weights(taste: bool, focus: Focus) -> Weights {
+    let base = match taste {
+        false => Weights { similarity: 0.85, fit: 0.0, behaviour: 0.0, transition: 0.15, sameness: 0.3 },
+        true => Weights { similarity: 0.55, fit: 0.2, behaviour: 0.1, transition: 0.15, sameness: 0.3 },
     };
     match focus {
         Focus::Balanced => base,
@@ -115,7 +108,7 @@ struct Candidate {
 }
 
 pub fn next(snapshot: &Snapshot, listener: &Listener, taste: &Taste, request: &RadioRequest<'_>) -> RadioBatch {
-    if snapshot.is_empty() || request.mood.is_some_and(|mood| !mood.playable()) {
+    if snapshot.is_empty() {
         return RadioBatch::default();
     }
     let mut rng =
@@ -142,9 +135,8 @@ pub fn next(snapshot: &Snapshot, listener: &Listener, taste: &Taste, request: &R
 
     let seed = if session.skip_streak >= 2 { session.last_good } else { request.seed };
     let seed = seed.and_then(|seed| snapshot.row_of(seed));
-    let (anchor, moved) = match (request.mood, seed) {
-        (Some(mood), _) => (mood_anchor(snapshot, mood, taste, &excluded, &mut rng), false),
-        (None, Some(seeded)) => match stuck(snapshot, seeded, tail) {
+    let (anchor, moved) = match seed {
+        Some(seeded) => match stuck(snapshot, seeded, tail) {
             Some(seed_artists) if !taste.is_empty() => {
                 let other = other_mode(taste, snapshot.vector(seeded), &mut rng);
                 let skip = |row: usize| snapshot.meta(row).artists.iter().any(|a| seed_artists.contains(a));
@@ -155,11 +147,11 @@ pub fn next(snapshot: &Snapshot, listener: &Listener, taste: &Taste, request: &R
             }
             _ => (Some(seeded), false),
         },
-        (None, None) if !taste.is_empty() => {
+        None if !taste.is_empty() => {
             let mode = pick_mode(taste, &mut rng);
             (taste_anchor(snapshot, &taste.modes[mode].centre, &excluded, &mut rng, |_| false), false)
         }
-        (None, None) => {
+        None => {
             let open: Vec<usize> = (0..snapshot.len()).filter(|row| !excluded.contains(row)).collect();
             if open.is_empty() {
                 return RadioBatch::default();
@@ -176,7 +168,7 @@ pub fn next(snapshot: &Snapshot, listener: &Listener, taste: &Taste, request: &R
         recent_artists.extend(snapshot.meta(seeded).artists.iter().copied());
     }
 
-    let mut weights = weights(request.mood.is_some(), !taste.is_empty(), request.focus);
+    let mut weights = weights(!taste.is_empty(), request.focus);
     if session.skip_streak >= 2 {
         weights.similarity *= 0.4;
     }
@@ -184,13 +176,12 @@ pub fn next(snapshot: &Snapshot, listener: &Listener, taste: &Taste, request: &R
     let session_weight = if request.seed.is_some_and(|seed| Some(seed) != session.current) { 0.15 } else { 0.65 };
     let mut ranked: Vec<Candidate> = (0..snapshot.len())
         .filter(|row| !excluded.contains(row))
-        .filter(|&row| request.mood.is_none_or(|mood| mood.members[row]))
         .map(|row| {
             let meta = snapshot.meta(row);
             let features = Features {
                 similarity: anchor_similarity[row],
                 fit: taste.fit.get(row).copied().unwrap_or(0.0),
-                mood: request.mood.map_or(0.0, |mood| mood.ranks[row]),
+                mood: 0.0,
                 #[expect(clippy::cast_possible_truncation, reason = "a score in [0, 1]")]
                 behaviour: ((taste::behaviour(taste, &meta.artists, meta.genre_id) + 1.0) / 2.0) as f32,
                 transition: 0.0,
@@ -201,7 +192,6 @@ pub fn next(snapshot: &Snapshot, listener: &Listener, taste: &Taste, request: &R
             };
             let mut base = weights.similarity * f64::from(features.similarity)
                 + weights.fit * f64::from(features.fit)
-                + weights.mood * f64::from(features.mood)
                 + weights.behaviour * f64::from(features.behaviour)
                 + session_weight * f64::from(features.session);
             base -= (1.0 - recency(listener, meta.track_id)) * 0.4;
@@ -357,22 +347,6 @@ impl<'a> Sequence<'a> {
     }
 }
 
-fn mood_anchor(
-    snapshot: &Snapshot,
-    mood: &MoodScores,
-    taste: &Taste,
-    excluded: &HashSet<usize>,
-    rng: &mut Rng,
-) -> Option<usize> {
-    let mut candidates: Vec<(usize, f32)> = (0..snapshot.len())
-        .filter(|&row| mood.members[row] && !excluded.contains(&row))
-        .map(|row| (row, mood.ranks[row] + taste.fit.get(row).copied().unwrap_or(0.0)))
-        .collect();
-    candidates.sort_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
-    candidates.truncate(ANCHOR_CANDIDATES);
-    (!candidates.is_empty()).then(|| candidates[rng.below(candidates.len())].0)
-}
-
 fn taste_anchor(
     snapshot: &Snapshot,
     centre: &[f32],
@@ -474,7 +448,6 @@ mod tests {
             recent: &[],
             session: None,
             limit: 10,
-            mood: None,
             focus: Focus::Balanced,
         };
         let batch = next(&snapshot, &listener, &taste, &request);
@@ -492,15 +465,8 @@ mod tests {
         let snapshot = library();
         for listener in [listener(&[]), listener(&[(1, 2.0), (4, 1.0)])] {
             let taste = taste(&snapshot, &listener);
-            let request = RadioRequest {
-                seed: None,
-                queue: &[],
-                recent: &[],
-                session: None,
-                limit: 3,
-                mood: None,
-                focus: Focus::Balanced,
-            };
+            let request =
+                RadioRequest { seed: None, queue: &[], recent: &[], session: None, limit: 3, focus: Focus::Balanced };
             let batch = next(&snapshot, &listener, &taste, &request);
             assert!(batch.anchor.is_some());
             assert_eq!(batch.picks.len(), 3);
@@ -521,7 +487,6 @@ mod tests {
             recent: &[],
             session: None,
             limit: 5,
-            mood: None,
             focus: Focus::Balanced,
         };
         let batch = next(&snapshot, &listener, &taste, &request);
@@ -532,7 +497,7 @@ mod tests {
     }
 
     fn request<'a>(seed: Option<u128>, queue: &'a [Uuid], limit: usize, focus: Focus) -> RadioRequest<'a> {
-        RadioRequest { seed: seed.map(Uuid::from_u128), queue, recent: &[], session: None, limit, mood: None, focus }
+        RadioRequest { seed: seed.map(Uuid::from_u128), queue, recent: &[], session: None, limit, focus }
     }
 
     fn cluster(snapshot: &Snapshot, row: usize) -> usize {

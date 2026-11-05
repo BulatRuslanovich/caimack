@@ -91,7 +91,6 @@ fun HomeScreen(nav: NavController) {
             item("recap") { RecapBanner() }
             val browse = blocks.filter { it.zone == "Browse" }
             browse.firstOrNull()?.let { block -> item(block.key) { Block(block, nav, shown, seen) } }
-            item("moods") { MoodRadio() }
             browse.drop(1).forEach { block -> item(block.key) { Block(block, nav, shown, seen) } }
         }
     }

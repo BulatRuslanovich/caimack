@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT t.id, t.file_path, t.content_hash, t.duration_seconds,\n                    (e.track_id IS NULL OR e.model_id <> $2 OR e.strategy <> $3 OR e.source_hash <> t.content_hash\n                     OR (NOT e.succeeded AND e.analyzed_at <= $4)) AS \"embed!\"\n             FROM tracks t\n             LEFT JOIN track_cues c ON c.track_id = t.id\n             LEFT JOIN track_embeddings e ON e.track_id = t.id\n             WHERE c.track_id IS NULL OR c.version <> $1 OR c.source_hash <> t.content_hash\n                OR (NOT c.succeeded AND c.analyzed_at <= $4)\n                OR e.track_id IS NULL OR e.model_id <> $2 OR e.strategy <> $3 OR e.source_hash <> t.content_hash\n                OR (NOT e.succeeded AND e.analyzed_at <= $4)\n             ORDER BY t.created_at DESC\n             LIMIT $5",
+  "query": "SELECT t.id, t.file_path, t.content_hash, t.duration_seconds,\n                    (e.track_id IS NULL OR e.model_id <> $2 OR e.strategy <> $3 OR e.source_hash <> t.content_hash\n                     OR (e.succeeded AND e.dimension <> $6)\n                     OR (NOT e.succeeded AND e.analyzed_at <= $4)) AS \"embed!\"\n             FROM tracks t\n             LEFT JOIN track_cues c ON c.track_id = t.id\n             LEFT JOIN track_embeddings e ON e.track_id = t.id\n             WHERE c.track_id IS NULL OR c.version <> $1 OR c.source_hash <> t.content_hash\n                OR (NOT c.succeeded AND c.analyzed_at <= $4)\n                OR e.track_id IS NULL OR e.model_id <> $2 OR e.strategy <> $3 OR e.source_hash <> t.content_hash\n                OR (e.succeeded AND e.dimension <> $6)\n                OR (NOT e.succeeded AND e.analyzed_at <= $4)\n             ORDER BY t.created_at DESC\n             LIMIT $5",
   "describe": {
     "columns": [
       {
@@ -60,7 +60,8 @@
         "Text",
         "Text",
         "Timestamptz",
-        "Int8"
+        "Int8",
+        "Int4"
       ]
     },
     "nullable": [
@@ -71,5 +72,5 @@
       null
     ]
   },
-  "hash": "bb9b5d3dc030cdb43a551379dc1eb7209a0400e3feb9be2057e0acf236b8ce51"
+  "hash": "932c051965a5923f43bc73380aeae7d977a5e532340938b45c4a1c0cc271ccc5"
 }

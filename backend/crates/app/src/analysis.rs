@@ -1,20 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Bulat Ruslanovich
 
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use chrono::Utc;
 use media::analysis::Analysis;
-use media::clap::{self, ClapEmbedder};
 use media::cues;
 use media::key::MusicalKey;
 use media::loudness::Loudness;
+use media::mert;
 use sqlx::PgPool;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::config::ModelConfig;
+use crate::mert::MertClient;
 use crate::recommendations::index::EmbeddingIndex;
 use crate::storage::Storage;
 
@@ -26,18 +25,17 @@ const RETRY_FAILED_AFTER: chrono::Duration = chrono::Duration::days(7);
 pub fn spawn(
     db: PgPool,
     storage: Storage,
-    model: ModelConfig,
+    embedder: MertClient,
     index: EmbeddingIndex,
     cancel: CancellationToken,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        let Some(embedder) = crate::clap_model::load_when_ready(&model, &cancel).await else { return };
         tokio::select! {
             () = cancel.cancelled() => return,
             () = tokio::time::sleep(STARTUP_DELAY) => {}
         }
         loop {
-            match run_pass(&db, &storage, &embedder, &cancel).await {
+            match run_pass(&db, &storage, &embedder, &index, &cancel).await {
                 Ok(analysed) if analysed > 0 => index.request_reload(),
                 Ok(_) => {}
                 Err(error) => tracing::error!("Track analysis pass failed: {error:#}"),
@@ -53,15 +51,18 @@ pub fn spawn(
 async fn run_pass(
     db: &PgPool,
     storage: &Storage,
-    embedder: &Arc<ClapEmbedder>,
+    embedder: &MertClient,
+    index: &EmbeddingIndex,
     cancel: &CancellationToken,
 ) -> anyhow::Result<usize> {
+    embedder.ready().await?;
     let mut analysed = 0;
     loop {
         let retry_before = Utc::now() - RETRY_FAILED_AFTER;
         let batch = sqlx::query!(
             r#"SELECT t.id, t.file_path, t.content_hash, t.duration_seconds,
                     (e.track_id IS NULL OR e.model_id <> $2 OR e.strategy <> $3 OR e.source_hash <> t.content_hash
+                     OR (e.succeeded AND e.dimension <> $6)
                      OR (NOT e.succeeded AND e.analyzed_at <= $4)) AS "embed!"
              FROM tracks t
              LEFT JOIN track_cues c ON c.track_id = t.id
@@ -69,14 +70,16 @@ async fn run_pass(
              WHERE c.track_id IS NULL OR c.version <> $1 OR c.source_hash <> t.content_hash
                 OR (NOT c.succeeded AND c.analyzed_at <= $4)
                 OR e.track_id IS NULL OR e.model_id <> $2 OR e.strategy <> $3 OR e.source_hash <> t.content_hash
+                OR (e.succeeded AND e.dimension <> $6)
                 OR (NOT e.succeeded AND e.analyzed_at <= $4)
              ORDER BY t.created_at DESC
              LIMIT $5"#,
             cues::VERSION,
-            clap::MODEL_ID,
-            clap::windows::STRATEGY,
+            mert::MODEL_ID,
+            mert::windows::STRATEGY,
             retry_before,
-            BATCH
+            BATCH,
+            mert::DIMENSION as i32
         )
         .fetch_all(db)
         .await?;
@@ -90,7 +93,7 @@ async fn run_pass(
             }
             let started = Instant::now();
             let outcome =
-                analyze(storage, embedder, &track.file_path, f64::from(track.duration_seconds), track.embed).await;
+                analyze(storage, embedder, &track.file_path, f64::from(track.duration_seconds), track.embed).await?;
             match save(db, track.id, &track.content_hash, &outcome).await {
                 Err(sqlx::Error::Database(error)) if error.is_foreign_key_violation() => {
                     tracing::debug!("Track {} was deleted during analysis", track.id);
@@ -114,6 +117,7 @@ async fn run_pass(
                 }
             );
         }
+        index.request_reload();
     }
 }
 
@@ -138,46 +142,50 @@ impl Outcome {
 
 async fn analyze(
     storage: &Storage,
-    embedder: &Arc<ClapEmbedder>,
+    embedder: &MertClient,
     file_path: &str,
     duration: f64,
     embed: bool,
-) -> Outcome {
+) -> anyhow::Result<Outcome> {
     let Some(source) = storage.existing(file_path) else {
         tracing::warn!("Track at {file_path} cannot be analysed: the file is missing from storage");
-        return Outcome::failed(embed, "source_missing");
+        return Ok(Outcome::failed(embed, "source_missing"));
     };
-
-    let embedder = Arc::clone(embedder);
-    let Ok(permit) = crate::background::permit().await else { return Outcome::failed(embed, "worker_closed") };
-    let work = tokio::task::spawn_blocking(move || -> anyhow::Result<(Analysis, Option<anyhow::Result<Vec<f32>>>)> {
+    let Ok(permit) = crate::background::permit().await else {
+        return Ok(Outcome::failed(embed, "worker_closed"));
+    };
+    let work = tokio::task::spawn_blocking(move || -> anyhow::Result<Analysis> {
         let _permit = permit;
-        let analysis = media::analysis::analyze(&source, duration, embed)?;
-        let vector = embed.then(|| embedder.embed(&analysis.windows));
-        Ok((analysis, vector))
+        media::analysis::analyze(&source, duration, embed)
     })
     .await;
 
     match work {
-        Ok(Ok((analysis, vector))) => Outcome {
-            cues: analysis.cues,
-            loudness: analysis.loudness,
-            key: analysis.key,
-            fingerprint: analysis.fingerprint,
-            vector: vector.map(|vector| {
-                vector.map_err(|error| {
-                    tracing::warn!("Embedding of {file_path} failed: {error:#}");
-                    "embedding_failed"
-                })
-            }),
-        },
+        Ok(Ok(analysis)) => {
+            let vector = if !embed {
+                None
+            } else if analysis.windows.is_empty() {
+                Some(Err("no_audio_fragments"))
+            } else {
+                // Service outages must be retried next pass, not stored as a
+                // per-track failure that suppresses analysis for seven days.
+                Some(Ok(embedder.embed(&analysis.windows).await?))
+            };
+            Ok(Outcome {
+                cues: analysis.cues,
+                loudness: analysis.loudness,
+                key: analysis.key,
+                fingerprint: analysis.fingerprint,
+                vector,
+            })
+        }
         Ok(Err(error)) => {
             tracing::warn!("Analysis of {file_path} failed: {error:#}");
-            Outcome::failed(embed, "embedding_failed")
+            Ok(Outcome::failed(embed, "decode_failed"))
         }
         Err(error) => {
             tracing::error!("Analysis of {file_path} crashed: {error}");
-            Outcome::failed(embed, "embedding_failed")
+            Ok(Outcome::failed(embed, "decode_failed"))
         }
     }
 }
@@ -263,8 +271,8 @@ async fn save(db: &PgPool, track: Uuid, content_hash: &str, outcome: &Outcome) -
         track,
         &vector,
         i32::try_from(vector.len()).unwrap_or(0),
-        clap::MODEL_ID,
-        clap::windows::STRATEGY,
+        mert::MODEL_ID,
+        mert::windows::STRATEGY,
         content_hash,
         error.is_none(),
         error,
@@ -284,5 +292,68 @@ mod tests {
     #[test]
     fn cue_seconds_keep_three_decimals() {
         assert_eq!(milliseconds(36.014_149_659_863_946), 36.014);
+    }
+
+    #[cfg(feature = "integration-tests")]
+    #[sqlx::test(migrations = "../../../db/migrations")]
+    #[ignore = "requires the local MERT GPU service and three 12-second FLAC fixtures in MERT_TEST_STORAGE/music"]
+    async fn gpu_backfill_replaces_clap_and_feeds_radio_and_map(db: PgPool) -> anyhow::Result<()> {
+        use crate::config::ModelConfig;
+
+        let root = std::env::var("MERT_TEST_STORAGE")?;
+        let storage = Storage::open(std::path::Path::new(&root))?;
+        for index in 0..3 {
+            let artist = Uuid::now_v7();
+            let track = Uuid::now_v7();
+            let file = format!("music/sample-{index}.flac");
+            anyhow::ensure!(storage.existing(&file).is_some(), "Missing fixture {file}");
+            sqlx::query("INSERT INTO artists(id,name,normalized_name,created_at) VALUES ($1,$2,$2,now())")
+                .bind(artist)
+                .bind(format!("Artist {index}"))
+                .execute(&db)
+                .await?;
+            sqlx::query("INSERT INTO tracks(id,title,normalized_title,artist_id,duration_seconds,file_path,original_file_name,mime_type,file_size,content_hash,created_at) VALUES ($1,$2,$2,$3,12,$4,$4,'audio/flac',1,$4,now())")
+                .bind(track).bind(format!("Sample {index}")).bind(artist).bind(&file).execute(&db).await?;
+            let mut old = vec![0.0_f32; 512];
+            old[0] = 1.0;
+            sqlx::query("INSERT INTO track_embeddings(track_id,vector,dimension,model_id,strategy,source_hash,succeeded,analyzed_at) VALUES ($1,$2,512,'laion/larger_clap_music_and_speech','clap_body_v3',$3,true,now())")
+                .bind(track).bind(old).bind(&file).execute(&db).await?;
+        }
+        assert!(crate::recommendations::index::load(&db).await?.is_empty());
+        let client = MertClient::new(&ModelConfig::from_env()?)?;
+        let count = run_pass(&db, &storage, &client, &EmbeddingIndex::default(), &CancellationToken::new()).await?;
+        assert_eq!(count, 3);
+        let results: Vec<(bool, Option<String>)> =
+            sqlx::query_as("SELECT succeeded,error FROM track_embeddings").fetch_all(&db).await?;
+        assert!(results.iter().all(|(succeeded, _)| *succeeded), "{results:?}");
+        let snapshot = crate::recommendations::index::load(&db).await?;
+        assert_eq!(snapshot.len(), 3);
+        assert_eq!(snapshot.dimension(), mert::DIMENSION);
+        let listener = reco::taste::Listener {
+            user: Uuid::now_v7(),
+            now: Utc::now().timestamp(),
+            day: 1,
+            tracks: Default::default(),
+            rules: Default::default(),
+        };
+        let taste = reco::taste::taste(&snapshot, &listener);
+        let radio = reco::radio::next(
+            &snapshot,
+            &listener,
+            &taste,
+            &reco::radio::RadioRequest {
+                seed: Some(snapshot.meta(0).track_id),
+                queue: &[],
+                recent: &[],
+                session: None,
+                limit: 2,
+                focus: Default::default(),
+            },
+        );
+        assert!(!radio.picks.is_empty());
+        let map = reco::map::layout(&snapshot, None);
+        assert_eq!(map.len(), 3);
+        assert!(map.x.iter().chain(&map.y).all(|value| value.is_finite()));
+        Ok(())
     }
 }

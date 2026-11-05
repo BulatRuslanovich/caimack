@@ -311,12 +311,12 @@ function PlayerSessionProvider({
   }, [advance, chooseSleepTimer, currentIndex, repeat, resetProgress, seek, stopsAtTrackEnd]);
 
   const startRadio = useCallback(
-    async (seedTrack?: Track | null, mood?: string | null) => {
-      const tracks = await startRadioSession(seedTrack, mood);
+    async (seedTrack?: Track | null) => {
+      const tracks = await startRadioSession(seedTrack);
       if (tracks) {
         tagSource(
           tracks.filter((track) => track.id !== seedTrack?.id).map((track) => track.id),
-          radioSource(mood, Boolean(seedTrack)),
+          radioSource(null, Boolean(seedTrack)),
         );
         replaceQueue(tracks, 0);
       }

@@ -41,7 +41,6 @@ import app.caimack.R
 
 internal enum class MapLayer(val key: String, @param:StringRes val label: Int) {
     Links("links", R.string.map_layer_links),
-    Moods("moods", R.string.map_layer_moods),
 }
 
 @Composable

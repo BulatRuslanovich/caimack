@@ -17,9 +17,6 @@ mod session;
 pub mod sound;
 pub mod stats;
 
-use std::sync::Arc;
-
-use reco::moods::MoodCatalog;
 use serde::Serialize;
 use serde_with::skip_serializing_none;
 use sqlx::PgPool;
@@ -34,7 +31,6 @@ use crate::catalog::dto::TrackDto;
 pub struct Recommendations {
     pub db: PgPool,
     pub index: EmbeddingIndex,
-    pub moods: Arc<MoodCatalog>,
     pub listeners: Listeners,
     pub map: MapCache,
     compute: compute::ComputePool,
@@ -42,14 +38,9 @@ pub struct Recommendations {
 
 impl Recommendations {
     pub fn new(db: PgPool) -> Self {
-        let moods = MoodCatalog::load(media::clap::MODEL_ID).unwrap_or_else(|error| {
-            tracing::warn!("Mood radio is off: {error}");
-            MoodCatalog::default()
-        });
         Self {
             db,
             index: EmbeddingIndex::default(),
-            moods: Arc::new(moods),
             listeners: Listeners::default(),
             map: MapCache::default(),
             compute: compute::ComputePool::default(),

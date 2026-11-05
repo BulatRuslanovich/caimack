@@ -21,7 +21,6 @@ import {
   Discoveries,
   Hours,
   Intro,
-  Mood,
   Sound,
   Summary,
   Time,
@@ -272,8 +271,6 @@ function useSlides(recap: Recap, onClose: () => void, onRestart: () => void): Sl
       art: fallbackArt,
       body: <Hours hourSeconds={recap.hourSeconds} {...hours} />,
     });
-  if (recap.moods.length > 0)
-    slides.push({ key: "mood", art: fallbackArt, body: <Mood recap={recap} /> });
   if (recap.soundOfMonth) {
     slides.push({
       key: "sound",

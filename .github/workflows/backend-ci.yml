@@ -55,6 +55,9 @@ jobs:
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
 
+      - name: Test MERT protocol and benchmark helpers
+        run: python3 -m unittest discover -s scripts -p 'test_*mert.py'
+
       - name: Migrate the database
         run: cargo run --locked -- migrate
 
@@ -66,4 +69,3 @@ jobs:
 
       - name: Test
         run: cargo test --workspace --all-features --locked
-

@@ -44,9 +44,6 @@ export const queries = {
       },
     }),
 
-  moods: () =>
-    queryOptions({ queryKey: ["moods"], queryFn: () => api.moods(), staleTime: Infinity }),
-
   sessions: () => queryOptions({ queryKey: ["sessions"], queryFn: () => api.sessions() }),
   signIns: () => queryOptions({ queryKey: ["signIns"], queryFn: () => api.signIns() }),
   invitations: () => queryOptions({ queryKey: ["invitations"], queryFn: () => api.invitations() }),

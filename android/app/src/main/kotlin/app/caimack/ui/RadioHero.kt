@@ -50,7 +50,7 @@ internal fun RadioHero(candidates: List<Track>) {
     val scope = rememberCoroutineScope()
     val playback by container.player.state.collectAsStateWithLifecycle()
     val radio by container.radio.state.collectAsStateWithLifecycle()
-    val active = radio.active && playback.current != null && radio.mood == null && radio.seedTrackId == null
+    val active = radio.active && playback.current != null && radio.seedTrackId == null
     val playing = active && playback.playing
     var starting by remember { mutableStateOf(false) }
     val lead = (if (active) playback.current else null) ?: candidates.firstOrNull { it.hasCover } ?: candidates.firstOrNull()

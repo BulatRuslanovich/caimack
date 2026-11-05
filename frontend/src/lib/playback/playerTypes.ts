@@ -10,7 +10,6 @@ export type RadioState = "idle" | "loading" | "empty" | "failed";
 
 export interface RadioSessionState {
   seedTrackId?: string | null;
-  mood?: string | null;
   focus?: RadioFocus | null;
   reasons: Record<string, RecommendationReason>;
 
@@ -86,7 +85,7 @@ export interface PlayerActions {
   patchTrack: (trackId: string, changes: Partial<Track>) => void;
   snapshotQueue: () => QueueSnapshot;
   restoreQueue: (snapshot: QueueSnapshot) => void;
-  startRadio: (seedTrack?: Track | null, mood?: string | null) => Promise<boolean>;
+  startRadio: (seedTrack?: Track | null) => Promise<boolean>;
   setRadioFocus: (focus: RadioFocus) => void;
   continueHere: () => Promise<boolean>;
 }

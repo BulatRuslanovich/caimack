@@ -127,8 +127,8 @@ class PlayerConnection(
 
     fun resume() = withController { it.play() }
 
-    fun playMyRadio(batch: RadioBatch, mood: String? = null) = withController {
-        radio.start(null, batch, mood)
+    fun playMyRadio(batch: RadioBatch) = withController {
+        radio.start(null, batch)
         load(it, batch.tracks.map { recommended -> recommended.track }, 0)
     }
 

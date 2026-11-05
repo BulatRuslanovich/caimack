@@ -14,8 +14,6 @@ use super::index::Library;
 use super::{Recommendations, compute::ComputePool};
 use crate::{AppResult, json};
 
-const LANDMARK_TRACKS: usize = 30;
-
 #[derive(Default)]
 struct MapState {
     generation: u64,
@@ -152,11 +150,9 @@ impl Recommendations {
         self.compute
             .run(move || {
                 let mut points = Vec::with_capacity(layout.len());
-                let mut positions: HashMap<Uuid, (f32, f32)> = HashMap::with_capacity(layout.len());
                 for (index, id) in layout.tracks.iter().enumerate() {
                     let Some(track) = tracks.get(id) else { continue };
                     let (x, y) = (layout.x[index], layout.y[index]);
-                    positions.insert(*id, (x, y));
                     points.push(MapPointDto {
                         id: *id,
                         x: rounded(x),
@@ -170,25 +166,11 @@ impl Recommendations {
                     });
                 }
 
-                let snapshot = &library.snapshot;
-                let landmarks = library
-                    .moods
-                    .playable()
-                    .filter_map(|(mood, scores)| {
-                        let spots: Vec<(f32, f32, f32)> = scores
-                            .top_members()
-                            .into_iter()
-                            .filter_map(|row| {
-                                positions.get(&snapshot.meta(row).track_id).map(|&(x, y)| (x, y, scores.ranks[row]))
-                            })
-                            .take(LANDMARK_TRACKS)
-                            .collect();
-                        let (x, y) = map::densest_spot(&spots)?;
-                        Some(MapLandmarkDto { mood: mood.to_owned(), x: rounded(x), y: rounded(y) })
-                    })
-                    .collect();
-
-                LibraryMapDto { points, landmarks, total_tracks: i64::try_from(tracks.len()).unwrap_or(i64::MAX) }
+                LibraryMapDto {
+                    points,
+                    landmarks: vec![],
+                    total_tracks: i64::try_from(tracks.len()).unwrap_or(i64::MAX),
+                }
             })
             .await
     }

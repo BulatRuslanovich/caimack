@@ -11,7 +11,7 @@ migrate: db
 	cd backend && cargo sqlx migrate run --source ../db/migrations
 
 model:
-	@test -f storage/models/clap/model.json || docker compose --profile model run --rm clap-model
+	docker compose run --rm mert --download-only
 
 backend: migrate
 	cd backend && cargo run

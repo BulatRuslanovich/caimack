@@ -22,7 +22,6 @@ import { blockHref, blockNote, blockSubjectHref, blockTitle } from "./blockMeta"
 import { DailyMix, HERO_PREVIEW_SIZE } from "./DailyMix";
 import { capFiveOnMobile, deferredSection, listPanel } from "./layout";
 import { MixCover } from "./MixCover";
-import { MoodRadio } from "./MoodRadio";
 import { RecapBanner } from "./RecapBanner";
 import { QuickTiles } from "./QuickTiles";
 import { RadioHero } from "./RadioHero";
@@ -111,8 +110,6 @@ function Blocks({ blocks }: { blocks: HomeBlock[] }) {
       <RecapBanner />
 
       {browse[0]}
-
-      <MoodRadio />
 
       {browse.slice(1)}
     </div>

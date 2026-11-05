@@ -3,12 +3,10 @@
 
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
 import { PauseIcon, PlayIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { formatArtists, genreName } from "@/lib/format";
-import { moodLabel } from "@/lib/moods";
 import {
   DAYPART_HOURS,
   capitalize,
@@ -20,10 +18,8 @@ import {
 import type { Artist, Recap, Track } from "@/lib/types";
 import { useFormat } from "@/lib/useFormat";
 import { usePlayback } from "@/lib/playback/usePlayback";
-import { usePlayerActions } from "@/contexts/PlayerContext";
 import { useI18n, useT } from "@/contexts/I18nContext";
 import { ArtistCover, TrackCover } from "@/components/Cover";
-import { MoodIcon } from "@/components/MoodIcon";
 import { Button } from "@/components/ui/button";
 
 function Eyebrow({ children }: { children: ReactNode }) {
@@ -278,46 +274,6 @@ export function Hours({
   );
 }
 
-export function Mood({ recap }: { recap: Recap }) {
-  const t = useT();
-  const player = usePlayerActions();
-  const start = useMutation({ mutationFn: (mood: string) => player.startRadio(null, mood) });
-  const lead = recap.moods[0];
-
-  return (
-    <>
-      <Eyebrow>{t("recap.mood.eyebrow")}</Eyebrow>
-      <MoodIcon mood={lead.key} className="size-16 text-primary" strokeWidth={1.75} />
-      <h2 className={huge}>{moodLabel(lead.key, t)}</h2>
-      <ul className="flex flex-col gap-2">
-        {recap.moods.slice(0, 4).map((mood) => (
-          <li
-            key={mood.key}
-            className="grid grid-cols-[7rem_minmax(0,1fr)_3rem] items-center gap-3"
-          >
-            <span className="truncate">{moodLabel(mood.key, t)}</span>
-            <span className="h-2 overflow-hidden rounded-full bg-foreground/15">
-              <span
-                className="block h-full rounded-full bg-primary"
-                style={{ width: `${mood.share * 100}%` }}
-              />
-            </span>
-            <span className="text-right text-muted-foreground tabular-nums">
-              {Math.round(mood.share * 100)}%
-            </span>
-          </li>
-        ))}
-      </ul>
-      <div>
-        <Button variant="primary" onClick={() => start.mutate(lead.key)} disabled={start.isPending}>
-          <MoodIcon mood={lead.key} size={16} />
-          {t("recap.mood.radio", { mood: moodLabel(lead.key, t) })}
-        </Button>
-      </div>
-    </>
-  );
-}
-
 export function Sound({ track }: { track: Track }) {
   const t = useT();
 
@@ -380,12 +336,10 @@ export function Summary({
 }) {
   const t = useT();
   const format = useFormat();
-  const mood = recap.moods[0];
 
   const facts = [
     [t("recap.summary.artist"), recap.topArtists[0]?.artist.name],
     [t("recap.summary.track"), recap.topTracks[0]?.track.title],
-    [t("recap.summary.mood"), mood ? moodLabel(mood.key, t) : null],
     [t("recap.summary.genre"), recap.topGenre && genreName(recap.topGenre)],
   ].filter((fact): fact is [string, string] => Boolean(fact[1]));
 

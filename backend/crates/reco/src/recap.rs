@@ -5,7 +5,6 @@ use std::collections::{HashMap, HashSet};
 
 use uuid::Uuid;
 
-use crate::moods::LibraryMoods;
 use crate::snapshot::Snapshot;
 use crate::vector::{self, dot};
 
@@ -119,26 +118,6 @@ pub fn totals(
         day_seconds: days,
         hour_seconds: hours,
     }
-}
-
-pub fn mood_shares(plays: &[Play], snapshot: &Snapshot, moods: &LibraryMoods) -> Vec<(String, f64)> {
-    if moods.scores.is_empty() || snapshot.is_empty() {
-        return vec![];
-    }
-    let mut seconds = vec![0_i64; moods.scores.len()];
-    for play in plays {
-        if let Some(mood) = snapshot.row_of(play.track).and_then(|row| moods.dominant(row)) {
-            seconds[mood] += play.seconds;
-        }
-    }
-    let total: i64 = seconds.iter().sum();
-    if total == 0 {
-        return vec![];
-    }
-    let mut order: Vec<usize> = (0..seconds.len()).filter(|&index| seconds[index] > 0).collect();
-    order.sort_by(|&a, &b| seconds[b].cmp(&seconds[a]).then(a.cmp(&b)));
-    #[expect(clippy::cast_precision_loss, reason = "a share")]
-    order.into_iter().map(|index| (moods.scores[index].0.clone(), seconds[index] as f64 / total as f64)).collect()
 }
 
 pub fn sound_of(plays: &[Play], snapshot: &Snapshot) -> Option<Uuid> {

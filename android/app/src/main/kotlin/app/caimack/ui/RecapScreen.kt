@@ -259,7 +259,6 @@ private fun recapSlides(recap: Recap, play: (List<Track>, Int) -> Unit, onClose:
         if (track != null) add(RecapSlide("track", trackArt) { TrackSlide(recap, play) })
         if (recap.daySeconds.any { it > 0 }) add(RecapSlide("day", fallback) { DaySlide(recap) })
         if (dominantDaypart(recap.hourSeconds) != null) add(RecapSlide("hours", fallback) { HoursSlide(recap) })
-        recap.moods.firstOrNull()?.let { lead -> add(RecapSlide("mood", fallback) { MoodSlide(recap, lead.key) }) }
         recap.soundOfMonth?.let { sound -> add(RecapSlide("sound", soundArt) { SoundSlide(sound, play) }) }
         recap.newArtists?.let { count -> add(RecapSlide("discoveries", fallback) { DiscoveriesSlide(recap, count) }) }
         add(RecapSlide("summary", fallback) { SummarySlide(recap, onClose, onRestart) })

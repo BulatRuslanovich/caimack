@@ -53,29 +53,25 @@ impl DatabaseConfig {
     }
 }
 
-pub const CLAP_MODEL_RELEASE_URL: &str = "https://github.com/BulatRuslanovich/caimack/releases/download/clap-model-v1";
-
 #[derive(Debug, Clone)]
 pub struct ModelConfig {
-    pub storage_root: PathBuf,
-    pub url: Option<String>,
+    pub url: String,
 }
 
 impl ModelConfig {
     pub fn from_env() -> anyhow::Result<Self> {
         #[derive(Deserialize)]
         struct Env {
-            #[serde(default = "default_storage_root")]
-            storage_root: PathBuf,
-            clap_model_url: Option<String>,
+            mert_url: Option<String>,
         }
-
-        let env: Env = envy::from_env().context("Could not read the configuration from the environment")?;
-        let url = match env.clap_model_url {
-            None => Some(CLAP_MODEL_RELEASE_URL.to_owned()),
-            Some(url) => nonempty(Some(url)).map(|url| url.trim_end_matches('/').to_owned()),
-        };
-        Ok(Self { storage_root: env.storage_root, url })
+        let env: Env = envy::from_env().context("Could not read MERT configuration")?;
+        let url = nonempty(env.mert_url).unwrap_or_else(|| "http://127.0.0.1:8090".to_owned());
+        let parsed = reqwest::Url::parse(&url).context("MERT_URL must be an HTTP URL")?;
+        anyhow::ensure!(
+            matches!(parsed.scheme(), "http" | "https") && parsed.host_str().is_some(),
+            "MERT_URL must be an HTTP URL"
+        );
+        Ok(Self { url })
     }
 }
 

@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "Recommendations without IO: the embedding snapshot, moods, taste, shelves, duplicates, the library map"
+description = "Recommendations without IO: the embedding snapshot, taste, shelves, duplicates, the library map"
 
 [dependencies]
 serde.workspace = true

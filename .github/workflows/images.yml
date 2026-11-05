@@ -21,10 +21,17 @@ jobs:
         include:
           - name: backend
             context: backend
+            file: backend/Dockerfile
             target: runtime
             contexts: db=db
           - name: frontend
             context: frontend
+            file: frontend/Dockerfile
+            target: runtime
+            contexts: ""
+          - name: mert
+            context: backend/scripts
+            file: backend/scripts/Dockerfile.mert
             target: runtime
             contexts: ""
     steps:
@@ -54,6 +61,7 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
           target: ${{ matrix.target }}
           build-contexts: ${{ matrix.contexts }}
           build-args: |

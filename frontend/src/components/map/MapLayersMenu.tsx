@@ -9,7 +9,6 @@ import {
   ImageIcon,
   LayersIcon,
   OrbitIcon,
-  PaletteIcon,
   RouteIcon,
   WaypointsIcon,
 } from "lucide-react";
@@ -28,7 +27,6 @@ const LAYER_ICONS = {
   route: RouteIcon,
   covers: ImageIcon,
   links: WaypointsIcon,
-  moods: PaletteIcon,
   motion: OrbitIcon,
 };
 

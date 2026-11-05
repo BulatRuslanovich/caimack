@@ -9,7 +9,6 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { MAX_SELECTION_PLAY, closestToCentre, median, soundPath } from "@/lib/libraryMap";
-import { moodHue, moodLabel } from "@/lib/moods";
 import { queries } from "@/lib/queries";
 import { readStored, writeStored } from "@/lib/storage";
 import { useToast } from "@/lib/useToast";
@@ -94,27 +93,13 @@ export function LibraryMapPage() {
         isEmpty={(data) => data.points.length === 0}
         empty={{ icon: <MapIcon size={24} />, title: t("map.preparing") }}
       >
-        {(data) => (
-          <MapExplorer
-            points={data.points}
-            landmarks={data.landmarks}
-            totalTracks={data.totalTracks}
-          />
-        )}
+        {(data) => <MapExplorer points={data.points} totalTracks={data.totalTracks} />}
       </Query>
     </div>
   );
 }
 
-function MapExplorer({
-  points,
-  landmarks,
-  totalTracks,
-}: {
-  points: MapPoint[];
-  landmarks: { mood: string; x: number; y: number }[];
-  totalTracks: number;
-}) {
+function MapExplorer({ points, totalTracks }: { points: MapPoint[]; totalTracks: number }) {
   const t = useT();
   const { notifyError } = useToast();
   const { currentTrack, currentIndex, queue, nextTrack, shuffle, isPlaying } = usePlayerState();
@@ -170,18 +155,12 @@ function MapExplorer({
   }, [points]);
 
   const labels = useMemo<MapLabel[]>(() => {
-    const moods = landmarks.map((landmark) => ({
-      ...landmark,
-      text: moodLabel(landmark.mood, t),
-      hue: moodHue(landmark.mood),
-    }));
-    if (!genre) return moods;
+    if (!genre) return [];
 
     const members = points.filter((point) => point.genre === genre);
-    if (members.length === 0) return moods;
+    if (members.length === 0) return [];
 
     return [
-      ...moods,
       {
         text: genreName(genre),
         x: median(members.map((point) => point.x)),
@@ -189,7 +168,7 @@ function MapExplorer({
         strong: true,
       },
     ];
-  }, [landmarks, genre, points, t]);
+  }, [genre, points]);
 
   const selectedIds = useMemo(
     () => (selection ? new Set(selection.map((point) => point.id)) : null),

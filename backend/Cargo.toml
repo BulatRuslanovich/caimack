@@ -30,7 +30,6 @@ image = { version = "0.25.10", default-features = false, features = ["jpeg", "pn
 ipnet = "2"
 jsonwebtoken = { version = "11.1.0", default-features = false, features = ["rust_crypto"] }
 lofty = "0.25.5"
-ort = "2.0.0-rc.15"
 moka = { version = "0.12.16", features = ["sync"] }
 rand = "0.10.3"
 realfft = "3.5.1"

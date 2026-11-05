@@ -15,7 +15,6 @@
 @import "./styles/playing.css" layer(components);
 @import "./styles/backdrop.css" layer(components);
 @import "./styles/recap.css" layer(components);
-@import "./styles/mood.css" layer(components);
 @import "./styles/lean-back.css" layer(components);
 @import "./styles/home.css";
 @import "./styles/ambient.css" layer(components);

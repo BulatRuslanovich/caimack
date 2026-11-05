@@ -120,17 +120,13 @@ private fun MapExplorer(map: LibraryMap) {
     var genre by remember { mutableStateOf<String?>(null) }
     var picked by remember { mutableStateOf<MapPoint?>(null) }
 
-    val moodNames = map.landmarks.associate { it.mood to moodLabel(it.mood) }
     val genreLabel = genre?.let { chosen ->
         val members = points.filter { it.genre == chosen }
         if (members.isEmpty()) null
         else Spot(members.map { it.x }.sorted()[members.size / 2], members.map { it.y }.sorted()[members.size / 2])
     }
     val visibleLinks = if (MapLayer.Links.key in hiddenLayers) emptyList() else links
-    val moodPlates = if (MapLayer.Moods.key in hiddenLayers) emptyList() else map.landmarks.map {
-        Plate(moodNames[it.mood] ?: it.mood, Spot(it.x, it.y), moodHue(it.mood))
-    }
-    val plates = moodPlates + listOfNotNull(genreLabel?.let {
+    val plates = listOfNotNull(genreLabel?.let {
         Plate(genre!!.replaceFirstChar { char -> char.uppercase() }, it, null, strong = true)
     })
 
@@ -261,7 +257,7 @@ private data class Plate(val text: String, val at: Spot, val hue: Float?, val st
 
 private fun lerpTowards(from: Color, to: Color, amount: Float) = androidx.compose.ui.graphics.lerp(from, to, amount)
 
-private fun moodTint(hue: Float, dark: Boolean, alpha: Float) = oklch(if (dark) 0.72f else 0.58f, 0.11f, hue).copy(alpha = alpha)
+private fun moodTint(hue: Float, dark: Boolean, alpha: Float) = oklch(if (dark) 0.72 else 0.58, 0.11, hue.toDouble(), alpha)
 
 private fun dotRadius(k: Float, density: Float) = min(3.6f, 1.4f + 0.55f * (ln(k + 1) / ln(2f))) * density
 

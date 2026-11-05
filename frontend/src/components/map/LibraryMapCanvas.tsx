@@ -50,7 +50,7 @@ export interface MapRoute {
   ahead: MapPoint[];
 }
 
-export const MAP_LAYERS = ["route", "covers", "links", "moods", "motion"] as const;
+export const MAP_LAYERS = ["route", "covers", "links", "motion"] as const;
 
 export type MapLayer = (typeof MAP_LAYERS)[number];
 
@@ -141,10 +141,7 @@ export function LibraryMapCanvas({
   const bounds = useMemo(() => boundsOf(points), [points]);
   const allLinks = useMemo(() => constellation(points), [points]);
   const links = layers.has("links") ? allLinks : NO_LINKS;
-  const shownLabels = useMemo(
-    () => (layers.has("moods") ? labels : labels.filter((label) => label.hue === undefined)),
-    [labels, layers],
-  );
+  const shownLabels = labels;
   const shownRoute = layers.has("route") ? route : null;
   const covers = layers.has("covers");
   const animate = layers.has("motion");

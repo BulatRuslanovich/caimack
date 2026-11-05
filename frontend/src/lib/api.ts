@@ -21,7 +21,6 @@ import type {
   LibraryMap,
   LibraryOverview,
   Lyrics,
-  Mood,
   PageParams,
   Paged,
   PlaybackHandoff,
@@ -240,7 +239,6 @@ export const api = {
     seedTrackId: string | null;
     exclude: string[];
     limit?: number;
-    mood?: string | null;
     focus?: RadioFocus | null;
   }) => {
     await flushEvents(EVENTS_FLUSH_WAIT_MS);
@@ -251,7 +249,6 @@ export const api = {
   },
   recommendationStats: (days: number) =>
     request<RecommendationStats>(`/recommendations/stats${qs({ days })}`),
-  moods: () => request<Mood[]>("/recommendations/moods"),
   tasteRules: () => request<TasteRule[]>("/recommendations/rules"),
   addTasteRule: (body: {
     action: TasteRuleAction;

@@ -113,7 +113,7 @@ docker compose up -d
 cat <<EOF
 
 Caimack is starting at https://$domain
-The first start downloads the audio model (about 280 MB); follow it with: docker compose logs -f model backend
+The first start downloads MERT-Large weights (about 1.26 GB). NVIDIA GPU access is required; follow it with: docker compose logs -f mert backend
 
 Sign in as:
   username  $owner

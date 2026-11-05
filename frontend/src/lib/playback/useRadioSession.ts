@@ -41,7 +41,7 @@ interface RadioSession {
   session: RadioSessionState | null;
   radio: RadioState;
 
-  start: (seedTrack?: Track | null, mood?: string | null) => Promise<Track[] | null>;
+  start: (seedTrack?: Track | null) => Promise<Track[] | null>;
 
   stop: () => void;
   setFocus: (focus: RadioFocus) => void;
@@ -162,7 +162,7 @@ export function useRadioSession({
   const radioFrom = useCallback(() => radioFromRef.current, []);
 
   const start = useCallback(
-    async (seedTrack: Track | null = null, mood: string | null = null) => {
+    async (seedTrack: Track | null = null) => {
       const generation = ++generationRef.current;
       radioRef.current = { inFlight: false, seed: null };
       setStarting(true);
@@ -172,7 +172,6 @@ export function useRadioSession({
           seedTrackId: seedTrack?.id ?? null,
           exclude: [],
           limit: RADIO_INITIAL_BATCH - (seedTrack ? 1 : 0),
-          mood,
         });
         if (generation !== generationRef.current) return null;
 
@@ -183,7 +182,6 @@ export function useRadioSession({
 
         setSession({
           seedTrackId: batch.seedTrackId,
-          mood,
           reasons: recommendationReasons(batch.tracks),
           signals: queueSignals(batch.tracks),
         });
@@ -232,7 +230,6 @@ export function useRadioSession({
       .radio({
         seedTrackId: seed,
         exclude: excluded,
-        mood: session?.mood,
         focus: session?.focus,
       })
       .then((batch) => {
@@ -271,7 +268,7 @@ export function useRadioSession({
 
         tagSource(
           merged.tracks.map((track) => track.id),
-          session ? radioSource(session.mood) : "radio:autoplay",
+          session ? radioSource() : "radio:autoplay",
         );
 
         const next = appendTracks(current, plan.order, merged.tracks);

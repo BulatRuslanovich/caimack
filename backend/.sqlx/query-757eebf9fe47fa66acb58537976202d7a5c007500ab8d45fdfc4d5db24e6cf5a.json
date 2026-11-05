@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT e.track_id, e.vector, e.dimension, t.artist_id, t.album_id, t.genre_id, t.duration_seconds, t.year,\n                  t.created_at, t.content_hash, t.title, ar.name AS artist_name,\n                  COALESCE(s.popularity_score, 0) AS \"popularity!\",\n                  c.tempo_bpm AS \"tempo_bpm?\", c.musical_key AS \"musical_key?\", c.loudness_lufs AS \"loudness_lufs?\",\n                  ARRAY(SELECT ta.artist_id FROM track_artists ta WHERE ta.track_id = t.id ORDER BY ta.position) AS \"credits!\"\n           FROM track_embeddings e\n           JOIN tracks t ON t.id = e.track_id\n           JOIN artists ar ON ar.id = t.artist_id\n           LEFT JOIN track_stats s ON s.track_id = t.id\n           LEFT JOIN track_cues c ON c.track_id = t.id\n           WHERE e.succeeded AND e.model_id = $1\n           ORDER BY e.track_id",
+  "query": "SELECT e.track_id, e.vector, e.dimension, t.artist_id, t.album_id, t.genre_id, t.duration_seconds, t.year,\n                  t.created_at, t.content_hash, t.title, ar.name AS artist_name,\n                  COALESCE(s.popularity_score, 0) AS \"popularity!\",\n                  c.tempo_bpm AS \"tempo_bpm?\", c.musical_key AS \"musical_key?\", c.loudness_lufs AS \"loudness_lufs?\",\n                  ARRAY(SELECT ta.artist_id FROM track_artists ta WHERE ta.track_id = t.id ORDER BY ta.position) AS \"credits!\"\n           FROM track_embeddings e\n           JOIN tracks t ON t.id = e.track_id\n           JOIN artists ar ON ar.id = t.artist_id\n           LEFT JOIN track_stats s ON s.track_id = t.id\n           LEFT JOIN track_cues c ON c.track_id = t.id\n           WHERE e.succeeded AND e.model_id = $1 AND e.strategy = $2 AND e.dimension = $3\n             AND e.source_hash = t.content_hash\n           ORDER BY e.track_id",
   "describe": {
     "columns": [
       {
@@ -183,7 +183,9 @@
     ],
     "parameters": {
       "Left": [
-        "Text"
+        "Text",
+        "Text",
+        "Int4"
       ]
     },
     "nullable": [
@@ -206,5 +208,5 @@
       null
     ]
   },
-  "hash": "3f62f437e65e99891cac2d5d36120e7fef7f680e6b9bf924f4f73023331902ec"
+  "hash": "757eebf9fe47fa66acb58537976202d7a5c007500ab8d45fdfc4d5db24e6cf5a"
 }

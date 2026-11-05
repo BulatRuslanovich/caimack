@@ -3,7 +3,6 @@
 
 pub mod duplicates;
 pub mod map;
-pub mod moods;
 pub mod radio;
 pub mod random;
 pub mod recap;
