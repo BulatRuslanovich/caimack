@@ -17,7 +17,7 @@ function DialogOverlay({ className, ...props }: ComponentProps<typeof DialogPrim
   return (
     <DialogPrimitive.Overlay
       className={cn(
-        "fixed inset-0 z-100 grid place-items-center overflow-y-auto bg-black/70 p-5 max-md:p-3 max-md:pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+        "overlay-scrim fixed inset-0 z-100 grid place-items-center overflow-y-auto p-5 max-md:p-3 max-md:pb-[max(0.75rem,env(safe-area-inset-bottom))]",
         "data-[state=open]:animate-in data-[state=open]:fade-in-0",
         "data-[state=closed]:animate-out data-[state=closed]:fade-out-0",
         className,
@@ -45,21 +45,20 @@ export function DialogContent({
     <DialogPrimitive.Portal>
       <DialogOverlay>
         <DialogPrimitive.Content
+          data-slot="dialog-content"
           {...(description ? {} : { "aria-describedby": undefined })}
           onInteractOutside={keepOpenOnToast}
           className={cn(
-            "relative flex max-h-[88dvh] w-[min(34rem,100%)] flex-col overflow-hidden rounded-lg bg-popover text-popover-foreground shadow-pop",
+            "dialog-panel relative flex max-h-[88dvh] w-[min(36rem,100%)] flex-col overflow-hidden",
             "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
             "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
             className,
           )}
           {...props}
         >
-          <header className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
+          <header className="dialog-header flex items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">
-              <DialogPrimitive.Title className="text-section font-semibold">
-                {title}
-              </DialogPrimitive.Title>
+              <DialogPrimitive.Title className="dialog-title">{title}</DialogPrimitive.Title>
               {description && (
                 <DialogPrimitive.Description className="text-sm text-muted-foreground">
                   {description}
@@ -74,10 +73,10 @@ export function DialogContent({
             </DialogPrimitive.Close>
           </header>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+          <div className="dialog-body min-h-0 flex-1 overflow-y-auto">{children}</div>
 
           {footer && (
-            <footer className="flex flex-wrap gap-2.5 px-5 pt-3 pb-5 max-md:[&>*]:flex-1">
+            <footer className="dialog-footer flex flex-wrap gap-2.5 max-md:[&>*]:flex-1">
               {footer}
             </footer>
           )}

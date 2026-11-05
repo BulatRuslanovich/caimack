@@ -4,6 +4,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { AudioLinesIcon, Clock3Icon, FileTextIcon, FileXIcon } from "lucide-react";
 import {
   formatArtists,
   formatAudioSpec,
@@ -14,7 +15,8 @@ import {
 import { useFormat } from "@/lib/useFormat";
 import type { Track } from "@/lib/types";
 import { useT } from "@/contexts/I18nContext";
-import { Badge } from "./ui/badge";
+import { TrackCover } from "./Cover";
+import { cn } from "@/lib/cn";
 import { Dialog, DialogContent } from "./ui/dialog";
 
 export function TrackInfoDialog({ track, onClose }: { track: Track; onClose: () => void }) {
@@ -26,40 +28,95 @@ export function TrackInfoDialog({ track, onClose }: { track: Track; onClose: () 
     ? `${format.relativeDate(track.createdAt)}, ${format.timeOfDay(track.createdAt)}`
     : null;
 
-  const rows: [string, ReactNode][] = [
-    [t("trackInfo.artists"), formatArtists(track)],
+  const release: [string, ReactNode][] = [
     [t("trackInfo.album"), track.albumTitle],
     [t("trackInfo.genre"), track.genreName && genreName(track.genreName)],
     [t("trackInfo.year"), track.year?.toString()],
     [t("trackInfo.trackNumber"), track.trackNumber?.toString()],
     [t("trackInfo.discNumber"), track.discNumber?.toString()],
-    [t("trackInfo.duration"), formatDuration(track.durationSeconds)],
-    [
-      t("trackInfo.format"),
-      spec && (isLossless(track.codec) ? <Badge>{spec}</Badge> : <span>{spec}</span>),
-    ],
+  ];
+  const library: [string, ReactNode][] = [
     [t("trackInfo.file"), track.originalFileName],
     [t("trackInfo.added"), added],
     [
       t("trackInfo.lyrics"),
-      track.hasLyrics ? t("trackInfo.lyricsPresent") : t("trackInfo.lyricsMissing"),
+      <span
+        key="lyrics"
+        className={cn(
+          "inline-flex items-center gap-2",
+          track.hasLyrics ? "text-primary" : "text-muted-foreground",
+        )}
+      >
+        {track.hasLyrics ? (
+          <FileTextIcon aria-hidden="true" size={15} />
+        ) : (
+          <FileXIcon aria-hidden="true" size={15} />
+        )}
+        {track.hasLyrics ? t("trackInfo.lyricsPresent") : t("trackInfo.lyricsMissing")}
+      </span>,
     ],
   ];
+  const hasRelease = release.some(([, value]) => value);
+  const details = (rows: [string, ReactNode][]) => (
+    <dl>
+      {rows.map(([label, value]) =>
+        value ? (
+          <div key={label} className="track-info-row">
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ) : null,
+      )}
+    </dl>
+  );
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent title={t("dialog.trackInfo.title")} description={track.title}>
-        <dl className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-x-4 gap-y-2.5 text-sm max-md:grid-cols-1 max-md:gap-y-0.5">
-          {rows.map(
-            ([label, value]) =>
-              value && (
-                <div key={label} className="contents">
-                  <dt className="text-muted-foreground max-md:mt-2.5">{label}</dt>
-                  <dd className="min-w-0 break-words">{value}</dd>
-                </div>
-              ),
+      <DialogContent title={t("dialog.trackInfo.title")} className="w-[min(42rem,100%)]">
+        <div className="track-info-heading">
+          <div className="track-info-cover">
+            <TrackCover track={track} variant="full" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="track-info-title">{track.title}</h2>
+            <p className="mt-1.5 text-sm break-words text-muted-foreground">
+              {formatArtists(track)}
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs">
+              <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                <Clock3Icon aria-hidden="true" size={14} />
+                <span className="sr-only">{t("trackInfo.duration")}: </span>
+                {formatDuration(track.durationSeconds)}
+              </span>
+              {spec && (
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-md px-2 py-1",
+                    isLossless(track.codec)
+                      ? "bg-primary-soft text-primary"
+                      : "bg-raised text-muted-foreground",
+                  )}
+                >
+                  <AudioLinesIcon aria-hidden="true" size={14} />
+                  <span className="sr-only">{t("trackInfo.format")}: </span>
+                  {spec}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className={cn("track-info-sections", !hasRelease && "grid-cols-1")}>
+          {hasRelease && (
+            <section className="track-info-section">
+              <h3>{t("trackInfo.release")}</h3>
+              {details(release)}
+            </section>
           )}
-        </dl>
+          <section className="track-info-section">
+            <h3>{t("trackInfo.library")}</h3>
+            {details(library)}
+          </section>
+        </div>
       </DialogContent>
     </Dialog>
   );

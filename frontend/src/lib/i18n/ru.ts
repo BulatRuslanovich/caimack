@@ -623,6 +623,8 @@ export const ru: Dictionary = {
 
   "dialog.trackInfo.title": "О треке",
   "trackInfo.artists": "Исполнители",
+  "trackInfo.release": "Релиз",
+  "trackInfo.library": "В библиотеке",
   "trackInfo.album": "Альбом",
   "trackInfo.genre": "Жанр",
   "trackInfo.year": "Год",
@@ -663,6 +665,7 @@ export const ru: Dictionary = {
   "settings.qualityOriginal": "Как загружено",
   "settings.equalizer": "Эквалайзер",
   "settings.equalizerPreset": "Пресет",
+  "settings.equalizerCustom": "Своя настройка",
   "settings.equalizerPreset.flat": "Ровно",
   "settings.equalizerPreset.bass": "Бас",
   "settings.equalizerPreset.vocal": "Вокал",

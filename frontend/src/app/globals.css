@@ -22,6 +22,7 @@
 @import "./styles/listening.css" layer(components);
 @import "./styles/library.css";
 @import "./styles/workspaces.css";
+@import "./styles/overlays.css";
 
 @layer base {
   html,

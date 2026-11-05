@@ -3,7 +3,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { CROSSFADE_CHOICES } from "@/lib/playback/crossfade";
 import {
   EQ_BANDS,
@@ -15,6 +15,13 @@ import {
 import { cn } from "@/lib/cn";
 import { SettingHelp } from "./SettingHelp";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useSettings } from "@/lib/useSettings";
 import { useI18n, useT } from "@/contexts/I18nContext";
 import { usePlayer } from "@/contexts/PlayerContext";
@@ -102,6 +109,7 @@ export function Playback() {
 function Equalizer() {
   const { locale, t } = useI18n();
   const eq = useEqualizer();
+  const presetId = useId();
 
   if (!eq.supported) return null;
 
@@ -125,15 +133,26 @@ function Equalizer() {
 
       {eq.enabled && (
         <>
-          <Choice
-            legend={t("settings.equalizerPreset")}
-            value={eq.preset ?? "custom"}
-            onChange={(preset) => eq.applyPreset(preset as EqualizerPreset)}
-            options={(Object.keys(EQ_PRESETS) as EqualizerPreset[]).map((preset) => ({
-              value: preset,
-              label: t(`settings.equalizerPreset.${preset}`),
-            }))}
-          />
+          <div className="flex flex-col gap-2">
+            <label htmlFor={presetId} className="font-semibold">
+              {t("settings.equalizerPreset")}
+            </label>
+            <Select
+              value={eq.preset ?? ""}
+              onValueChange={(preset) => eq.applyPreset(preset as EqualizerPreset)}
+            >
+              <SelectTrigger id={presetId} className="w-full sm:w-64">
+                <SelectValue placeholder={t("settings.equalizerCustom")} />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(EQ_PRESETS) as EqualizerPreset[]).map((preset) => (
+                  <SelectItem key={preset} value={preset}>
+                    {t(`settings.equalizerPreset.${preset}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           <div className="min-w-0 overflow-x-auto px-1 py-3">
             <div className="min-w-[600px]">

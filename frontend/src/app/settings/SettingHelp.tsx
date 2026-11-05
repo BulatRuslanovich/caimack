@@ -22,7 +22,7 @@ export function SettingHelp({ children, hint }: { children: React.ReactNode; hin
       <span
         id={id}
         role="tooltip"
-        className="pointer-events-none absolute bottom-full left-0 z-50 mb-2 hidden w-64 max-w-[75vw] rounded-md border border-border bg-popover p-3 text-sm font-normal text-popover-foreground shadow-pop group-hover/help:block group-focus-within/help:block"
+        className="floating-panel pointer-events-none absolute bottom-full left-0 z-50 mb-2 hidden w-64 max-w-[75vw] p-3 text-sm font-normal group-hover/help:block group-focus-within/help:block"
       >
         {hint}
       </span>

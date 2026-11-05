@@ -81,13 +81,20 @@ export function SleepTimerButton({
         <DropdownMenuLabel>{t("sleep.label")}</DropdownMenuLabel>
 
         {SLEEP_TIMER_MINUTES.map((minutes) => (
-          <DropdownMenuItem key={minutes} onSelect={() => choose(minutes)}>
+          <DropdownMenuItem
+            key={minutes}
+            data-selected={chosenMinutes === minutes}
+            onSelect={() => choose(minutes)}
+          >
             <span className="flex-1">{t("sleep.minutes", { count: minutes })}</span>
             {chosenMinutes === minutes && <CheckIcon aria-hidden="true" />}
           </DropdownMenuItem>
         ))}
 
-        <DropdownMenuItem onSelect={() => choose("trackEnd")}>
+        <DropdownMenuItem
+          data-selected={sleepTimer?.kind === "trackEnd"}
+          onSelect={() => choose("trackEnd")}
+        >
           <span className="flex-1">{t("sleep.trackEnd")}</span>
           {sleepTimer?.kind === "trackEnd" && <CheckIcon aria-hidden="true" />}
         </DropdownMenuItem>

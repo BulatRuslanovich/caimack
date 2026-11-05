@@ -3,7 +3,7 @@
 
 "use client";
 
-import { CheckIcon } from "lucide-react";
+import { AudioLinesIcon, ChevronDownIcon, Volume1Icon, Volume2Icon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatAudioSpec } from "@/lib/format";
@@ -14,12 +14,18 @@ import { useT } from "@/contexts/I18nContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 
-const QUALITIES: AudioQuality[] = ["Low", "Normal", "Original"];
+const QUALITIES = [
+  { value: "Low", bitrate: 64, icon: Volume1Icon },
+  { value: "Normal", bitrate: 128, icon: Volume2Icon },
+  { value: "Original", bitrate: null, icon: AudioLinesIcon },
+] as const;
 
 const AUDIO_EVENTS = [STREAM_CHANGE, "loadedmetadata", "playing"];
 
@@ -57,35 +63,62 @@ export function StreamQuality({ track, className }: { track: Track; className?: 
       <DropdownMenuTrigger
         aria-label={t("player.quality", { stream: stream ?? "…" })}
         title={reduced ? t("player.qualityReducedDetail") : undefined}
-        className={cn(
-          "inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-border-strong px-2.5 text-2xs font-semibold whitespace-nowrap text-muted-foreground tabular-nums transition-colors hover:border-foreground hover:text-foreground",
-          className,
-        )}
+        className={cn("quality-trigger group shrink-0", className)}
       >
+        <AudioLinesIcon aria-hidden="true" size={13} className="text-primary" />
         {reduced && <span aria-hidden="true">↓</span>}
         {stream ?? "…"}
+        <ChevronDownIcon
+          aria-hidden="true"
+          size={12}
+          className="text-muted-foreground transition-transform group-data-[state=open]:rotate-180"
+        />
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent>
-        <DropdownMenuLabel>{t("settings.quality")}</DropdownMenuLabel>
+      <DropdownMenuContent className="w-72">
+        <DropdownMenuLabel className="space-y-1 px-3 pt-3 pb-2">
+          <span className="block text-sm font-semibold text-foreground">
+            {t("settings.quality")}
+          </span>
+          {stream && (
+            <span className="block text-xs font-normal">{t("player.quality", { stream })}</span>
+          )}
+        </DropdownMenuLabel>
         {reduced && (
-          <DropdownMenuLabel className="max-w-64 whitespace-normal font-normal">
+          <p className="px-3 pb-2 text-xs leading-relaxed text-muted-foreground">
             {t("player.qualityReducedDetail")}
-          </DropdownMenuLabel>
+          </p>
         )}
-        {QUALITIES.map((quality) => (
-          <DropdownMenuItem
-            key={quality}
-            onSelect={() => {
-              if (settings.quality === quality)
-                window.dispatchEvent(new Event("retry-stream-quality"));
-              else settings.update({ quality });
-            }}
-          >
-            <CheckIcon className={cn(settings.quality !== quality && "invisible")} />
-            {t(`settings.quality.${quality}`)}
-          </DropdownMenuItem>
-        ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuRadioGroup
+          value={settings.quality}
+          onValueChange={(quality) => {
+            if (quality !== settings.quality) settings.update({ quality: quality as AudioQuality });
+          }}
+        >
+          {QUALITIES.map(({ value, bitrate, icon: Icon }) => (
+            <DropdownMenuRadioItem
+              key={value}
+              value={value}
+              textValue={t(`settings.quality.${value}`)}
+              className="gap-3 py-3"
+              onSelect={() => {
+                if (settings.quality === value)
+                  window.dispatchEvent(new Event("retry-stream-quality"));
+              }}
+            >
+              <Icon aria-hidden="true" />
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="font-medium">{t(`settings.quality.${value}`)}</span>
+                <span className="text-xs font-normal text-muted-foreground">
+                  {bitrate
+                    ? t("settings.qualityBitrate", { bitrate })
+                    : t("settings.qualityOriginal")}
+                </span>
+              </span>
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

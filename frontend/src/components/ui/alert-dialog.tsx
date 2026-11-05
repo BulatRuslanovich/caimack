@@ -28,21 +28,19 @@ function AlertDialogContent({
     <AlertDialogPrimitive.Portal>
       <AlertDialogPrimitive.Overlay
         className={cn(
-          "fixed inset-0 z-100 grid place-items-center overflow-y-auto bg-black/70 p-5",
+          "overlay-scrim fixed inset-0 z-100 grid place-items-center overflow-y-auto p-5",
           "data-[state=open]:animate-in data-[state=open]:fade-in-0",
           "data-[state=closed]:animate-out data-[state=closed]:fade-out-0",
         )}
       >
         <AlertDialogPrimitive.Content
           className={cn(
-            "w-[min(28rem,100%)] rounded-lg bg-popover p-5 text-popover-foreground shadow-pop",
+            "dialog-panel w-[min(28rem,100%)] p-6",
             "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
             "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
           )}
         >
-          <AlertDialogPrimitive.Title className="text-section font-semibold">
-            {title}
-          </AlertDialogPrimitive.Title>
+          <AlertDialogPrimitive.Title className="dialog-title">{title}</AlertDialogPrimitive.Title>
 
           {description && (
             <AlertDialogPrimitive.Description className="mt-2 text-sm text-muted-foreground">

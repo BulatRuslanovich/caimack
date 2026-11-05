@@ -38,6 +38,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -100,8 +101,7 @@ const SheetMenu = createContext<{ open: boolean; onOpenChange: (open: boolean) =
 );
 
 const sheetRow = cn(
-  "flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left hover:bg-accent hover:no-underline",
-  "disabled:pointer-events-none disabled:text-faint [&_svg]:size-5 [&_svg]:shrink-0",
+  "sheet-menu-item hover:no-underline disabled:pointer-events-none disabled:text-faint",
 );
 
 export function TrackMenu({ open, onOpenChange, trigger, ...rest }: TrackMenuProps) {
@@ -146,7 +146,20 @@ export function TrackMenu({ open, onOpenChange, trigger, ...rest }: TrackMenuPro
 function MenuContent({ track, children }: { track: Track; children: ReactNode }) {
   const sheet = useContext(SheetMenu);
 
-  if (!sheet) return <DropdownMenuContent>{children}</DropdownMenuContent>;
+  if (!sheet)
+    return (
+      <DropdownMenuContent className="w-72">
+        <DropdownMenuLabel className="flex items-center gap-3 p-3">
+          <TrackCover track={track} size={40} />
+          <span className="flex min-w-0 flex-1 flex-col gap-1">
+            <span className="truncate text-sm font-semibold text-foreground">{track.title}</span>
+            <span className="truncate text-xs font-normal">{formatArtists(track)}</span>
+          </span>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {children}
+      </DropdownMenuContent>
+    );
 
   return (
     <Sheet open={sheet.open} onOpenChange={sheet.onOpenChange}>
@@ -156,8 +169,8 @@ function MenuContent({ track, children }: { track: Track; children: ReactNode })
           (event.currentTarget as HTMLElement).focus();
         }}
       >
-        <div className="flex items-center gap-3 px-3 pb-3">
-          <TrackCover track={track} size={44} />
+        <div className="flex items-center gap-3 px-3 pt-1 pb-4">
+          <TrackCover track={track} size={52} />
           <span className="flex min-w-0 flex-col">
             <SheetTitle className="truncate text-base font-semibold">{track.title}</SheetTitle>
             <span className="truncate text-sm text-muted-foreground">{formatArtists(track)}</span>
@@ -202,11 +215,17 @@ function MenuItem({
   const className = cn(sheetRow, variant === "destructive" && "text-destructive");
 
   return asChild ? (
-    <Slot className={className} onClick={run}>
+    <Slot className={className} data-variant={variant} onClick={run}>
       {children}
     </Slot>
   ) : (
-    <button type="button" disabled={disabled} className={className} onClick={run}>
+    <button
+      type="button"
+      disabled={disabled}
+      className={className}
+      data-variant={variant}
+      onClick={run}
+    >
       {children}
     </button>
   );
@@ -215,7 +234,7 @@ function MenuItem({
 function MenuSeparator() {
   const sheet = useContext(SheetMenu);
 
-  return sheet ? <div className="my-1.5 h-px shrink-0 bg-border" /> : <DropdownMenuSeparator />;
+  return sheet ? <div className="floating-separator shrink-0" /> : <DropdownMenuSeparator />;
 }
 
 function MenuSub({ label, children }: { label: ReactNode; children: ReactNode }) {

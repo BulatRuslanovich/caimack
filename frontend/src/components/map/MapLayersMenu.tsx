@@ -50,7 +50,7 @@ export function MapLayersMenu({
         checked={layers.has(layer)}
         onCheckedChange={() => onToggle(layer)}
         onSelect={(event) => event.preventDefault()}
-        className="group flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm outline-none select-none focus:bg-accent focus:text-accent-foreground"
+        className="floating-item group min-h-11 gap-3"
       >
         <Icon size={16} className="shrink-0 text-muted-foreground" />
         <span className="flex-1">{t(`map.layer.${layer}`)}</span>

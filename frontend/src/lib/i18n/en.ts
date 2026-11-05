@@ -588,6 +588,8 @@ export const en = {
 
   "dialog.trackInfo.title": "Track info",
   "trackInfo.artists": "Artists",
+  "trackInfo.release": "Release",
+  "trackInfo.library": "In your library",
   "trackInfo.album": "Album",
   "trackInfo.genre": "Genre",
   "trackInfo.year": "Year",
@@ -628,6 +630,7 @@ export const en = {
   "settings.qualityOriginal": "As uploaded",
   "settings.equalizer": "Equalizer",
   "settings.equalizerPreset": "Preset",
+  "settings.equalizerCustom": "Custom",
   "settings.equalizerPreset.flat": "Flat",
   "settings.equalizerPreset.bass": "Bass",
   "settings.equalizerPreset.vocal": "Vocal",
