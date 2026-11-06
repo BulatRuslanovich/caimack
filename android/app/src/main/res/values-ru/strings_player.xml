@@ -52,14 +52,6 @@
     <string name="player_skipped_unplayable">«%1$s» не воспроизводится — переходим к следующему.</string>
     <string name="queue_up_next">Далее</string>
     <string name="queue_radio_from">Радио по «%1$s»</string>
-    <string name="queue_radio_mood">Радио «%1$s»</string>
-    <string name="mood_title">Под настроение</string>
-    <string name="mood_workout">Тренировка</string>
-    <string name="mood_party">Вечеринка</string>
-    <string name="mood_chill">Чилл</string>
-    <string name="mood_sleep">Сон</string>
-    <string name="mood_happy">Радостное</string>
-    <string name="mood_sad">Грустное</string>
     <string name="queue_similar">Похожие треки</string>
     <string name="queue_history">Уже играло · %1$d</string>
     <string name="queue_autoplay">Продолжать похожими</string>

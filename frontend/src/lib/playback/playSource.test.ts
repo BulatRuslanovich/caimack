@@ -19,8 +19,7 @@ describe("playSource", () => {
   });
 
   it("tells radios apart", () => {
-    expect(radioSource("sad")).toBe("radio:mood:sad");
-    expect(radioSource(null, true)).toBe("radio:track");
+    expect(radioSource(true)).toBe("radio:track");
     expect(radioSource()).toBe("radio");
   });
 

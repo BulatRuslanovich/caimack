@@ -115,8 +115,6 @@
     <string name="recap_hours_evening">Вечерний слушатель</string>
     <string name="recap_hours_night">Ночной слушатель</string>
     <string name="recap_hours_note">%1$d%% музыки прозвучало с %2$02d до %3$02d</string>
-    <string name="recap_mood_eyebrow">Месяц под знаком</string>
-    <string name="recap_mood_radio">Радио «%1$s»</string>
     <string name="recap_sound_eyebrow">Звук месяца</string>
     <string name="recap_sound_note">Трек, который ближе всех к тому, как звучал весь месяц</string>
     <string name="recap_discoveries_eyebrow">Открытия</string>
@@ -126,7 +124,6 @@
     <string name="recap_summary_time">Музыки</string>
     <string name="recap_summary_artist">Исполнитель</string>
     <string name="recap_summary_track">Трек</string>
-    <string name="recap_summary_mood">Настроение</string>
     <string name="recap_summary_genre">Жанр</string>
     <string name="unit_hours_minutes">%1$d ч %2$d мин</string>
     <string name="unit_hours">%1$d ч</string>
@@ -159,7 +156,6 @@
     <string name="map_layers_expanded">Развёрнуто</string>
     <string name="map_layers_collapsed">Свёрнуто</string>
     <string name="map_layer_links">Связи</string>
-    <string name="map_layer_moods">Настроения</string>
     <string name="map_locate">Показать, что играет</string>
     <string name="action_close">Закрыть</string>
     <string name="map_reset">Показать всю карту</string>

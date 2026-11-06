@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use moka::sync::Cache;
+use reco::listening;
 use reco::rules::Rules;
 use reco::{Listener, TrackSignal};
 use sqlx::PgPool;
@@ -88,16 +89,17 @@ pub async fn load(db: &PgPool, user: Uuid, now: DateTime<Utc>) -> AppResult<List
         r#"WITH events AS (
                SELECT track_id, type, listened_seconds, occurred_at, source,
                       power(0.5, EXTRACT(EPOCH FROM ($2 - occurred_at))::float8 / 86400.0 / $5::float8) AS decay,
-                      type = 4 AND (listened_seconds < $4
-                          OR (duration_seconds > 0 AND listened_seconds::float8 / duration_seconds < 0.2)) AS early,
-                      type = 4 AND duration_seconds > 0 AND listened_seconds::float8 / duration_seconds >= 0.5 AS mostly,
+                      type = 4 AND listened_seconds < $10
+                          AND listened_seconds::float8 / NULLIF(duration_seconds, 0) < $9 AS early,
+                      type IN (3, 4) AND listened_seconds::float8 / NULLIF(duration_seconds, 0) >= $7 AS near_complete,
+                      type IN (3, 4) AND listened_seconds::float8 / NULLIF(duration_seconds, 0) >= $8 AS mostly,
                       COALESCE(source = ANY($3), false) AS browsed
                FROM playback_events
                WHERE user_id = $1 AND track_id IS NOT NULL AND occurred_at >= $2 - make_interval(days => $6)
            )
            SELECT track_id AS "track_id!",
                   SUM(decay * CASE
-                      WHEN type = 3 THEN 1.0
+                      WHEN near_complete THEN 1.0
                       WHEN early AND browsed THEN -0.05
                       WHEN early THEN -0.1
                       WHEN mostly THEN 0.3
@@ -117,7 +119,11 @@ pub async fn load(db: &PgPool, user: Uuid, now: DateTime<Utc>) -> AppResult<List
         &browsed,
         THRESHOLD_SECONDS,
         HALF_LIFE_DAYS,
-        EVENT_RETENTION_DAYS
+        EVENT_RETENTION_DAYS,
+        listening::NEAR_COMPLETE,
+        listening::PARTIAL,
+        listening::EARLY,
+        listening::EARLY_SECONDS
     )
     .fetch_all(db)
     .await?;

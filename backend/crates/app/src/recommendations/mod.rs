@@ -3,14 +3,13 @@
 
 mod compute;
 pub mod duplicates;
-pub mod evaluation;
 pub mod home;
 pub mod impressions;
 pub mod index;
 pub mod listener;
 pub mod maintenance;
 pub mod map;
-pub mod moods;
+pub mod quality;
 pub mod radio;
 pub mod recap;
 pub mod rules;

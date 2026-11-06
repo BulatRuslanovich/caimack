@@ -74,7 +74,8 @@ impl Session {
             }
             match event.action {
                 Action::Skipped if rating < 0.0 => session.skip_streak += 1,
-                Action::Completed | Action::Liked | Action::Replayed => session.skip_streak = 0,
+                Action::Completed if rating > 0.0 => session.skip_streak = 0,
+                Action::Liked | Action::Replayed => session.skip_streak = 0,
                 Action::Progress if rating > 0.0 => session.skip_streak = 0,
                 _ => {}
             }
@@ -161,14 +162,17 @@ fn rating(event: &Event) -> f32 {
         if event.duration > 0 { (event.listened as f32 / event.duration as f32).clamp(0.0, 1.0) } else { 0.0 };
     match event.action {
         Action::Started if event.chosen => 0.35,
-        Action::Completed if event.listened < 3 => 0.0,
-        Action::Completed if fraction >= 0.8 => 0.8,
-        Action::Completed if fraction >= 0.5 => 0.5,
-        Action::Completed if event.listened >= 60 => 0.3,
-        Action::Completed => 0.1,
-        Action::Skipped if event.listened < 3 => -0.15,
-        Action::Skipped if event.listened < 30 || fraction < 0.2 => -0.7,
-        Action::Skipped if fraction >= 0.5 => 0.2,
+        Action::Completed | Action::Skipped => {
+            use crate::listening::{self, End, Grade};
+            let end = if event.action == Action::Skipped { End::Skipped } else { End::Completed };
+            match listening::grade(end, event.listened, event.duration) {
+                Some(Grade::NearComplete) => 0.8,
+                Some(Grade::Partial) => 0.3,
+                Some(Grade::EarlySkip) if event.listened < 3 => -0.15,
+                Some(Grade::EarlySkip) => -0.7,
+                None => 0.0,
+            }
+        }
         Action::Replayed => 1.2,
         Action::Liked => 1.5,
         Action::Unliked => -0.3,
@@ -195,7 +199,7 @@ mod tests {
     }
 
     #[test]
-    fn a_long_pause_discards_the_previous_mood() {
+    fn a_long_pause_discards_the_previous_context() {
         let library = snapshot(&[(1, 1, "a", [1.0, 0.0, 0.0]), (2, 2, "b", [0.0, 1.0, 0.0])]);
         let session = Session::build(&library, &[event(1, Action::Liked, 100), event(2, Action::Liked, 1400)], 1401);
         assert!(session.affinity(&library, 1) > session.affinity(&library, 0));

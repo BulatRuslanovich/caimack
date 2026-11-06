@@ -133,6 +133,22 @@ class ListeningTrackerTest {
     }
 
     @Test
+    fun `discarding a failed or interrupted track does not record a skip`() {
+        tracker.begin("song", 210)
+        tracker.accumulate(1.0)
+        tracker.discard()
+        tracker.finish(ListeningTracker.SKIPPED)
+        assertEquals(listOf("trackStarted"), types())
+        assertEquals(0, tracker.listenedSeconds)
+        tracker.begin("song", 210)
+        tracker.accumulate(1.0)
+        tracker.finish(ListeningTracker.COMPLETED)
+        assertEquals("song", last("trackCompleted").trackId)
+        assertEquals(1, last("trackCompleted").listenedSeconds)
+        assertEquals(listOf("trackStarted", "trackStarted", "trackCompleted"), types())
+    }
+
+    @Test
     fun `the source travels with every event of a listen`() {
         val sourced = ListeningTracker(sourceOf = { id -> if (id == "song") "home:forYou" else null }) { events += it }
 

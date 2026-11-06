@@ -11,6 +11,7 @@ export interface ListeningTracker {
   reposition(currentTime: number): void;
   listenedSeconds(): number;
   finish(type: "trackCompleted" | "trackSkipped"): void;
+  discard(): void;
 }
 
 interface Played {
@@ -49,6 +50,10 @@ export function createListeningTracker(record = recordEvent): ListeningTracker {
     });
 
   return {
+    discard() {
+      heard.delete(played.trackId);
+      played = { ...IDLE };
+    },
     listenedSeconds: () => Math.floor(played.seconds),
     reposition(currentTime) {
       played.position = currentTime;

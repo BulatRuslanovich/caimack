@@ -32,7 +32,6 @@ pub fn router(enabled: bool) -> Router<AppState> {
     }
     base.route("/api/home/mixes/{kind}", get(mix))
         .route("/api/recommendations/radio", post(radio))
-        .route("/api/recommendations/moods", get(moods))
         .route("/api/recommendations/stats", get(stats))
         .route("/api/recommendations/rules", get(rules).post(add_rule))
         .route("/api/recommendations/rules/{id}", delete(remove_rule))
@@ -94,10 +93,6 @@ async fn remove_rule(
 ) -> ApiResult<StatusCode> {
     state.recommendations.remove_rule(user.user_id, id).await?;
     Ok(StatusCode::NO_CONTENT)
-}
-
-async fn moods(State(state): State<AppState>, CurrentUser(_): CurrentUser) -> ApiResult<impl IntoResponse> {
-    Ok(Json(state.recommendations.moods().await?))
 }
 
 #[derive(Deserialize)]

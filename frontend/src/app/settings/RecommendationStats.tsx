@@ -8,7 +8,12 @@ import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { queries } from "@/lib/queries";
 import { sourceLabel } from "@/lib/sourceLabel";
-import type { RadioImpressionStats, RecommendationStats as Stats, SourceStats } from "@/lib/types";
+import type {
+  ListeningStats,
+  RadioImpressionStats,
+  RecommendationStats as Stats,
+  SourceStats,
+} from "@/lib/types";
 import { useFormat } from "@/lib/useFormat";
 import { useT } from "@/contexts/I18nContext";
 import { Query } from "@/components/Query";
@@ -28,7 +33,7 @@ const percentLabel = (part: number, whole: number) => {
 export function RecommendationStats() {
   const t = useT();
   const [days, setDays] = useState(30);
-  const stats = useQuery(queries.recommendationStats(days));
+  const stats = useQuery({ ...queries.recommendationStats(days), refetchInterval: 60_000 });
 
   return (
     <div className="flex flex-col gap-5">
@@ -79,6 +84,7 @@ function Report({ stats }: { stats: Stats }) {
 
   return (
     <>
+      {stats.behavior && stats.behavior.length > 0 && <ListeningQuality rows={stats.behavior} />}
       <div className="flex flex-col gap-2">
         <p className="font-display text-2xl font-semibold">{t("stats.share", { share })}</p>
         <div className="flex h-2 overflow-hidden rounded-full bg-raised" aria-hidden="true">
@@ -156,6 +162,71 @@ function Report({ stats }: { stats: Stats }) {
         </table>
       </div>
     </>
+  );
+}
+
+function ListeningQuality({ rows }: { rows: ListeningStats[] }) {
+  const t = useT();
+  const totals = rows.reduce(
+    (sum, row) => ({
+      zero: sum.zero + row.earlySkips,
+      one: sum.one + row.partial,
+      two: sum.two + row.nearComplete,
+      unrated: sum.unrated + row.unrated,
+    }),
+    { zero: 0, one: 0, two: 0, unrated: 0 },
+  );
+  const rated = totals.zero + totals.one + totals.two;
+  const average = rated > 0 ? ((totals.one + 2 * totals.two) / rated).toFixed(2) : "—";
+  const grades = [
+    { label: t("stats.gradeZero"), count: totals.zero, color: "bg-destructive/70" },
+    { label: t("stats.gradeOne"), count: totals.one, color: "bg-primary/40" },
+    { label: t("stats.gradeTwo"), count: totals.two, color: "bg-primary" },
+  ];
+  return (
+    <section
+      className="flex flex-col gap-4 border-b border-border pb-5"
+      aria-label={t("stats.listeningTitle")}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex max-w-[60ch] flex-col gap-1">
+          <h3 className="text-heading font-semibold">{t("stats.listeningTitle")}</h3>
+          <p className="text-sm text-muted-foreground">{t("stats.listeningNote")}</p>
+        </div>
+        <p className="shrink-0 tabular-nums">
+          <span className="font-display text-3xl font-semibold">{average}</span>
+          <span className="text-muted-foreground"> / 2</span>
+        </p>
+      </div>
+      {rated > 0 && (
+        <div className="flex h-2 overflow-hidden rounded-full bg-raised" aria-hidden="true">
+          {grades.map((grade) => (
+            <span
+              key={grade.label}
+              className={grade.color}
+              style={{ width: `${(100 * grade.count) / rated}%` }}
+            />
+          ))}
+        </div>
+      )}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {grades.map((grade) => (
+          <div key={grade.label} className="flex flex-col gap-1">
+            <span className="text-sm text-muted-foreground">{grade.label}</span>
+            <span className="text-xl font-semibold tabular-nums">
+              {grade.count}
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                {percentLabel(grade.count, rated)}
+              </span>
+            </span>
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {t("stats.listeningCount", { rated, unrated: totals.unrated })}
+      </p>
+      <p className="text-xs text-muted-foreground">{t("stats.listeningRules")}</p>
+    </section>
   );
 }
 

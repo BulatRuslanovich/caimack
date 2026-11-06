@@ -42,19 +42,9 @@ pub struct MapPointDto {
 }
 
 #[derive(Debug, Serialize)]
-pub struct MapLandmarkDto {
-    pub mood: String,
-    #[serde(serialize_with = "json::number")]
-    pub x: f64,
-    #[serde(serialize_with = "json::number")]
-    pub y: f64,
-}
-
-#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryMapDto {
     pub points: Vec<MapPointDto>,
-    pub landmarks: Vec<MapLandmarkDto>,
     pub total_tracks: i64,
 }
 
@@ -166,11 +156,7 @@ impl Recommendations {
                     });
                 }
 
-                LibraryMapDto {
-                    points,
-                    landmarks: vec![],
-                    total_tracks: i64::try_from(tracks.len()).unwrap_or(i64::MAX),
-                }
+                LibraryMapDto { points, total_tracks: i64::try_from(tracks.len()).unwrap_or(i64::MAX) }
             })
             .await
     }

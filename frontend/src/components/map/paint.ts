@@ -16,7 +16,6 @@ import type { MapPoint } from "@/lib/types";
 import type { MapLabel, MapRoute } from "./LibraryMapCanvas";
 
 const LEVELS = 8;
-const TERRITORY = 0.14;
 const COVER_ZOOM = 4;
 const COVER_FADE = 2;
 const COVER_RADIUS = 14;
@@ -48,10 +47,6 @@ export function readPalette(element: Element): Palette {
     light: style.colorScheme === "light",
     font: style.fontFamily,
   };
-}
-
-function moodTint(hue: number, light: boolean, alpha: number): string {
-  return `oklch(${light ? 0.58 : 0.72} 0.11 ${hue} / ${alpha})`;
 }
 
 function haloSprite(color: Rgb, strength: number): HTMLCanvasElement {
@@ -139,8 +134,6 @@ export function paintMap(
   const radius = dotRadius(view.k);
   const coverShare = covers ? clamp01((view.k - COVER_ZOOM) / COVER_FADE) : 0;
   const mark = coverShare > 0 ? radius + (COVER_RADIUS - radius) * coverShare : radius;
-  const settled = easeOut(intro);
-  const moods = labels.filter((label) => label.hue !== undefined);
   const screen = (spot: Spot) => toScreen(spot, view, base);
   let moving = false;
 
@@ -162,19 +155,6 @@ export function paintMap(
     }
   }
   context.fill();
-
-  for (const label of moods) {
-    const spot = screen(label);
-    const reach = TERRITORY * base * view.k * (0.4 + 0.6 * settled);
-    const glow = context.createRadialGradient(spot.x, spot.y, 0, spot.x, spot.y, reach);
-    glow.addColorStop(
-      0,
-      moodTint(label.hue!, palette.light, (palette.light ? 0.2 : 0.16) * settled),
-    );
-    glow.addColorStop(1, moodTint(label.hue!, palette.light, 0));
-    context.fillStyle = glow;
-    context.fillRect(spot.x - reach, spot.y - reach, reach * 2, reach * 2);
-  }
 
   const hoveredIndex =
     hoveredId === null ? -1 : points.findIndex((point) => point.id === hoveredId);
@@ -290,24 +270,7 @@ export function paintMap(
   const arrive = (point: MapPoint): { spot: Spot; grown: number } => {
     if (intro >= 1) return { spot: screen(point), grown: 1 };
 
-    let origin: Spot = point;
-    let nearest = Infinity;
-    for (const mood of moods) {
-      const distance = (mood.x - point.x) ** 2 + (mood.y - point.y) ** 2;
-      if (distance < nearest) {
-        nearest = distance;
-        origin = mood;
-      }
-    }
-
-    const grown = easeOut(clamp01((intro - Math.min(0.5, Math.sqrt(nearest) * 2)) / 0.5));
-    return {
-      spot: screen({
-        x: origin.x + (point.x - origin.x) * grown,
-        y: origin.y + (point.y - origin.y) * grown,
-      }),
-      grown,
-    };
+    return { spot: screen(point), grown: easeOut(clamp01(intro)) };
   };
 
   const buckets = new Map<string, Spot[]>();
@@ -459,8 +422,7 @@ export function paintMap(
     const size = label.strong ? 14 : 12;
     context.font = `${label.strong ? 700 : 600} ${size}px ${palette.font}`;
 
-    const swatch = label.hue === undefined ? 0 : 13;
-    const plate = context.measureText(label.text).width + 20 + swatch;
+    const plate = context.measureText(label.text).width + 20;
     const height = size + 12;
     let y = spot.y;
 
@@ -493,22 +455,12 @@ export function paintMap(
 
     if (!label.strong) {
       context.lineWidth = 1;
-      context.strokeStyle =
-        label.hue === undefined
-          ? rgba(palette.ink, 0.16)
-          : moodTint(label.hue, palette.light, 0.55);
+      context.strokeStyle = rgba(palette.ink, 0.16);
       context.stroke();
     }
 
-    if (label.hue !== undefined) {
-      context.beginPath();
-      context.arc(left + 13, y, 3.5, 0, Math.PI * 2);
-      context.fillStyle = moodTint(label.hue, palette.light, 1);
-      context.fill();
-    }
-
     context.fillStyle = label.strong ? rgba(palette.onPrimary, 1) : rgba(palette.ink, 1);
-    context.fillText(label.text, left + 10 + swatch, y + 0.5);
+    context.fillText(label.text, left + 10, y + 0.5);
   }
 
   context.globalAlpha = 1;

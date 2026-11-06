@@ -21,8 +21,7 @@ object PlaySources {
 
     fun of(trackId: String): String? = synchronized(sources) { sources[trackId] }
 
-    fun radio(mood: String?, seeded: Boolean = false): String = when {
-        mood != null -> "radio:mood:$mood"
+    fun radio(seeded: Boolean = false): String = when {
         seeded -> "radio:track"
         else -> "radio"
     }

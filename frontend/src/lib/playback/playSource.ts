@@ -29,8 +29,7 @@ export function sourceOf(trackId: string): string | undefined {
   return sources.get(trackId);
 }
 
-export function radioSource(mood?: string | null, seeded = false): string {
-  if (mood) return `radio:mood:${mood}`;
+export function radioSource(seeded = false): string {
   return seeded ? "radio:track" : "radio";
 }
 

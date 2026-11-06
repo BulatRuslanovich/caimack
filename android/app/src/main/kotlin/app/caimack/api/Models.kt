@@ -219,9 +219,6 @@ data class SignalBatch(val events: List<PlaybackSignal>)
 data class HistoryEntryRequest(val trackId: String, val playbackPosition: Int, val listenedSeconds: Int)
 
 @Serializable
-data class Mood(val key: String, val albumIds: List<String> = emptyList())
-
-@Serializable
 data class RadioRequest(val seedTrackId: String?, val exclude: List<String>, val sessionId: String? = null)
 
 @Serializable
@@ -288,9 +285,6 @@ data class RecapArtist(val artist: Artist, val plays: Int, val listenedSeconds: 
 data class RecapGenre(val id: String, val name: String, val share: Double)
 
 @Serializable
-data class RecapMood(val key: String, val share: Double)
-
-@Serializable
 data class Recap(
     val year: Int,
     val month: Int,
@@ -302,7 +296,6 @@ data class Recap(
     val topTracks: List<RecapTrack> = emptyList(),
     val topArtists: List<RecapArtist> = emptyList(),
     val topGenre: String? = null,
-    val moods: List<RecapMood> = emptyList(),
     val daySeconds: List<Long> = emptyList(),
     val hourSeconds: List<Long> = emptyList(),
     val soundOfMonth: Track? = null,
@@ -324,12 +317,8 @@ data class MapPoint(
 )
 
 @Serializable
-data class MapLandmark(val mood: String, val x: Float, val y: Float)
-
-@Serializable
 data class LibraryMap(
     val points: List<MapPoint> = emptyList(),
-    val landmarks: List<MapLandmark> = emptyList(),
     val totalTracks: Int = 0,
 )
 

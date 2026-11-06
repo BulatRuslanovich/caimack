@@ -312,6 +312,7 @@ export function usePlaybackEngine({
     clearSwitchTimer();
 
     if (!currentTrack) {
+      tracker.discard();
       crossfader.finish();
       dropStandby();
       audio.pause();
@@ -692,6 +693,7 @@ export function usePlaybackEngine({
       }
       recovery.recover();
 
+      tracker.discard();
       if (isPlaying) {
         notify(t("player.skippedUnplayable", { title: currentTrack.title }), "info");
         onTrackEnded();
@@ -738,7 +740,7 @@ export function usePlaybackEngine({
       if (attempt === 0) void refreshSession().then(retry);
       else retry();
     }, decision.delayMs);
-  }, [currentTrack, isPlaying, quality, notify, t, recovery, failSource, onTrackEnded]);
+  }, [currentTrack, isPlaying, quality, notify, t, recovery, failSource, onTrackEnded, tracker]);
 
   const handleWaiting = useCallback(() => {
     const audio = audioRef.current;

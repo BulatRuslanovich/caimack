@@ -1,0 +1,81 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH likes AS (\n                   SELECT s.source, COUNT(DISTINCT s.track_id)::int AS liked\n                   FROM playback_events s\n                   WHERE s.user_id = $1 AND s.type = 1 AND s.occurred_at >= $2 AND s.source IS NOT NULL\n                     AND EXISTS (SELECT 1 FROM playback_events l\n                                 WHERE l.user_id = s.user_id AND l.track_id = s.track_id AND l.type = 7\n                                   AND l.occurred_at >= s.occurred_at AND l.occurred_at <= s.occurred_at + interval '1 day')\n                   GROUP BY s.source\n               )\n               SELECT e.source,\n                      (COUNT(*) FILTER (WHERE e.type = 15))::int AS \"impressions!\",\n                      (COUNT(*) FILTER (WHERE e.type = 1))::int AS \"starts!\",\n                      (COUNT(*) FILTER (WHERE e.type IN (3, 4) AND e.duration_seconds > 0\n                        AND e.listened_seconds::float8 / NULLIF(e.duration_seconds, 0) >= $4))::int AS \"completed!\",\n                      (COUNT(*) FILTER (WHERE e.type IN (3, 4) AND (e.duration_seconds <= 0\n                        OR e.listened_seconds::float8 / NULLIF(e.duration_seconds, 0) < $4)))::int AS \"skipped!\",\n                      (COUNT(*) FILTER (WHERE e.type = 4 AND e.listened_seconds < $3 AND e.duration_seconds > 0\n                        AND e.listened_seconds::float8 / NULLIF(e.duration_seconds, 0) < $5))::int AS \"skipped_early!\",\n                      COALESCE(SUM(GREATEST(e.listened_seconds, 0)) FILTER (WHERE e.type IN (3, 4)), 0)::bigint AS \"listened_seconds!\",\n                      COALESCE(MAX(l.liked), 0) AS \"liked!\"\n               FROM playback_events e\n               LEFT JOIN likes l ON l.source = e.source\n               WHERE e.user_id = $1 AND e.occurred_at >= $2 AND e.type IN (1, 3, 4, 15)\n               GROUP BY e.source",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "playback_events",
+            "name": "source"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "impressions!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "starts!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "completed!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "skipped!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "skipped_early!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "listened_seconds!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "liked!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Int4",
+        "Float8",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      true,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "d3c54c61b724b874bc05ccc654909edd3d9f75d9ff11773174e5297e47533147"
+}

@@ -8,8 +8,9 @@ use uuid::Uuid;
 use super::Recommendations;
 use super::impressions::{self, ImpressionStatsDto};
 use super::listener::{EVENT_RETENTION_DAYS, is_recommendation};
-use crate::library::history::THRESHOLD_SECONDS;
+use super::quality::{self, ListeningStatsDto};
 use crate::{AppError, AppResult};
+use reco::listening;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -33,6 +34,7 @@ pub struct RecommendationStatsDto {
     pub recommended_seconds: i64,
     pub sources: Vec<SourceStatsDto>,
     pub radio: Vec<ImpressionStatsDto>,
+    pub behavior: Vec<ListeningStatsDto>,
 }
 
 impl Recommendations {
@@ -43,6 +45,7 @@ impl Recommendations {
         let since = Utc::now() - chrono::Duration::days(i64::from(days));
         impressions::resolve(&self.db).await?;
         let radio = impressions::stats(&self.db, user, since).await?;
+        let behavior = quality::load(&self.db, user, since).await?;
 
         let rows = sqlx::query!(
             r#"WITH likes AS (
@@ -57,9 +60,12 @@ impl Recommendations {
                SELECT e.source,
                       (COUNT(*) FILTER (WHERE e.type = 15))::int AS "impressions!",
                       (COUNT(*) FILTER (WHERE e.type = 1))::int AS "starts!",
-                      (COUNT(*) FILTER (WHERE e.type = 3))::int AS "completed!",
-                      (COUNT(*) FILTER (WHERE e.type = 4))::int AS "skipped!",
-                      (COUNT(*) FILTER (WHERE e.type = 4 AND e.listened_seconds < $3))::int AS "skipped_early!",
+                      (COUNT(*) FILTER (WHERE e.type IN (3, 4) AND e.duration_seconds > 0
+                        AND e.listened_seconds::float8 / NULLIF(e.duration_seconds, 0) >= $4))::int AS "completed!",
+                      (COUNT(*) FILTER (WHERE e.type IN (3, 4) AND (e.duration_seconds <= 0
+                        OR e.listened_seconds::float8 / NULLIF(e.duration_seconds, 0) < $4)))::int AS "skipped!",
+                      (COUNT(*) FILTER (WHERE e.type = 4 AND e.listened_seconds < $3 AND e.duration_seconds > 0
+                        AND e.listened_seconds::float8 / NULLIF(e.duration_seconds, 0) < $5))::int AS "skipped_early!",
                       COALESCE(SUM(GREATEST(e.listened_seconds, 0)) FILTER (WHERE e.type IN (3, 4)), 0)::bigint AS "listened_seconds!",
                       COALESCE(MAX(l.liked), 0) AS "liked!"
                FROM playback_events e
@@ -68,7 +74,9 @@ impl Recommendations {
                GROUP BY e.source"#,
             user,
             since,
-            THRESHOLD_SECONDS
+            listening::EARLY_SECONDS,
+            listening::NEAR_COMPLETE,
+            listening::EARLY
         )
         .fetch_all(&self.db)
         .await?;
@@ -98,6 +106,7 @@ impl Recommendations {
             recommended_seconds: sources.iter().filter(|row| row.recommended).map(|row| row.listened_seconds).sum(),
             sources,
             radio,
+            behavior,
         })
     }
 }

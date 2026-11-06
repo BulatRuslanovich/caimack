@@ -21,8 +21,7 @@ class PlaySourcesTest {
 
     @Test
     fun `radios are told apart`() {
-        assertEquals("radio:mood:sad", PlaySources.radio("sad"))
-        assertEquals("radio:track", PlaySources.radio(null, seeded = true))
-        assertEquals("radio", PlaySources.radio(null))
+        assertEquals("radio:track", PlaySources.radio(seeded = true))
+        assertEquals("radio", PlaySources.radio())
     }
 }

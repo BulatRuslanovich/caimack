@@ -4,7 +4,6 @@
 mod auth;
 mod client;
 mod csrf;
-mod evaluation;
 mod extract;
 mod files;
 mod healthcheck;
@@ -53,10 +52,9 @@ async fn run() -> anyhow::Result<()> {
     match std::env::args().nth(1).as_deref() {
         Some("healthcheck") => std::process::exit(if healthcheck::healthy() { 0 } else { 1 }),
         Some("migrate") => return migrate().await,
-        Some("recommendations-evaluate") => return evaluation::run().await,
         Some("serve") | None => {}
         Some(other) => {
-            anyhow::bail!("Unknown command '{other}'. Commands: serve, migrate, healthcheck, recommendations-evaluate.")
+            anyhow::bail!("Unknown command '{other}'. Commands: serve, migrate, healthcheck.")
         }
     }
 

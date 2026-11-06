@@ -89,7 +89,6 @@ import kotlin.math.round
 private const val GENRE_CHOICES = 12
 private const val LOCATE_ZOOM = 5f
 private const val LEVELS = 8
-private const val TERRITORY = 0.14f
 
 @Composable
 fun MapScreen() {
@@ -137,7 +136,7 @@ private fun MapExplorer(map: LibraryMap) {
     }
     val visibleLinks = if (MapLayer.Links.key in hiddenLayers) emptyList() else links
     val plates = listOfNotNull(genreLabel?.let {
-        Plate(genre!!.replaceFirstChar { char -> char.uppercase() }, it, null, strong = true)
+        Plate(genre!!.replaceFirstChar { char -> char.uppercase() }, it, strong = true)
     })
 
     val current = playback.current?.id?.let { id -> points.firstOrNull { it.id == id } }
@@ -301,11 +300,9 @@ private fun MapExplorer(map: LibraryMap) {
     }
 }
 
-private data class Plate(val text: String, val at: Spot, val hue: Float?, val strong: Boolean = false)
+private data class Plate(val text: String, val at: Spot, val strong: Boolean = false)
 
 private fun lerpTowards(from: Color, to: Color, amount: Float) = androidx.compose.ui.graphics.lerp(from, to, amount)
-
-private fun moodTint(hue: Float, dark: Boolean, alpha: Float) = oklch(if (dark) 0.72 else 0.58, 0.11, hue.toDouble(), alpha)
 
 private fun dotRadius(k: Float, density: Float) = min(3.6f, 1.4f + 0.55f * (ln(k + 1) / ln(2f))) * density
 
@@ -340,21 +337,6 @@ private fun DrawScope.drawMap(
             gy += step
         }
         gx += step
-    }
-
-    plates.forEach { plate ->
-        val hue = plate.hue ?: return@forEach
-        val centre = toScreen(plate.at, view, base).let { Offset(it.x, it.y) }
-        val reach = TERRITORY * base * view.k
-        drawCircle(
-            Brush.radialGradient(
-                listOf(moodTint(hue, palette.dark, if (palette.dark) 0.09f else 0.12f), moodTint(hue, palette.dark, 0f)),
-                center = centre,
-                radius = reach,
-            ),
-            reach,
-            centre,
-        )
     }
 
     val path = Path()
@@ -455,7 +437,7 @@ private fun DrawScope.drawPlates(plates: List<Plate>, view: MapView, base: Float
             color = if (plate.strong) palette.onPrimary else palette.foreground,
         )
         val margin = 8.dp.toPx()
-        val mark = if (plate.hue == null) 0f else 13.dp.toPx()
+        val mark = 0f
         val text = measurer.measure(plate.text, style, maxLines = 1, overflow = TextOverflow.Ellipsis,
             constraints = Constraints(maxWidth = (size.width - margin * 2 - 20.dp.toPx() - mark).toInt().coerceAtLeast(1)))
         val width = text.size.width + 20.dp.toPx() + mark
@@ -475,14 +457,13 @@ private fun DrawScope.drawPlates(plates: List<Plate>, view: MapView, base: Float
         drawRoundRect(if (plate.strong) palette.primary else palette.card.copy(alpha = 0.86f), Offset(left, top), Size(width, height), corner)
         if (!plate.strong) {
             drawRoundRect(
-                plate.hue?.let { moodTint(it, palette.dark, 0.55f) } ?: palette.foreground.copy(alpha = 0.16f),
+                palette.foreground.copy(alpha = 0.16f),
                 Offset(left, top),
                 Size(width, height),
                 corner,
                 style = Stroke(1.dp.toPx()),
             )
         }
-        plate.hue?.let { drawCircle(moodTint(it, palette.dark, 1f), 3.5f * density, Offset(left + 13.dp.toPx(), top + height / 2)) }
         drawText(text, topLeft = Offset(left + 10.dp.toPx() + mark, top + (height - text.size.height) / 2))
     }
 }

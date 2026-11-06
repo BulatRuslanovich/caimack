@@ -29,7 +29,7 @@ class RadioSession(context: Context) {
     fun start(seedTrackId: String?, batch: RadioBatch) {
         PlaySources.tag(
             batch.tracks.map { it.track.id }.filter { it != seedTrackId },
-            PlaySources.radio(null, seeded = seedTrackId != null),
+            PlaySources.radio(seeded = seedTrackId != null),
         )
         current.value = RadioState(seedTrackId, notesOf(batch), generation.incrementAndGet(), active = true)
     }
@@ -38,7 +38,7 @@ class RadioSession(context: Context) {
         val state = current.value
         PlaySources.tag(
             batch.tracks.map { it.track.id },
-            if (state.notes.isNotEmpty()) PlaySources.radio(null) else "radio:autoplay",
+            if (state.notes.isNotEmpty()) PlaySources.radio() else "radio:autoplay",
         )
         current.update { it.copy(notes = it.notes + notesOf(batch)) }
     }

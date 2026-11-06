@@ -112,6 +112,19 @@ describe("accumulate", () => {
 });
 
 describe("finish", () => {
+  it("does not turn a playback failure or interruption into a skip", () => {
+    tracker.begin(song);
+    tracker.accumulate(1);
+    tracker.discard();
+    tracker.finish("trackSkipped");
+    expect(typesOf()).toEqual(["trackStarted"]);
+    tracker.begin(song);
+    tracker.accumulate(1);
+    tracker.finish("trackCompleted");
+    expect(lastOf("trackCompleted")).toMatchObject({ trackId: song.id, listenedSeconds: 1 });
+    expect(typesOf()).not.toContain("trackReplayed");
+  });
+
   it("reports whole seconds", () => {
     tracker.begin(song);
     tracker.accumulate(1.75);

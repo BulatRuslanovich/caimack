@@ -26,14 +26,6 @@ const RECENT_ARTIST_PENALTY: f64 = 0.5;
 const WARM_TRACKS: usize = 10;
 const POOL: usize = 150;
 
-/// The legacy path is retained for paired, reproducible evaluation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum Ranking {
-    LegacyV3,
-    CalibratedV4,
-}
-
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Focus {
     #[default]
@@ -59,8 +51,6 @@ pub struct Features {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub similarity_rank: Option<f32>,
     pub fit: f32,
-    // Kept at zero for the historical impression feature schema.
-    pub mood: f32,
     pub behaviour: f32,
     pub transition: f32,
     pub sameness: f32,
@@ -119,16 +109,6 @@ struct Candidate {
 }
 
 pub fn next(snapshot: &Snapshot, listener: &Listener, taste: &Taste, request: &RadioRequest<'_>) -> RadioBatch {
-    next_with_ranking(snapshot, listener, taste, request, Ranking::CalibratedV4)
-}
-
-pub fn next_with_ranking(
-    snapshot: &Snapshot,
-    listener: &Listener,
-    taste: &Taste,
-    request: &RadioRequest<'_>,
-    ranking: Ranking,
-) -> RadioBatch {
     if snapshot.is_empty() {
         return RadioBatch::default();
     }
@@ -184,7 +164,7 @@ pub fn next_with_ranking(
     excluded.extend(snapshot.clones(anchor));
 
     let anchor_similarity = snapshot.similarities(snapshot.vector(anchor));
-    let similarity_ranks = (ranking == Ranking::CalibratedV4).then(|| {
+    let similarity_ranks = {
         // Seed copies, blocked songs and rejected tracks are not competitors.
         let candidates: Vec<f32> = anchor_similarity
             .iter()
@@ -192,7 +172,7 @@ pub fn next_with_ranking(
             .map(|(row, &score)| if excluded.contains(&row) { f32::NAN } else { score })
             .collect();
         calibration::relative_scores(&candidates)
-    });
+    };
     let mut recent_artists: HashSet<Uuid> = tail.iter().flat_map(|&row| snapshot.meta(row).artists.clone()).collect();
     if moved && let Some(seeded) = request.seed.and_then(|seed| snapshot.row_of(seed)) {
         recent_artists.extend(snapshot.meta(seeded).artists.iter().copied());
@@ -210,9 +190,8 @@ pub fn next_with_ranking(
             let meta = snapshot.meta(row);
             let features = Features {
                 similarity: anchor_similarity[row],
-                similarity_rank: similarity_ranks.as_ref().map(|scores| scores[row]),
+                similarity_rank: Some(similarity_ranks[row]),
                 fit: taste.fit.get(row).copied().unwrap_or(0.0),
-                mood: 0.0,
                 #[expect(clippy::cast_possible_truncation, reason = "a score in [0, 1]")]
                 behaviour: ((taste::behaviour(taste, &meta.artists, meta.genre_id) + 1.0) / 2.0) as f32,
                 transition: 0.0,
@@ -292,8 +271,7 @@ pub fn next_with_ranking(
         .filter(|candidate| {
             candidate.base >= floor
                 && unheard(listener, snapshot.meta(candidate.row).track_id)
-                && (ranking == Ranking::LegacyV3
-                    || candidate.features.similarity_rank.unwrap_or(candidate.features.similarity) >= similarity_floor)
+                && candidate.features.similarity_rank.unwrap_or(candidate.features.similarity) >= similarity_floor
         })
         .take(POOL)
         .collect();
@@ -491,9 +469,7 @@ mod tests {
         let listener = listener(&[]);
         let taste = taste(&snapshot, &listener);
         let request = request(Some(0), &[], 1, Focus::Closer);
-        let before = next_with_ranking(&snapshot, &listener, &taste, &request, Ranking::LegacyV3);
-        let after = next_with_ranking(&snapshot, &listener, &taste, &request, Ranking::CalibratedV4);
-        assert_eq!(before.picks[0].row, 2);
+        let after = next(&snapshot, &listener, &taste, &request);
         assert_eq!(after.picks[0].row, 1);
         assert!(after.picks[0].features.similarity > 0.94, "retain raw evidence for diagnostics");
     }

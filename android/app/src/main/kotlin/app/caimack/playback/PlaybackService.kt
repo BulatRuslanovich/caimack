@@ -292,6 +292,8 @@ class PlaybackService : MediaLibraryService() {
                     return
                 }
 
+                signals.tracker.discard()
+                listening = null
                 if (player.hasNextMediaItem() && failures++ < MAX_SKIPS) {
                     val title = item.mediaMetadata.title?.toString().orEmpty()
                     Toast.makeText(this@PlaybackService, Appearance.localized(this@PlaybackService).getString(R.string.player_skipped_unplayable, title), Toast.LENGTH_SHORT).show()
@@ -387,7 +389,7 @@ class PlaybackService : MediaLibraryService() {
         equalizer = null
         ticks.removeCallbacksAndMessages(null)
         exclusive.release()
-        signals.tracker.finish(ListeningTracker.SKIPPED)
+        signals.tracker.discard()
         signals.flush()
         session?.run {
             save((application as CaimackApp).container, player)

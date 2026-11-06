@@ -63,6 +63,14 @@ class ListeningTracker(
         trackId = ""
     }
 
+    fun discard() {
+        heard.remove(trackId)
+        trackId = ""
+        listened = 0.0
+        position = 0.0
+        heartbeatAt = 0.0
+    }
+
     private fun progress(type: String) = record(
         ListeningEvent(type, trackId, duration, positionSeconds = position.toInt(), listenedSeconds = listened.toInt(), source = source),
     )

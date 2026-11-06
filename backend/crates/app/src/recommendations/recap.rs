@@ -9,11 +9,11 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use super::Recommendations;
+use crate::AppResult;
 use crate::catalog::artists;
 use crate::catalog::dto::{ArtistDto, TrackDto};
 use crate::catalog::tracks;
 use crate::library::history::THRESHOLD_SECONDS;
-use crate::{AppResult, json};
 
 const TOP: usize = 5;
 const NEW_ARTIST_PICKS: usize = 3;
@@ -34,13 +34,6 @@ pub struct RecapArtistDto {
 }
 
 #[derive(Debug, Serialize)]
-pub struct RecapMoodDto {
-    pub key: String,
-    #[serde(serialize_with = "json::number")]
-    pub share: f64,
-}
-
-#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecapDto {
     pub year: i32,
@@ -53,7 +46,6 @@ pub struct RecapDto {
     pub top_tracks: Vec<RecapTrackDto>,
     pub top_artists: Vec<RecapArtistDto>,
     pub top_genre: Option<String>,
-    pub moods: Vec<RecapMoodDto>,
     pub day_seconds: Vec<i64>,
     pub hour_seconds: Vec<i64>,
     pub sound_of_month: Option<TrackDto>,
@@ -249,7 +241,6 @@ impl Recommendations {
                 })
                 .collect(),
             top_genre,
-            moods: vec![],
             day_seconds: totals.day_seconds,
             hour_seconds: totals.hour_seconds,
             sound_of_month: sound.and_then(|id| found_tracks.get(&id).cloned()),

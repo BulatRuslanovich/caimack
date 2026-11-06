@@ -41,7 +41,6 @@ export interface MapLabel {
   x: number;
   y: number;
   strong?: boolean;
-  hue?: number;
 }
 
 export interface MapRoute {

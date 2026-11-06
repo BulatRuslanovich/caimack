@@ -143,11 +143,11 @@ downloads the pinned, ready-to-use weights (about 1.26 GB) from Hugging Face onc
 and keeps them in `storage/models/mert`. No training or model export runs on the server.
 The library and playback are available while the model loads. Existing CLAP vectors
 are automatically replaced in the background; recommendations and the map use only
-compatible MERT vectors. Mood radio and mood labels have been removed.
+compatible MERT vectors.
 
 See [optional module deployment and cache reuse](docs/mert.md).
 
-Compare radio ranking on existing vectors with [blind recommendation evaluation](docs/recommendation-evaluation.md).
+Listening behavior automatically scores recommendations; see [recommendation quality](docs/recommendations.md).
 
 </details>
 

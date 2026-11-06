@@ -107,8 +107,6 @@
     <string name="recap_hours_evening">Evening listener</string>
     <string name="recap_hours_night">Night listener</string>
     <string name="recap_hours_note">%1$d%% of your music played between %2$02d and %3$02d</string>
-    <string name="recap_mood_eyebrow">The month sounded</string>
-    <string name="recap_mood_radio">%1$s radio</string>
     <string name="recap_sound_eyebrow">Sound of the month</string>
     <string name="recap_sound_note">The track closest to how the whole month sounded</string>
     <string name="recap_discoveries_eyebrow">Discoveries</string>
@@ -118,7 +116,6 @@
     <string name="recap_summary_time">Music</string>
     <string name="recap_summary_artist">Artist</string>
     <string name="recap_summary_track">Track</string>
-    <string name="recap_summary_mood">Mood</string>
     <string name="recap_summary_genre">Genre</string>
     <string name="unit_hours_minutes">%1$d h %2$d min</string>
     <string name="unit_hours">%1$d h</string>
@@ -144,7 +141,6 @@
     <string name="map_layers_expanded">Expanded</string>
     <string name="map_layers_collapsed">Collapsed</string>
     <string name="map_layer_links">Links</string>
-    <string name="map_layer_moods">Moods</string>
     <string name="map_locate">Show what’s playing</string>
     <string name="action_close">Close</string>
     <string name="map_reset">Show the whole map</string>

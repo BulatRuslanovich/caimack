@@ -25,11 +25,6 @@ export interface TrackLoudness {
   range?: number | null;
 }
 
-export interface Mood {
-  key: string;
-  albumIds: string[];
-}
-
 export interface Track {
   id: string;
   title: string;
@@ -80,15 +75,8 @@ export interface MapPoint {
   plays: number;
 }
 
-export interface MapLandmark {
-  mood: string;
-  x: number;
-  y: number;
-}
-
 export interface LibraryMap {
   points: MapPoint[];
-  landmarks: MapLandmark[];
   totalTracks: number;
 }
 
@@ -264,7 +252,6 @@ export interface Recap {
   topTracks: { track: Track; plays: number }[];
   topArtists: { artist: Artist; plays: number; listenedSeconds: number }[];
   topGenre?: string | null;
-  moods: { key: string; share: number }[];
   daySeconds: number[];
   hourSeconds: number[];
   soundOfMonth?: Track | null;
@@ -300,6 +287,15 @@ export interface RecommendationStats {
   recommendedSeconds: number;
   sources: SourceStats[];
   radio?: RadioImpressionStats[];
+  behavior?: ListeningStats[];
+}
+
+export interface ListeningStats {
+  source: string;
+  earlySkips: number;
+  partial: number;
+  nearComplete: number;
+  unrated: number;
 }
 
 export interface AccountSession {

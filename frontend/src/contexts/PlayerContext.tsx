@@ -316,7 +316,7 @@ function PlayerSessionProvider({
       if (tracks) {
         tagSource(
           tracks.filter((track) => track.id !== seedTrack?.id).map((track) => track.id),
-          radioSource(null, Boolean(seedTrack)),
+          radioSource(Boolean(seedTrack)),
         );
         replaceQueue(tracks, 0);
       }

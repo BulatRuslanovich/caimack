@@ -144,7 +144,6 @@ fn russian(template: &str) -> Option<&'static str> {
         "The tracks that were playing are gone." => "Треков, которые играли, больше нет.",
         "A play is only recorded after {0} seconds of listening." => "Прослушивание засчитывается после {0} с.",
 
-        "Unknown mood '{0}'." => "Неизвестное настроение «{0}».",
         "Radio limit must be between 1 and {0}." => "Радио берёт от 1 до {0} треков.",
         "Days must be between 1 and {0}." => "Период — от 1 до {0} дней.",
         "Unknown audio quality." => "Неизвестное качество звука.",

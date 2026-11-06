@@ -14,8 +14,8 @@ describe("sourceLabel", () => {
     expect(sourceLabel("radio:autoplay", t)).toBe("source.radio:autoplay");
   });
 
-  it("names a mood radio after its mood", () => {
-    expect(sourceLabel("radio:mood:sad", t)).toBe("source.radioMood(radio.mood.sad)");
+  it("groups historical radio variants", () => {
+    expect(sourceLabel("radio:previous", t)).toBe("source.radio");
   });
 
   it("shows an unrecorded source as unknown and a strange one as is", () => {

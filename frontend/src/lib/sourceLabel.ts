@@ -3,7 +3,6 @@
 
 import type { Translate } from "@/contexts/I18nContext";
 import type { TranslationKey } from "@/lib/i18n";
-import { moodLabel } from "@/lib/moods";
 
 const KNOWN = new Set([
   "home",
@@ -40,9 +39,7 @@ const KNOWN = new Set([
 
 export function sourceLabel(source: string | null | undefined, t: Translate): string {
   if (!source) return t("source.unknown");
-  if (source.startsWith("radio:mood:")) {
-    return t("source.radioMood", { mood: moodLabel(source.slice("radio:mood:".length), t) });
-  }
+  if (source.startsWith("radio:") && !KNOWN.has(source)) return t("source.radio");
 
   return KNOWN.has(source) ? t(`source.${source}` as TranslationKey) : source;
 }

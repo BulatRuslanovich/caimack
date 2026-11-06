@@ -50,14 +50,6 @@
     <string name="player_skipped_unplayable">“%1$s” can’t be played — skipping to the next track.</string>
     <string name="queue_up_next">Up next</string>
     <string name="queue_radio_from">Radio from “%1$s”</string>
-    <string name="queue_radio_mood">%1$s radio</string>
-    <string name="mood_title">For your mood</string>
-    <string name="mood_workout">Workout</string>
-    <string name="mood_party">Party</string>
-    <string name="mood_chill">Chill</string>
-    <string name="mood_sleep">Sleep</string>
-    <string name="mood_happy">Happy</string>
-    <string name="mood_sad">Sad</string>
     <string name="queue_similar">Similar tracks</string>
     <string name="queue_history">Played · %1$d</string>
     <string name="queue_autoplay">Keep going with similar</string>

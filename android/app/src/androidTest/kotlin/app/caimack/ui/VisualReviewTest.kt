@@ -130,7 +130,7 @@ class VisualReviewTest {
                         MockResponse.Builder().code(204).build()
                     }
                     path == "/api/favorites" || path == "/api/history/recent" || path == "/api/tracks" -> json(Json.encodeToString(Paged(tracks, tracks.size, 1, 50)))
-                    path == "/api/genres" || path == "/api/recommendations/moods" -> json("[]")
+                    path == "/api/genres" -> json("[]")
                     else -> MockResponse.Builder().code(204).build()
                 }
             }
@@ -391,7 +391,6 @@ class VisualReviewTest {
         container.appearance.setLanguage("ru")
         container.appearance.setTheme(Appearance.DARK)
         context.getSharedPreferences("map_layers", 0).edit().remove("hidden").apply()
-        val moods = listOf("chill", "sleep", "workout", "party", "happy", "sad")
         val random = kotlin.random.Random(42)
         val centres = listOf(0.25f to 0.25f, 0.65f to 0.2f, 0.35f to 0.55f, 0.75f to 0.55f, 0.25f to 0.8f, 0.7f to 0.85f)
         val points = (0 until 180).map { index ->
@@ -405,7 +404,7 @@ class VisualReviewTest {
                 genre = listOf("Electronic", "Ambient", "Indie rock")[index % 3], plays = index % 27,
             )
         }
-        val map = app.caimack.api.LibraryMap(points, centres.mapIndexed { index, at -> app.caimack.api.MapLandmark(moods[index], at.first, at.second) }, points.size)
+        val map = app.caimack.api.LibraryMap(points, points.size)
         val previous = web.dispatcher
         web.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse = when (request.url.encodedPath) {
