@@ -7,6 +7,29 @@ as an Actions artifact for 30 days, then sends the file to one configured Telegr
 group. It does not create a GitHub Release. Master pushes and pull requests do not
 send messages.
 
+## Retry a release after a CI fix
+
+Commit the corrected workflow to the default branch (`master`). In GitHub, open
+**Actions → Android release → Run workflow**, select **master** as the workflow
+branch, and enter the existing release tag in **release_tag**, for example
+`v1.2.3`. No new tag or version bump is required.
+
+The workflow definition comes from the selected branch; application sources are
+checked out from `refs/tags/<release_tag>`. Version validation, artifact names,
+the APK source URL and the Telegram caption use the selected tag and its actual
+commit. The normal test, signing, artifact and Telegram delivery steps still run.
+The selected tag must already exist and match its own `frontend/package.json`.
+
+GitHub CLI equivalent:
+
+```bash
+gh workflow run android-release.yml --ref master -f release_tag=v1.2.3
+```
+
+This creates a new manual run using the corrected workflow. Re-running the old
+failed run keeps its original workflow commit. If a previous attempt already
+delivered its APK, another successful run sends another copy to the same group.
+
 ## Repository secrets
 
 Add these in **Settings → Secrets and variables → Actions → Repository secrets**:

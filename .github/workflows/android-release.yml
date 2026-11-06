@@ -1,32 +1,48 @@
 name: Android release
+run-name: Android ${{ inputs.release_tag || github.ref_name }}
 
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing release tag to rebuild (for example v1.2.3)"
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: android-release-${{ github.ref }}
+  group: android-release-${{ inputs.release_tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   apk:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
     steps:
+      - name: Validate release tag
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tag must have the form v1.2.3."
+            exit 1
+          fi
       - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
       - name: Validate version and restore release signing key
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
           CAIMACK_KEYSTORE_BASE64: ${{ secrets.CAIMACK_KEYSTORE_BASE64 }}
           CAIMACK_KEYSTORE_PASSWORD: ${{ secrets.CAIMACK_KEYSTORE_PASSWORD }}
           CAIMACK_KEY_ALIAS: ${{ secrets.CAIMACK_KEY_ALIAS }}
           CAIMACK_KEY_PASSWORD: ${{ secrets.CAIMACK_KEY_PASSWORD }}
         run: |
           python3 - <<'PY'
-          import base64, binascii, json, os, re
+          import base64, binascii, json, os, re, subprocess
           from pathlib import Path
           version = json.loads(Path('frontend/package.json').read_text())['version']
           if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version) or os.environ['RELEASE_TAG'] != f'v{version}':
@@ -41,11 +57,14 @@ jobs:
               raise SystemExit('CAIMACK_KEYSTORE_BASE64 is not valid base64.') from None
           if not key:
               raise SystemExit('The release keystore is empty.')
+          revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          if not re.fullmatch(r'[a-fA-F0-9]{40}', revision):
+              raise SystemExit('Could not resolve the release source commit.')
           os.umask(0o077)
           target = Path(os.environ['RUNNER_TEMP']) / 'caimack-release.jks'
           target.write_bytes(key)
           with open(os.environ['GITHUB_ENV'], 'a') as output:
-              output.write(f'CAIMACK_KEYSTORE_FILE={target}\nAPK_NAME=caimack-v{version}-arm64.apk\n')
+              output.write(f'CAIMACK_KEYSTORE_FILE={target}\nAPK_NAME=caimack-v{version}-arm64.apk\nSOURCE_REVISION={revision}\n')
           PY
 
       - uses: actions/setup-java@v6
@@ -54,7 +73,7 @@ jobs:
           java-version: "25"
       - uses: android-actions/setup-android@v4
         with:
-          packages: "platform-tools platforms;android-37 build-tools;36.0.0"
+          packages: "platform-tools platforms;android-37.0 build-tools;36.0.0"
       - uses: gradle/actions/setup-gradle@v6
         with:
           cache-provider: basic
@@ -65,7 +84,7 @@ jobs:
           CAIMACK_KEYSTORE_PASSWORD: ${{ secrets.CAIMACK_KEYSTORE_PASSWORD }}
           CAIMACK_KEY_ALIAS: ${{ secrets.CAIMACK_KEY_ALIAS }}
           CAIMACK_KEY_PASSWORD: ${{ secrets.CAIMACK_KEY_PASSWORD }}
-          CAIMACK_SOURCE_URL: https://github.com/${{ github.repository }}/tree/${{ github.sha }}
+          CAIMACK_SOURCE_URL: https://github.com/${{ github.repository }}/tree/${{ env.SOURCE_REVISION }}
         run: ./gradlew :app:testDebugUnitTest :app:assembleRelease --no-daemon --no-configuration-cache
 
       - name: Verify signature and prepare artifact
@@ -75,7 +94,7 @@ jobs:
           cp android/app/build/outputs/apk/release/app-release.apk "dist/$APK_NAME"
       - uses: actions/upload-artifact@v7
         with:
-          name: caimack-android-${{ github.ref_name }}
+          name: caimack-android-${{ env.RELEASE_TAG }}
           path: dist/*.apk
           if-no-files-found: error
           retention-days: 30
@@ -84,9 +103,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          RELEASE_TAG: ${{ github.ref_name }}
           SOURCE_REPOSITORY: ${{ github.repository }}
-          SOURCE_REVISION: ${{ github.sha }}
         run: |
           python3 scripts/send_telegram_apk.py --apk "dist/$APK_NAME" \
             --tag "$RELEASE_TAG" --repository "$SOURCE_REPOSITORY" --revision "$SOURCE_REVISION"
