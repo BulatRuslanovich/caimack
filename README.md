@@ -289,6 +289,9 @@ keyPassword=...
 
 </details>
 
+Tagged releases can also build and deliver a signed APK to a fixed Telegram group.
+See [Android release automation](docs/android-release.md) for signing and bot secrets.
+
 ## License
 
 AGPL-3.0-only — see [LICENSE](LICENSE) and [LICENSING.md](LICENSING.md).

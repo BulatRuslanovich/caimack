@@ -1,0 +1,96 @@
+name: Android release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate version and restore release signing key
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          CAIMACK_KEYSTORE_BASE64: ${{ secrets.CAIMACK_KEYSTORE_BASE64 }}
+          CAIMACK_KEYSTORE_PASSWORD: ${{ secrets.CAIMACK_KEYSTORE_PASSWORD }}
+          CAIMACK_KEY_ALIAS: ${{ secrets.CAIMACK_KEY_ALIAS }}
+          CAIMACK_KEY_PASSWORD: ${{ secrets.CAIMACK_KEY_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import base64, binascii, json, os, re
+          from pathlib import Path
+          version = json.loads(Path('frontend/package.json').read_text())['version']
+          if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version) or os.environ['RELEASE_TAG'] != f'v{version}':
+              raise SystemExit('Release tag must match frontend/package.json (for example v1.2.3).')
+          required = ['CAIMACK_KEYSTORE_BASE64', 'CAIMACK_KEYSTORE_PASSWORD', 'CAIMACK_KEY_ALIAS', 'CAIMACK_KEY_PASSWORD']
+          missing = [name for name in required if not os.environ.get(name)]
+          if missing:
+              raise SystemExit('Missing repository secrets: ' + ', '.join(missing))
+          try:
+              key = base64.b64decode(''.join(os.environ['CAIMACK_KEYSTORE_BASE64'].split()), validate=True)
+          except (ValueError, binascii.Error):
+              raise SystemExit('CAIMACK_KEYSTORE_BASE64 is not valid base64.') from None
+          if not key:
+              raise SystemExit('The release keystore is empty.')
+          os.umask(0o077)
+          target = Path(os.environ['RUNNER_TEMP']) / 'caimack-release.jks'
+          target.write_bytes(key)
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write(f'CAIMACK_KEYSTORE_FILE={target}\nAPK_NAME=caimack-v{version}-arm64.apk\n')
+          PY
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: "platform-tools platforms;android-37 build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+
+      - name: Test and build signed release APK
+        working-directory: android
+        env:
+          CAIMACK_KEYSTORE_PASSWORD: ${{ secrets.CAIMACK_KEYSTORE_PASSWORD }}
+          CAIMACK_KEY_ALIAS: ${{ secrets.CAIMACK_KEY_ALIAS }}
+          CAIMACK_KEY_PASSWORD: ${{ secrets.CAIMACK_KEY_PASSWORD }}
+          CAIMACK_SOURCE_URL: https://github.com/${{ github.repository }}/tree/${{ github.sha }}
+        run: ./gradlew :app:testDebugUnitTest :app:assembleRelease --no-daemon --no-configuration-cache
+
+      - name: Verify signature and prepare artifact
+        run: |
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose android/app/build/outputs/apk/release/app-release.apk
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/app-release.apk "dist/$APK_NAME"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: caimack-android-${{ github.ref_name }}
+          path: dist/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Send APK to the configured Telegram group
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          SOURCE_REPOSITORY: ${{ github.repository }}
+          SOURCE_REVISION: ${{ github.sha }}
+        run: |
+          python3 scripts/send_telegram_apk.py --apk "dist/$APK_NAME" \
+            --tag "$RELEASE_TAG" --repository "$SOURCE_REPOSITORY" --revision "$SOURCE_REVISION"
+
+      - name: Remove signing key
+        if: always()
+        run: rm -f -- "$RUNNER_TEMP/caimack-release.jks"
