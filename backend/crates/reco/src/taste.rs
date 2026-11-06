@@ -296,6 +296,17 @@ mod tests {
     }
 
     #[test]
+    fn identical_sounding_tracks_have_equal_fit_after_catalog_permutation() {
+        let original =
+            snapshot(&[(1, 10, "a", [1.0, 0.0, 0.0]), (2, 20, "b", [1.0, 0.0, 0.0]), (3, 30, "c", [1.0, 0.0, 0.0])]);
+        let reordered =
+            snapshot(&[(3, 30, "c", [1.0, 0.0, 0.0]), (1, 10, "a", [1.0, 0.0, 0.0]), (2, 20, "b", [1.0, 0.0, 0.0])]);
+        let listener = listener(&[(1, 1.0, 1)]);
+        assert_eq!(taste(&original, &listener).fit, [0.5, 0.5, 0.5]);
+        assert_eq!(taste(&reordered, &listener).fit, [0.5, 0.5, 0.5]);
+    }
+
+    #[test]
     fn liked_sound_ranks_higher() {
         let snapshot = library();
         let listener = listener(&[(1, 2.0, 3)]);

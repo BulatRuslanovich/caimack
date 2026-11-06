@@ -122,7 +122,7 @@ fn compose(
                 familiar: usize| {
         let meta = snapshot.meta(candidate.row);
         !taken.contains(&candidate.row)
-            && per_artist.get(&meta.artist()).copied().unwrap_or(0) < MAX_PER_ARTIST
+            && meta.credited_artists().all(|artist| per_artist.get(&artist).copied().unwrap_or(0) < MAX_PER_ARTIST)
             && meta.album_id.is_none_or(|album| per_album.get(&album).copied().unwrap_or(0) < MAX_PER_ALBUM)
             && (!candidate.familiar || max_familiar.is_none_or(|max| familiar < max))
     };
@@ -155,7 +155,9 @@ fn compose(
 
         let meta = snapshot.meta(chosen.row);
         taken.extend(snapshot.clones(chosen.row));
-        *per_artist.entry(meta.artist()).or_default() += 1;
+        for artist in meta.credited_artists() {
+            *per_artist.entry(artist).or_default() += 1;
+        }
         if let Some(album) = meta.album_id {
             *per_album.entry(album).or_default() += 1;
         }
@@ -287,6 +289,24 @@ mod tests {
                 .collect(),
             rules: crate::rules::Rules::default(),
         }
+    }
+
+    #[test]
+    fn shared_credits_do_not_bypass_shelf_artist_limits() {
+        let rows = (1..=20u128)
+            .map(|id| {
+                let mut track = meta(id, id, &format!("t{id}"));
+                if id <= 10 {
+                    track.artists.extend([Uuid::from_u128(500), Uuid::from_u128(500)]);
+                }
+                (track, vec![1.0])
+            })
+            .collect();
+        let snapshot = Snapshot::new(1, rows);
+        let pool = (0..snapshot.len()).map(|row| Candidate { row, score: 1.0, familiar: false }).collect::<Vec<_>>();
+        let picks = compose(&snapshot, &pool, 12, 0.0, 7, None);
+        assert_eq!(picks.len(), 12);
+        assert_eq!(picks.iter().filter(|p| snapshot.meta(p.row).is_by(Uuid::from_u128(500))).count(), MAX_PER_ARTIST);
     }
 
     #[test]

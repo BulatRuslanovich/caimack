@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::library::history::THRESHOLD_SECONDS;
 
-pub const FEATURES_VERSION: i32 = 5;
+pub const FEATURES_VERSION: i32 = 6;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Outcome {

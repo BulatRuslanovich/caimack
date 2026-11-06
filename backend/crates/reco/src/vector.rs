@@ -23,19 +23,7 @@ pub fn add_scaled(target: &mut [f32], source: &[f32], scale: f32) {
 }
 
 pub fn percentile_ranks(values: &[f32]) -> Vec<f32> {
-    let count = values.len();
-    if count == 1 {
-        return vec![1.0];
-    }
-    let mut order: Vec<usize> = (0..count).collect();
-    order.sort_by(|&a, &b| values[a].total_cmp(&values[b]).then(a.cmp(&b)));
-    let mut ranks = vec![0.0; count];
-    for (rank, &index) in order.iter().enumerate() {
-        #[expect(clippy::cast_precision_loss, reason = "library sizes are far below 2^24")]
-        let share = rank as f32 / (count - 1) as f32;
-        ranks[index] = share;
-    }
-    ranks
+    crate::calibration::relative_scores(values)
 }
 
 pub fn quantile(values: &[f32], q: f64) -> f32 {
@@ -63,7 +51,14 @@ mod tests {
     #[test]
     fn ranks_spread_from_zero_to_one() {
         assert_eq!(percentile_ranks(&[0.3, -1.0, 2.0]), [0.5, 0.0, 1.0]);
-        assert_eq!(percentile_ranks(&[5.0]), [1.0]);
+        assert_eq!(percentile_ranks(&[5.0]), [0.5]);
+    }
+
+    #[test]
+    fn tied_evidence_is_neutral_and_does_not_depend_on_catalog_order() {
+        assert_eq!(percentile_ranks(&[0.9, 0.9, 0.9]), [0.5, 0.5, 0.5]);
+        assert_eq!(percentile_ranks(&[0.1, 0.5, 0.5, 0.9]), [0.0, 0.5, 0.5, 1.0]);
+        assert_eq!(percentile_ranks(&[0.5, 0.9, 0.1, 0.5]), [0.5, 1.0, 0.0, 0.5]);
     }
 
     #[test]

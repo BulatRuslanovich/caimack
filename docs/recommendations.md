@@ -32,3 +32,40 @@ Grades are implicit evidence of satisfaction, not an objective accuracy score.
 An improving mean over time can also reflect changes in the library or listening
 context; comparisons over different periods are not a randomized A/B test.
 The ranking weights themselves are not automatically trained from these grades.
+
+## Selection and playback order
+
+Taste fit and sound similarity use the same tie-aware relative ranks. Identical
+scores share a midpoint instead of receiving different preferences according to
+their catalog position. A flat or singleton pool is neutral.
+
+Radio batches and home track shelves count every credited artist toward the
+artist limit. Repeated credits within one song count once. Radio permits one
+track per artist in batches of up to six and two in larger batches; home track
+shelves permit two. Artist and duplicate limits remain in force during fallback.
+
+Seeded radio exhausts a close neighborhood before expanding it in bounded steps.
+The bounds are differences from the best available relative similarity:
+
+| Focus | Initial gap | Second gap | Maximum gap |
+| --- | --- | --- | --- |
+| Closer | 0.15 | 0.25 | 0.35 |
+| Balanced | 0.35 | 0.45 | 0.50 |
+
+Within each neighborhood, the engine can relax its soft preference score before
+expanding the sound boundary. It searches beyond the initial candidate pool when
+artist limits exhaust the nearest entries. If the constraints cannot fill a
+batch, it returns fewer tracks. Wider focus, unseeded personal radio and recovery
+after repeated skips can deliberately explore outside these seed boundaries.
+
+The engine first selects the batch using sound, taste, behavior, recency,
+discovery allocation and diversity. Only then does it greedily order that fixed
+set for tempo, key and loudness transitions. Transition metadata cannot add or
+replace a selected song. Equal transition scores preserve relevance order, and a
+new anchor chosen to escape a stuck artist remains first. Discoveries keep the
+positions assigned during selection, so transition ordering cannot bunch them
+together or change the exploration allocation.
+
+Impression feature version 6 records the selection score separately from the
+actual transition score in the resulting playback order. Existing embeddings and
+listening history remain usable; no model inference is needed for this update.

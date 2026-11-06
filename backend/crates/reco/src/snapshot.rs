@@ -36,6 +36,14 @@ impl TrackMeta {
         self.artists.first().copied().unwrap_or_default()
     }
 
+    /// Every credited artist once; missing credits share the anonymous artist.
+    pub fn credited_artists(&self) -> impl Iterator<Item = Uuid> + '_ {
+        (0..self.artists.len().max(1)).filter_map(|index| {
+            let artist = self.artists.get(index).copied().unwrap_or_default();
+            (!self.artists[..index].contains(&artist)).then_some(artist)
+        })
+    }
+
     pub fn is_by(&self, artist: Uuid) -> bool {
         self.artists.contains(&artist)
     }
@@ -238,6 +246,15 @@ pub(crate) mod tests {
 
     pub fn snapshot(vectors: &[(u128, u128, &str, [f32; 3])]) -> Snapshot {
         Snapshot::new(3, vectors.iter().map(|(id, artist, title, v)| (meta(*id, *artist, title), v.to_vec())).collect())
+    }
+
+    #[test]
+    fn credited_artists_are_unique_and_empty_metadata_has_a_safe_identity() {
+        let mut track = meta(1, 10, "song");
+        track.artists.extend([Uuid::from_u128(20), Uuid::from_u128(10), Uuid::from_u128(20)]);
+        assert_eq!(track.credited_artists().collect::<Vec<_>>(), [Uuid::from_u128(10), Uuid::from_u128(20)]);
+        track.artists.clear();
+        assert_eq!(track.credited_artists().collect::<Vec<_>>(), [Uuid::nil()]);
     }
 
     #[test]

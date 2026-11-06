@@ -79,14 +79,13 @@ struct Weights {
     similarity: f64,
     fit: f64,
     behaviour: f64,
-    transition: f64,
     sameness: f64,
 }
 
 fn weights(taste: bool, focus: Focus) -> Weights {
     let base = match taste {
-        false => Weights { similarity: 0.85, fit: 0.0, behaviour: 0.0, transition: 0.15, sameness: 0.3 },
-        true => Weights { similarity: 0.55, fit: 0.2, behaviour: 0.1, transition: 0.15, sameness: 0.3 },
+        false => Weights { similarity: 0.85, fit: 0.0, behaviour: 0.0, sameness: 0.3 },
+        true => Weights { similarity: 0.55, fit: 0.2, behaviour: 0.1, sameness: 0.3 },
     };
     match focus {
         Focus::Balanced => base,
@@ -96,7 +95,6 @@ fn weights(taste: bool, focus: Focus) -> Weights {
             fit: base.fit + 0.15,
             behaviour: base.behaviour + 0.05,
             sameness: 0.5,
-            ..base
         },
     }
 }
@@ -106,6 +104,12 @@ struct Candidate {
     row: usize,
     base: f64,
     features: Features,
+}
+
+impl Candidate {
+    fn similarity(&self) -> f32 {
+        self.features.similarity_rank.unwrap_or(self.features.similarity)
+    }
 }
 
 pub fn next(snapshot: &Snapshot, listener: &Listener, taste: &Taste, request: &RadioRequest<'_>) -> RadioBatch {
@@ -237,54 +241,48 @@ pub fn next(snapshot: &Snapshot, listener: &Listener, taste: &Taste, request: &R
         });
     }
     let previous = request.queue.last().and_then(|&id| snapshot.row_of(id)).unwrap_or(anchor);
-    let mut sequence = Sequence::new(snapshot, previous, per_artist);
+    let mut sequence = Sequence::new(snapshot, per_artist);
     if moved {
         sequence.take(anchor);
     }
 
-    let pool: Vec<Candidate> = ranked.iter().copied().take(POOL).collect();
-    // An opening must still fit: novelty is not a reason to accept an arbitrary
-    // low-ranked song. Distribute discoveries through the sequence.
-    let floor = ranked.first().map_or(0.0, |candidate| candidate.base - 0.3);
-    let similarity_floor = if request.seed.is_some() && session.skip_streak < 2 && request.focus != Focus::Wider {
-        let nearest = ranked
-            .iter()
-            .map(|candidate| candidate.features.similarity_rank.unwrap_or(candidate.features.similarity))
-            .fold(-1.0_f32, f32::max);
-        nearest - if request.focus == Focus::Closer { 0.15 } else { 0.35 }
+    let merit_floor = ranked.first().map_or(0.0, |candidate| candidate.base - 0.3);
+    let floors = if request.seed.is_some() && session.skip_streak < 2 {
+        let nearest = ranked.iter().map(Candidate::similarity).fold(-1.0_f32, f32::max);
+        match request.focus {
+            Focus::Closer => [nearest - 0.15, nearest - 0.25, nearest - 0.35],
+            Focus::Balanced => [nearest - 0.35, nearest - 0.45, nearest - 0.5],
+            Focus::Wider => [-1.0; 3],
+        }
     } else {
-        -1.0
+        [-1.0; 3]
     };
-    let familiar: Vec<Candidate> = ranked
-        .iter()
-        .copied()
-        .filter(|candidate| {
-            candidate.base >= floor
-                && candidate.features.similarity_rank.unwrap_or(candidate.features.similarity) >= similarity_floor
-                && !unheard(listener, snapshot.meta(candidate.row).track_id)
-        })
-        .take(POOL)
-        .collect();
-    let discoveries: Vec<Candidate> = ranked
-        .iter()
-        .copied()
-        .filter(|candidate| {
-            candidate.base >= floor
-                && unheard(listener, snapshot.meta(candidate.row).track_id)
-                && candidate.features.similarity_rank.unwrap_or(candidate.features.similarity) >= similarity_floor
-        })
-        .take(POOL)
-        .collect();
     let mut explored = 0;
     while picks.len() < request.limit {
         let position = picks.len().saturating_sub(usize::from(moved));
         let discover = explored < explore_slots && (2 * position + 1) * explore_slots >= (2 * explored + 1) * size;
-        let discovery = discover.then(|| sequence.best(&discoveries, &weights)).flatten();
-        let Some(mut pick) = discovery
-            .or_else(|| sequence.best(&familiar, &weights))
-            .or_else(|| sequence.best(&pool, &weights))
-            .or_else(|| sequence.best(&ranked, &weights))
-        else {
+        // Exhaust each neighborhood before expanding. Even the final fallback
+        // respects its sound boundary, artist caps, and duplicate exclusions.
+        let pick = floors.iter().find_map(|&floor| {
+            let choose = |discovery: Option<bool>, minimum: f64| {
+                sequence.best(
+                    ranked.iter().filter(|candidate| {
+                        candidate.similarity() >= floor
+                            && candidate.base >= minimum
+                            && discovery
+                                .is_none_or(|wanted| unheard(listener, snapshot.meta(candidate.row).track_id) == wanted)
+                    }),
+                    &weights,
+                )
+            };
+            discover
+                .then(|| choose(Some(true), merit_floor))
+                .flatten()
+                .or_else(|| choose(Some(false), merit_floor))
+                .or_else(|| choose(None, merit_floor))
+                .or_else(|| choose(None, f64::NEG_INFINITY))
+        });
+        let Some(mut pick) = pick else {
             break;
         };
         pick.explore = unheard(listener, snapshot.meta(pick.row).track_id);
@@ -292,6 +290,10 @@ pub fn next(snapshot: &Snapshot, listener: &Listener, taste: &Taste, request: &R
         sequence.take(pick.row);
         picks.push(pick);
     }
+
+    // Transition metadata may reorder the selected set, never change its members.
+    let fixed = usize::from(moved);
+    order_for_transitions(snapshot, if moved { anchor } else { previous }, &mut picks[fixed..]);
 
     RadioBatch { anchor: Some(anchor), moved, picks }
 }
@@ -313,7 +315,6 @@ fn recency(listener: &Listener, track: Uuid) -> f64 {
 
 struct Sequence<'a> {
     snapshot: &'a Snapshot,
-    previous: usize,
     picked: Vec<usize>,
     taken: HashSet<usize>,
     artists: HashMap<Uuid, usize>,
@@ -321,38 +322,40 @@ struct Sequence<'a> {
 }
 
 impl<'a> Sequence<'a> {
-    fn new(snapshot: &'a Snapshot, previous: usize, per_artist: usize) -> Self {
-        Self { snapshot, previous, picked: Vec::new(), taken: HashSet::new(), artists: HashMap::new(), per_artist }
+    fn new(snapshot: &'a Snapshot, per_artist: usize) -> Self {
+        Self { snapshot, picked: Vec::new(), taken: HashSet::new(), artists: HashMap::new(), per_artist }
     }
 
     fn allows(&self, row: usize) -> bool {
-        let artist = self.snapshot.meta(row).artist();
-        !self.taken.contains(&row) && self.artists.get(&artist).copied().unwrap_or(0) < self.per_artist
+        !self.taken.contains(&row)
+            && self
+                .snapshot
+                .meta(row)
+                .credited_artists()
+                .all(|artist| self.artists.get(&artist).copied().unwrap_or(0) < self.per_artist)
     }
 
     fn take(&mut self, row: usize) {
         self.taken.extend(self.snapshot.clones(row));
-        *self.artists.entry(self.snapshot.meta(row).artist()).or_default() += 1;
+        for artist in self.snapshot.meta(row).credited_artists() {
+            *self.artists.entry(artist).or_default() += 1;
+        }
         self.picked.push(row);
-        self.previous = row;
     }
 
-    fn best(&self, candidates: &[Candidate], weights: &Weights) -> Option<RadioPick> {
-        let previous = self.snapshot.meta(self.previous);
+    fn best<'c>(&self, candidates: impl Iterator<Item = &'c Candidate>, weights: &Weights) -> Option<RadioPick> {
         candidates
-            .iter()
             .filter(|candidate| self.allows(candidate.row))
+            .take(POOL)
             .map(|candidate| {
-                let transition = transition::smoothness(previous, self.snapshot.meta(candidate.row));
                 let sameness = self
                     .picked
                     .iter()
                     .map(|&row| self.snapshot.between(row, candidate.row))
                     .fold(0.0_f32, f32::max)
                     .max(0.0);
-                let score = candidate.base + weights.transition * transition - weights.sameness * f64::from(sameness);
-                #[expect(clippy::cast_possible_truncation, reason = "scores in [-1, 1]")]
-                let features = Features { transition: transition as f32, sameness, ..candidate.features };
+                let score = candidate.base - weights.sameness * f64::from(sameness);
+                let features = Features { sameness, ..candidate.features };
                 (candidate.row, score, features)
             })
             .max_by(|a, b| a.1.total_cmp(&b.1).then(b.0.cmp(&a.0)))
@@ -361,6 +364,24 @@ impl<'a> Sequence<'a> {
                 let score = score as f32;
                 RadioPick { row, explore: false, score, features }
             })
+    }
+}
+
+fn order_for_transitions(snapshot: &Snapshot, mut previous: usize, picks: &mut [RadioPick]) {
+    // A small bounded batch: removing from this copy preserves relevance ties
+    // while keeping discoveries in the slots assigned during selection.
+    let mut remaining = picks.to_vec();
+    for pick in picks {
+        let smoothness = |at: usize| transition::smoothness(snapshot.meta(previous), snapshot.meta(remaining[at].row));
+        let best = (0..remaining.len())
+            .filter(|&at| remaining[at].explore == pick.explore)
+            .max_by(|&a, &b| smoothness(a).total_cmp(&smoothness(b)).then(b.cmp(&a)));
+        let Some(best) = best else { continue };
+        *pick = remaining.remove(best);
+        #[expect(clippy::cast_possible_truncation, reason = "a transition score in [0, 1]")]
+        let transition = transition::smoothness(snapshot.meta(previous), snapshot.meta(pick.row)) as f32;
+        pick.features.transition = transition;
+        previous = pick.row;
     }
 }
 
@@ -450,6 +471,100 @@ mod tests {
                 .map(|&(id, score)| (Uuid::from_u128(id), TrackSignal { score, plays: 1, ..TrackSignal::default() }))
                 .collect(),
             rules: Rules::default(),
+        }
+    }
+
+    #[test]
+    fn shared_featured_artists_respect_the_same_cap_and_duplicate_credits_count_once() {
+        let rows = (0..=200u128)
+            .map(|id| {
+                let mut track = meta(id, id, &format!("t{id}"));
+                if (1..=160).contains(&id) {
+                    track.artists.extend([Uuid::from_u128(500), Uuid::from_u128(500)]);
+                }
+                (track, vec![1.0, 0.0])
+            })
+            .collect();
+        let snapshot = Snapshot::new(2, rows);
+        let listener = listener(&[]);
+        let taste = taste(&snapshot, &listener);
+        for (limit, expected) in [(6, 1), (8, 2)] {
+            let batch = next(&snapshot, &listener, &taste, &request(Some(0), &[], limit, Focus::Balanced));
+            assert_eq!(batch.picks.len(), limit);
+            assert_eq!(
+                batch.picks.iter().filter(|p| snapshot.meta(p.row).is_by(Uuid::from_u128(500))).count(),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn depleted_close_pool_does_not_fall_back_to_unrelated_tracks() {
+        let mut rows = vec![(meta(0, 0, "seed"), vec![1.0, 0.0])];
+        for id in 1..=4u32 {
+            rows.push((meta(u128::from(id), 100, &format!("close{id}")), vec![1.0, id as f32 * 0.01]));
+        }
+        for id in 5..=34u128 {
+            rows.push((meta(id, id, &format!("far{id}")), vec![0.0, 1.0]));
+        }
+        let snapshot = Snapshot::new(2, rows);
+        let listener = listener(&[]);
+        let taste = taste(&snapshot, &listener);
+        let batch = next(&snapshot, &listener, &taste, &request(Some(0), &[], 5, Focus::Closer));
+        assert_eq!(batch.picks.len(), 1, "artist limits should not force unrelated filler");
+        assert!(batch.picks.iter().all(|p| p.row <= 4));
+    }
+
+    #[test]
+    fn closer_expands_one_step_to_fill_from_the_next_neighborhood() {
+        let rows = (0..=100u32)
+            .map(|id| {
+                let cosine = 1.0 - id as f32 / 101.0;
+                let artist = if (1..=15).contains(&id) { 500 } else { u128::from(id) };
+                (meta(u128::from(id), artist, &format!("t{id}")), vec![cosine, (1.0 - cosine * cosine).sqrt()])
+            })
+            .collect();
+        let snapshot = Snapshot::new(2, rows);
+        let listener = listener(&[]);
+        let batch = next(&snapshot, &listener, &taste(&snapshot, &listener), &request(Some(0), &[], 6, Focus::Closer));
+        assert_eq!(batch.picks.len(), 6);
+        assert_eq!(batch.picks.iter().filter(|p| snapshot.meta(p.row).is_by(Uuid::from_u128(500))).count(), 1);
+        assert!(batch.picks.iter().all(|p| p.features.similarity_rank.unwrap() >= 0.75));
+        assert!(batch.picks.iter().any(|p| p.features.similarity_rank.unwrap() < 0.85));
+    }
+
+    #[test]
+    fn transition_metadata_cannot_change_which_tracks_are_selected() {
+        let make = |smooth: bool| {
+            let rows = (0..=100u32)
+                .map(|id| {
+                    let cosine = 1.0 - id as f32 / 101.0;
+                    let mut track = meta(u128::from(id), u128::from(id), &format!("t{id}"));
+                    let matches_seed = id == 0 || (smooth && id == 2);
+                    track.tempo_bpm = Some(if matches_seed { 120.0 } else { 150.0 });
+                    track.musical_key = Some(if matches_seed { 0 } else { 6 });
+                    (track, vec![cosine, (1.0 - cosine * cosine).sqrt()])
+                })
+                .collect();
+            Snapshot::new(2, rows)
+        };
+        let listener = listener(&[]);
+        let selected = |snapshot: &Snapshot, limit, focus| {
+            next(snapshot, &listener, &taste(snapshot, &listener), &request(Some(0), &[], limit, focus))
+                .picks
+                .iter()
+                .map(|p| p.row)
+                .collect::<HashSet<_>>()
+        };
+        assert_eq!(selected(&make(false), 1, Focus::Closer), HashSet::from([1]));
+        for focus in [Focus::Closer, Focus::Balanced, Focus::Wider] {
+            for limit in [1, 6] {
+                assert_eq!(
+                    selected(&make(false), limit, focus),
+                    selected(&make(true), limit, focus),
+                    "a smooth but weaker match must not replace a sound match"
+                );
+            }
         }
     }
 
@@ -613,21 +728,43 @@ mod tests {
     }
 
     #[test]
-    fn a_smooth_transition_wins_a_tie() {
+    fn transition_ordering_keeps_the_selected_set_and_places_a_smooth_track_first() {
         let mut rows = Vec::new();
         for id in 0..3u128 {
             let mut track = meta(id, id, &format!("t{id}"));
-            track.tempo_bpm = Some(if id == 2 { 150.0 } else { 120.0 });
-            track.musical_key = Some(if id == 2 { 6 } else { 0 });
+            track.tempo_bpm = Some(if id == 1 { 150.0 } else { 120.0 });
+            track.musical_key = Some(if id == 1 { 6 } else { 0 });
             rows.push((track, vec![1.0, 0.0]));
         }
         let snapshot = Snapshot::new(2, rows);
         let listener = listener(&[]);
         let taste = taste(&snapshot, &listener);
 
-        let batch = next(&snapshot, &listener, &taste, &request(Some(0), &[], 1, Focus::Balanced));
-        assert_eq!(batch.picks.first().map(|pick| pick.row), Some(1));
+        let batch = next(&snapshot, &listener, &taste, &request(Some(0), &[], 2, Focus::Balanced));
+        assert_eq!(batch.picks.iter().map(|p| p.row).collect::<Vec<_>>(), [2, 1]);
         assert!(batch.picks[0].features.transition > 0.9);
+    }
+
+    #[test]
+    fn transition_ordering_preserves_discovery_slots_and_selection_scores() {
+        let snapshot = Snapshot::new(
+            1,
+            (0..4u128)
+                .map(|id| {
+                    let mut track = meta(id, id, &format!("t{id}"));
+                    track.tempo_bpm = Some(if id == 1 { 150.0 } else { 120.0 });
+                    track.musical_key = Some(if id == 1 { 6 } else { 0 });
+                    (track, vec![1.0])
+                })
+                .collect(),
+        );
+        let mut picks = (1..4)
+            .map(|row| RadioPick { row, explore: row == 2, score: row as f32, features: Features::default() })
+            .collect::<Vec<_>>();
+        order_for_transitions(&snapshot, 0, &mut picks);
+        assert_eq!(picks.iter().map(|p| p.row).collect::<Vec<_>>(), [3, 2, 1]);
+        assert_eq!(picks.iter().map(|p| p.explore).collect::<Vec<_>>(), [false, true, false]);
+        assert!(picks.iter().all(|p| p.score == p.row as f32));
     }
 
     #[test]
