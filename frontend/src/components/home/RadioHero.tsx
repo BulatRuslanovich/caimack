@@ -3,6 +3,7 @@
 
 "use client";
 
+import { useRecommendations } from "@/lib/useRecommendations";
 import { useMutation } from "@tanstack/react-query";
 import { PauseIcon, PlayIcon } from "lucide-react";
 import { usePlayerActions, usePlayerState } from "@/contexts/PlayerContext";
@@ -15,7 +16,7 @@ import { trackCoverUrl } from "@/lib/media";
 import type { Track } from "@/lib/types";
 import { useCoverLight } from "@/lib/useCoverTone";
 
-export function RadioHero({ tracks }: { tracks: Track[] }) {
+function EnabledRadioHero({ tracks }: { tracks: Track[] }) {
   const t = useT();
   const state = usePlayerState();
   const player = usePlayerActions();
@@ -120,4 +121,9 @@ export function RadioHero({ tracks }: { tracks: Track[] }) {
       </div>
     </section>
   );
+}
+
+export function RadioHero(props: import("react").ComponentProps<typeof EnabledRadioHero>) {
+  const enabled = useRecommendations();
+  return enabled ? <EnabledRadioHero {...props} /> : null;
 }

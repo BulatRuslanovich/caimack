@@ -35,7 +35,7 @@ pub fn router(state: AppState) -> Router {
         .merge(library::router())
         .merge(media::router())
         .merge(playback::router())
-        .merge(recommendations::router())
+        .merge(recommendations::router(state.config.recommendations_enabled))
         .route_layer(from_fn_with_state(state.clone(), crate::auth::require_user));
 
     let public = Router::new().route("/health", get(health)).merge(auth::public());

@@ -120,9 +120,9 @@ impl Recommendations {
         let quick_places = quick_places(&recently_played);
         let quick_album_ids: Vec<Uuid> = quick_places.iter().filter_map(|track| track.album_id).collect();
         let (personal, top, mix, mut quick_albums) = tokio::try_join!(
-            self.personal_shelves(user, &listener, shelf_size),
+            async { if self.enabled { self.personal_shelves(user, &listener, shelf_size).await } else { Ok(vec![]) } },
             self.top_tracks(user, size),
-            self.daily_mix_for(user, &listener),
+            async { if self.enabled { self.daily_mix_for(user, &listener).await } else { Ok(vec![]) } },
             self.albums_by_ids(&quick_album_ids),
         )?;
 

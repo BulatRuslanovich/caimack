@@ -53,6 +53,7 @@ private const val MIN_DISTINCT = 3
 @Composable
 fun HomeScreen(nav: NavController) {
     val container = LocalContainer.current
+    val recommendations = recommendationsEnabled()
 
     Load(
         key = "home",
@@ -76,7 +77,7 @@ fun HomeScreen(nav: NavController) {
             contentPadding = PaddingValues(vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(32.dp),
         ) {
-            item("personal-radio") { RadioHero(blocks.flatMap { it.tracks.orEmpty() }) }
+            if (recommendations) item("personal-radio") { RadioHero(blocks.flatMap { it.tracks.orEmpty() }) }
             blocks.filter { it.zone == "Lead" }.forEach { block -> item(block.key) { Block(block, nav, shown, seen) } }
 
             val quick = blocks.filter { it.zone == "Quick" }
@@ -88,7 +89,7 @@ fun HomeScreen(nav: NavController) {
                 }
             }
 
-            item("recap") { RecapBanner() }
+            if (recommendations) item("recap") { RecapBanner() }
             val browse = blocks.filter { it.zone == "Browse" }
             browse.firstOrNull()?.let { block -> item(block.key) { Block(block, nav, shown, seen) } }
             browse.drop(1).forEach { block -> item(block.key) { Block(block, nav, shown, seen) } }

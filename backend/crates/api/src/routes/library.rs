@@ -78,6 +78,7 @@ struct ClientConfig {
     max_upload_bytes: i64,
     max_image_upload_bytes: i64,
     access_token_minutes: i64,
+    recommendations_enabled: bool,
 }
 
 async fn client_config(State(state): State<AppState>) -> Json<ClientConfig> {
@@ -85,6 +86,7 @@ async fn client_config(State(state): State<AppState>) -> Json<ClientConfig> {
         max_upload_bytes: MAX_UPLOAD_BYTES,
         max_image_upload_bytes: MAX_IMAGE_UPLOAD_BYTES,
         access_token_minutes: state.auth.tokens().access_token_minutes(),
+        recommendations_enabled: state.config.recommendations_enabled,
     })
 }
 

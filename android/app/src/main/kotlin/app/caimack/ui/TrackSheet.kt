@@ -150,7 +150,7 @@ fun TrackSheet(track: Track, onRemoveFromPlaylist: (() -> Unit)? = null, positio
                 say(resources.getString(R.string.menu_added_to_queue, track.title))
                 onDismiss()
             }
-            SheetRow(stringResource(R.string.menu_radio), Lucide.Radio) {
+            if (recommendationsEnabled()) SheetRow(stringResource(R.string.menu_radio), Lucide.Radio) {
                 onDismiss()
                 container.scope.launch {
                     val radio = runCatching { container.radio(RadioRequest(track.id, emptyList())) }.getOrNull()
@@ -170,10 +170,10 @@ fun TrackSheet(track: Track, onRemoveFromPlaylist: (() -> Unit)? = null, positio
                 container.favorites.toggle(track)
                 onDismiss()
             }
-            SheetRow(stringResource(R.string.rules_block_track), Lucide.EyeOff) {
+            if (recommendationsEnabled()) SheetRow(stringResource(R.string.rules_block_track), Lucide.EyeOff) {
                 neverSuggest("track", track.id)
             }
-            SheetRow(stringResource(R.string.rules_block_artist, track.artistName), Lucide.EyeOff) {
+            if (recommendationsEnabled()) SheetRow(stringResource(R.string.rules_block_artist, track.artistName), Lucide.EyeOff) {
                 neverSuggest("artist", track.artistId)
             }
             SheetRow(stringResource(R.string.menu_add_to_playlist), Lucide.Plus) { choosingPlaylist = true }

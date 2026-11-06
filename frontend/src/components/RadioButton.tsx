@@ -3,6 +3,7 @@
 
 "use client";
 
+import { useRecommendations } from "@/lib/useRecommendations";
 import { useMutation } from "@tanstack/react-query";
 import { RadioIcon } from "lucide-react";
 import type { Track } from "@/lib/types";
@@ -10,7 +11,7 @@ import { usePlayerActions } from "@/contexts/PlayerContext";
 import { useT } from "@/contexts/I18nContext";
 import { Button } from "./ui/button";
 
-export function RadioButton({ seed, label }: { seed: Track | null; label?: string }) {
+function EnabledRadioButton({ seed, label }: { seed: Track | null; label?: string }) {
   const t = useT();
   const player = usePlayerActions();
   const radio = useMutation({ mutationFn: () => player.startRadio(seed) });
@@ -21,4 +22,9 @@ export function RadioButton({ seed, label }: { seed: Track | null; label?: strin
       {radio.isPending ? t("menu.radioStarting") : (label ?? t("action.radio"))}
     </Button>
   );
+}
+
+export function RadioButton(props: import("react").ComponentProps<typeof EnabledRadioButton>) {
+  const enabled = useRecommendations();
+  return enabled ? <EnabledRadioButton {...props} /> : null;
 }

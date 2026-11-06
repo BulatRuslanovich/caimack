@@ -76,8 +76,11 @@ async fn run() -> anyhow::Result<()> {
     let mut workers =
         app::transcode::spawn(db.clone(), storage.clone(), transcodes.clone(), receivers, background.clone());
 
-    let recommendations = Recommendations::new(db.clone());
-    workers.push(app::recommendations::index::spawn(db.clone(), recommendations.index.clone(), background.clone()));
+    let mut recommendations = Recommendations::new(db.clone());
+    recommendations.enabled = config.recommendations_enabled;
+    if config.recommendations_enabled {
+        workers.push(app::recommendations::index::spawn(db.clone(), recommendations.index.clone(), background.clone()));
+    }
     workers.push(app::recommendations::sound::spawn(db.clone(), recommendations.index.clone(), background.clone()));
     workers.push(app::recommendations::maintenance::spawn(
         db.clone(),
@@ -87,7 +90,11 @@ async fn run() -> anyhow::Result<()> {
     workers.push(app::analysis::spawn(
         db.clone(),
         storage.clone(),
-        app::mert::MertClient::new(&ModelConfig::from_env()?)?,
+        if config.recommendations_enabled {
+            Some(app::mert::MertClient::new(&ModelConfig::from_env()?)?)
+        } else {
+            None
+        },
         recommendations.index.clone(),
         background.clone(),
     ));

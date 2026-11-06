@@ -1,0 +1,12 @@
+# Optional NVIDIA/MERT module. Add this file after the base/image Compose files.
+services:
+  mert-init:
+    profiles: !reset []
+  mert:
+    profiles: !reset []
+  backend:
+    environment:
+      RECOMMENDATIONS_ENABLED: "true"
+    depends_on:
+      mert:
+        condition: service_started

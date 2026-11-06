@@ -3,6 +3,7 @@
 
 "use client";
 
+import { useRecommendations } from "@/lib/useRecommendations";
 import dynamic from "next/dynamic";
 import type { EditableArtist } from "./EditArtistDialog";
 import Link from "next/link";
@@ -342,6 +343,7 @@ function TrackMenuBody({
     }
   };
 
+  const recommendations = useRecommendations();
   const radio = useMutation({
     mutationFn: () => player.startRadio(track),
     onSuccess: (started) => {
@@ -417,9 +419,11 @@ function TrackMenuBody({
           <ListVideoIcon size={16} /> {t("menu.addToQueue")}
         </MenuItem>
 
-        <MenuItem disabled={radio.isPending} onSelect={stayOpen(() => radio.mutate())}>
-          <RadioIcon size={16} /> {radio.isPending ? t("menu.radioStarting") : t("menu.radio")}
-        </MenuItem>
+        {recommendations && (
+          <MenuItem disabled={radio.isPending} onSelect={stayOpen(() => radio.mutate())}>
+            <RadioIcon size={16} /> {radio.isPending ? t("menu.radioStarting") : t("menu.radio")}
+          </MenuItem>
+        )}
 
         <MenuSeparator />
 
@@ -430,47 +434,53 @@ function TrackMenuBody({
           </MenuItem>
         )}
 
-        <MenuSub
-          label={
-            <>
-              <SlidersHorizontalIcon size={16} /> {t("rules.menu")}
-            </>
-          }
-        >
-          <MenuItem
-            onSelect={() =>
-              addRule.mutate({ action: "block", targetType: "track", targetId: track.id })
+        {recommendations && (
+          <MenuSub
+            label={
+              <>
+                <SlidersHorizontalIcon size={16} /> {t("rules.menu")}
+              </>
             }
           >
-            {t("rules.blockTrack")}
-          </MenuItem>
-          <MenuItem
-            onSelect={() =>
-              addRule.mutate({
-                action: "cooldown",
-                targetType: "track",
-                targetId: track.id,
-                days: 30,
-              })
-            }
-          >
-            {t("rules.pauseTrack")}
-          </MenuItem>
-          <MenuItem
-            onSelect={() =>
-              addRule.mutate({ action: "downrank", targetType: "artist", targetId: track.artistId })
-            }
-          >
-            {t("rules.downrankArtist", { artist: track.artistName })}
-          </MenuItem>
-          <MenuItem
-            onSelect={() =>
-              addRule.mutate({ action: "block", targetType: "artist", targetId: track.artistId })
-            }
-          >
-            {t("rules.blockArtist", { artist: track.artistName })}
-          </MenuItem>
-        </MenuSub>
+            <MenuItem
+              onSelect={() =>
+                addRule.mutate({ action: "block", targetType: "track", targetId: track.id })
+              }
+            >
+              {t("rules.blockTrack")}
+            </MenuItem>
+            <MenuItem
+              onSelect={() =>
+                addRule.mutate({
+                  action: "cooldown",
+                  targetType: "track",
+                  targetId: track.id,
+                  days: 30,
+                })
+              }
+            >
+              {t("rules.pauseTrack")}
+            </MenuItem>
+            <MenuItem
+              onSelect={() =>
+                addRule.mutate({
+                  action: "downrank",
+                  targetType: "artist",
+                  targetId: track.artistId,
+                })
+              }
+            >
+              {t("rules.downrankArtist", { artist: track.artistName })}
+            </MenuItem>
+            <MenuItem
+              onSelect={() =>
+                addRule.mutate({ action: "block", targetType: "artist", targetId: track.artistId })
+              }
+            >
+              {t("rules.blockArtist", { artist: track.artistName })}
+            </MenuItem>
+          </MenuSub>
+        )}
 
         <MenuSub
           label={

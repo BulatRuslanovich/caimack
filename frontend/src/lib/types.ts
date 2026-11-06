@@ -406,6 +406,7 @@ export interface ClientConfig {
   maxUploadBytes: number;
   maxImageUploadBytes: number;
   accessTokenMinutes: number;
+  recommendationsEnabled?: boolean;
 }
 
 export type AudioQuality = "Low" | "Normal" | "Original";

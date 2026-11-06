@@ -3,6 +3,7 @@
 
 "use client";
 
+import { useRecommendations } from "@/lib/useRecommendations";
 import dynamic from "next/dynamic";
 import { type DragEndEvent } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
@@ -96,6 +97,7 @@ export function QueuePanel({ onClose, docked = false }: { onClose: () => void; d
 }
 
 export function QueueList() {
+  const recommendations = useRecommendations();
   const player = usePlayer();
   const t = useT();
   const { notify } = useToast();
@@ -180,12 +182,14 @@ export function QueueList() {
         </div>
       </div>
 
-      <label className="mb-2 flex items-center justify-between gap-3 px-0.5 text-sm text-muted-foreground">
-        {t("queue.autoplay")}
-        <Switch checked={player.autoplay} onCheckedChange={player.setAutoplay} />
-      </label>
+      {recommendations && (
+        <label className="mb-2 flex items-center justify-between gap-3 px-0.5 text-sm text-muted-foreground">
+          {t("queue.autoplay")}
+          <Switch checked={player.autoplay} onCheckedChange={player.setAutoplay} />
+        </label>
+      )}
 
-      {player.radioSession && (
+      {recommendations && player.radioSession && (
         <ToggleGroup aria-label={t("radio.focus")} className="mb-2 gap-x-4 px-0.5">
           {RADIO_FOCUSES.map((focus) => (
             <ToggleGroupButton

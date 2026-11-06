@@ -3,6 +3,7 @@
 
 "use client";
 
+import { useRecommendations } from "@/lib/useRecommendations";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef } from "react";
@@ -58,7 +59,10 @@ function SettingsSections() {
   const t = useT();
   const params = useSearchParams();
   const { isAdmin } = useAuth();
-  const sections = isAdmin ? ADMIN_SECTIONS : SECTIONS;
+  const recommendations = useRecommendations();
+  const sections = (isAdmin ? ADMIN_SECTIONS : SECTIONS).filter(
+    (key) => key !== "recommendations" || recommendations,
+  );
 
   const raw = params.get("tab");
   const section = sections.find((key) => key === raw) ?? DEFAULT_SECTION;

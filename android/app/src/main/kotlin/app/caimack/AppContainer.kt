@@ -49,6 +49,18 @@ import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 
 class AppContainer(context: Context) {
+    val recommendationsEnabled = MutableStateFlow(false)
+    private var capabilitiesFor: String? = null
+    suspend fun refreshCapabilities() {
+        val address = server.url.value?.toString()
+        if (address != capabilitiesFor) recommendationsEnabled.value = false
+        val capabilities = api.capabilities()
+        if (server.url.value?.toString() == address) {
+            recommendationsEnabled.value = capabilities.recommendationsEnabled
+            capabilitiesFor = address
+        }
+    }
+
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     val preferences: DataStore<Preferences> =
@@ -123,6 +135,8 @@ class AppContainer(context: Context) {
     }
 
     suspend fun radio(request: RadioRequest) = run {
+        refreshCapabilities()
+        check(recommendationsEnabled.value) { "Recommendations module is disabled" }
         flushSignals()
         api.radio(request.copy(sessionId = listeningSession))
     }

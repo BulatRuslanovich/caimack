@@ -518,6 +518,7 @@ class PlaybackService : MediaLibraryService() {
         if (!refresh && order.size - 1 - order.indexOf(player.currentMediaItemIndex) > RADIO_PREFETCH_AT) return
         val seed = player.currentMediaItem?.mediaId ?: return
         if (!refresh && (seed == radioSeed || radioRequest?.isActive == true)) return
+        if (!container.recommendationsEnabled.value) return
         radioRequest?.cancel()
         radioSeed = seed
         val state = container.radio.state.value

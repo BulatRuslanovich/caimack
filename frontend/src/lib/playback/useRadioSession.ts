@@ -3,6 +3,7 @@
 
 "use client";
 
+import { useRecommendations } from "@/lib/useRecommendations";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { api } from "@/lib/api";
@@ -64,6 +65,7 @@ export function useRadioSession({
   setCurrentIndex,
 }: RadioSessionInput): RadioSession {
   const { notify, notifyError } = useToast();
+  const recommendations = useRecommendations();
   const t = useT();
 
   const [session, setSession] = useState<RadioSessionState | null>(null);
@@ -163,6 +165,7 @@ export function useRadioSession({
 
   const start = useCallback(
     async (seedTrack: Track | null = null) => {
+      if (!recommendations) return null;
       const generation = ++generationRef.current;
       radioRef.current = { inFlight: false, seed: null };
       setStarting(true);
@@ -193,11 +196,18 @@ export function useRadioSession({
         setStarting(false);
       }
     },
-    [notify, notifyError, t],
+    [notify, notifyError, t, recommendations],
   );
 
   useEffect(() => {
-    if (starting || currentIndex < 0 || repeat !== "off" || (!autoplay && !session)) return;
+    if (
+      !recommendations ||
+      starting ||
+      currentIndex < 0 ||
+      repeat !== "off" ||
+      (!autoplay && !session)
+    )
+      return;
 
     const order = orderRef.current;
     const position = order.indexOf(currentIndex);
@@ -306,6 +316,7 @@ export function useRadioSession({
     queueRef,
     orderRef,
     revision,
+    recommendations,
     setCurrentIndex,
   ]);
 

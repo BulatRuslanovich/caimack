@@ -16,6 +16,9 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface CaimackApi {
+    @GET("api/config")
+    suspend fun capabilities(): ServerCapabilities
+
     @POST("api/auth/login")
     suspend fun login(@Body request: LoginRequest): User
 

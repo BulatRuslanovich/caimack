@@ -26,3 +26,5 @@ Thumbs.db
 /.visual-check
 
 __pycache__/
+/.caimack/
+/.env.tmp.*

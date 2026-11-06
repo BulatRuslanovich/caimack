@@ -326,3 +326,6 @@ data class LibraryMap(
 
 @Serializable
 data class TrackLookup(val ids: List<String>)
+
+@kotlinx.serialization.Serializable
+data class ServerCapabilities(val recommendationsEnabled: Boolean = false)

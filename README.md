@@ -101,11 +101,26 @@ You'll need Docker with Compose v2 and a domain pointing at your server.
 ```bash
 git clone https://github.com/BulatRuslanovich/caimack.git
 cd caimack
-./setup.sh
+./caimack.sh
 ```
 
-The script asks for your domain, music folder and admin username, generates the secrets and starts
-the prebuilt images from `ghcr.io`. It prints the admin password when it finishes.
+On its first run the manager asks for your domain, music folder and admin username,
+generates secrets and starts the prebuilt images from `ghcr.io`. Later runs open
+an interactive server console with arrow-key navigation and direct shortcuts.
+The entire manager is in English; no extra TUI packages are required.
+
+```bash
+./caimack.sh update                  # pull images and apply updates
+./caimack.sh recommendations on      # opt in to NVIDIA / MERT
+./caimack.sh recommendations off     # return to the CPU-only deployment
+./caimack.sh reset once              # recover the owner password
+./caimack.sh status
+```
+
+Configuration changes are backed up in `.caimack/backups/`. Existing database and
+JWT secrets are preserved. `setup.sh` remains a compatibility entry point.
+See the [server manager guide](docs/server-manager.md) for standalone installation,
+all commands and password reset behaviour.
 
 Open `https://<PUBLIC_DOMAIN>` and sign in as the owner: the music folder is scanned on its
 own, and more music can be dropped onto the Upload page. Invite people from the Users page: each
@@ -118,15 +133,19 @@ The music folder is rescanned every hour (`LIBRARY_SCAN_INTERVAL_MINUTES`, `0` f
 and from the Upload page. A file that disappears stays in the library for 30 days, so a drive that
 is briefly disconnected costs no likes or history; a moved file keeps its track.
 
-Track analysis uses **MERT-Large v1 (330M)** on an NVIDIA GPU. The `mert` container
+Recommendations are optional and disabled by default: no GPU, MERT image or weights
+are required for a normal deployment. Add `-f docker-compose.recommendations.yml`
+after your usual Compose files to enable the module. The API advertises this
+capability; clients hide recommendation controls when it is disabled.
+
+When enabled, track similarity uses **MERT-Large v1 (330M)** on an NVIDIA GPU. The `mert` container
 downloads the pinned, ready-to-use weights (about 1.26 GB) from Hugging Face once
 and keeps them in `storage/models/mert`. No training or model export runs on the server.
 The library and playback are available while the model loads. Existing CLAP vectors
 are automatically replaced in the background; recommendations and the map use only
 compatible MERT vectors. Mood radio and mood labels have been removed.
 
-See [MERT deployment and cache reuse](docs/mert.md) and the optional
-[GPU benchmark](docs/mert-gpu-experiment.md).
+See [optional module deployment and cache reuse](docs/mert.md).
 
 </details>
 
@@ -147,8 +166,8 @@ COMPOSE_FILE=docker-compose.yml:docker-compose.images.yml   # use the prebuilt i
 Then run `docker compose up -d`. To update, run `docker compose pull && docker compose up -d`;
 `CAIMACK_VERSION` pins a release instead of `latest`.
 
-Use `./setup.sh --build` to build the images on the server, or `./setup.sh --help` for
-the non-interactive options.
+Use `./caimack.sh install --build` for a source-based installation, or
+`./caimack.sh --help` for the non-interactive options.
 
 </details>
 

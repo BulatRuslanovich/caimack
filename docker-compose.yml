@@ -57,6 +57,7 @@ services:
     networks: [internal]
 
   mert-init:
+    profiles: [recommendations]
     image: busybox:1.37.0
     user: root
     command:
@@ -70,6 +71,7 @@ services:
     networks: [internal]
 
   mert:
+    profiles: [recommendations]
     build:
       context: ./backend/scripts
       dockerfile: Dockerfile.mert
@@ -131,8 +133,6 @@ services:
     restart: unless-stopped
     user: "${PUID:-1000}:${PGID:-1000}"
     depends_on:
-      mert:
-        condition: service_started
       postgres:
         condition: service_healthy
       migrate:
@@ -153,6 +153,7 @@ services:
       OWNER_RESET_PASSWORD: ${OWNER_RESET_PASSWORD:-false}
       LIBRARY_SCAN_INTERVAL_MINUTES: ${LIBRARY_SCAN_INTERVAL_MINUTES:-60}
       BACKGROUND_HEAVY_JOBS: ${BACKGROUND_HEAVY_JOBS:-}
+      RECOMMENDATIONS_ENABLED: "false"
       MERT_URL: http://mert:8090
       RUST_LOG: ${RUST_LOG:-info}
     ports:

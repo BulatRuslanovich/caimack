@@ -30,6 +30,7 @@ use crate::catalog::dto::TrackDto;
 #[derive(Clone)]
 pub struct Recommendations {
     pub db: PgPool,
+    pub enabled: bool,
     pub index: EmbeddingIndex,
     pub listeners: Listeners,
     pub map: MapCache,
@@ -40,6 +41,7 @@ impl Recommendations {
     pub fn new(db: PgPool) -> Self {
         Self {
             db,
+            enabled: true,
             index: EmbeddingIndex::default(),
             listeners: Listeners::default(),
             map: MapCache::default(),

@@ -117,6 +117,7 @@ fun GenreScreen(id: String, name: String, play: (List<Track>, Int) -> Unit) {
 
 @Composable
 fun MixScreen(kind: String, play: (List<Track>, Int) -> Unit) {
+    if (!recommendationsEnabled()) return
     val container = LocalContainer.current
     val title = when (kind) {
         "new" -> R.string.home_new_arrivals

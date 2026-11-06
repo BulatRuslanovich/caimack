@@ -309,6 +309,7 @@ internal fun SheetRow(label: String, icon: ImageVector, onClick: () -> Unit) {
 private fun Header(nav: NavController, user: User, onAccount: () -> Unit) {
     val palette = LocalPalette.current
     val destination = nav.currentBackStackEntryAsState().value?.destination
+    val library = library.filter { it.route != MapRoute || recommendationsEnabled() }
     val inLibrary = library.any { destination?.hasRoute(it.type) == true }
     val isSettings = destination?.hasRoute(SettingsRoute::class) == true
     val showBack = isSettings || (!inLibrary && tabs.none { destination?.hasRoute(it.type) == true } && destination != null)
@@ -346,7 +347,7 @@ private fun Header(nav: NavController, user: User, onAccount: () -> Unit) {
         }
         if (inLibrary) {
             Tabs {
-                library.forEach { entry ->
+                library.filter { it.route != MapRoute || recommendationsEnabled() }.forEach { entry ->
                     Tab(stringResource(entry.label), destination?.hasRoute(entry.type) == true) { nav.openSection(entry.route) }
                 }
             }
@@ -369,6 +370,7 @@ internal fun BottomBar(nav: NavController) {
                 runCatching { nav.getBackStackEntry(tab.route).destination }.getOrNull()
             }
     }
+    val library = library.filter { it.route != MapRoute || recommendationsEnabled() }
     val inLibrary = library.any { section?.hasRoute(it.type) == true }
     var libraryIndex by rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(section) {

@@ -1,0 +1,44 @@
+name: Server tools CI
+
+on:
+  push:
+    branches: [master]
+    paths:
+      [
+        "caimack.sh",
+        "setup.sh",
+        "tests/test_caimack_cli.py",
+        "docker-compose*.yml",
+        ".env.example",
+        ".github/workflows/server-tools-ci.yml",
+      ]
+  pull_request:
+    paths:
+      [
+        "caimack.sh",
+        "setup.sh",
+        "tests/test_caimack_cli.py",
+        "docker-compose*.yml",
+        ".env.example",
+        ".github/workflows/server-tools-ci.yml",
+      ]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check Bash syntax and ShellCheck
+        run: |
+          bash -n caimack.sh
+          bash -n setup.sh
+          if ! command -v shellcheck >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends shellcheck
+          fi
+          shellcheck caimack.sh setup.sh
+      - name: Test isolated server installations
+        run: python3 -m unittest discover -s tests -p test_caimack_cli.py

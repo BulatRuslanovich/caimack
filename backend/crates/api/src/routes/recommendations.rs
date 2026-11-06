@@ -21,10 +21,16 @@ use crate::state::AppState;
 const DEFAULT_SECTION_SIZE: i64 = 12;
 const DEFAULT_STATS_DAYS: i32 = 30;
 
-pub fn router() -> Router<AppState> {
-    Router::new()
+pub fn router(enabled: bool) -> Router<AppState> {
+    let base = Router::new()
         .route("/api/home/feed", get(feed))
-        .route("/api/home/mixes/{kind}", get(mix))
+        .route("/api/library/duplicates", get(duplicates))
+        .route("/api/library/duplicates/dismiss", post(dismiss_duplicates))
+        .route("/api/library/duplicates/merge", post(merge_duplicates));
+    if !enabled {
+        return base;
+    }
+    base.route("/api/home/mixes/{kind}", get(mix))
         .route("/api/recommendations/radio", post(radio))
         .route("/api/recommendations/moods", get(moods))
         .route("/api/recommendations/stats", get(stats))
@@ -32,9 +38,6 @@ pub fn router() -> Router<AppState> {
         .route("/api/recommendations/rules/{id}", delete(remove_rule))
         .route("/api/recap", get(recap))
         .route("/api/library/map", get(map))
-        .route("/api/library/duplicates", get(duplicates))
-        .route("/api/library/duplicates/dismiss", post(dismiss_duplicates))
-        .route("/api/library/duplicates/merge", post(merge_duplicates))
 }
 
 #[derive(Deserialize)]

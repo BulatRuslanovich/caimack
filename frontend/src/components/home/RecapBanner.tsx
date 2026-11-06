@@ -3,6 +3,7 @@
 
 "use client";
 
+import { useRecommendations } from "@/lib/useRecommendations";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRightIcon } from "lucide-react";
 import Link from "next/link";
@@ -12,7 +13,7 @@ import { useFormat } from "@/lib/useFormat";
 import { useI18n } from "@/contexts/I18nContext";
 import { TrackCover } from "@/components/Cover";
 
-export function RecapBanner() {
+function EnabledRecapBanner() {
   const { locale, t } = useI18n();
   const format = useFormat();
   const recap = useQuery(queries.recap());
@@ -54,4 +55,9 @@ export function RecapBanner() {
       <ChevronRightIcon className="size-5 shrink-0 text-primary transition-transform duration-150 ease-brand group-hover:translate-x-0.5" />
     </Link>
   );
+}
+
+export function RecapBanner() {
+  const enabled = useRecommendations();
+  return enabled ? <EnabledRecapBanner /> : null;
 }

@@ -84,6 +84,7 @@ private const val TERRITORY = 0.14f
 
 @Composable
 fun MapScreen() {
+    if (!recommendationsEnabled()) return
     val container = LocalContainer.current
 
     Load(

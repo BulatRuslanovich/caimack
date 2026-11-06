@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT t.id, t.file_path, t.content_hash, t.duration_seconds,\n                    (e.track_id IS NULL OR e.model_id <> $2 OR e.strategy <> $3 OR e.source_hash <> t.content_hash\n                     OR (e.succeeded AND e.dimension <> $6)\n                     OR (NOT e.succeeded AND e.analyzed_at <= $4)) AS \"embed!\"\n             FROM tracks t\n             LEFT JOIN track_cues c ON c.track_id = t.id\n             LEFT JOIN track_embeddings e ON e.track_id = t.id\n             WHERE c.track_id IS NULL OR c.version <> $1 OR c.source_hash <> t.content_hash\n                OR (NOT c.succeeded AND c.analyzed_at <= $4)\n                OR e.track_id IS NULL OR e.model_id <> $2 OR e.strategy <> $3 OR e.source_hash <> t.content_hash\n                OR (e.succeeded AND e.dimension <> $6)\n                OR (NOT e.succeeded AND e.analyzed_at <= $4)\n             ORDER BY t.created_at DESC\n             LIMIT $5",
+  "query": "SELECT t.id, t.file_path, t.content_hash, t.duration_seconds,\n                    ($7 AND (e.track_id IS NULL OR e.model_id <> $2 OR e.strategy <> $3 OR e.source_hash <> t.content_hash\n                     OR (e.succeeded AND e.dimension <> $6)\n                     OR (NOT e.succeeded AND e.analyzed_at <= $4))) AS \"embed!\"\n             FROM tracks t\n             LEFT JOIN track_cues c ON c.track_id = t.id\n             LEFT JOIN track_embeddings e ON e.track_id = t.id\n             WHERE c.track_id IS NULL OR c.version <> $1 OR c.source_hash <> t.content_hash\n                OR (NOT c.succeeded AND c.analyzed_at <= $4)\n                OR ($7 AND (e.track_id IS NULL OR e.model_id <> $2 OR e.strategy <> $3 OR e.source_hash <> t.content_hash\n                OR (e.succeeded AND e.dimension <> $6)\n                OR (NOT e.succeeded AND e.analyzed_at <= $4)))\n             ORDER BY t.created_at DESC\n             LIMIT $5",
   "describe": {
     "columns": [
       {
@@ -61,7 +61,8 @@
         "Text",
         "Timestamptz",
         "Int8",
-        "Int4"
+        "Int4",
+        "Bool"
       ]
     },
     "nullable": [
@@ -72,5 +73,5 @@
       null
     ]
   },
-  "hash": "932c051965a5923f43bc73380aeae7d977a5e532340938b45c4a1c0cc271ccc5"
+  "hash": "4645fc01f36ce1642c34c1da979ffa427027500fbb4be8c92860215d764c1aa1"
 }

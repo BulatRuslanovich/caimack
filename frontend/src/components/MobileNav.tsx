@@ -3,6 +3,7 @@
 
 "use client";
 
+import { useRecommendations } from "@/lib/useRecommendations";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -89,6 +90,7 @@ export function MobileHeader() {
 }
 
 export function LibraryChips() {
+  const recommendations = useRecommendations();
   const t = useT();
   const pathname = usePathname();
 
@@ -110,20 +112,22 @@ export function LibraryChips() {
       aria-label={t("nav.mediaLibrary")}
       className="-mx-4 -mb-3 hidden gap-5 overflow-x-auto px-4 shadow-[inset_0_-1px_0_var(--border)] [scrollbar-width:none] max-md:flex [&::-webkit-scrollbar]:hidden"
     >
-      {libraryTabs.map((entry) => {
-        const active = isActivePath(pathname, entry.href);
+      {libraryTabs
+        .filter((entry) => entry.href !== "/map" || recommendations)
+        .map((entry) => {
+          const active = isActivePath(pathname, entry.href);
 
-        return (
-          <Link
-            key={entry.href}
-            href={entry.href}
-            aria-current={active ? "page" : undefined}
-            className={cn(chipClass, active && "border-primary text-foreground")}
-          >
-            {t(entry.labelKey)}
-          </Link>
-        );
-      })}
+          return (
+            <Link
+              key={entry.href}
+              href={entry.href}
+              aria-current={active ? "page" : undefined}
+              className={cn(chipClass, active && "border-primary text-foreground")}
+            >
+              {t(entry.labelKey)}
+            </Link>
+          );
+        })}
     </nav>
   );
 }

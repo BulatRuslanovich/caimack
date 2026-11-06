@@ -3,6 +3,7 @@
 
 "use client";
 
+import { useRecommendations } from "@/lib/useRecommendations";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { LogOutIcon } from "lucide-react";
 import Link from "next/link";
@@ -124,6 +125,8 @@ function NavGroup({
 }
 
 export function Sidebar() {
+  const recommendations = useRecommendations();
+
   const t = useT();
   const { isAdmin } = useAuth();
 
@@ -150,7 +153,10 @@ export function Sidebar() {
         className="flex flex-1 flex-col gap-6 [@media(max-height:52rem)]:gap-3"
       >
         <NavGroup entries={primaryNav} />
-        <NavGroup label={t("nav.library")} entries={libraryNav} />
+        <NavGroup
+          label={t("nav.library")}
+          entries={libraryNav.filter((entry) => entry.href !== "/map" || recommendations)}
+        />
         <div className="mt-auto flex flex-col gap-1">
           <NavGroup entries={serviceNav(isAdmin)} compact />
         </div>

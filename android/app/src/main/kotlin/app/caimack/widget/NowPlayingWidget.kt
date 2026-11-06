@@ -164,6 +164,9 @@ class NowPlayingWidget : AppWidgetProvider() {
                 setViewVisibility(R.id.widget_progress, playingParts)
 
                 if (idle) {
+                    val enabled = (app.applicationContext as CaimackApp).container.recommendationsEnabled.value
+                    setViewVisibility(R.id.widget_primary, if (enabled) View.VISIBLE else View.GONE)
+                    setViewVisibility(R.id.widget_secondary, if (enabled) View.VISIBLE else View.GONE)
                     button(context, R.id.widget_primary, R.drawable.widget_radio, R.string.widget_my_radio, WidgetActions.MY_RADIO)
                     button(context, R.id.widget_secondary, R.drawable.widget_mix, R.string.widget_daily_mix, WidgetActions.DAILY_MIX)
                     return@apply
@@ -279,6 +282,8 @@ class WidgetActions : BroadcastReceiver() {
                             context.startActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                             return@launch
                         }
+                        runCatching { container.refreshCapabilities() }
+                        if (!container.recommendationsEnabled.value) return@launch
                         if (intent.action == MY_RADIO) {
                             runCatching { container.radio(RadioRequest(null, emptyList())) }.getOrNull()
                                 ?.takeIf { it.tracks.isNotEmpty() }

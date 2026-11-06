@@ -67,6 +67,7 @@ private const val HOLD_MS = 250L
 private class RecapSlide(val key: String, val art: String?, val content: @Composable () -> Unit)
 @Composable
 fun RecapBanner() {
+    if (!recommendationsEnabled()) return
     val palette = LocalPalette.current
     val container = LocalContainer.current
     var recap by remember { mutableStateOf(Remote.cache[RECAP] as Recap?) }

@@ -3,6 +3,7 @@
 
 use std::time::{Duration, Instant};
 
+use anyhow::Context;
 use chrono::Utc;
 use media::analysis::Analysis;
 use media::cues;
@@ -25,7 +26,7 @@ const RETRY_FAILED_AFTER: chrono::Duration = chrono::Duration::days(7);
 pub fn spawn(
     db: PgPool,
     storage: Storage,
-    embedder: MertClient,
+    embedder: Option<MertClient>,
     index: EmbeddingIndex,
     cancel: CancellationToken,
 ) -> tokio::task::JoinHandle<()> {
@@ -35,7 +36,7 @@ pub fn spawn(
             () = tokio::time::sleep(STARTUP_DELAY) => {}
         }
         loop {
-            match run_pass(&db, &storage, &embedder, &index, &cancel).await {
+            match run_pass(&db, &storage, embedder.as_ref(), &index, &cancel).await {
                 Ok(analysed) if analysed > 0 => index.request_reload(),
                 Ok(_) => {}
                 Err(error) => tracing::error!("Track analysis pass failed: {error:#}"),
@@ -51,27 +52,29 @@ pub fn spawn(
 async fn run_pass(
     db: &PgPool,
     storage: &Storage,
-    embedder: &MertClient,
+    embedder: Option<&MertClient>,
     index: &EmbeddingIndex,
     cancel: &CancellationToken,
 ) -> anyhow::Result<usize> {
-    embedder.ready().await?;
+    if let Some(embedder) = embedder {
+        embedder.ready().await?;
+    }
     let mut analysed = 0;
     loop {
         let retry_before = Utc::now() - RETRY_FAILED_AFTER;
         let batch = sqlx::query!(
             r#"SELECT t.id, t.file_path, t.content_hash, t.duration_seconds,
-                    (e.track_id IS NULL OR e.model_id <> $2 OR e.strategy <> $3 OR e.source_hash <> t.content_hash
+                    ($7 AND (e.track_id IS NULL OR e.model_id <> $2 OR e.strategy <> $3 OR e.source_hash <> t.content_hash
                      OR (e.succeeded AND e.dimension <> $6)
-                     OR (NOT e.succeeded AND e.analyzed_at <= $4)) AS "embed!"
+                     OR (NOT e.succeeded AND e.analyzed_at <= $4))) AS "embed!"
              FROM tracks t
              LEFT JOIN track_cues c ON c.track_id = t.id
              LEFT JOIN track_embeddings e ON e.track_id = t.id
              WHERE c.track_id IS NULL OR c.version <> $1 OR c.source_hash <> t.content_hash
                 OR (NOT c.succeeded AND c.analyzed_at <= $4)
-                OR e.track_id IS NULL OR e.model_id <> $2 OR e.strategy <> $3 OR e.source_hash <> t.content_hash
+                OR ($7 AND (e.track_id IS NULL OR e.model_id <> $2 OR e.strategy <> $3 OR e.source_hash <> t.content_hash
                 OR (e.succeeded AND e.dimension <> $6)
-                OR (NOT e.succeeded AND e.analyzed_at <= $4)
+                OR (NOT e.succeeded AND e.analyzed_at <= $4)))
              ORDER BY t.created_at DESC
              LIMIT $5"#,
             cues::VERSION,
@@ -79,7 +82,8 @@ async fn run_pass(
             mert::windows::STRATEGY,
             retry_before,
             BATCH,
-            mert::DIMENSION as i32
+            mert::DIMENSION as i32,
+            embedder.is_some()
         )
         .fetch_all(db)
         .await?;
@@ -142,7 +146,7 @@ impl Outcome {
 
 async fn analyze(
     storage: &Storage,
-    embedder: &MertClient,
+    embedder: Option<&MertClient>,
     file_path: &str,
     duration: f64,
     embed: bool,
@@ -169,7 +173,7 @@ async fn analyze(
             } else {
                 // Service outages must be retried next pass, not stored as a
                 // per-track failure that suppresses analysis for seven days.
-                Some(Ok(embedder.embed(&analysis.windows).await?))
+                Some(Ok(embedder.context("MERT is disabled")?.embed(&analysis.windows).await?))
             };
             Ok(Outcome {
                 cues: analysis.cues,
@@ -296,6 +300,37 @@ mod tests {
 
     #[cfg(feature = "integration-tests")]
     #[sqlx::test(migrations = "../../../db/migrations")]
+    async fn disabled_module_never_requests_or_replaces_embeddings(db: PgPool) -> anyhow::Result<()> {
+        let root = std::env::temp_dir().join(format!("caimack-cpu-{}", Uuid::now_v7()));
+        let storage = Storage::open(&root)?;
+        let artist = Uuid::now_v7();
+        let track = Uuid::now_v7();
+        sqlx::query("INSERT INTO artists(id,name,normalized_name,created_at) VALUES ($1,'CPU','cpu',now())")
+            .bind(artist)
+            .execute(&db)
+            .await?;
+        sqlx::query("INSERT INTO tracks(id,title,normalized_title,artist_id,duration_seconds,file_path,original_file_name,mime_type,file_size,content_hash,created_at) VALUES ($1,'CPU','cpu',$2,12,'missing.flac','missing.flac','audio/flac',1,'cpu-test',now())")
+            .bind(track).bind(artist).execute(&db).await?;
+        sqlx::query("INSERT INTO track_embeddings(track_id,vector,dimension,model_id,strategy,source_hash,succeeded,analyzed_at) VALUES ($1,$2,512,'previous-model','previous-strategy','cpu-test',true,now())")
+            .bind(track).bind(vec![0.0_f32;512]).execute(&db).await?;
+        let index = EmbeddingIndex::default();
+        let cancel = CancellationToken::new();
+        assert_eq!(run_pass(&db, &storage, None, &index, &cancel).await?, 1);
+        assert_eq!(run_pass(&db, &storage, None, &index, &cancel).await?, 0);
+        let model: String = sqlx::query_scalar("SELECT model_id FROM track_embeddings WHERE track_id=$1")
+            .bind(track)
+            .fetch_one(&db)
+            .await?;
+        assert_eq!(model, "previous-model");
+        for directory in std::fs::read_dir(&root)? {
+            std::fs::remove_dir(directory?.path())?;
+        }
+        std::fs::remove_dir(root)?;
+        Ok(())
+    }
+
+    #[cfg(feature = "integration-tests")]
+    #[sqlx::test(migrations = "../../../db/migrations")]
     #[ignore = "requires the local MERT GPU service and three 12-second FLAC fixtures in MERT_TEST_STORAGE/music"]
     async fn gpu_backfill_replaces_clap_and_feeds_radio_and_map(db: PgPool) -> anyhow::Result<()> {
         use crate::config::ModelConfig;
@@ -321,7 +356,8 @@ mod tests {
         }
         assert!(crate::recommendations::index::load(&db).await?.is_empty());
         let client = MertClient::new(&ModelConfig::from_env()?)?;
-        let count = run_pass(&db, &storage, &client, &EmbeddingIndex::default(), &CancellationToken::new()).await?;
+        let count =
+            run_pass(&db, &storage, Some(&client), &EmbeddingIndex::default(), &CancellationToken::new()).await?;
         assert_eq!(count, 3);
         let results: Vec<(bool, Option<String>)> =
             sqlx::query_as("SELECT succeeded,error FROM track_embeddings").fetch_all(&db).await?;

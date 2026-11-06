@@ -125,7 +125,7 @@ fun QueuePanel(state: PlayerState, onUndoable: (String, QueueSnapshot) -> Unit) 
                 )
             }
         }
-        Row(
+        if (recommendationsEnabled()) Row(
             Modifier.fillMaxWidth().clip(Radius.row).clickable { container.radio.setAutoplay(!autoplay) }.padding(vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

@@ -12,6 +12,7 @@ use serde::Deserialize;
 #[derive(Debug, Clone)]
 pub struct Config {
     pub app_env: AppEnv,
+    pub recommendations_enabled: bool,
     pub listen_addr: SocketAddr,
     pub database: DatabaseConfig,
     pub jwt: JwtConfig,
@@ -99,6 +100,8 @@ pub struct YandexMusicConfig {
 
 #[derive(Deserialize)]
 struct Env {
+    #[serde(default)]
+    recommendations_enabled: bool,
     #[serde(default = "default_app_env")]
     app_env: AppEnv,
     #[serde(default = "default_listen_addr")]
@@ -206,6 +209,7 @@ impl Config {
         Ok(Self {
             app_env: env.app_env,
             listen_addr,
+            recommendations_enabled: env.recommendations_enabled,
             database: DatabaseConfig { url: database_url, max_connections: env.database_max_connections },
             jwt: JwtConfig {
                 signing_key,
@@ -325,6 +329,19 @@ mod tests {
     fn short_signing_key_is_rejected() {
         let result = env(&[("DATABASE_URL", "postgres://localhost/music"), ("JWT_SIGNING_KEY", "short")]);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn recommendations_are_an_explicit_opt_in() -> anyhow::Result<()> {
+        let required = [("DATABASE_URL", "postgres://localhost/music"), ("JWT_SIGNING_KEY", KEY)];
+        assert!(!env(&required)?.recommendations_enabled);
+        let mut enabled = required.to_vec();
+        enabled.push(("RECOMMENDATIONS_ENABLED", "true"));
+        assert!(env(&enabled)?.recommendations_enabled);
+        enabled.pop();
+        enabled.push(("RECOMMENDATIONS_ENABLED", "invalid"));
+        assert!(env(&enabled).is_err());
+        Ok(())
     }
 
     #[test]
