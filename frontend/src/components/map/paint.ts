@@ -14,6 +14,7 @@ import {
 import { rgbOf, rgba, type Rgb } from "@/lib/cssColor";
 import type { MapPoint } from "@/lib/types";
 import type { MapLabel, MapRoute } from "./LibraryMapCanvas";
+import { visibleLandmarks } from "./landmarks";
 
 const LEVELS = 8;
 const COVER_ZOOM = 4;
@@ -81,6 +82,7 @@ export interface HaloCache {
 
 export interface Scene {
   points: MapPoint[];
+  landmarks: MapPoint[];
   labels: MapLabel[];
   highlightGenre: string | null;
   nowPlayingId: string | null;
@@ -295,10 +297,10 @@ export function paintMap(
       fill = rgba(palette.primary, 1);
       front.push(spot);
     } else if (marked === false) {
-      fill = rgba(palette.faint, 0.14);
+      fill = rgba(palette.faint, selectedIds ? 0.1 : 0.18);
     } else {
       const level = Math.round(playsLevel(point.plays, maxPlays) * LEVELS) / LEVELS;
-      fill = level === 0 ? rgba(palette.faint, 0.42) : rgba(palette.primary, 0.3 + 0.7 * level);
+      fill = level === 0 ? rgba(palette.faint, 0.55) : rgba(palette.primary, 0.4 + 0.6 * level);
       if (level > 0) glowing.push({ spot, level: level * grown });
     }
 
@@ -345,6 +347,11 @@ export function paintMap(
   if (front.length > 0) {
     context.fillStyle = rgba(palette.primary, 1);
     dots(front, radius + 0.5);
+    if (selectedIds) {
+      context.lineWidth = 1;
+      context.strokeStyle = rgba(palette.ink, 0.7);
+      rings(front, radius + 2);
+    }
   }
 
   context.lineWidth = 1.5;
@@ -412,6 +419,47 @@ export function paintMap(
   context.textAlign = "left";
   context.textBaseline = "middle";
   context.globalAlpha = clamp01((intro - 0.35) / 0.4);
+
+  if (covers) {
+    const clipText = (text: string, max: number) => {
+      if (context.measureText(text).width <= max) return text;
+      let shortened = text;
+      while (shortened && context.measureText(`${shortened}…`).width > max)
+        shortened = shortened.slice(0, -1);
+      return `${shortened}…`;
+    };
+    for (const { point, at, labelX, width: labelWidth } of visibleLandmarks(
+      scene.landmarks,
+      view,
+      size,
+      highlightGenre,
+      selectedIds,
+    )) {
+      const active = point.id === hoveredId || point.id === nowPlayingId;
+      context.beginPath();
+      context.roundRect(labelX - labelWidth / 2, at.y + 20, labelWidth, 45, 7);
+      context.fillStyle = rgba(palette.card, 0.97);
+      context.fill();
+      context.strokeStyle = rgba(active ? palette.primary : palette.ink, active ? 1 : 0.18);
+      context.lineWidth = 1;
+      context.stroke();
+      context.textAlign = "center";
+      context.font = `600 13px ${palette.font}`;
+      context.fillStyle = rgba(palette.ink, 1);
+      context.fillText(clipText(point.artist || point.title, labelWidth - 16), labelX, at.y + 34);
+      context.font = `400 12px ${palette.font}`;
+      context.fillStyle = rgba(palette.ink, 0.76);
+      context.fillText(clipText(point.title, labelWidth - 16), labelX, at.y + 51);
+      const image = cover(point);
+      context.fillStyle = rgba(palette.card, 1);
+      dots([at], 21);
+      if (image) context.drawImage(image, at.x - 19, at.y - 19, 38, 38);
+      context.strokeStyle = rgba(active ? palette.primary : palette.ink, active ? 1 : 0.5);
+      context.lineWidth = active ? 2.5 : 1.5;
+      rings([at], 21);
+    }
+    context.textAlign = "left";
+  }
 
   const placed: { left: number; right: number; top: number; bottom: number }[] = [];
 

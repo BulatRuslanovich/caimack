@@ -124,3 +124,18 @@ export function DropdownMenuRadioItem({
     </DropdownMenuPrimitive.RadioItem>
   );
 }
+
+export function DropdownMenuCheckboxItem({
+  className,
+  children,
+  ...props
+}: ComponentProps<typeof DropdownMenuPrimitive.CheckboxItem>) {
+  return (
+    <DropdownMenuPrimitive.CheckboxItem className={cn(itemClass, "pr-10", className)} {...props}>
+      {children}
+      <DropdownMenuPrimitive.ItemIndicator className="absolute right-3 text-primary">
+        <CheckIcon size={16} />
+      </DropdownMenuPrimitive.ItemIndicator>
+    </DropdownMenuPrimitive.CheckboxItem>
+  );
+}

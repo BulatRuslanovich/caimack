@@ -31,14 +31,14 @@ export function Choice<T extends string>({
   const legendId = useId();
 
   return (
-    <fieldset className="flex flex-col gap-2 border-0 p-0">
-      <legend id={legendId} className="font-semibold">
+    <div className="settings-choice" data-preview={previews}>
+      <span id={legendId} className="font-medium">
         {legend}
-      </legend>
+      </span>
       <RadioGroup.Root
         aria-labelledby={legendId}
         data-preview={previews}
-        className="settings-options mt-1 gap-2"
+        className="settings-options gap-1"
         value={value}
         onValueChange={(next) => onChange(next as T)}
       >
@@ -47,10 +47,9 @@ export function Choice<T extends string>({
             key={option.value}
             value={option.value}
             className={cn(
-              "settings-option flex cursor-pointer flex-col items-start gap-0.5 rounded-md border border-border text-left transition-colors outline-none",
+              "settings-option flex cursor-pointer flex-col items-start gap-0.5 rounded-md border border-transparent text-left transition-colors outline-none",
               previews ? "p-3" : "px-4 py-2.5",
               "hover:bg-raised focus-visible:ring-2 focus-visible:ring-ring/40",
-              "data-[state=checked]:border-primary data-[state=checked]:bg-primary-soft",
             )}
           >
             {option.preview}
@@ -59,6 +58,6 @@ export function Choice<T extends string>({
           </RadioGroup.Item>
         ))}
       </RadioGroup.Root>
-    </fieldset>
+    </div>
   );
 }

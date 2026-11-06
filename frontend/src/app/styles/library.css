@@ -5,10 +5,10 @@
   --library-card-min: 11rem;
   --library-card-gap: 1.5rem;
   --library-shelf-width: 11rem;
-  --library-row-padding: 0.5rem;
-  --library-cover-size: 2.5rem;
+  --library-row-padding: 0.625rem;
+  --library-cover-size: 2.75rem;
   --library-secondary: color-mix(in oklab, var(--foreground) 80%, var(--background));
-  --library-tertiary: color-mix(in oklab, var(--foreground) 65%, var(--background));
+  --library-tertiary: color-mix(in oklab, var(--foreground) 72%, var(--background));
   --library-surface: color-mix(in oklab, var(--card) 65%, var(--background));
   --library-edge: color-mix(in oklab, var(--foreground) 5%, transparent);
   --library-lift: 0 8px 24px -18px rgb(0 0 0 / 48%);
@@ -70,10 +70,47 @@
 }
 
 .library-track-list {
-  padding: 0.5rem;
-  border: 1px solid var(--library-edge);
-  border-radius: 12px;
-  background: color-mix(in oklab, var(--card) 30%, var(--background));
+  padding: 0.25rem 0;
+}
+
+.library-track-list > [role="row"]:first-child {
+  margin-bottom: 0.5rem;
+  padding-block: 0.75rem;
+  border-color: var(--library-edge);
+}
+
+.library-track-row:nth-child(even) {
+  background: color-mix(in oklab, var(--card) 24%, transparent);
+}
+
+.library-track-row:hover,
+.library-track-row:focus-within {
+  background: var(--library-surface);
+}
+
+.library-track-row.track-row-current {
+  background: var(--primary-soft);
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+
+.library-track-list .track-audio-spec {
+  padding-inline: 0.375rem;
+  border-radius: 4px;
+  background: var(--library-surface);
+  font-size: 0.75rem;
+}
+
+.track-tempo-cell {
+  color: var(--library-tertiary);
+  font-size: 0.8125rem;
+}
+
+.library-display-trigger {
+  min-height: 2.75rem;
+}
+
+.library-toolbar {
+  padding-block: 0.25rem;
 }
 
 .library-track-row,
@@ -170,7 +207,7 @@
 
 @media (width < 768px) {
   .library-track-list {
-    padding: 0.25rem;
+    padding: 0;
   }
   :root {
     --library-card-min: 8.75rem;

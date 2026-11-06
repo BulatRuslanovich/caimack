@@ -166,8 +166,9 @@ function Equalizer() {
             </div>
           </div>
 
-          <p className="text-xs text-muted-foreground sm:hidden">
-            {t("settings.equalizerScrollHint")}
+          <p className="text-xs text-muted-foreground">
+            {t("settings.equalizerControls")}
+            <span className="mt-1 block sm:hidden">{t("settings.equalizerScrollHint")}</span>
           </p>
 
           <div className="flex flex-col gap-4 rounded-md border border-border p-4">

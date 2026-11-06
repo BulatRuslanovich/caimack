@@ -29,6 +29,7 @@ import {
   type Spot,
 } from "@/lib/libraryMap";
 import { coverTile } from "./covers";
+import { landmarkAt, mapLandmarks, visibleLandmarks } from "./landmarks";
 import { paintMap, readPalette, type HaloCache } from "./paint";
 import type { MapPoint } from "@/lib/types";
 import { useT } from "@/contexts/I18nContext";
@@ -139,6 +140,7 @@ export function LibraryMapCanvas({
   const maxPlays = points.reduce((max, point) => Math.max(max, point.plays), 0);
   const bounds = useMemo(() => boundsOf(points), [points]);
   const allLinks = useMemo(() => constellation(points), [points]);
+  const landmarks = useMemo(() => mapLandmarks(points), [points]);
   const links = layers.has("links") ? allLinks : NO_LINKS;
   const shownLabels = labels;
   const shownRoute = layers.has("route") ? route : null;
@@ -158,6 +160,7 @@ export function LibraryMapCanvas({
     maxPlays,
     bounds,
     links,
+    landmarks,
   });
   useEffect(() => {
     latest.current = {
@@ -173,6 +176,7 @@ export function LibraryMapCanvas({
       maxPlays,
       bounds,
       links,
+      landmarks,
     };
   });
 
@@ -385,6 +389,13 @@ export function LibraryMapCanvas({
     if (!view) return null;
 
     const base = Math.min(sizeRef.current.width, sizeRef.current.height);
+    if (covers) {
+      const landmark = landmarkAt(
+        visibleLandmarks(landmarks, view, sizeRef.current, highlightGenre, selectedIds),
+        at,
+      );
+      if (landmark) return landmark;
+    }
     let best: MapPoint | null = null;
     let bestDistance = HIT_RADIUS_PX ** 2;
 

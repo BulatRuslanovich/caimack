@@ -78,7 +78,7 @@ export function TrackList({
   showCover = true,
   showAlbum = true,
   showArtist = true,
-  showAudioSpec = true,
+  showAudioSpec = false,
   showTempoKey = false,
   useTrackNumbers = false,
   playedAt,
@@ -222,9 +222,9 @@ export function TrackList({
     return <EmptyState icon={<MusicIcon size={24} />} title={emptyMessage ?? t("tracks.empty")} />;
   }
 
-  const visibleAlbum = showAlbum && columns !== "narrow";
+  const visibleAlbum = showAlbum && columns !== "narrow" && (!showTempoKey || columns !== "album");
   const visibleDate = playedAt !== undefined && columns === "all";
-  const visibleTempo = showTempoKey && (columns === "tempo" || columns === "all");
+  const visibleTempo = showTempoKey && columns !== "narrow";
   const grid = rowGridFor(visibleAlbum, visibleDate, visibleTempo);
 
   const rows = tracks.map((track, index) => (
@@ -499,7 +499,7 @@ const TrackRow = memo(function TrackRow({
               )}
 
               {showSpec && (
-                <span className="library-tertiary shrink-0 text-xs max-md:hidden">
+                <span className="track-audio-spec library-tertiary shrink-0 max-md:hidden">
                   {formatAudioSpec(track)}
                 </span>
               )}
@@ -579,7 +579,7 @@ function TempoKeyCell({ track }: { track: Track }) {
 
   return (
     <span
-      className="track-tempo-cell library-secondary truncate text-sm tabular-nums max-md:hidden"
+      className="track-tempo-cell truncate tabular-nums max-md:hidden"
       role="cell"
       title={
         bpm && key && track.key

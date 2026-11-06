@@ -141,7 +141,7 @@ export function DailyMix<T extends string>({
                       {formatArtists(track)}
                     </span>
                   </span>
-                  <span className="text-2xs text-faint tabular-nums">
+                  <span className="text-xs text-muted-foreground tabular-nums">
                     {formatDuration(track.durationSeconds)}
                   </span>
                 </button>

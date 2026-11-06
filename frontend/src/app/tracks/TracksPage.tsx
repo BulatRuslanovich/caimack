@@ -31,6 +31,8 @@ import {
 import { PlayAllButton } from "@/components/PlayAllButton";
 import { Query } from "@/components/Query";
 import { TrackList } from "@/components/TrackList";
+import { TrackDisplayMenu } from "@/components/TrackDisplayMenu";
+import { useTrackDisplay } from "@/lib/trackDisplay";
 import { Button } from "@/components/ui/button";
 import { CheckIcon, ShuffleIcon } from "lucide-react";
 import { useConfirm } from "@/components/ui/alert-dialog";
@@ -56,6 +58,7 @@ const TEMPOS: Record<string, { phrase: TranslationKey; filter: TrackFilter }> = 
 
 export function TracksPage() {
   const t = useT();
+  const display = useTrackDisplay();
   const format = useFormat();
   const player = usePlayerActions();
   const { isAdmin } = useAuth();
@@ -180,6 +183,7 @@ export function TracksPage() {
             ))}
           </SelectContent>
         </Select>
+        <TrackDisplayMenu />
         {isAdmin && (
           <BulkActions
             selection={selection}
@@ -196,7 +200,8 @@ export function TracksPage() {
           <Section>
             <TrackList
               tracks={data.items}
-              showTempoKey
+              showTempoKey={display.showTempoKey}
+              showAudioSpec={display.showAudioSpec}
               emptyMessage={filtered ? t("filter.nothingMatched") : undefined}
               selection={
                 isAdmin && selecting
