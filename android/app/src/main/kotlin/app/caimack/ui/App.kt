@@ -170,7 +170,8 @@ fun App(user: User) {
     val toneEnabled by container.appearance.coverTone.collectAsStateWithLifecycle()
     val tone = rememberCoverTone(playback.current?.takeIf { toneEnabled }?.let { trackCover(it) })
     val toneTarget = if (colorway == Colorway.Graphite && palette.dark) Color.Transparent else tone?.color(palette, colorway) ?: Color.Transparent
-    val nowPlayingTone by animateColorAsState(toneTarget, tween(900), label = "tone")
+    val motion = playerMotionEnabled()
+    val nowPlayingTone by animateColorAsState(toneTarget, tween(if (motion) 900 else 0), label = "tone")
 
     LaunchedEffect(Unit) { container.player.connect() }
 
@@ -254,7 +255,7 @@ fun App(user: User) {
         }
     }
 
-    AnimatedVisibility(full, enter = fadeIn(tween(360)), exit = fadeOut(tween(NOW_PLAYING_TRANSITION_MS))) {
+    AnimatedVisibility(full, enter = fadeIn(tween(if (motion) 360 else 0)), exit = fadeOut(tween(if (motion) NOW_PLAYING_TRANSITION_MS else 0))) {
         CompositionLocalProvider(LocalFullPlayerVisibility provides this) {
             FullPlayer(playback) { expanded = false }
         }

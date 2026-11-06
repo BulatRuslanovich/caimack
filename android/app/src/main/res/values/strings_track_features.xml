@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="track_info_title">About this track</string>
+    <string name="track_info_release">Release</string>
+    <string name="track_info_audio">Audio</string>
+    <string name="track_info_library">Library</string>
+    <string name="track_info_album">Album</string>
+    <string name="track_info_genre">Genre</string>
+    <string name="track_info_year">Year</string>
+    <string name="track_info_number">Track number</string>
+    <string name="track_info_disc">Disc number</string>
+    <string name="track_info_codec">Format</string>
+    <string name="track_info_bitrate">Bitrate</string>
+    <string name="track_info_sample_rate">Sample rate</string>
+    <string name="track_info_depth">Bit depth</string>
+    <string name="track_info_tempo">Tempo</string>
+    <string name="track_info_key">Key</string>
+    <string name="track_info_loudness">Loudness</string>
+    <string name="track_info_file">File</string>
+    <string name="track_info_added">Added</string>
+    <string name="track_info_lyrics">Lyrics</string>
+    <string name="track_info_lyrics_present">Available</string>
+    <string name="track_info_lyrics_missing">Not available</string>
+    <string name="map_layer_route">Playback route</string>
+    <string name="map_layer_covers">Cover art</string>
+    <string name="map_layer_motion">Animation</string>
+    <string name="settings_player_effects">Player animations and effects</string>
+    <string name="settings_help_player_effects">Animate the record, glow and player transitions. Respects system motion settings.</string>
+</resources>

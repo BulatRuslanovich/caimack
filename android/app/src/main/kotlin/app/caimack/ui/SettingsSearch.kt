@@ -18,6 +18,7 @@ internal enum class SettingKey(val section: Int, vararg val terms: Int) {
     Theme(R.string.settings_appearance, R.string.settings_theme, R.string.settings_help_theme, R.string.settings_theme_system, R.string.settings_theme_dark, R.string.settings_theme_light),
     Palette(R.string.settings_appearance, R.string.settings_colorway, R.string.settings_help_colorway, R.string.settings_colorway_coffee, R.string.settings_colorway_graphite, R.string.settings_colorway_midnight, R.string.settings_colorway_plum, R.string.settings_colorway_studio),
     Density(R.string.settings_appearance, R.string.settings_library_density, R.string.settings_density_compact, R.string.settings_density_comfortable, R.string.settings_density_spacious),
+    PlayerEffects(R.string.settings_appearance, R.string.settings_player_effects, R.string.settings_help_player_effects),
     Cover(R.string.settings_appearance, R.string.settings_cover_tone, R.string.settings_help_coverTone),
     Language(R.string.settings_appearance, R.string.settings_language, R.string.settings_help_language, R.string.language_english, R.string.language_russian),
     SignOut(R.string.nav_account, R.string.sign_out),

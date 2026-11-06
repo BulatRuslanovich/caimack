@@ -24,6 +24,12 @@ class Appearance(private val context: Context) {
     private val chosenCoverTone = MutableStateFlow(preferences.getBoolean(COVER_TONE, true))
 
     val coverTone: StateFlow<Boolean> = chosenCoverTone
+    private val chosenPlayerEffects = MutableStateFlow(preferences.getBoolean(PLAYER_EFFECTS, true))
+    val playerEffects: StateFlow<Boolean> = chosenPlayerEffects
+    fun setPlayerEffects(value: Boolean) {
+        preferences.edit { putBoolean(PLAYER_EFFECTS, value) }
+        chosenPlayerEffects.value = value
+    }
 
     private val chosenLibraryDensity = MutableStateFlow(LibraryDensity.of(preferences.getString(LIBRARY_DENSITY, null)))
     val libraryDensity: StateFlow<LibraryDensity> = chosenLibraryDensity
@@ -70,6 +76,7 @@ class Appearance(private val context: Context) {
         private const val THEME = "theme"
         private const val COLORWAY = "colorway"
         private const val LANGUAGE = "language"
+        private const val PLAYER_EFFECTS = "player_effects"
         private const val COVER_TONE = "cover_tone"
         private const val LIBRARY_DENSITY = "library_density"
 

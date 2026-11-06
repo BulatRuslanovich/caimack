@@ -27,6 +27,7 @@ val LocalFullPlayerVisibility = staticCompositionLocalOf<AnimatedVisibilityScope
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun Modifier.nowPlayingCover(visibility: AnimatedVisibilityScope?): Modifier {
+    if (!playerMotionEnabled()) return this
     val transition = LocalNowPlayingTransition.current ?: return this
     if (visibility == null) return this
     return with(transition.scope) {

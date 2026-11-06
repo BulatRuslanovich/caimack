@@ -29,6 +29,15 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.withFrameNanos
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -132,6 +141,27 @@ private fun MapExplorer(map: LibraryMap) {
     })
 
     val current = playback.current?.id?.let { id -> points.firstOrNull { it.id == id } }
+    val motion = MapLayer.Motion.key !in hiddenLayers && systemMotionEnabled()
+    val route = remember(points, playback.queue, playback.index, playback.shuffle, playback.nextIndex) {
+        playbackMapRoute(points, playback.queue, playback.index, playback.shuffle, playback.nextIndex)
+    }.takeIf { MapLayer.Route.key !in hiddenLayers }
+    val showCovers = MapLayer.Covers.key !in hiddenLayers
+    var phase by remember { mutableFloatStateOf(0f) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(motion, playback.playing, current?.id, lifecycle) {
+        phase = 0f
+        if (!motion || !playback.playing || current == null) return@LaunchedEffect
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            var started = 0L
+            while (true) {
+                withFrameNanos { now ->
+                    if (started == 0L) started = now
+                    phase = ((now - started) % 2_400_000_000L) / 2_400_000_000f
+                }
+                delay(32)
+            }
+        }
+    }
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val hitRadius = with(density) { 22.dp.toPx() }
@@ -196,6 +226,7 @@ private fun MapExplorer(map: LibraryMap) {
                 Canvas(
                     Modifier
                         .fillMaxSize()
+                        .graphicsLayer()
                         .semantics { contentDescription = description }
                         .pointerInput(bounds) {
                             detectTransformGestures { centroid, pan, zoom, _ ->
@@ -226,8 +257,24 @@ private fun MapExplorer(map: LibraryMap) {
                         shown, points, visibleLinks, maxPlays, palette, genre, plates,
                         current?.id,
                         picked?.id,
-                        measurer,
+                        measurer, route, showCovers,
                     )
+                }
+
+                view?.takeIf { showCovers && it.k > 4f }?.let { shown ->
+                    MapCoverTiles(points, shown, size, current?.id, picked?.id, motion)
+                }
+
+                if (motion && playback.playing && current != null) Canvas(Modifier.fillMaxSize()) {
+                    val shown = view ?: return@Canvas
+                    val base = min(size.width, size.height)
+                    val at = toScreen(Spot(current.x, current.y), shown, base)
+                    val dot = dotRadius(shown.k, this.density)
+                    val marker = if (showCovers) dot + (16.dp.toPx() - dot) * ((shown.k - 4f) / 2f).coerceIn(0f, 1f) else dot
+                    val pulse = (kotlin.math.sin(phase * 2f * kotlin.math.PI).toFloat() + 1f) / 2f
+                    drawCircle(palette.primary.copy(alpha = 0.35f * (1f - pulse)), marker + (8f + 8f * pulse) * this.density,
+                        Offset(at.x, at.y), style = Stroke(2.dp.toPx()))
+                    route?.let { drawRouteProgress(it, shown, base, palette, phase) }
                 }
 
                 picked?.let { point ->
@@ -273,9 +320,12 @@ private fun DrawScope.drawMap(
     currentId: String?,
     pickedId: String?,
     measurer: TextMeasurer,
+    route: PlaybackMapRoute?,
+    covers: Boolean,
 ) {
     val base = min(size.width, size.height)
     val radius = dotRadius(view.k, density)
+    val marker = if (covers) radius + (16.dp.toPx() - radius) * ((view.k - 4f) / 2f).coerceIn(0f, 1f) else radius
     val screen = { point: MapPoint -> toScreen(Spot(point.x, point.y), view, base).let { Offset(it.x, it.y) } }
 
     val step = gridStep(view.k)
@@ -315,6 +365,8 @@ private fun DrawScope.drawMap(
         path.lineTo(end.x, end.y)
     }
     drawPath(path, palette.foreground.copy(alpha = if (palette.dark) 0.09f else 0.13f), style = Stroke(1.dp.toPx()))
+
+    if (route != null) drawPlaybackRoute(route, view, base, palette)
 
     val emphasised: (MapPoint) -> Boolean? = { point -> genre?.let { point.genre == it } }
 
@@ -358,13 +410,40 @@ private fun DrawScope.drawMap(
     points.firstOrNull { it.id == currentId }?.let { point ->
         val centre = screen(point)
         drawCircle(palette.primary, radius + 1.5f * density, centre)
-        drawCircle(palette.foreground, radius + 5f * density, centre, style = Stroke(2.dp.toPx()))
+        drawCircle(palette.foreground, marker + 5f * density, centre, style = Stroke(2.dp.toPx()))
     }
     points.firstOrNull { it.id == pickedId }?.let { point ->
-        drawCircle(palette.foreground, radius + 3f * density, screen(point), style = Stroke(2.dp.toPx()))
+        drawCircle(palette.foreground, marker + 3f * density, screen(point), style = Stroke(2.dp.toPx()))
     }
 
     drawPlates(plates, view, base, palette, measurer)
+}
+
+private fun DrawScope.drawPlaybackRoute(route: PlaybackMapRoute, view: MapView, base: Float, palette: Palette) {
+    fun at(point: MapPoint) = toScreen(Spot(point.x, point.y), view, base).let { Offset(it.x, it.y) }
+    fun path(points: List<MapPoint>): Path = Path().apply {
+        points.forEachIndexed { index, point -> val position = at(point)
+            if (index == 0) moveTo(position.x, position.y) else lineTo(position.x, position.y)
+        }
+    }
+    if (route.behind.isNotEmpty()) drawPath(path(route.behind + route.at), palette.foreground.copy(alpha = 0.25f),
+        style = Stroke(2.dp.toPx()))
+    val forward = listOf(route.at) + route.ahead
+    if (route.ahead.isNotEmpty()) {
+        drawPath(path(forward), palette.primary.copy(alpha = 0.8f), style = Stroke(2.dp.toPx(),
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(7.dp.toPx(), 5.dp.toPx()))))
+        route.ahead.forEach { drawCircle(palette.primary, 3.dp.toPx(), at(it)) }
+    }
+}
+
+private fun DrawScope.drawRouteProgress(route: PlaybackMapRoute, view: MapView, base: Float, palette: Palette, phase: Float) {
+    if (route.ahead.isEmpty()) return
+    val points = listOf(route.at) + route.ahead
+    val progress = phase * (points.size - 1)
+    val index = progress.toInt().coerceAtMost(points.lastIndex - 1)
+    fun at(point: MapPoint) = toScreen(Spot(point.x, point.y), view, base).let { Offset(it.x, it.y) }
+    val start = at(points[index]); val end = at(points[index + 1])
+    drawCircle(palette.primary, 4.dp.toPx(), start + (end - start) * (progress - index))
 }
 
 private fun DrawScope.drawPlates(plates: List<Plate>, view: MapView, base: Float, palette: Palette, measurer: TextMeasurer) {

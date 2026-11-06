@@ -57,6 +57,7 @@ fun TrackSheet(track: Track, onRemoveFromPlaylist: (() -> Unit)? = null, positio
     val resources = LocalResources.current
     var choosingPlaylist by remember { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
+    var showingInfo by androidx.compose.runtime.saveable.rememberSaveable(track.id) { mutableStateOf(false) }
     var sharing by remember { mutableStateOf(false) }
     container.favorites.state.collectAsState().value
     val liked = container.favorites.isFavorite(track)
@@ -70,6 +71,11 @@ fun TrackSheet(track: Track, onRemoveFromPlaylist: (() -> Unit)? = null, positio
                 say(rule?.let { resources.getString(R.string.rules_blocked, it.name) } ?: resources.getString(R.string.rules_failed))
             }
         }
+    }
+
+    if (showingInfo) {
+        TrackInfoSheet(track) { showingInfo = false; onDismiss() }
+        return
     }
 
     if (sharing) {
@@ -177,6 +183,7 @@ fun TrackSheet(track: Track, onRemoveFromPlaylist: (() -> Unit)? = null, positio
                 neverSuggest("artist", track.artistId)
             }
             SheetRow(stringResource(R.string.menu_add_to_playlist), Lucide.Plus) { choosingPlaylist = true }
+            SheetRow(stringResource(R.string.track_info_title), Lucide.Info) { showingInfo = true }
             SheetRow(stringResource(R.string.share_card), Lucide.Share2) { sharing = true }
             onRemoveFromPlaylist?.let { remove ->
                 SheetRow(stringResource(R.string.playlist_remove_track), Lucide.Trash2) {

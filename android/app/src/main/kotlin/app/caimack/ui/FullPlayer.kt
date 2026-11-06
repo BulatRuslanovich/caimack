@@ -3,7 +3,6 @@
 
 package app.caimack.ui
 
-import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.core.Animatable
@@ -71,7 +70,6 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -313,15 +311,12 @@ fun Record(
     vertical: Boolean = false,
     jacket: Modifier = Modifier,
 ) {
-    val slid by animateFloatAsState(if (out) RECORD_OUT else 0f, tween(650), label = "record-out")
+    val motion = playerMotionEnabled()
+    val slid by animateFloatAsState(if (out) RECORD_OUT else 0f, tween(if (motion) 650 else 0), label = "record-out")
     val angle = remember(track.id) { Animatable(0f) }
-    val context = LocalContext.current
-    val reducedMotion = remember(context) {
-        Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
-    }
 
-    LaunchedEffect(spinning, track.id, reducedMotion) {
-        while (spinning && !reducedMotion) {
+    LaunchedEffect(spinning, track.id, motion) {
+        while (spinning && motion) {
             angle.animateTo(angle.value + 360f, tween(1800, easing = LinearEasing))
             angle.snapTo(angle.value % 360f)
         }

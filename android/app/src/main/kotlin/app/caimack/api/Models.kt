@@ -39,6 +39,15 @@ data class Track(
     val cues: TrackCues? = null,
     val key: MusicalKey? = null,
     val loudness: TrackLoudness? = null,
+    val genreName: String? = null,
+    val trackNumber: Int? = null,
+    val discNumber: Int? = null,
+    val originalFileName: String? = null,
+    val createdAt: String? = null,
+    val hasLyrics: Boolean? = null,
+    val bitrateKbps: Int? = null,
+    val sampleRateHz: Int? = null,
+    val bitsPerSample: Int? = null,
 )
 
 @Serializable

@@ -86,6 +86,7 @@ class VisualReviewTest {
     private val originalLanguage = container.appearance.language
     private val originalFontScale = context.resources.configuration.fontScale
     private val originalDensity = container.appearance.libraryDensity.value
+    private val originalPlayerEffects = container.appearance.playerEffects.value
     private val originalColorway = container.appearance.colorway.value
     private val originalMapLayers = context.getSharedPreferences("map_layers", 0).getStringSet("hidden", emptySet())?.toSet()
     private val user = User("visual-review", "Визуальная проверка")
@@ -110,6 +111,8 @@ class VisualReviewTest {
                 fun json(value: String) = MockResponse.Builder().code(200).addHeader("Content-Type", "application/json").body(value).build()
                 return when {
                     path == "/api/auth/login" || path == "/api/auth/me" -> json(Json.encodeToString(user))
+                    path == "/api/config" -> json("{\"recommendationsEnabled\":true}")
+                    path == "/api/tracks/lookup" -> json(Json.encodeToString(tracks))
                     path == "/api/me/settings" -> json("{\"quality\":\"Original\"}")
                     path == "/api/home/feed" -> json("{\"blocks\":[]}")
                     path == "/api/playlists" || path == "/api/playlists/public" -> json(Json.encodeToString(listOf(Playlist("review", "Вечерний маршрут", ownerId = user.id, ownerName = user.username, trackCount = tracks.size))))
@@ -139,6 +142,7 @@ class VisualReviewTest {
     @After
     fun stop() {
         container.player.stop()
+        container.appearance.setPlayerEffects(originalPlayerEffects)
         container.appearance.setTheme(originalTheme)
         container.appearance.setLanguage(originalLanguage)
         container.appearance.setLibraryDensity(originalDensity)
@@ -205,6 +209,47 @@ class VisualReviewTest {
         capture("$prefix-settings-search")
         compose.onNodeWithText(label(R.string.nav_home)).performClick()
         compose.onNodeWithText(label(R.string.home_empty_title)).assertIsDisplayed()
+    }
+
+    @Test
+    fun trackInformationIsAvailableWithLargeText() {
+        tracks = original.map { it.copy(codec = "flac", bitrateKbps = 950, sampleRateHz = 44100,
+            bitsPerSample = 24, albumTitle = "Test album", genreName = "Electronic",
+            originalFileName = "02 - Test track.flac", createdAt = "2026-11-06T10:00:00Z", hasLyrics = true) }
+        container.appearance.setLanguage("ru")
+        container.appearance.setTheme(Appearance.DARK)
+        shell("settings put system font_scale 1.3")
+        compose.activityRule.scenario.recreate()
+        compose.onNodeWithText(label(R.string.nav_library)).performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("Вечерний маршрут").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Вечерний маршрут").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription(label(R.string.menu_more)).fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodesWithContentDescription(label(R.string.menu_more))[0].performClick()
+        compose.onNodeWithText(label(R.string.track_info_title)).performScrollTo().performClick()
+        compose.onNodeWithText(label(R.string.track_info_audio)).performScrollTo().assertIsDisplayed()
+        capture("track-information-large", seedPlayback = false)
+        compose.onNodeWithText("44100 Hz").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("24 bit").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("02 - Test track.flac").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun playerEffectsCanBeDisabledInSettingsAndPersist() {
+        container.appearance.setLanguage("ru")
+        container.appearance.setPlayerEffects(true)
+        compose.activityRule.scenario.recreate()
+        compose.onNode(hasText("В") and hasClickAction()).performClick()
+        compose.onNodeWithText(label(R.string.settings_title)).performClick()
+        compose.onNodeWithContentDescription(label(R.string.settings_search)).performTextInput("эффекты")
+        compose.onNodeWithContentDescription(label(R.string.settings_search)).performImeAction()
+        compose.onNodeWithText(label(R.string.settings_player_effects)).performClick()
+        compose.runOnIdle {
+            assertTrue(!container.appearance.playerEffects.value)
+            assertTrue(!Appearance(context).playerEffects.value)
+        }
+        capture("player-effects-disabled", seedPlayback = false)
+        compose.onNodeWithText(label(R.string.settings_player_effects)).performClick()
+        compose.runOnIdle { assertTrue(container.appearance.playerEffects.value) }
     }
 
     @Test fun darkTheme() = review(dark = true, fontScale = 1f, prefix = "dark")
@@ -381,14 +426,21 @@ class VisualReviewTest {
         val spot = toScreen(Spot(points[0].x, points[0].y), view, minOf(bounds.width, bounds.height))
         canvas.performTouchInput { click(Offset(spot.x, spot.y)) }
         capture("library-map-picked")
-        compose.onNodeWithText(localized.getString(R.string.map_layers_count, MapLayer.entries.size)).performClick()
+        compose.onNodeWithText(localized.getString(R.string.map_layers_count, MapLayer.entries.count { it != MapLayer.Motion })).performClick()
         capture("library-map-layers")
+        MapLayer.entries.forEach { compose.onNodeWithText(label(it.label)).assertIsDisplayed() }
+        compose.onNodeWithText(label(R.string.map_layer_motion)).performClick()
+        compose.runOnIdle {
+            assertTrue(context.getSharedPreferences("map_layers", 0).getStringSet("hidden", emptySet())!!.contains("motion"))
+        }
         compose.onNodeWithText(label(R.string.map_layer_links)).performClick()
         compose.activityRule.scenario.recreate()
         compose.onNodeWithText(label(R.string.nav_library)).performClick()
         compose.onNode(hasText(label(R.string.nav_map)) and hasClickAction()).performScrollTo().performClick()
         container.appearance.setTheme(Appearance.LIGHT)
         capture("library-map-light")
+        repeat(6) { compose.onNodeWithContentDescription(label(R.string.map_zoom_in)).performClick() }
+        capture("library-map-cover-art")
     }
 
     @Test

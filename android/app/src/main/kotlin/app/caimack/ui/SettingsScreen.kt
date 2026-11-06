@@ -334,6 +334,18 @@ fun SettingsScreen() {
                         ) { container.appearance.setLibraryDensity(LibraryDensity.of(it)) }
                     }
 
+                    if (SettingKey.PlayerEffects in visible) {
+                        val enabled by container.appearance.playerEffects.collectAsStateWithLifecycle()
+                        Row(Modifier.fillMaxWidth().clickable { container.appearance.setPlayerEffects(!enabled) },
+                            verticalAlignment = Alignment.CenterVertically) {
+                            SettingLabel(stringResource(R.string.settings_player_effects),
+                                stringResource(R.string.settings_help_player_effects),
+                                style = Type.body.copy(fontWeight = FontWeight.SemiBold),
+                                modifier = Modifier.weight(1f).padding(end = 12.dp))
+                            Toggle(enabled) { container.appearance.setPlayerEffects(it) }
+                        }
+                    }
+
                     if (SettingKey.Cover in visible) {
                         val coverTone by container.appearance.coverTone.collectAsStateWithLifecycle()
                         Row(

@@ -3,7 +3,6 @@
 
 package app.caimack.ui
 
-import android.provider.Settings
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.Canvas
 import androidx.compose.animation.core.animateFloatAsState
@@ -49,7 +48,6 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
@@ -93,6 +91,8 @@ fun Deck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Modifier = Modi
 private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Modifier) {
     val track = state.current ?: return
     val player = LocalContainer.current.player
+    val motion = playerMotionEnabled()
+    val latestMotion by rememberUpdatedState(motion)
     val view = LocalView.current
     val scope = rememberCoroutineScope()
     val latest by rememberUpdatedState(state)
@@ -192,17 +192,17 @@ private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Mo
 
                     scope.launch {
                         if (commit) {
-                            swipe.animateTo(if (toNext) -step else step, tween(220))
+                            if (latestMotion) swipe.animateTo(if (toNext) -step else step, tween(220)) else swipe.snapTo(if (toNext) -step else step)
                             player.skipTo(index)
                             // Keep the incoming sleeve in place until the player acknowledges
                             // the new song. The keyed deck then replaces both art and offset.
                             if (index != latest.index) delay(SKIP_ACK_TIMEOUT_MS)
                             // A failed command (or repeating the same queue item) must not
                             // leave the deck outside its resting position indefinitely.
-                            swipe.animateTo(0f, spring())
+                            if (latestMotion) swipe.animateTo(0f, spring()) else swipe.snapTo(0f)
                             swiping = false
                         } else {
-                            swipe.animateTo(0f, spring())
+                            if (latestMotion) swipe.animateTo(0f, spring()) else swipe.snapTo(0f)
                             swiping = false
                         }
                     }
@@ -247,15 +247,12 @@ private fun BeatGlow(track: Track, playing: Boolean, modifier: Modifier) {
     val palette = LocalPalette.current
     val tone = LocalNowPlayingTone.current
     val light = if (tone.alpha > 0f) tone.copy(alpha = 1f) else palette.primary
-    val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val bpm = track.cues?.bpm
     var pulse by remember(track.id) { mutableFloatStateOf(0f) }
     var phase by remember { mutableFloatStateOf(0f) }
-    val still = remember(context) {
-        Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
-    }
-    val opacity by animateFloatAsState(if (playing && !still) 1f else 0f, tween(500), label = "record-aura")
+    val still = !playerMotionEnabled()
+    val opacity by animateFloatAsState(if (playing && !still) 1f else 0f, tween(if (still) 0 else 500), label = "record-aura")
 
     LaunchedEffect(track.id, playing, bpm, still, lifecycle) {
         if (!playing || still) return@LaunchedEffect

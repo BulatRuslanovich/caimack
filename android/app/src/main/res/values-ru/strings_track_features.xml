@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="track_info_title">О треке</string>
+    <string name="track_info_release">Релиз</string>
+    <string name="track_info_audio">Аудио</string>
+    <string name="track_info_library">Библиотека</string>
+    <string name="track_info_album">Альбом</string>
+    <string name="track_info_genre">Жанр</string>
+    <string name="track_info_year">Год</string>
+    <string name="track_info_number">Номер трека</string>
+    <string name="track_info_disc">Номер диска</string>
+    <string name="track_info_codec">Формат</string>
+    <string name="track_info_bitrate">Битрейт</string>
+    <string name="track_info_sample_rate">Частота дискретизации</string>
+    <string name="track_info_depth">Разрядность</string>
+    <string name="track_info_tempo">Темп</string>
+    <string name="track_info_key">Тональность</string>
+    <string name="track_info_loudness">Громкость</string>
+    <string name="track_info_file">Файл</string>
+    <string name="track_info_added">Добавлено</string>
+    <string name="track_info_lyrics">Текст песни</string>
+    <string name="track_info_lyrics_present">Есть</string>
+    <string name="track_info_lyrics_missing">Нет</string>
+    <string name="map_layer_route">Маршрут воспроизведения</string>
+    <string name="map_layer_covers">Обложки</string>
+    <string name="map_layer_motion">Анимация</string>
+    <string name="settings_player_effects">Анимации и эффекты плеера</string>
+    <string name="settings_help_player_effects">Анимация вращения пластинки, свечение и переходы. Учитывает системные настройки.</string>
+</resources>

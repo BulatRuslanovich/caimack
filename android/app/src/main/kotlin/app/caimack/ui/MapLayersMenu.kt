@@ -40,14 +40,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import app.caimack.R
 
 internal enum class MapLayer(val key: String, @param:StringRes val label: Int) {
+    Route("route", R.string.map_layer_route),
+    Covers("covers", R.string.map_layer_covers),
     Links("links", R.string.map_layer_links),
+    Motion("motion", R.string.map_layer_motion),
 }
 
 @Composable
 internal fun MapLayersMenu(hidden: Set<String>, modifier: Modifier = Modifier, onToggle: (MapLayer) -> Unit) {
     val palette = LocalPalette.current
     var expanded by remember { mutableStateOf(false) }
-    val label = stringResource(R.string.map_layers_count, MapLayer.entries.count { it.key !in hidden })
+    val label = stringResource(R.string.map_layers_count, MapLayer.entries.count { it != MapLayer.Motion && it.key !in hidden })
     val state = stringResource(if (expanded) R.string.map_layers_expanded else R.string.map_layers_collapsed)
 
     Box(modifier) {
@@ -83,6 +86,7 @@ internal fun MapLayersMenu(hidden: Set<String>, modifier: Modifier = Modifier, o
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).semantics { heading() },
             )
             MapLayer.entries.forEach { layer ->
+                if (layer == MapLayer.Motion) androidx.compose.material3.HorizontalDivider(Modifier.padding(vertical = 6.dp), color = palette.border)
                 val checked = layer.key !in hidden
                 Row(
                     Modifier

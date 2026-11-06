@@ -66,6 +66,7 @@ internal fun rememberPosition(state: PlayerState): Long {
 internal fun clock(ms: Long) = durationOf((ms / 1000).toInt())
 @Composable
 fun MiniPlayer(state: PlayerState, onOpen: () -> Unit) {
+    val motion = playerMotionEnabled()
     val palette = LocalPalette.current
     val container = LocalContainer.current
     val player = container.player
@@ -89,9 +90,9 @@ fun MiniPlayer(state: PlayerState, onOpen: () -> Unit) {
             .musicSurface(palette)
             .background(Brush.horizontalGradient(0f to wash, 0.75f to Color.Transparent))
             .clickable(onClick = onOpen)
-            .pointerInput(Unit) {
+            .pointerInput(motion) {
                 var total = Offset.Zero
-                val settle = { scope.launch { swipe.animateTo(0f, tween(200)) } }
+                val settle = { scope.launch { swipe.animateTo(0f, tween(if (motion) 200 else 0)) } }
                 detectDragGestures(
                     onDragStart = { total = Offset.Zero },
                     onDragEnd = {
@@ -123,7 +124,7 @@ fun MiniPlayer(state: PlayerState, onOpen: () -> Unit) {
         ) {
             val transition = LocalNowPlayingTransition.current
             Box(Modifier.size(46.dp).semantics { contentDescription = openLabel }.clickable(onClick = onOpen)) {
-                androidx.compose.animation.AnimatedVisibility(visible = transition?.full != true, enter = fadeIn(tween(NOW_PLAYING_TRANSITION_MS)), exit = fadeOut(tween(NOW_PLAYING_TRANSITION_MS))) {
+                androidx.compose.animation.AnimatedVisibility(visible = transition?.full != true, enter = fadeIn(tween(if (motion) NOW_PLAYING_TRANSITION_MS else 0)), exit = fadeOut(tween(if (motion) NOW_PLAYING_TRANSITION_MS else 0))) {
                     Cover(trackCover(track), track.albumTitle ?: track.title, Modifier.fillMaxSize().nowPlayingCover(this))
                 }
             }
