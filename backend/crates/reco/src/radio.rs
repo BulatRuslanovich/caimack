@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use serde::Serialize;
 
+use crate::calibration;
 use crate::random::{self, Rng};
 use crate::rules::Verdict;
 use crate::session::Session;
@@ -24,6 +25,14 @@ const RECENT_ARTIST_PENALTY: f64 = 0.5;
 
 const WARM_TRACKS: usize = 10;
 const POOL: usize = 150;
+
+/// The legacy path is retained for paired, reproducible evaluation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Ranking {
+    LegacyV3,
+    CalibratedV4,
+}
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Focus {
@@ -47,6 +56,8 @@ pub struct RadioRequest<'a> {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize)]
 pub struct Features {
     pub similarity: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub similarity_rank: Option<f32>,
     pub fit: f32,
     // Kept at zero for the historical impression feature schema.
     pub mood: f32,
@@ -108,6 +119,16 @@ struct Candidate {
 }
 
 pub fn next(snapshot: &Snapshot, listener: &Listener, taste: &Taste, request: &RadioRequest<'_>) -> RadioBatch {
+    next_with_ranking(snapshot, listener, taste, request, Ranking::CalibratedV4)
+}
+
+pub fn next_with_ranking(
+    snapshot: &Snapshot,
+    listener: &Listener,
+    taste: &Taste,
+    request: &RadioRequest<'_>,
+    ranking: Ranking,
+) -> RadioBatch {
     if snapshot.is_empty() {
         return RadioBatch::default();
     }
@@ -163,6 +184,15 @@ pub fn next(snapshot: &Snapshot, listener: &Listener, taste: &Taste, request: &R
     excluded.extend(snapshot.clones(anchor));
 
     let anchor_similarity = snapshot.similarities(snapshot.vector(anchor));
+    let similarity_ranks = (ranking == Ranking::CalibratedV4).then(|| {
+        // Seed copies, blocked songs and rejected tracks are not competitors.
+        let candidates: Vec<f32> = anchor_similarity
+            .iter()
+            .enumerate()
+            .map(|(row, &score)| if excluded.contains(&row) { f32::NAN } else { score })
+            .collect();
+        calibration::relative_scores(&candidates)
+    });
     let mut recent_artists: HashSet<Uuid> = tail.iter().flat_map(|&row| snapshot.meta(row).artists.clone()).collect();
     if moved && let Some(seeded) = request.seed.and_then(|seed| snapshot.row_of(seed)) {
         recent_artists.extend(snapshot.meta(seeded).artists.iter().copied());
@@ -180,6 +210,7 @@ pub fn next(snapshot: &Snapshot, listener: &Listener, taste: &Taste, request: &R
             let meta = snapshot.meta(row);
             let features = Features {
                 similarity: anchor_similarity[row],
+                similarity_rank: similarity_ranks.as_ref().map(|scores| scores[row]),
                 fit: taste.fit.get(row).copied().unwrap_or(0.0),
                 mood: 0.0,
                 #[expect(clippy::cast_possible_truncation, reason = "a score in [0, 1]")]
@@ -190,7 +221,7 @@ pub fn next(snapshot: &Snapshot, listener: &Listener, taste: &Taste, request: &R
                 weight: listener.rules.weight(meta).unwrap_or(0.0) as f32,
                 session: session.affinity(snapshot, row),
             };
-            let mut base = weights.similarity * f64::from(features.similarity)
+            let mut base = weights.similarity * f64::from(features.similarity_rank.unwrap_or(features.similarity))
                 + weights.fit * f64::from(features.fit)
                 + weights.behaviour * f64::from(features.behaviour)
                 + session_weight * f64::from(features.session);
@@ -237,7 +268,10 @@ pub fn next(snapshot: &Snapshot, listener: &Listener, taste: &Taste, request: &R
     // low-ranked song. Distribute discoveries through the sequence.
     let floor = ranked.first().map_or(0.0, |candidate| candidate.base - 0.3);
     let similarity_floor = if request.seed.is_some() && session.skip_streak < 2 && request.focus != Focus::Wider {
-        let nearest = ranked.iter().map(|candidate| candidate.features.similarity).fold(-1.0_f32, f32::max);
+        let nearest = ranked
+            .iter()
+            .map(|candidate| candidate.features.similarity_rank.unwrap_or(candidate.features.similarity))
+            .fold(-1.0_f32, f32::max);
         nearest - if request.focus == Focus::Closer { 0.15 } else { 0.35 }
     } else {
         -1.0
@@ -247,7 +281,7 @@ pub fn next(snapshot: &Snapshot, listener: &Listener, taste: &Taste, request: &R
         .copied()
         .filter(|candidate| {
             candidate.base >= floor
-                && candidate.features.similarity >= similarity_floor
+                && candidate.features.similarity_rank.unwrap_or(candidate.features.similarity) >= similarity_floor
                 && !unheard(listener, snapshot.meta(candidate.row).track_id)
         })
         .take(POOL)
@@ -255,7 +289,12 @@ pub fn next(snapshot: &Snapshot, listener: &Listener, taste: &Taste, request: &R
     let discoveries: Vec<Candidate> = ranked
         .iter()
         .copied()
-        .filter(|candidate| candidate.base >= floor && unheard(listener, snapshot.meta(candidate.row).track_id))
+        .filter(|candidate| {
+            candidate.base >= floor
+                && unheard(listener, snapshot.meta(candidate.row).track_id)
+                && (ranking == Ranking::LegacyV3
+                    || candidate.features.similarity_rank.unwrap_or(candidate.features.similarity) >= similarity_floor)
+        })
         .take(POOL)
         .collect();
     let mut explored = 0;
@@ -434,6 +473,29 @@ mod tests {
                 .collect(),
             rules: Rules::default(),
         }
+    }
+
+    #[test]
+    fn compressed_cosines_do_not_let_transition_metadata_override_seed_evidence() {
+        let mut seed = meta(0, 10, "seed");
+        seed.tempo_bpm = Some(120.0);
+        seed.musical_key = Some(0);
+        let mut near = meta(1, 11, "near");
+        near.tempo_bpm = Some(150.0);
+        near.musical_key = Some(6);
+        let mut farther = meta(2, 12, "farther");
+        farther.tempo_bpm = Some(120.0);
+        farther.musical_key = Some(0);
+        let vector = |cosine: f32| vec![cosine, (1.0 - cosine * cosine).sqrt()];
+        let snapshot = Snapshot::new(2, vec![(seed, vec![1.0, 0.0]), (near, vector(0.95)), (farther, vector(0.94))]);
+        let listener = listener(&[]);
+        let taste = taste(&snapshot, &listener);
+        let request = request(Some(0), &[], 1, Focus::Closer);
+        let before = next_with_ranking(&snapshot, &listener, &taste, &request, Ranking::LegacyV3);
+        let after = next_with_ranking(&snapshot, &listener, &taste, &request, Ranking::CalibratedV4);
+        assert_eq!(before.picks[0].row, 2);
+        assert_eq!(after.picks[0].row, 1);
+        assert!(after.picks[0].features.similarity > 0.94, "retain raw evidence for diagnostics");
     }
 
     #[test]

@@ -58,6 +58,9 @@ jobs:
       - name: Test MERT protocol and benchmark helpers
         run: python3 -m unittest discover -s scripts -p 'test_*mert.py'
 
+      - name: Test recommendation evaluation
+        run: python3 -m unittest discover -s scripts -p 'test_*recommendations.py'
+
       - name: Migrate the database
         run: cargo run --locked -- migrate
 

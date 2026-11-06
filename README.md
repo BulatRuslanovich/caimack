@@ -147,6 +147,8 @@ compatible MERT vectors. Mood radio and mood labels have been removed.
 
 See [optional module deployment and cache reuse](docs/mert.md).
 
+Compare radio ranking on existing vectors with [blind recommendation evaluation](docs/recommendation-evaluation.md).
+
 </details>
 
 <details>

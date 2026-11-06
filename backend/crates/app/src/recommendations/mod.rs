@@ -3,6 +3,7 @@
 
 mod compute;
 pub mod duplicates;
+pub mod evaluation;
 pub mod home;
 pub mod impressions;
 pub mod index;
