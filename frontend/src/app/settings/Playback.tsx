@@ -27,6 +27,8 @@ import { useI18n, useT } from "@/contexts/I18nContext";
 import { usePlayer } from "@/contexts/PlayerContext";
 import type { AudioQuality } from "@/lib/types";
 import { Choice, Panel } from "./Panel";
+import { PlaybackDevices } from "@/components/PlaybackDevices";
+import { useConnect } from "@/lib/playback/useConnectPlayback";
 
 const QUALITIES: { quality: AudioQuality; bitrateKbps: number | null }[] = [
   { quality: "Low", bitrateKbps: 64 },
@@ -37,6 +39,10 @@ const QUALITIES: { quality: AudioQuality; bitrateKbps: number | null }[] = [
 export function Playback() {
   const t = useT();
   const settings = useSettings();
+  const connect = useConnect();
+  const supportsCrossfade =
+    !connect.selectedId ||
+    connect.devices.find((device) => device.id === connect.selectedId)?.kind !== "android";
   const {
     crossfade,
     setCrossfade,
@@ -48,6 +54,7 @@ export function Playback() {
 
   return (
     <Panel title={t("settings.playback")}>
+      <PlaybackDevices />
       <Choice
         legend={
           <SettingHelp hint={t("settings.help.quality")}>{t("settings.quality")}</SettingHelp>
@@ -63,17 +70,21 @@ export function Playback() {
         }))}
       />
 
-      <Choice
-        legend={
-          <SettingHelp hint={t("settings.help.crossfade")}>{t("settings.crossfade")}</SettingHelp>
-        }
-        value={String(crossfade)}
-        onChange={(seconds) => setCrossfade(Number(seconds))}
-        options={CROSSFADE_CHOICES.map((seconds) => ({
-          value: String(seconds),
-          label: seconds ? t("settings.crossfadeSeconds", { seconds }) : t("settings.crossfadeOff"),
-        }))}
-      />
+      {supportsCrossfade && (
+        <Choice
+          legend={
+            <SettingHelp hint={t("settings.help.crossfade")}>{t("settings.crossfade")}</SettingHelp>
+          }
+          value={String(crossfade)}
+          onChange={(seconds) => setCrossfade(Number(seconds))}
+          options={CROSSFADE_CHOICES.map((seconds) => ({
+            value: String(seconds),
+            label: seconds
+              ? t("settings.crossfadeSeconds", { seconds })
+              : t("settings.crossfadeOff"),
+          }))}
+        />
+      )}
 
       <label className="flex cursor-pointer items-start gap-3">
         <Switch

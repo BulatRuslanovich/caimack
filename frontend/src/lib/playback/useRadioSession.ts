@@ -42,7 +42,7 @@ interface RadioSession {
   session: RadioSessionState | null;
   radio: RadioState;
 
-  start: (seedTrack?: Track | null) => Promise<Track[] | null>;
+  start: (seedTrack?: Track | null, signal?: AbortSignal) => Promise<Track[] | null>;
 
   stop: () => void;
   setFocus: (focus: RadioFocus) => void;
@@ -164,19 +164,22 @@ export function useRadioSession({
   const radioFrom = useCallback(() => radioFromRef.current, []);
 
   const start = useCallback(
-    async (seedTrack: Track | null = null) => {
+    async (seedTrack: Track | null = null, signal?: AbortSignal) => {
       if (!recommendations) return null;
       const generation = ++generationRef.current;
       radioRef.current = { inFlight: false, seed: null };
       setStarting(true);
 
       try {
-        const batch = await api.radio({
-          seedTrackId: seedTrack?.id ?? null,
-          exclude: [],
-          limit: RADIO_INITIAL_BATCH - (seedTrack ? 1 : 0),
-        });
-        if (generation !== generationRef.current) return null;
+        const batch = await api.radio(
+          {
+            seedTrackId: seedTrack?.id ?? null,
+            exclude: [],
+            limit: RADIO_INITIAL_BATCH - (seedTrack ? 1 : 0),
+          },
+          signal,
+        );
+        if (generation !== generationRef.current || signal?.aborted) return null;
 
         if (batch.tracks.length === 0 && !seedTrack) {
           notify(t("radio.empty"), "info");
@@ -190,7 +193,8 @@ export function useRadioSession({
         });
         return [...(seedTrack ? [seedTrack] : []), ...batch.tracks.map((item) => item.track)];
       } catch (error) {
-        if (generation === generationRef.current) notifyError(error, t("radio.failed"));
+        if (generation === generationRef.current && !signal?.aborted)
+          notifyError(error, t("radio.failed"));
         return null;
       } finally {
         setStarting(false);

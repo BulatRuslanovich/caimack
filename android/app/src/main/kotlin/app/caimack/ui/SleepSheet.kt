@@ -28,8 +28,9 @@ import kotlinx.coroutines.delay
 @Composable
 fun SleepSheet(onDismiss: () -> Unit) {
     val palette = LocalPalette.current
-    val timer = LocalContainer.current.sleepTimer
-    val state by timer.state.collectAsState()
+    val container = LocalContainer.current
+    val timer = container.sleepTimer
+    val state = displayedSleepTimer()
     val remaining by rememberSleepRemaining(state)
 
     val title = when {
@@ -50,7 +51,7 @@ fun SleepSheet(onDismiss: () -> Unit) {
             SleepTimer.MINUTES.forEach { minutes ->
                 val chosen = (state as? SleepTimerState.Minutes)?.minutes == minutes
                 SheetRow(stringResource(R.string.sleep_minutes, minutes), if (chosen) Lucide.Check else Lucide.Moon) {
-                    timer.set(minutes)
+                    if (!container.connect.route(app.caimack.api.ConnectCommand.SetSleepTimer(minutes, false))) timer.set(minutes)
                     onDismiss()
                 }
             }
@@ -58,14 +59,14 @@ fun SleepSheet(onDismiss: () -> Unit) {
                 stringResource(R.string.sleep_track_end),
                 if (state is SleepTimerState.TrackEnd) Lucide.Check else Lucide.Moon,
             ) {
-                timer.untilTrackEnd()
+                if (!container.connect.route(app.caimack.api.ConnectCommand.SetSleepTimer(null, true))) timer.untilTrackEnd()
                 onDismiss()
             }
 
             if (state != null) {
                 HorizontalDivider(Modifier.padding(vertical = 8.dp), color = palette.border)
                 SheetRow(stringResource(R.string.sleep_off), Lucide.X) {
-                    timer.cancel()
+                    if (!container.connect.route(app.caimack.api.ConnectCommand.SetSleepTimer(null, false))) timer.cancel()
                     onDismiss()
                 }
             }

@@ -56,6 +56,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
@@ -96,10 +98,10 @@ fun FullPlayer(state: PlayerState, onClose: () -> Unit) {
     var panel by rememberSaveable { mutableStateOf(Panel.None) }
     var actions by remember { mutableStateOf(false) }
     var sleeping by remember { mutableStateOf(false) }
-    val sleepTimer by container.sleepTimer.state.collectAsState()
+    val sleepTimer = displayedSleepTimer()
     container.favorites.state.collectAsState().value
     val liked = container.favorites.isFavorite(track)
-    val note = container.radio.state.collectAsState().value.notes[track.id]
+    val note = displayedRadio().notes[track.id]
     val peaks by produceState<List<Int>?>(null, track.id) {
         value = runCatching { container.api.waveform(track.id).body()?.peaks }.getOrNull()?.takeIf { it.isNotEmpty() }
     }
@@ -137,7 +139,7 @@ fun FullPlayer(state: PlayerState, onClose: () -> Unit) {
             val header = @Composable {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconAction(Lucide.ChevronDown, stringResource(R.string.player_close_full), onClick = onClose)
-                    Text(stringResource(R.string.player_now_playing), style = Type.small, color = palette.muted, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+                    PlaybackDevicesButton(Modifier.weight(1f))
                     IconAction(Lucide.Moon, stringResource(R.string.sleep_title), tint = if (sleepTimer != null) palette.primary else palette.foreground) {
                         sleeping = true
                     }
@@ -222,6 +224,11 @@ fun FullPlayer(state: PlayerState, onClose: () -> Unit) {
                             tint = if (state.repeat == Player.REPEAT_MODE_OFF) palette.muted else palette.primary,
                         ) { player.cycleRepeat() }
                     }
+                    var volume by remember(state.volume) { mutableStateOf(state.volume) }
+                    val volumeLabel = stringResource(R.string.connect_volume)
+                    androidx.compose.material3.Slider(value = volume, onValueChange = { volume = it },
+                        onValueChangeFinished = { player.setVolume(volume) },
+                        modifier = Modifier.semantics { contentDescription = volumeLabel })
                 }
             }
 

@@ -13,6 +13,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
+    "test:connect": "node scripts/connect-e2e.mjs",
     "test:watch": "vitest"
   },
   "dependencies": {

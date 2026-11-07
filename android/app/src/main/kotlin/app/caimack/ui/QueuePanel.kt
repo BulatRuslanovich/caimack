@@ -67,8 +67,13 @@ fun QueuePanel(state: PlayerState, onUndoable: (String, QueueSnapshot) -> Unit) 
     val palette = LocalPalette.current
     val container = LocalContainer.current
     val player = container.player
-    val radio by container.radio.state.collectAsState()
-    val autoplay by container.radio.autoplay.collectAsState()
+    val radio = displayedRadio()
+    val connect by container.connect.state.collectAsState()
+    val localAutoplay by container.radio.autoplay.collectAsState()
+    val autoplay = if (connect.selectedId != null) connect.playback?.autoplay ?: localAutoplay else localAutoplay
+    val setAutoplay: (Boolean) -> Unit = { enabled ->
+        if (!container.connect.route(app.caimack.api.ConnectCommand.SetAutoplay(enabled))) container.radio.setAutoplay(enabled)
+    }
     if (state.queue.isEmpty()) return Empty(stringResource(R.string.queue_empty))
 
     var showHistory by rememberSaveable { mutableStateOf(false) }
@@ -126,11 +131,11 @@ fun QueuePanel(state: PlayerState, onUndoable: (String, QueueSnapshot) -> Unit) 
             }
         }
         if (recommendationsEnabled()) Row(
-            Modifier.fillMaxWidth().clip(Radius.row).clickable { container.radio.setAutoplay(!autoplay) }.padding(vertical = 6.dp),
+            Modifier.fillMaxWidth().clip(Radius.row).clickable { setAutoplay(!autoplay) }.padding(vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(stringResource(R.string.queue_autoplay), style = Type.small, color = palette.muted, modifier = Modifier.weight(1f))
-            Toggle(autoplay) { container.radio.setAutoplay(it) }
+            Toggle(autoplay) { setAutoplay(it) }
         }
 
         LazyColumn(Modifier.fillMaxSize().fadeEdges(), state = list) {

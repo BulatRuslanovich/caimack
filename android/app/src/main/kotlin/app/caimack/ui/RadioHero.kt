@@ -49,7 +49,7 @@ internal fun RadioHero(candidates: List<Track>) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val playback by container.player.state.collectAsStateWithLifecycle()
-    val radio by container.radio.state.collectAsStateWithLifecycle()
+    val radio = displayedRadio()
     val active = radio.active && playback.current != null && radio.seedTrackId == null
     val playing = active && playback.playing
     var starting by remember { mutableStateOf(false) }

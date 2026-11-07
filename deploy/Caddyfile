@@ -8,7 +8,8 @@
 }
 
 (app) {
-	handle /api/playback/session {
+	@playback_events path /api/playback/session /api/playback/connect/events
+	handle @playback_events {
 		reverse_proxy backend:8080 {
 			flush_interval -1
 

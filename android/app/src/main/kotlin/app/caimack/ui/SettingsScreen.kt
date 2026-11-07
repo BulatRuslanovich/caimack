@@ -94,7 +94,15 @@ fun SettingsScreen(category: SettingsCategory? = null) {
     val settings by container.settings.collectAsStateWithLifecycle()
     val theme by container.appearance.theme.collectAsStateWithLifecycle()
     val equalizer by container.equalizer.state.collectAsStateWithLifecycle()
-    val smartTransitions by container.playbackPrefs.smartTransitions.collectAsStateWithLifecycle()
+    val connect by container.connect.state.collectAsStateWithLifecycle()
+    val localSmartTransitions by container.playbackPrefs.smartTransitions.collectAsStateWithLifecycle()
+    val smartTransitions = if (connect.selectedId != null) connect.playback?.smartTransitions ?: localSmartTransitions else localSmartTransitions
+    val setSmartTransitions: (Boolean) -> Unit = { enabled ->
+        if (!container.connect.route(app.caimack.api.ConnectCommand.SetSmartTransitions(enabled))) container.playbackPrefs.setSmartTransitions(enabled)
+    }
+    val setNormalizeVolume: (Boolean) -> Unit = { enabled ->
+        if (!container.connect.route(app.caimack.api.ConnectCommand.SetNormalizeVolume(enabled))) container.playbackPrefs.setNormalizeVolume(enabled)
+    }
     val activity = LocalActivity.current
     val scope = rememberCoroutineScope()
     var query by rememberSaveable { mutableStateOf("") }
@@ -160,6 +168,7 @@ fun SettingsScreen(category: SettingsCategory? = null) {
             else if (visible.isEmpty()) Empty(stringResource(R.string.settings_search_empty))
             if (visible.any { it.section == R.string.settings_playback }) {
                 Panel(stringResource(R.string.settings_playback)) {
+                    PlaybackDevicesButton()
                     if (SettingKey.Quality in visible) {
                         Choice(
                             stringResource(R.string.settings_quality),
@@ -175,7 +184,7 @@ fun SettingsScreen(category: SettingsCategory? = null) {
 
                     if (SettingKey.Transitions in visible) {
                         Row(
-                            Modifier.fillMaxWidth().clickable { container.playbackPrefs.setSmartTransitions(!smartTransitions) },
+                            Modifier.fillMaxWidth().clickable { setSmartTransitions(!smartTransitions) },
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             SettingLabel(
@@ -184,14 +193,15 @@ fun SettingsScreen(category: SettingsCategory? = null) {
                                 style = Type.body.copy(fontWeight = FontWeight.SemiBold),
                                 modifier = Modifier.weight(1f).padding(end = 12.dp),
                             )
-                            Toggle(smartTransitions) { container.playbackPrefs.setSmartTransitions(it) }
+                            Toggle(smartTransitions) { setSmartTransitions(it) }
                         }
                     }
 
                     if (SettingKey.Loudness in visible) {
-                        val normalizeVolume by container.playbackPrefs.normalizeVolume.collectAsStateWithLifecycle()
+                        val localNormalizeVolume by container.playbackPrefs.normalizeVolume.collectAsStateWithLifecycle()
+                        val normalizeVolume = if (connect.selectedId != null) connect.playback?.normalizeVolume ?: localNormalizeVolume else localNormalizeVolume
                         Row(
-                            Modifier.fillMaxWidth().clickable { container.playbackPrefs.setNormalizeVolume(!normalizeVolume) },
+                            Modifier.fillMaxWidth().clickable { setNormalizeVolume(!normalizeVolume) },
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             SettingLabel(
@@ -200,7 +210,7 @@ fun SettingsScreen(category: SettingsCategory? = null) {
                                 style = Type.body.copy(fontWeight = FontWeight.SemiBold),
                                 modifier = Modifier.weight(1f).padding(end = 12.dp),
                             )
-                            Toggle(normalizeVolume) { container.playbackPrefs.setNormalizeVolume(it) }
+                            Toggle(normalizeVolume) { setNormalizeVolume(it) }
                         }
                     }
 

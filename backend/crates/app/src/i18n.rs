@@ -65,6 +65,25 @@ pub fn format_template(template: &str, args: &[String]) -> String {
 
 fn russian(template: &str) -> Option<&'static str> {
     Some(match template {
+        "Invalid playback state." => "Не удалось обновить состояние воспроизведения.",
+        "Invalid playback command." => "Недопустимая команда воспроизведения.",
+        "Invalid deviceId." => "Недопустимый идентификатор устройства.",
+        "Too many connected playback devices." => "Подключено слишком много устройств воспроизведения.",
+        "Playback device disconnected." => "Устройство воспроизведения отключилось.",
+        "Playback device is offline." => "Устройство воспроизведения не в сети.",
+        "Playback device is not responding." => {
+            "Устройство воспроизведения не отвечает. Проверьте соединение или выберите другое устройство."
+        }
+        "Playback device could not apply the command." => {
+            "Не удалось выполнить действие на устройстве воспроизведения."
+        }
+        "The playback queue changed. Try again." => "Очередь воспроизведения изменилась. Повторите действие.",
+        "Playback command expired." => "Истекло время ожидания команды воспроизведения.",
+        "Playback command is no longer available." => "Команда воспроизведения больше недоступна.",
+        "Command ID was already used." => "Эта команда воспроизведения уже отправлялась.",
+        "Too many playback commands." => {
+            "Слишком много команд воспроизведения. Дождитесь выполнения предыдущих действий."
+        }
         "The requested resource was not found." => "Не найдено.",
         "Invalid credentials." => "Нужно войти заново.",
         "Access denied." => "Нет доступа.",

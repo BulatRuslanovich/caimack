@@ -27,6 +27,7 @@ import app.caimack.playback.EqualizerSettings
 import app.caimack.playback.Favorites
 import app.caimack.playback.PlaybackPrefs
 import app.caimack.playback.PlayerConnection
+import app.caimack.playback.ConnectPlayback
 import app.caimack.playback.RadioSession
 import app.caimack.playback.Signals
 import app.caimack.playback.SleepTimer
@@ -127,6 +128,12 @@ class AppContainer(context: Context) {
     val downloads by lazy { Downloads(context.applicationContext, http, server, json) }
 
     val player = PlayerConnection(context.applicationContext, media, tracks, radio, signals)
+    val connect by lazy { ConnectPlayback(context.applicationContext, this) }
+
+    init {
+        player.remoteRoute = { command -> connect.route(command) }
+        player.remoteSelected = { connect.isRemote }
+    }
 
     val queue = AtomicFile(File(context.filesDir, "queue.json"))
 

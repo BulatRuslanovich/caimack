@@ -52,6 +52,7 @@ dependencies = [
  "futures-util",
  "ipnet",
  "media",
+ "reqwest",
  "serde",
  "serde_json",
  "sqlx",

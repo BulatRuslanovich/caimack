@@ -1,0 +1,11 @@
+<resources>
+    <string name="connect_title">Устройства воспроизведения</string>
+    <string name="connect_this_device">Это устройство</string>
+    <string name="connect_description">Выберите, где звучит музыка. Управляйте ей в этом плеере.</string>
+    <string name="connect_playing_on">Играет на %1$s</string>
+    <string name="connect_unavailable">%1$s недоступно</string>
+    <string name="connect_reconnecting">Восстанавливаем соединение…</string>
+    <string name="connect_find_devices">Откройте Caimack на другом устройстве и войдите в тот же аккаунт. Оно появится здесь.</string>
+    <string name="connect_failed">Не удалось управлять устройством воспроизведения. Проверьте соединение или выберите другое устройство.</string>
+    <string name="connect_volume">Громкость воспроизведения</string>
+</resources>

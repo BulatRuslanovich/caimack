@@ -88,6 +88,10 @@ The home screen above brings together personal radio, a daily mix and new additi
 The web app is a PWA with its own mobile layout. There is also a native Android client with
 background playback, offline downloads and Android Auto.
 
+The normal player can also control another signed-in web or Android device.
+Choose an output from the player's device button; playback controls, the queue
+and progress follow that device. See [playback devices](docs/playback-connect.md).
+
 <p align="center">
   <img src="docs/screenshots/mobile-oled.webp" alt="Mobile web player in OLED Black with album artwork, waveform and playback controls" width="320">
 </p>

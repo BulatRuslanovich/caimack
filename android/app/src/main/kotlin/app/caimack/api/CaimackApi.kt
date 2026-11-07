@@ -16,6 +16,18 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface CaimackApi {
+    @POST("api/playback/connect/heartbeat")
+    suspend fun connectHeartbeat(@Body heartbeat: ConnectHeartbeat)
+
+    @PUT("api/playback/connect/state")
+    suspend fun connectReport(@Body report: ConnectReport): ConnectSnapshot
+
+    @POST("api/playback/connect/commands")
+    suspend fun connectCommand(@Body request: ConnectRequest): ConnectSnapshot
+
+    @POST("api/playback/connect/commands/{id}/ack")
+    suspend fun connectAck(@Path("id") id: String, @Body ack: ConnectAck)
+
     @GET("api/config")
     suspend fun capabilities(): ServerCapabilities
 

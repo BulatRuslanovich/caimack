@@ -1,0 +1,11 @@
+<resources>
+    <string name="connect_title">Playback devices</string>
+    <string name="connect_this_device">This device</string>
+    <string name="connect_description">Choose where the music plays. Use this player to control it.</string>
+    <string name="connect_playing_on">Playing on %1$s</string>
+    <string name="connect_unavailable">%1$s is unavailable</string>
+    <string name="connect_reconnecting">Reconnecting…</string>
+    <string name="connect_find_devices">Open Caimack on another device and sign in to the same account. It will appear here.</string>
+    <string name="connect_failed">Could not control the playback device. Check its connection or choose another device.</string>
+    <string name="connect_volume">Playback volume</string>
+</resources>

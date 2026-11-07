@@ -3,6 +3,8 @@
 
 "use client";
 
+import { PlaybackDevices } from "./PlaybackDevices";
+
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -212,6 +214,7 @@ export function FullScreenPlayer({
               </span>
 
               <div className="flex items-center gap-1 justify-self-end">
+                <PlaybackDevices compact />
                 <StreamQuality track={track} className="mr-1 max-sm:hidden" />
 
                 <SleepTimerButton size="icon-lg" />

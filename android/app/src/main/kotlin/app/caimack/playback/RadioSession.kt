@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicLong
 
 data class RadioNote(val reason: RecommendationReason, val explore: Boolean)
 
-data class RadioState(val seedTrackId: String? = null, val notes: Map<String, RadioNote> = emptyMap(), val generation: Long = 0, val active: Boolean = false)
+data class RadioState(val seedTrackId: String? = null, val notes: Map<String, RadioNote> = emptyMap(), val generation: Long = 0, val active: Boolean = false, val focus: String? = null)
 
 class RadioSession(context: Context) {
     private val preferences = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)

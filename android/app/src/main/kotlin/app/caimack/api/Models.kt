@@ -219,7 +219,7 @@ data class SignalBatch(val events: List<PlaybackSignal>)
 data class HistoryEntryRequest(val trackId: String, val playbackPosition: Int, val listenedSeconds: Int)
 
 @Serializable
-data class RadioRequest(val seedTrackId: String?, val exclude: List<String>, val sessionId: String? = null)
+data class RadioRequest(val seedTrackId: String?, val exclude: List<String>, val sessionId: String? = null, val focus: String? = null)
 
 @Serializable
 data class AddTracksRequest(val trackIds: List<String>)

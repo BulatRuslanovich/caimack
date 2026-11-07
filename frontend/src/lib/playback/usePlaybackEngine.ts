@@ -315,7 +315,8 @@ export function usePlaybackEngine({
       tracker.discard();
       crossfader.finish();
       dropStandby();
-      audio.pause();
+      silence(audio, adaptiveRef.current);
+      adaptiveRef.current = null;
       return;
     }
 

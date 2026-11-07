@@ -4,6 +4,21 @@
 import type { Dictionary } from "./en";
 
 export const ru: Dictionary = {
+  "connect.title": "Устройства воспроизведения",
+  "connect.description": "Выберите, где звучит музыка. Управляйте ей в этом плеере.",
+  "connect.thisDevice": "Это устройство",
+  "connect.playingOn": "Играет на {device}",
+  "connect.unavailable": "{device} недоступно",
+  "connect.offline":
+    "Устройство воспроизведения не в сети. Откройте на нём Caimack или выберите другое.",
+  "connect.changed": "Устройство воспроизведения изменилось. Повторите действие.",
+  "connect.selected": "Выбрано",
+  "connect.transferHere": "Продолжить слушать здесь",
+  "connect.listenHere": "Слушать на этом устройстве",
+  "connect.transferring": "Подключаемся к устройству…",
+  "connect.reconnecting": "Восстанавливаем соединение…",
+  "connect.findDevices":
+    "Откройте Caimack на другом устройстве и войдите в тот же аккаунт. Оно появится здесь.",
   "nav.home": "Главная",
   "nav.library": "Ваша библиотека",
   "nav.main": "Основное",

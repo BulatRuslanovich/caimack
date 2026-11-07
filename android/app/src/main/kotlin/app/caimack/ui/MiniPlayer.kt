@@ -70,6 +70,7 @@ fun MiniPlayer(state: PlayerState, onOpen: () -> Unit) {
     val palette = LocalPalette.current
     val container = LocalContainer.current
     val player = container.player
+    val connect by container.connect.state.collectAsStateWithLifecycle()
     val track = state.current ?: return
     val openLabel = stringResource(R.string.player_open_full)
     val position = rememberPosition(state)
@@ -129,8 +130,13 @@ fun MiniPlayer(state: PlayerState, onOpen: () -> Unit) {
             Column(Modifier.weight(1f)) {
                 Text(track.title, style = Type.body.copy(fontWeight = FontWeight.Medium), color = palette.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(artistsOf(track), style = Type.small, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (connect.selectedId != null) Text(
+                    stringResource(if (connect.available) R.string.connect_playing_on else R.string.connect_unavailable,
+                        connect.selectedName ?: stringResource(R.string.connect_title)),
+                    style = Type.tiny, color = palette.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
+                PlaybackDevicesButton(compact = true)
                 Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                     Box(Modifier.size(40.dp).clip(CircleShape).background(palette.action))
                     IconAction(if (state.playing) Lucide.Pause else Lucide.Play,

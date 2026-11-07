@@ -19,7 +19,6 @@ import { NowPlayingTone } from "./NowPlayingTone";
 import { Player } from "./Player";
 import { QueuePanel } from "./QueuePanel";
 import { YandexImports } from "./yandex/YandexImports";
-import { PlayingElsewhereBar } from "./PlayingElsewhereBar";
 import { ShortcutsHelp } from "./ShortcutsHelp";
 import { Sidebar } from "./Sidebar";
 import { SecretCat } from "./SecretCat";
@@ -102,7 +101,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       {queueOpen && <QueuePanel docked={queueDocked} onClose={() => setQueueOpen(false)} />}
 
       <div className="flex flex-col [grid-area:player]">
-        <PlayingElsewhereBar />
         <Player />
       </div>
       <MobileNav />

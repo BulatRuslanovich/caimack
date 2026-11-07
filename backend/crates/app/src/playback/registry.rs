@@ -60,7 +60,10 @@ struct Inner {
 }
 
 #[derive(Default, Clone)]
-pub struct PlaybackRegistry(Arc<Mutex<Inner>>);
+pub struct PlaybackRegistry {
+    inner: Arc<Mutex<Inner>>,
+    pub connect: super::connect::ConnectRegistry,
+}
 
 impl PlaybackRegistry {
     pub fn claim(&self, user: Uuid, device_id: &str, device_name: &str) -> Arc<Holder> {
@@ -71,7 +74,7 @@ impl PlaybackRegistry {
             displaced_by: Mutex::new(None),
         });
 
-        let previous = self.0.lock().ok().and_then(|mut inner| inner.holders.insert(user, Arc::clone(&holder)));
+        let previous = self.inner.lock().ok().and_then(|mut inner| inner.holders.insert(user, Arc::clone(&holder)));
         if let Some(previous) = previous
             && previous.device_id != device_id
         {
@@ -81,7 +84,7 @@ impl PlaybackRegistry {
     }
 
     pub fn release(&self, user: Uuid, holder: &Arc<Holder>) {
-        if let Ok(mut inner) = self.0.lock()
+        if let Ok(mut inner) = self.inner.lock()
             && inner.holders.get(&user).is_some_and(|current| Arc::ptr_eq(current, holder))
         {
             inner.holders.remove(&user);
@@ -89,7 +92,7 @@ impl PlaybackRegistry {
     }
 
     pub fn report(&self, user: Uuid, state: PlaybackState) -> bool {
-        let Ok(mut inner) = self.0.lock() else { return false };
+        let Ok(mut inner) = self.inner.lock() else { return false };
         let accepted = match inner.holders.get(&user) {
             Some(holder) => holder.device_id == state.device_id,
             None => {
@@ -105,7 +108,7 @@ impl PlaybackRegistry {
 
     pub fn elsewhere(&self, user: Uuid, device_id: &str) -> Option<PlaybackState> {
         let (state, live) = {
-            let inner = self.0.lock().ok()?;
+            let inner = self.inner.lock().ok()?;
             let state = inner.states.get(&user).filter(|state| state.device_id != device_id)?.clone();
             let live = inner.holders.get(&user).is_some_and(|holder| holder.device_id == state.device_id);
             (state, live)

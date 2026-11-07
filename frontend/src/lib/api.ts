@@ -53,6 +53,7 @@ import type {
   YandexSearch,
 } from "@/lib/types";
 import { yandexMusicToken } from "@/lib/yandexMusic";
+import type { ConnectCommand, ConnectPlayback, ConnectSnapshot } from "@/lib/playback/connect";
 
 const SECTION_SIZE = 12;
 const EVENTS_FLUSH_WAIT_MS = 1500;
@@ -87,6 +88,35 @@ async function withoutImage(
 }
 
 export const api = {
+  connectHeartbeat: (deviceId: string, connectionId: string) =>
+    request<void>("/playback/connect/heartbeat", {
+      method: "POST",
+      body: { deviceId, connectionId },
+      signal: AbortSignal.timeout(5000),
+    }),
+  connectReport: (
+    deviceId: string,
+    connectionId: string,
+    state: Omit<ConnectPlayback, "deviceId" | "queueRevision" | "reportedAt">,
+    signal?: AbortSignal,
+  ) =>
+    request<ConnectSnapshot>("/playback/connect/state", {
+      method: "PUT",
+      body: { deviceId, connectionId, state },
+      signal: signal ?? AbortSignal.timeout(8000),
+    }),
+  connectCommand: (id: string, deviceId: string, command: ConnectCommand, queueRevision?: number) =>
+    request<ConnectSnapshot>("/playback/connect/commands", {
+      method: "POST",
+      body: { id, deviceId, command, queueRevision },
+      signal: AbortSignal.timeout(12000),
+    }),
+  connectAck: (id: string, deviceId: string, connectionId: string, error: string | null) =>
+    request<void>(`/playback/connect/commands/${id}/ack`, {
+      method: "POST",
+      body: { deviceId, connectionId, error },
+      signal: AbortSignal.timeout(4000),
+    }),
   login: (username: string, password: string, deviceName?: string) =>
     request<User>("/auth/login", {
       method: "POST",
@@ -118,8 +148,8 @@ export const api = {
     request<void>("/library/duplicates/dismiss", { method: "POST", body: { trackIds } }),
   mergeDuplicates: (keepId: string, removeIds: string[]) =>
     request<void>("/library/duplicates/merge", { method: "POST", body: { keepId, removeIds } }),
-  lookupTracks: (ids: string[]) =>
-    request<Track[]>("/tracks/lookup", { method: "POST", body: { ids } }),
+  lookupTracks: (ids: string[], signal?: AbortSignal) =>
+    request<Track[]>("/tracks/lookup", { method: "POST", body: { ids }, signal }),
 
   tracks: (
     params: PageParams & TrackFilter & { sort?: TrackSort; q?: string },
@@ -235,16 +265,20 @@ export const api = {
     request<PlayingElsewhere | undefined>(`/playback/now${qs({ deviceId })}`, { signal }),
   handoff: (deviceId: string) =>
     request<PlaybackHandoff>("/playback/handoff", { method: "POST", body: { deviceId } }),
-  radio: async (body: {
-    seedTrackId: string | null;
-    exclude: string[];
-    limit?: number;
-    focus?: RadioFocus | null;
-  }) => {
+  radio: async (
+    body: {
+      seedTrackId: string | null;
+      exclude: string[];
+      limit?: number;
+      focus?: RadioFocus | null;
+    },
+    signal?: AbortSignal,
+  ) => {
     await flushEvents(EVENTS_FLUSH_WAIT_MS);
     return request<RadioBatch>("/recommendations/radio", {
       method: "POST",
       body: { ...body, sessionId: deviceId() },
+      signal,
     });
   },
   recommendationStats: (days: number) =>

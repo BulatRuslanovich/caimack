@@ -4,6 +4,7 @@
 mod account;
 mod auth;
 mod catalog;
+mod connect;
 mod integrations;
 mod library;
 mod media;
@@ -35,6 +36,7 @@ pub fn router(state: AppState) -> Router {
         .merge(library::router())
         .merge(media::router())
         .merge(playback::router())
+        .merge(connect::router())
         .merge(recommendations::router(state.config.recommendations_enabled))
         .route_layer(from_fn_with_state(state.clone(), crate::auth::require_user));
 

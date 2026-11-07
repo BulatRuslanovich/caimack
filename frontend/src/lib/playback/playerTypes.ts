@@ -28,6 +28,7 @@ export interface QueueSnapshot {
 
 export interface PlayerState {
   queue: Track[];
+  queueOrder: number[];
   currentTrack: Track | null;
   nextTrack: Track | null;
   currentIndex: number;
@@ -85,7 +86,7 @@ export interface PlayerActions {
   patchTrack: (trackId: string, changes: Partial<Track>) => void;
   snapshotQueue: () => QueueSnapshot;
   restoreQueue: (snapshot: QueueSnapshot) => void;
-  startRadio: (seedTrack?: Track | null) => Promise<boolean>;
+  startRadio: (seedTrack?: Track | null, signal?: AbortSignal) => Promise<boolean>;
   setRadioFocus: (focus: RadioFocus) => void;
   continueHere: () => Promise<boolean>;
 }

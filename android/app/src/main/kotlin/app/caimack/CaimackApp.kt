@@ -18,6 +18,7 @@ class CaimackApp : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         container.scope.launch { container.session.restore() }
+        container.connect.start()
         Background.schedule(this)
     }
 

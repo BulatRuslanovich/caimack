@@ -31,7 +31,7 @@ import { useRadioSession } from "@/lib/playback/useRadioSession";
 import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
 import { useExclusivePlayback } from "@/lib/playback/useExclusivePlayback";
 import { useMediaSession } from "@/lib/playback/useMediaSession";
-import { usePlaybackReport } from "@/lib/playback/usePlaybackReport";
+import { ConnectContext, useConnectPlayback } from "@/lib/playback/useConnectPlayback";
 import { readPersistedPlayer, usePersistedPlayer } from "@/lib/playback/usePlayerStorage";
 import { useQueueEditing } from "@/lib/playback/useQueueEditing";
 import { useSleepTimer } from "@/lib/playback/useSleepTimer";
@@ -81,6 +81,7 @@ function PlayerSessionProvider({
   const [normalizeVolume, setNormalizeVolume] = useState(false);
   const [autoplay, setAutoplay] = useState(true);
   const [restored, setRestored] = useState(false);
+  const [localOutput, setLocalOutput] = useState(true);
 
   const orderRef = useRef<number[]>([]);
   const queueRef = useRef<Track[]>([]);
@@ -122,7 +123,7 @@ function PlayerSessionProvider({
     queue,
     currentIndex,
     repeat,
-    autoplay,
+    autoplay: autoplay && localOutput,
     queueRef,
     orderRef,
     applyQueue,
@@ -149,13 +150,13 @@ function PlayerSessionProvider({
     resetProgress,
     resumeAt,
   } = usePlaybackEngine({
-    currentTrack,
-    nextTrack: stopsAtTrackEnd ? null : nextTrack,
+    currentTrack: localOutput ? currentTrack : null,
+    nextTrack: stopsAtTrackEnd || !localOutput ? null : nextTrack,
     crossfade,
     smartTransitions,
     normalizeVolume,
     repeat,
-    isPlaying,
+    isPlaying: isPlaying && localOutput,
     setIsPlaying,
     volume: volume * sleep.gain,
     muted,
@@ -311,8 +312,8 @@ function PlayerSessionProvider({
   }, [advance, chooseSleepTimer, currentIndex, repeat, resetProgress, seek, stopsAtTrackEnd]);
 
   const startRadio = useCallback(
-    async (seedTrack?: Track | null) => {
-      const tracks = await startRadioSession(seedTrack);
+    async (seedTrack?: Track | null, signal?: AbortSignal) => {
+      const tracks = await startRadioSession(seedTrack, signal);
       if (tracks) {
         tagSource(
           tracks.filter((track) => track.id !== seedTrack?.id).map((track) => track.id),
@@ -444,18 +445,8 @@ function PlayerSessionProvider({
     [resetProgress],
   );
 
-  useMediaSession(currentTrack, isPlaying, duration, {
-    play,
-    pause,
-    next,
-    previous,
-    seek,
-    seekBy,
-    getPosition,
-  });
-
   const takeOver = useCallback(
-    (handoff: PlaybackHandoff) => {
+    (handoff: PlaybackHandoff, playing = true) => {
       const { tracks, index, positionSeconds } = handoff;
       const target = tracks[index];
       if (!target) return;
@@ -474,7 +465,7 @@ function PlayerSessionProvider({
       if (sameTrack) seek(positionSeconds);
       else resumeAt(target.id, positionSeconds);
 
-      setIsPlaying(true);
+      setIsPlaying(playing);
     },
     [applyQueue, resetRadio, resumeAt, seek, startQueue, stopRadioSession],
   );
@@ -489,35 +480,10 @@ function PlayerSessionProvider({
     }
   }, [notifyError, takeOver]);
 
-  const reportPlayback = usePlaybackReport({
-    queue,
-    currentIndex,
-    isPlaying,
-    shuffle,
-    repeat,
-    getPosition,
-  });
-
-  useExclusivePlayback(isPlaying, {
-    onClaimed: reportPlayback,
-    onDisplaced: (takeover) => {
-      setIsPlaying(false);
-
-      if (!takeover?.deviceName) {
-        notify(t("player.playingElsewhere"), "info");
-        return;
-      }
-
-      notify(t("player.playingOn", { device: takeover.deviceName }), "info", {
-        label: t("player.takeBack"),
-        run: () => void continueHere(),
-      });
-    },
-  });
-
   const state = useMemo<PlayerState>(
     () => ({
       queue,
+      queueOrder: order,
       currentTrack,
       nextTrack,
       currentIndex,
@@ -537,6 +503,7 @@ function PlayerSessionProvider({
     }),
     [
       queue,
+      order,
       currentTrack,
       nextTrack,
       currentIndex,
@@ -636,26 +603,105 @@ function PlayerSessionProvider({
     [position, duration, buffered, getPosition],
   );
 
-  const currentTrackId = currentTrack?.id ?? null;
-  const currentAlbumId = currentTrack?.albumId ?? null;
+  const output = useCallback(
+    (enabled: boolean) => {
+      setLocalOutput(enabled);
+      if (!enabled) {
+        setIsPlaying(false);
+        stopRadioSession();
+        chooseSleepTimer(null);
+      }
+    },
+    [stopRadioSession, chooseSleepTimer],
+  );
+  const load = useCallback(
+    (
+      tracks: Track[],
+      command: Extract<import("@/lib/playback/connect").ConnectCommand, { type: "play" }>,
+    ) => {
+      takeOver(
+        {
+          deviceId: deviceId(),
+          deviceName: "",
+          tracks,
+          index: command.index,
+          positionSeconds: command.positionSeconds,
+          shuffle: command.shuffle,
+          repeat: command.repeat,
+        },
+        command.playing,
+      );
+      if (command.order) applyQueue(tracks, command.order);
+      if (command.radio) {
+        restoreRadioSession(command.radio);
+        tagSource(
+          Object.keys(command.radio.reasons),
+          radioSource(Boolean(command.radio.seedTrackId)),
+        );
+      }
+    },
+    [takeOver, applyQueue, restoreRadioSession],
+  );
+  const connected = useConnectPlayback(userId, state, actions, progress, output, load);
+
+  useExclusivePlayback(connected.shouldHold, {
+    onClaimed: () => {
+      connected.claimed();
+      void connected.report().catch(() => {});
+    },
+    onDisplaced: (takeover) => {
+      setIsPlaying(false);
+      connected.displaced();
+      notify(
+        t(takeover?.deviceName ? "player.playingOn" : "player.playingElsewhere", {
+          device: takeover?.deviceName ?? "",
+        }),
+        "info",
+      );
+    },
+  });
+  useMediaSession(
+    connected.state.currentTrack,
+    connected.state.isPlaying,
+    connected.progress.duration,
+    {
+      play: connected.controls.selectedId
+        ? () => {
+            if (!connected.state.isPlaying) connected.actions.toggle();
+          }
+        : play,
+      pause: connected.actions.pause,
+      next: connected.actions.next,
+      previous: connected.actions.previous,
+      seek: connected.actions.seek,
+      seekBy: connected.actions.seekBy,
+      getPosition: connected.progress.getPosition,
+    },
+  );
+
+  const currentTrackId = connected.state.currentTrack?.id ?? null;
+  const currentAlbumId = connected.state.currentTrack?.albumId ?? null;
+  const displayedPlaying = connected.state.isPlaying;
 
   const nowPlaying = useMemo<PlayerNowPlaying>(
-    () => ({ currentTrackId, currentAlbumId, isPlaying }),
-    [currentTrackId, currentAlbumId, isPlaying],
+    () => ({ currentTrackId, currentAlbumId, isPlaying: displayedPlaying }),
+    [currentTrackId, currentAlbumId, displayedPlaying],
   );
 
   return (
-    <PlayerStateContext.Provider value={state}>
-      <PlayerActionsContext.Provider value={actions}>
-        <PlayerNowPlayingContext.Provider value={nowPlaying}>
-          <PlayerProgressContext.Provider value={progress}>
-            {children}
-          </PlayerProgressContext.Provider>
-        </PlayerNowPlayingContext.Provider>
-        <audio ref={primaryAudioRef} {...audioProps} />
-        <audio ref={secondaryAudioRef} {...audioProps} />
-      </PlayerActionsContext.Provider>
-    </PlayerStateContext.Provider>
+    <ConnectContext.Provider value={connected.controls}>
+      <PlayerStateContext.Provider value={connected.state}>
+        <PlayerActionsContext.Provider value={connected.actions}>
+          <PlayerNowPlayingContext.Provider value={nowPlaying}>
+            <PlayerProgressContext.Provider value={connected.progress}>
+              {children}
+            </PlayerProgressContext.Provider>
+          </PlayerNowPlayingContext.Provider>
+          <audio ref={primaryAudioRef} {...audioProps} />
+          <audio ref={secondaryAudioRef} {...audioProps} />
+        </PlayerActionsContext.Provider>
+      </PlayerStateContext.Provider>
+    </ConnectContext.Provider>
   );
 }
 

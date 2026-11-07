@@ -4,6 +4,20 @@
 import type { Phrase, PluralPhrase } from "./types";
 
 export const en = {
+  "connect.title": "Playback devices",
+  "connect.description": "Choose where the music plays. Use this player to control it.",
+  "connect.thisDevice": "This device",
+  "connect.playingOn": "Playing on {device}",
+  "connect.unavailable": "{device} is unavailable",
+  "connect.offline": "The playback device is offline. Open Caimack there or choose another device.",
+  "connect.changed": "The playback device changed. Try again.",
+  "connect.selected": "Selected",
+  "connect.transferHere": "Continue listening here",
+  "connect.listenHere": "Play on this device",
+  "connect.transferring": "Connecting to the device…",
+  "connect.reconnecting": "Reconnecting…",
+  "connect.findDevices":
+    "Open Caimack on another device and sign in to the same account. It will appear here.",
   "nav.home": "Home",
   "nav.library": "Your library",
   "nav.main": "Main",

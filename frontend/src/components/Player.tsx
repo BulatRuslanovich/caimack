@@ -23,6 +23,7 @@ import { Record } from "./Record";
 import { Seekbar } from "./Seekbar";
 import { PlayerTransport } from "./PlayerTransport";
 import { PlayerVolume } from "./PlayerVolume";
+import { PlaybackDevices } from "./PlaybackDevices";
 import { StreamQuality } from "./StreamQuality";
 import { FullScreenPlayer } from "./FullScreenPlayer";
 import { BufferingRing } from "./PlaybackIndicators";
@@ -247,6 +248,7 @@ export function Player() {
                 track={currentTrack}
                 className="truncate text-sm text-muted-foreground"
               />
+              <PlaybackDevices onlyRemote className="min-h-6 justify-start p-0" />
               {reason && (
                 <span className="truncate text-2xs text-faint max-md:hidden">
                   {reasonLabel(reason, t)}
@@ -299,6 +301,7 @@ export function Player() {
 
           <div className="flex min-w-0 items-center justify-end gap-3 max-lg:gap-1 max-md:hidden">
             <div className="flex shrink-0 items-center gap-0.5">
+              <PlaybackDevices compact />
               <StreamQuality
                 track={currentTrack}
                 className="border-transparent font-medium text-faint max-xl:hidden"

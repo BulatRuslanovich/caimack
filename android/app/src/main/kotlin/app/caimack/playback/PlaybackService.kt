@@ -32,6 +32,7 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import androidx.media3.session.CacheBitmapLoader
@@ -47,6 +48,10 @@ import app.caimack.widget.NowPlayingWidget
 import app.caimack.api.PlaybackStateReport
 import app.caimack.api.RadioRequest
 import app.caimack.api.Track
+import app.caimack.api.ConnectCommand
+import app.caimack.api.ConnectState
+import app.caimack.api.ConnectRadio
+import app.caimack.api.ConnectSleep
 import app.caimack.ui.Appearance
 import app.caimack.ui.withNetworkRetries
 import kotlinx.coroutines.Job
@@ -79,6 +84,10 @@ class PlaybackService : MediaLibraryService() {
     private val saving = Dispatchers.IO.limitedParallelism(1)
     private lateinit var signals: Signals
     private lateinit var exclusive: ExclusiveSession
+    private var playbackLease = false
+    private var outputPlayer: ExoPlayer? = null
+    private var connectPlayer: ConnectMediaPlayer? = null
+    private var connectSession: Job? = null
     private var heart: Job? = null
     private var tone: Job? = null
     private var sleep: Job? = null
@@ -121,9 +130,11 @@ class PlaybackService : MediaLibraryService() {
             .build()
 
         signals = container.signals
+        outputPlayer = player
         radioReactions = container.scope.launch(Dispatchers.Main) {
             val progressed = mutableSetOf<String>()
             signals.reactions.collect { event ->
+                if (container.connect.isRemote) return@collect
                 if (!RadioPolicy.reactsTo(event.type, event.listenedSeconds)) return@collect
                 if (event.type == "trackPlayed" && !progressed.add(event.trackId.orEmpty())) return@collect
                 if (container.radio.state.value.notes.isEmpty()) return@collect
@@ -142,6 +153,8 @@ class PlaybackService : MediaLibraryService() {
             container.scope,
             onClaimed = { report(container, player) },
         ) { byDevice ->
+            playbackLease = false
+            container.connect.displaced()
             player.pause()
             val message = byDevice?.let { getString(R.string.player_playing_on, it) } ?: getString(R.string.player_playing_elsewhere)
             Toast.makeText(this, message, Toast.LENGTH_LONG).show()
@@ -229,6 +242,11 @@ class PlaybackService : MediaLibraryService() {
             }
 
             override fun onEvents(ignored: Player, events: Player.Events) {
+                container.connect.changed()
+                if (player.mediaItemCount == 0) {
+                    playbackLease = false
+                    exclusive.release()
+                }
                 val item = player.currentMediaItem ?: run {
                     container.playbackDelivery.value = null
                     return
@@ -251,12 +269,13 @@ class PlaybackService : MediaLibraryService() {
                 ticks.removeCallbacks(tick)
                 NowPlayingWidget.show(this@PlaybackService, player.currentMediaItem?.mediaId?.let { container.tracks[it] }, isPlaying, player.currentPosition, player.duration)
                 if (isPlaying) {
+                    playbackLease = true
                     failures = 0
                     listen(player)
                     ticks.post(tick)
                     exclusive.hold()
                 } else {
-                    exclusive.release()
+                    if (playbackLease && !container.connect.isRemote) exclusive.hold() else exclusive.release()
                     signals.flush()
                     save(container, player)
                     if (!player.playWhenReady) report(container, player)
@@ -341,6 +360,22 @@ class PlaybackService : MediaLibraryService() {
             .build()
 
         heart = container.scope.launch(Dispatchers.Main) {
+            container.connect.attach(
+                state = { connectState(container, player) },
+                execute = { command -> executeConnect(container, player, command) },
+            )
+            val remote = ConnectMediaPlayer(container)
+            connectPlayer = remote
+            connectSession = container.scope.launch(Dispatchers.Main) {
+                container.connect.state.map { it.selectedId }.distinctUntilChanged().collect { selected ->
+                    if (selected != null) {
+                        playbackLease = false
+                        exclusive.release()
+                        player.pause()
+                        session?.setPlayer(remote)
+                    } else session?.setPlayer(player)
+                }
+            }
             container.favorites.state.collect {
                 showButtons(container)
                 val track = player.currentMediaItem?.mediaId?.let { id -> container.tracks[id] }
@@ -373,6 +408,9 @@ class PlaybackService : MediaLibraryService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
 
     override fun onDestroy() {
+        (application as CaimackApp).container.connect.detach()
+        connectSession?.cancel()
+        connectPlayer?.release()
         radioReactions?.cancel()
         radioRefresh?.cancel()
         radioRequest?.cancel()
@@ -391,12 +429,13 @@ class PlaybackService : MediaLibraryService() {
         exclusive.release()
         signals.tracker.discard()
         signals.flush()
-        session?.run {
+        outputPlayer?.let { player ->
             save((application as CaimackApp).container, player)
             NowPlayingWidget.show(this@PlaybackService, player.currentMediaItem?.mediaId?.let { (application as CaimackApp).container.tracks[it] }, false)
             player.release()
-            release()
         }
+        session?.release()
+        outputPlayer = null
         session = null
         super.onDestroy()
     }
@@ -495,6 +534,7 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private fun continueWithRadio(container: AppContainer, player: ExoPlayer, refresh: Boolean = false) {
+        if (container.connect.isRemote) return
         if (!container.radio.autoplay.value || player.repeatMode != Player.REPEAT_MODE_OFF || player.mediaItemCount == 0) return
         val queued = idsOf(player)
         val shuffled = player.shuffleModeEnabled
@@ -530,7 +570,7 @@ class PlaybackService : MediaLibraryService() {
         } else queued.indices.toSet()
         val excluded = RadioPolicy.exclusions(order, player.currentMediaItemIndex, retained).map { queued[it] }
         radioRequest = container.scope.launch(Dispatchers.Main) {
-            val batch = runCatching { withNetworkRetries { container.radio(RadioRequest(seed, excluded)) } }.getOrNull()
+            val batch = runCatching { withNetworkRetries { container.radio(RadioRequest(seed, excluded, focus = state.focus)) } }.getOrNull()
                 ?: run { radioSeed = null; return@launch }
             val fresh = batch.tracks.map { it.track }.filter { it.id !in excluded }
             if (fresh.isEmpty()) return@launch
@@ -640,6 +680,7 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private fun report(container: AppContainer, player: Player) {
+        if (container.connect.isRemote) return
         val ids = idsOf(player)
         if (ids.isEmpty()) return
         val current = player.currentMediaItemIndex.coerceIn(0, ids.size - 1)
@@ -663,6 +704,123 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private fun idsOf(player: Player) = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId }
+
+    private fun connectState(container: AppContainer, player: Player): ConnectState {
+        val ids = idsOf(player)
+        val order = buildList {
+            var index = player.currentTimeline.getFirstWindowIndex(player.shuffleModeEnabled)
+            while (index != C.INDEX_UNSET) {
+                add(index)
+                index = player.currentTimeline.getNextWindowIndex(index, Player.REPEAT_MODE_OFF, player.shuffleModeEnabled)
+            }
+        }
+        val radio = container.radio.state.value
+        val sleep = when (val timer = container.sleepTimer.state.value) {
+            is SleepTimerState.Minutes -> ConnectSleep("minutes", timer.minutes, System.currentTimeMillis() + timer.remainingMs)
+            SleepTimerState.TrackEnd -> ConnectSleep("trackEnd")
+            null -> null
+        }
+        return ConnectState(
+            trackIds = ids, index = player.currentMediaItemIndex.coerceAtLeast(0), order = order,
+            positionSeconds = (player.currentPosition / 1000.0).coerceAtLeast(0.0),
+            isPlaying = player.playWhenReady, buffering = player.playbackState == Player.STATE_BUFFERING,
+            volume = container.player.localVolume.toDouble(), muted = container.player.localMuted,
+            shuffle = player.shuffleModeEnabled, repeat = repeatOf(player.repeatMode),
+            radio = if (radio.active) ConnectRadio(radio.seedTrackId, radio.focus, radio.notes.mapValues { it.value.reason }) else null,
+            smartTransitions = container.playbackPrefs.smartTransitions.value,
+            normalizeVolume = container.playbackPrefs.normalizeVolume.value, autoplay = container.radio.autoplay.value,
+            sleepTimer = sleep,
+        )
+    }
+
+    private suspend fun executeConnect(container: AppContainer, player: ExoPlayer, command: ConnectCommand) {
+        fun checkIndex(index: Int, id: String) {
+            check(index in 0 until player.mediaItemCount && player.getMediaItemAt(index).mediaId == id) { "Playback queue changed" }
+        }
+        fun item(track: Track): MediaItem {
+            container.tracks[track.id] = track
+            return resolve(container, track.toMediaItem(container.media))
+        }
+        when (command) {
+            is ConnectCommand.SetPlaying -> {
+                check(!command.playing || player.mediaItemCount > 0) { "Playback queue is empty" }
+                if (command.playing && player.playbackState == Player.STATE_IDLE) player.prepare()
+                player.playWhenReady = command.playing
+            }
+            ConnectCommand.Next -> player.seekToNext()
+            ConnectCommand.Previous -> player.seekToPrevious()
+            is ConnectCommand.Seek -> player.seekTo((command.positionSeconds * 1000).toLong())
+            is ConnectCommand.SetVolume -> container.player.executeLocal { container.player.setVolume(command.volume.toFloat()) }
+            is ConnectCommand.SetMuted -> container.player.executeLocal { container.player.setMuted(command.muted) }
+            is ConnectCommand.SetShuffle -> player.shuffleModeEnabled = command.shuffle
+            is ConnectCommand.SetRepeat -> player.repeatMode = repeatModeOf(command.repeat)
+            is ConnectCommand.Play -> {
+                val tracks = container.connect.lookup(command.trackIds)
+                container.radio.reset()
+                PlaySources.tag(command.trackIds, command.source)
+                player.shuffleModeEnabled = command.shuffle
+                player.repeatMode = repeatModeOf(command.repeat)
+                player.setMediaItems(tracks.map(::item), command.index, (command.positionSeconds * 1000).toLong())
+                command.order?.let { player.setShuffleOrder(DefaultShuffleOrder(it.toIntArray(), 0L)) }
+                command.radio?.let { radio ->
+                    container.radio.restore(RadioState(seedTrackId = radio.seedTrackId,
+                        notes = radio.reasons.mapValues { RadioNote(it.value, false) }, active = true, focus = radio.focus))
+                    PlaySources.tag(radio.reasons.keys.toList(), PlaySources.radio(seeded = radio.seedTrackId != null))
+                }
+                player.prepare()
+                playbackLease = true
+                exclusive.hold()
+                player.playWhenReady = command.playing
+            }
+            is ConnectCommand.Enqueue -> {
+                val track = container.connect.lookup(listOf(command.trackId)).single()
+                PlaySources.tag(listOf(track.id), "queue")
+                container.signals.choice("trackAddedToQueue", track.id, track.durationSeconds)
+                val at = if (command.next) (player.currentMediaItemIndex + 1).coerceAtLeast(0) else player.mediaItemCount
+                player.addMediaItem(at, item(track))
+            }
+            is ConnectCommand.Remove -> { checkIndex(command.index, command.trackId); player.removeMediaItem(command.index) }
+            is ConnectCommand.Jump -> { checkIndex(command.index, command.trackId); player.seekTo(command.index, 0); player.play() }
+            is ConnectCommand.Move -> {
+                checkIndex(command.from, command.trackId)
+                check(command.to in 0 until player.mediaItemCount)
+                player.moveMediaItem(command.from, command.to)
+            }
+            ConnectCommand.Clear -> { container.radio.reset(); player.pause(); player.stop(); player.clearMediaItems() }
+            ConnectCommand.ClearUpcoming -> {
+                val upcoming = mutableListOf<Int>()
+                var index = player.currentTimeline.getNextWindowIndex(player.currentMediaItemIndex, Player.REPEAT_MODE_OFF, player.shuffleModeEnabled)
+                while (index != C.INDEX_UNSET) {
+                    upcoming.add(index)
+                    index = player.currentTimeline.getNextWindowIndex(index, Player.REPEAT_MODE_OFF, player.shuffleModeEnabled)
+                }
+                upcoming.sortedDescending().forEach { player.removeMediaItem(it) }
+            }
+            is ConnectCommand.StartRadio -> {
+                val seed = command.seedTrackId?.let { container.connect.lookup(listOf(it)).single() }
+                val batch = container.radio(RadioRequest(command.seedTrackId, emptyList()))
+                val tracks = listOfNotNull(seed) + batch.tracks.map { it.track }.filter { it.id != seed?.id }
+                check(tracks.isNotEmpty()) { "The radio is empty" }
+                container.radio.start(command.seedTrackId, batch)
+                player.setMediaItems(tracks.map(::item), 0, 0)
+                player.prepare()
+                player.play()
+            }
+            is ConnectCommand.SetRadioFocus -> {
+                container.radio.restore(container.radio.state.value.copy(focus = command.focus))
+                continueWithRadio(container, player, refresh = true)
+            }
+            is ConnectCommand.SetCrossfade -> check(command.seconds == 0.0) { "Crossfade is not supported by this device" }
+            is ConnectCommand.SetSmartTransitions -> container.playbackPrefs.setSmartTransitions(command.enabled)
+            is ConnectCommand.SetNormalizeVolume -> container.playbackPrefs.setNormalizeVolume(command.enabled)
+            is ConnectCommand.SetAutoplay -> container.radio.setAutoplay(command.enabled)
+            is ConnectCommand.SetSleepTimer -> when {
+                command.trackEnd -> container.sleepTimer.untilTrackEnd()
+                command.minutes != null -> container.sleepTimer.set(command.minutes)
+                else -> container.sleepTimer.cancel()
+            }
+        }
+    }
 
     private fun statusOf(error: Throwable?) = (error as? HttpDataSource.InvalidResponseCodeException)?.responseCode
 
