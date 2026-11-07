@@ -78,7 +78,7 @@ fun SectionHeader(title: String, note: String? = null, onSeeAll: (() -> Unit)? =
             note?.let { Text(it, style = Type.small, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
         onSeeAll?.let {
-            Row(Modifier.clickable(onClick = it).padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.heightIn(min = 48.dp).clickable(onClick = it).padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.action_see_all), style = Type.small, color = palette.muted)
                 Icon(Lucide.ChevronRight, null, tint = palette.muted, modifier = Modifier.size(16.dp))
             }
@@ -197,7 +197,7 @@ fun TrackRow(
             Lucide.EllipsisVertical,
             stringResource(R.string.menu_more),
             tint = palette.faint,
-            modifier = Modifier.clip(CircleShape).clickable { actions = true }.padding(12.dp).size(18.dp),
+            modifier = Modifier.clip(CircleShape).clickable { actions = true }.padding(15.dp).size(18.dp),
         )
     }
 }

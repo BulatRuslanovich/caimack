@@ -49,7 +49,7 @@ fun DownloadsScreen(play: (List<Track>, Int) -> Unit) {
         item { PageTitle(stringResource(R.string.downloads_title)) }
 
         if (entries.isEmpty()) {
-            item { Empty(stringResource(R.string.downloads_empty_title)) }
+            item { Empty(stringResource(R.string.downloads_empty_title), stringResource(R.string.downloads_empty_hint)) }
             return@LazyColumn
         }
 
@@ -83,7 +83,7 @@ fun DownloadsScreen(play: (List<Track>, Int) -> Unit) {
                     TrackRow(track, { if (entry.done) play(ready, ready.indexOf(track)) })
                 }
                 Box(
-                    Modifier.padding(end = 8.dp).size(40.dp).clip(Radius.row).clickable { container.downloads.remove(listOf(track.id)) },
+                    Modifier.padding(end = 8.dp).size(48.dp).clip(Radius.row).clickable { container.downloads.remove(listOf(track.id)) },
                     contentAlignment = Alignment.Center,
                 ) {
                     if (entry.done) {

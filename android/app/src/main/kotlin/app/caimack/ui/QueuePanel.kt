@@ -266,7 +266,7 @@ private fun QueueRow(
             Lucide.Trash2,
             stringResource(R.string.queue_remove, track.title),
             tint = palette.faint,
-            modifier = Modifier.clip(CircleShape).clickable(onClick = onRemove).padding(12.dp).size(18.dp),
+            modifier = Modifier.clip(CircleShape).clickable(onClick = onRemove).padding(15.dp).size(18.dp),
         )
     }
 }

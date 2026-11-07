@@ -351,7 +351,7 @@ object Type {
     val body = TextStyle(fontFamily = Onest, fontSize = 15.sp, lineHeight = 22.sp)
     val small = TextStyle(fontFamily = Onest, fontSize = 14.sp, lineHeight = 20.sp)
     val tiny = TextStyle(fontFamily = Onest, fontSize = 12.sp, lineHeight = 16.sp)
-    val micro = TextStyle(fontFamily = Onest, fontSize = 11.sp, lineHeight = 16.sp)
+    val micro = TextStyle(fontFamily = Onest, fontSize = 12.sp, lineHeight = 16.sp)
 }
 
 val LocalPalette = staticCompositionLocalOf { CoffeeDark }

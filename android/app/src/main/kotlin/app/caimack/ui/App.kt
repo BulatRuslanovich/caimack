@@ -3,14 +3,7 @@
 
 package app.caimack.ui
 
-import app.caimack.playback.Background
-import androidx.core.content.edit
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.compose.rememberLauncherForActivityResult
-import android.content.Context
-import android.Manifest
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -102,7 +95,8 @@ import kotlinx.serialization.Serializable
 @Serializable data object RecentRoute
 @Serializable data object SettingsRoute
 @Serializable data object DownloadsRoute
-@Serializable data object MapRoute
+@Serializable data object LibraryRoute
+@Serializable data class SettingsSectionRoute(val section: String)
 @Serializable data class AlbumRoute(val id: String)
 @Serializable data class ArtistRoute(val id: String)
 @Serializable data class PlaylistRoute(val id: String)
@@ -119,19 +113,20 @@ private val library = listOf(
     Tab(FavoritesRoute, FavoritesRoute::class, R.string.nav_favorites, Lucide.Heart),
     Tab(RecentRoute, RecentRoute::class, R.string.nav_recently_played, Lucide.History),
     Tab(GenresRoute, GenresRoute::class, R.string.nav_genres, Lucide.Tags),
-    Tab(MapRoute, MapRoute::class, R.string.nav_map, Lucide.Map),
     Tab(DownloadsRoute, DownloadsRoute::class, R.string.downloads_title, Lucide.Download),
 )
 
 private val tabs = listOf(
     Tab(HomeRoute, HomeRoute::class, R.string.nav_home, Lucide.House),
     Tab(SearchRoute, SearchRoute::class, R.string.nav_search, Lucide.Search),
-    Tab(PlaylistsRoute, PlaylistsRoute::class, R.string.nav_library, Lucide.LibraryBig),
+    Tab(LibraryRoute, LibraryRoute::class, R.string.nav_library, Lucide.LibraryBig),
 )
 
 internal fun NavController.openSection(route: Any) {
     // Settings belongs to the account, not to a tab's saved navigation history.
-    if (currentDestination?.hasRoute(SettingsRoute::class) == true) popBackStack()
+    while (currentDestination?.let { it.hasRoute(SettingsRoute::class) || it.hasRoute(SettingsSectionRoute::class) } == true) {
+        if (!popBackStack()) break
+    }
     if (currentDestination?.hasRoute(route::class) == true) return
 
     // Reselecting an open section returns to its root without duplicating it.
@@ -144,7 +139,7 @@ internal fun NavController.openSection(route: Any) {
         popUpTo(HomeRoute) { saveState = true }
         launchSingleTop = true
         // Restoring Home can bring back the screen that was saved above it.
-        restoreState = route != HomeRoute
+        restoreState = route != HomeRoute && route != LibraryRoute
     }
 }
 
@@ -181,16 +176,6 @@ fun App(user: User) {
 
     LaunchedEffect(user.id) {
         runCatching { withNetworkRetries { container.api.settings() } }.onSuccess { container.settings.value = it }
-    }
-
-    val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
-    val context = LocalContext.current
-    LaunchedEffect(Unit) {
-        val asked = context.getSharedPreferences("permissions", Context.MODE_PRIVATE)
-        if (container.playbackPrefs.recapReminder.value && !Background.canNotify(context) && !asked.getBoolean("notifications", false)) {
-            asked.edit { putBoolean("notifications", true) }
-            notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
     }
 
     val navigate: (Any) -> Unit = { route ->
@@ -238,6 +223,7 @@ fun App(user: User) {
             composable<HomeRoute> { HomeScreen(nav) }
             composable<SearchRoute> { SearchScreen(nav, play) }
             composable<TracksRoute> { TracksScreen(play) }
+            composable<LibraryRoute> { LibraryScreen(nav) }
             composable<PlaylistsRoute> { PlaylistsScreen(nav) }
             composable<FavoritesRoute> { FavoritesScreen(play) }
             composable<AlbumsRoute> { AlbumsScreen(nav) }
@@ -246,7 +232,7 @@ fun App(user: User) {
             composable<RecentRoute> { RecentScreen(play) }
             composable<SettingsRoute> { SettingsScreen() }
             composable<DownloadsRoute> { DownloadsScreen(play) }
-            composable<MapRoute> { MapScreen() }
+            composable<SettingsSectionRoute> { SettingsScreen(SettingsCategory.of(it.toRoute<SettingsSectionRoute>().section)) }
             composable<AlbumRoute> { AlbumScreen(it.toRoute<AlbumRoute>().id, nav, play) }
             composable<ArtistRoute> { ArtistScreen(it.toRoute<ArtistRoute>().id, nav, play) }
             composable<PlaylistRoute> { PlaylistScreen(it.toRoute<PlaylistRoute>().id, play) { nav.popBackStack() } }
@@ -310,10 +296,8 @@ internal fun SheetRow(label: String, icon: ImageVector, onClick: () -> Unit) {
 private fun Header(nav: NavController, user: User, onAccount: () -> Unit) {
     val palette = LocalPalette.current
     val destination = nav.currentBackStackEntryAsState().value?.destination
-    val library = library.filter { it.route != MapRoute || recommendationsEnabled() }
-    val inLibrary = library.any { destination?.hasRoute(it.type) == true }
-    val isSettings = destination?.hasRoute(SettingsRoute::class) == true
-    val showBack = isSettings || (!inLibrary && tabs.none { destination?.hasRoute(it.type) == true } && destination != null)
+    val isSettings = destination?.let { it.hasRoute(SettingsRoute::class) || it.hasRoute(SettingsSectionRoute::class) } == true
+    val showBack = isSettings || (tabs.none { destination?.hasRoute(it.type) == true } && destination != null)
 
     Column(Modifier.background(palette.background).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(52.dp).padding(start = if (showBack) 4.dp else 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -346,15 +330,7 @@ private fun Header(nav: NavController, user: User, onAccount: () -> Unit) {
                 }
             }
         }
-        if (inLibrary) {
-            Tabs {
-                library.filter { it.route != MapRoute || recommendationsEnabled() }.forEach { entry ->
-                    Tab(stringResource(entry.label), destination?.hasRoute(entry.type) == true) { nav.openSection(entry.route) }
-                }
-            }
-        } else {
-            HorizontalDivider(color = palette.border)
-        }
+        HorizontalDivider(color = palette.border)
     }
 }
 
@@ -371,21 +347,15 @@ internal fun BottomBar(nav: NavController) {
                 runCatching { nav.getBackStackEntry(tab.route).destination }.getOrNull()
             }
     }
-    val library = library.filter { it.route != MapRoute || recommendationsEnabled() }
-    val inLibrary = library.any { section?.hasRoute(it.type) == true }
-    var libraryIndex by rememberSaveable { mutableIntStateOf(0) }
-    LaunchedEffect(section) {
-        library.indexOfFirst { section?.hasRoute(it.type) == true }.takeIf { it >= 0 }?.let { libraryIndex = it }
-    }
-
+    val inLibrary = section?.hasRoute(LibraryRoute::class) == true || library.any { section?.hasRoute(it.type) == true }
     Column(Modifier.background(palette.card).navigationBarsPadding()) {
         HorizontalDivider(color = palette.border)
         Row(Modifier.fillMaxWidth().height(62.dp).selectableGroup()) {
             tabs.forEach { tab ->
-                val active = if (tab.route == PlaylistsRoute) inLibrary else section?.hasRoute(tab.type) == true
+                val active = if (tab.route == LibraryRoute) inLibrary else section?.hasRoute(tab.type) == true
                 TabItem(stringResource(tab.label), tab.icon, active) {
                     focus.clearFocus()
-                    nav.openSection(if (tab.route == PlaylistsRoute) library[libraryIndex].route else tab.route)
+                    nav.openSection(tab.route)
                 }
             }
         }

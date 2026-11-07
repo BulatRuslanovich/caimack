@@ -39,7 +39,8 @@ class SettingsSearchUiTest {
         compose.onNode(hasText(context.getString(R.string.settings_theme)) and !hasSetTextAction()).assertIsDisplayed()
         compose.onNodeWithText(context.getString(R.string.settings_quality)).assertDoesNotExist()
         compose.onNodeWithContentDescription(context.getString(R.string.search_clear)).performClick()
-        compose.onNodeWithText(context.getString(R.string.settings_quality)).assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.settings_playback)).assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.settings_quality)).assertDoesNotExist()
     }
 
     @Test

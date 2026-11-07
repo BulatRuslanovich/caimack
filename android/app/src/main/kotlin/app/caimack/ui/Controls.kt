@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -168,6 +169,7 @@ fun Chip(
     val tint = if (active) palette.primary else palette.muted
     Row(
         modifier
+            .heightIn(min = 48.dp)
             .clip(CircleShape)
             .background(if (active) palette.primarySoft else palette.raised)
             .then(if (active) Modifier.border(1.dp, palette.primary, CircleShape) else Modifier)

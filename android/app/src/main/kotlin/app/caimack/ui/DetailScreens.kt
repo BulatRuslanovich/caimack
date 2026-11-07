@@ -103,16 +103,9 @@ fun ArtistScreen(id: String, nav: NavController, play: (List<Track>, Int) -> Uni
 @Composable
 fun GenreScreen(id: String, name: String, play: (List<Track>, Int) -> Unit) {
     val api = LocalContainer.current.api
-    val pager = rememberPager("genre:$id") { api.genreTracks(id, it, TRACK_PAGE_SIZE) }
-    val total = pager.total
-    PagedColumn(
-        pager,
-        stringResource(R.string.tracks_empty),
-        header = {
-            item { PageTitle(name, total?.let { pluralStringResource(R.plurals.count_tracks, it, it) }) }
-            if (total != null && total > 0) item { Actions(pager.items, play) }
-        },
-    ) { index, track -> TrackRow(track, { play(pager.items, index) }) }
+    TrackPage("genre:$id", readableGenre(name), stringResource(R.string.tracks_empty), null, play) {
+        api.genreTracks(id, it, TRACK_PAGE_SIZE)
+    }
 }
 
 @Composable
@@ -165,7 +158,7 @@ internal fun Actions(tracks: List<Track>, play: (List<Track>, Int) -> Unit, onMo
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         PlayActions(Modifier.weight(1f), onPlay = { play(tracks, 0) }, onShuffle = { play(tracks.shuffled(), 0) })
         Box(
-            Modifier.size(44.dp).clip(CircleShape).clickable {
+            Modifier.size(48.dp).clip(CircleShape).clickable {
                 if (pending || complete) container.downloads.remove(mine.map { it.download.request.id })
                 else scope.launch { container.downloads.add(tracks, container.settings.value) }
             },
@@ -189,7 +182,7 @@ internal fun Actions(tracks: List<Track>, play: (List<Track>, Int) -> Unit, onMo
 
 @Composable
 private fun MoreButton(onClick: () -> Unit) {
-    Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(48.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
         Icon(Lucide.EllipsisVertical, stringResource(R.string.playlist_manage), tint = LocalPalette.current.muted)
     }
 }

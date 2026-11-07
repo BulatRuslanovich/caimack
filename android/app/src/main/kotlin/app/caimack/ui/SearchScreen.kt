@@ -213,7 +213,10 @@ private fun BrowseGenres(open: (Any) -> Unit) {
         Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(stringResource(R.string.search_browse_genres), style = Type.section)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                genres.forEach { genre -> Chip(genre.name, false) { open(GenreRoute(genre.id, genre.name)) } }
+                previewGenres(genres).forEach { genre -> Chip(genreTitle(genre.name), false) { open(GenreRoute(genre.id, genre.name)) } }
+            }
+            androidx.compose.material3.TextButton(onClick = { open(GenresRoute) }) {
+                Text(stringResource(R.string.action_see_all), color = LocalPalette.current.primary)
             }
         }
     }
@@ -251,7 +254,7 @@ private fun RecentSearches(onPick: (String) -> Unit) {
                         Lucide.X,
                         stringResource(R.string.search_forget, query),
                         tint = palette.faint,
-                        modifier = Modifier.clip(CircleShape).clickable { recent.forget(query) }.padding(10.dp).size(14.dp),
+                        modifier = Modifier.clip(CircleShape).clickable { recent.forget(query) }.padding(17.dp).size(14.dp),
                     )
                 }
             }

@@ -87,7 +87,7 @@ private data class Option(
 )
 
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(category: SettingsCategory? = null) {
     val sourceContext = LocalContext.current
     val palette = LocalPalette.current
     val container = LocalContainer.current
@@ -100,8 +100,47 @@ fun SettingsScreen() {
     var query by rememberSaveable { mutableStateOf("") }
     val resources = LocalResources.current
     val configuration = LocalConfiguration.current
-    val visible = remember(query, configuration) { matchingSettings(query, resources) }
+    val recommendations = recommendationsEnabled()
+    val visible = remember(query, configuration, category, recommendations) {
+        matchingSettings(query, resources).filterTo(mutableSetOf()) {
+            (query.isNotBlank() || category?.title == it.section) && (recommendations || it != SettingKey.Tile)
+        }
+    }
     val scroll = rememberScrollState()
+
+    var permissionExplanation by remember { mutableStateOf(false) }
+    var notificationsAllowed by remember { mutableStateOf(app.caimack.playback.Background.canNotify(sourceContext)) }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    androidx.compose.runtime.DisposableEffect(lifecycle) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                notificationsAllowed = app.caimack.playback.Background.canNotify(sourceContext)
+            }
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
+    val permission = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        notificationsAllowed = granted
+        container.playbackPrefs.setRecapReminder(granted)
+    }
+    val reminderChange: (Boolean) -> Unit = { enabled ->
+        if (!enabled) container.playbackPrefs.setRecapReminder(false)
+        else if (notificationsAllowed) container.playbackPrefs.setRecapReminder(true)
+        else permissionExplanation = true
+    }
+    if (permissionExplanation) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { permissionExplanation = false },
+        title = { Text(stringResource(R.string.settings_recap_reminder)) },
+        text = { Text(stringResource(R.string.notifications_explanation)) },
+        confirmButton = { TextButton(onClick = {
+            permissionExplanation = false
+            permission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }) { Text(stringResource(R.string.notifications_enable)) } },
+        dismissButton = { TextButton(onClick = { permissionExplanation = false }) { Text(stringResource(R.string.action_cancel)) } },
+    )
 
     val update = { changes: SettingsChanges ->
         container.settings.value = settings.copy(quality = changes.quality ?: settings.quality)
@@ -117,7 +156,8 @@ fun SettingsScreen() {
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
         )
         Column(Modifier.weight(1f).verticalScroll(scroll).padding(bottom = 24.dp)) {
-            if (visible.isEmpty()) Empty(stringResource(R.string.settings_search_empty))
+            if (category == null && query.isBlank()) SettingsOverview()
+            else if (visible.isEmpty()) Empty(stringResource(R.string.settings_search_empty))
             if (visible.any { it.section == R.string.settings_playback }) {
                 Panel(stringResource(R.string.settings_playback)) {
                     if (SettingKey.Quality in visible) {
@@ -164,36 +204,6 @@ fun SettingsScreen() {
                         }
                     }
 
-                    if (SettingKey.Downloads in visible) {
-                        val autoDownloads by container.playbackPrefs.autoDownloads.collectAsStateWithLifecycle()
-                        Row(
-                            Modifier.fillMaxWidth().clickable { container.playbackPrefs.setAutoDownloads(!autoDownloads) },
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                stringResource(R.string.settings_auto_downloads),
-                                style = Type.body.copy(fontWeight = FontWeight.SemiBold),
-                                modifier = Modifier.weight(1f).padding(end = 12.dp),
-                            )
-                            Toggle(autoDownloads) { container.playbackPrefs.setAutoDownloads(it) }
-                        }
-                    }
-
-                    if (SettingKey.Reminder in visible) {
-                        val recapReminder by container.playbackPrefs.recapReminder.collectAsStateWithLifecycle()
-                        Row(
-                            Modifier.fillMaxWidth().clickable { container.playbackPrefs.setRecapReminder(!recapReminder) },
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                stringResource(R.string.settings_recap_reminder),
-                                style = Type.body.copy(fontWeight = FontWeight.SemiBold),
-                                modifier = Modifier.weight(1f).padding(end = 12.dp),
-                            )
-                            Toggle(recapReminder) { container.playbackPrefs.setRecapReminder(it) }
-                        }
-                    }
-
                     if (SettingKey.Tile in visible) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Text(
@@ -211,8 +221,48 @@ fun SettingsScreen() {
                                     .clip(CircleShape)
                                     .border(1.dp, if (added) palette.border else palette.controlBorder, CircleShape)
                                     .clickable(enabled = !added) { RadioTile.requestAdd(context) { added = it } }
+                                    .heightIn(min = 48.dp)
                                     .padding(horizontal = 16.dp, vertical = 8.dp),
                             )
+                        }
+                    }
+
+                }
+            }
+
+            if (SettingKey.Downloads in visible) {
+                Panel(stringResource(R.string.settings_downloads)) {
+                    if (SettingKey.Downloads in visible) {
+                        val autoDownloads by container.playbackPrefs.autoDownloads.collectAsStateWithLifecycle()
+                        Row(
+                            Modifier.fillMaxWidth().clickable { container.playbackPrefs.setAutoDownloads(!autoDownloads) },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                stringResource(R.string.settings_auto_downloads),
+                                style = Type.body.copy(fontWeight = FontWeight.SemiBold),
+                                modifier = Modifier.weight(1f).padding(end = 12.dp),
+                            )
+                            Toggle(autoDownloads) { container.playbackPrefs.setAutoDownloads(it) }
+                        }
+                    }
+
+                }
+            }
+            if (SettingKey.Reminder in visible) {
+                Panel(stringResource(R.string.nav_account)) {
+                    if (SettingKey.Reminder in visible) {
+                        val recapReminder by container.playbackPrefs.recapReminder.collectAsStateWithLifecycle()
+                        Row(
+                            Modifier.fillMaxWidth().clickable { reminderChange(!(recapReminder && notificationsAllowed)) },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                stringResource(R.string.settings_recap_reminder),
+                                style = Type.body.copy(fontWeight = FontWeight.SemiBold),
+                                modifier = Modifier.weight(1f).padding(end = 12.dp),
+                            )
+                            Toggle(recapReminder && notificationsAllowed, reminderChange)
                         }
                     }
 
@@ -224,33 +274,20 @@ fun SettingsScreen() {
                     Text(stringResource(R.string.settings_help_equalizer), style = Type.small, color = palette.muted)
 
                     if (equalizer.enabled) {
-                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OptionSelector(
+                            stringResource(R.string.settings_preset), equalizer.preset ?: "custom",
                             listOf(
-                                "flat" to R.string.settings_equalizer_flat,
-                                "bass" to R.string.settings_equalizer_bass,
-                                "vocal" to R.string.settings_equalizer_vocal,
-                                "treble" to R.string.settings_equalizer_treble,
-                                "rock" to R.string.settings_equalizer_rock,
-                                "electronic" to R.string.settings_equalizer_electronic,
-                                "acoustic" to R.string.settings_equalizer_acoustic,
-                                "warm" to R.string.settings_equalizer_warm,
-                            ).forEach { (preset, label) ->
-                                val active = equalizer.preset == preset
-                                Text(
-                                    stringResource(label),
-                                    style = Type.small.copy(fontWeight = FontWeight.Medium),
-                                    color = if (active) palette.primary else palette.muted,
-                                    textAlign = TextAlign.Center,
-                                    maxLines = 1,
-                                    modifier = Modifier
-                                        .clip(CircleShape)
-                                        .background(if (active) palette.primarySoft else palette.raised)
-                                        .then(if (active) Modifier.border(1.dp, palette.primary, CircleShape) else Modifier)
-                                        .selectable(active, role = Role.RadioButton) { container.equalizer.applyPreset(preset) }
-                                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                                )
-                            }
-                        }
+                                "custom" to stringResource(R.string.settings_preset_custom),
+                                "flat" to stringResource(R.string.settings_equalizer_flat),
+                                "bass" to stringResource(R.string.settings_equalizer_bass),
+                                "vocal" to stringResource(R.string.settings_equalizer_vocal),
+                                "treble" to stringResource(R.string.settings_equalizer_treble),
+                                "rock" to stringResource(R.string.settings_equalizer_rock),
+                                "electronic" to stringResource(R.string.settings_equalizer_electronic),
+                                "acoustic" to stringResource(R.string.settings_equalizer_acoustic),
+                                "warm" to stringResource(R.string.settings_equalizer_warm),
+                            ), Modifier.fillMaxWidth(),
+                        ) { if (it != "custom") container.equalizer.applyPreset(it) }
 
                         val locale = LocalConfiguration.current.locales[0]
                         val frequencies = EqualizerState.BANDS_HZ.map { hz ->
@@ -403,8 +440,8 @@ fun SettingsScreen() {
 private fun Panel(title: String, action: (@Composable () -> Unit)? = null, content: @Composable () -> Unit) {
     val palette = LocalPalette.current
     Column(
-        Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().clip(Radius.hero).background(palette.cabinet).border(1.dp, palette.cabinetEdge, Radius.hero).padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        Modifier.padding(horizontal = 20.dp, vertical = 16.dp).fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(title, style = Type.heading, modifier = Modifier.weight(1f))
@@ -417,6 +454,14 @@ private fun Panel(title: String, action: (@Composable () -> Unit)? = null, conte
 @Composable
 private fun Choice(legend: String, hint: String?, value: String, options: List<Option>, onChange: (String) -> Unit) {
     val palette = LocalPalette.current
+    if (options.none { it.preview != null }) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (hint != null) SettingLabel(legend, hint, Type.body.copy(fontWeight = FontWeight.Medium), Modifier.fillMaxWidth())
+            else Text(legend, style = Type.body.copy(fontWeight = FontWeight.Medium))
+            OptionSelector(legend, value, options.map { it.value to listOfNotNull(it.label, it.hint).joinToString(" · ") }, Modifier.fillMaxWidth(), onChange)
+        }
+        return
+    }
     Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (hint != null) {
             SettingLabel(legend, hint, Type.body.copy(fontWeight = FontWeight.SemiBold), Modifier.fillMaxWidth())
@@ -579,15 +624,9 @@ private fun EqualizerCurve(gains: List<Int>, frequencies: List<String>, decibels
 
 @Composable
 private fun SettingLabel(text: String, hint: String, style: androidx.compose.ui.text.TextStyle, modifier: Modifier = Modifier) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Text(text, style = style, modifier = Modifier.weight(1f))
-        TextButton(onClick = { expanded = true }) { Text("?") }
+    val palette = LocalPalette.current
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(text, style = style)
+        Text(hint, style = Type.small, color = palette.muted)
     }
-    if (expanded) androidx.compose.material3.AlertDialog(
-        onDismissRequest = { expanded = false },
-        title = { Text(text) },
-        text = { Text(hint) },
-        confirmButton = { TextButton(onClick = { expanded = false }) { Text(stringResource(android.R.string.ok)) } },
-    )
 }

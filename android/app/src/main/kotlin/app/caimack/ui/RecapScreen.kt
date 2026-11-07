@@ -196,7 +196,7 @@ private fun RecapStory(recap: Recap, play: (List<Track>, Int) -> Unit, onClose: 
                         if (paused) Lucide.Play else Lucide.Pause,
                         stringResource(if (paused) R.string.recap_resume else R.string.recap_pause),
                         tint = palette.foreground,
-                        modifier = Modifier.clip(CircleShape).clickable { paused = !paused }.padding(10.dp).size(20.dp),
+                        modifier = Modifier.clip(CircleShape).clickable { paused = !paused }.padding(14.dp).size(20.dp),
                     )
                     Icon(
                         Lucide.X,

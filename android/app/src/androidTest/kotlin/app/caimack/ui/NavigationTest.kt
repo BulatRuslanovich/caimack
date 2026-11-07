@@ -49,16 +49,18 @@ class NavigationTest {
                             var query by rememberSaveable { mutableStateOf("") }
                             BasicTextField(query, { query = it }, Modifier.testTag("query"))
                         }
-                        composable<PlaylistsRoute> {
+                        composable<LibraryRoute> {
                             Column {
                                 LibraryShortcuts({ nav.openSection(FavoritesRoute) }, { nav.openSection(DownloadsRoute) })
-                                Text("playlists-screen", Modifier.testTag("playlists"))
+                                Text("library-screen", Modifier.testTag("library"))
                             }
                         }
+                        composable<PlaylistsRoute> { Text("playlists-screen", Modifier.testTag("playlists")) }
                         composable<FavoritesRoute> { Text("favorites-screen", Modifier.testTag("favorites")) }
                         composable<DownloadsRoute> { Text("downloads-screen", Modifier.testTag("downloads")) }
                         composable<AlbumsRoute> { Text("albums-screen", Modifier.testTag("albums")) }
                         composable<SettingsRoute> { Text("settings-screen", Modifier.testTag("settings")) }
+                        composable<SettingsSectionRoute> { Text("settings-detail", Modifier.testTag("settings-detail")) }
                         composable<AlbumRoute> { Text("album-screen", Modifier.testTag("album")) }
                     }
                     BottomBar(nav)
@@ -103,7 +105,7 @@ class NavigationTest {
         compose.onNodeWithTag("query").performTextInput("saved search")
         compose.runOnIdle { nav.navigate(SettingsRoute) }
         tapTab(R.string.nav_library)
-        compose.onNodeWithTag("playlists").assertIsDisplayed()
+        compose.onNodeWithTag("library").assertIsDisplayed()
         tapTab(R.string.nav_search)
         compose.onNodeWithTag("query").assertTextEquals("saved search")
     }
@@ -137,21 +139,33 @@ class NavigationTest {
         tapTab(R.string.nav_library)
         tapTab(R.string.nav_favorites)
         compose.onNodeWithTag("favorites").assertIsDisplayed()
-        compose.runOnIdle { nav.openSection(PlaylistsRoute) }
+        compose.runOnIdle { nav.openSection(LibraryRoute) }
         tapTab(R.string.downloads_title)
         compose.onNodeWithTag("downloads").assertIsDisplayed()
     }
 
     @Test
-    fun libraryButtonRemembersTheLastLibrarySection() {
+    fun libraryButtonReturnsToTheOverviewFromAnotherTabAndReselection() {
         start()
         tapTab(R.string.nav_library)
         compose.runOnIdle { nav.openSection(AlbumsRoute) }
         compose.onNodeWithTag("albums").assertIsDisplayed()
         tapTab(R.string.nav_search)
         tapTab(R.string.nav_library)
-        compose.onNodeWithTag("albums").assertIsDisplayed()
+        compose.onNodeWithTag("library").assertIsDisplayed()
         tapTab(R.string.nav_library)
-        compose.onNodeWithTag("albums").assertIsDisplayed()
+        compose.onNodeWithTag("library").assertIsDisplayed()
+    }
+
+    @Test
+    fun homeClosesNestedSettingsWithoutRestoringThemLater() {
+        start()
+        compose.runOnIdle { nav.navigate(SettingsRoute); nav.navigate(SettingsSectionRoute("equalizer")) }
+        compose.onNodeWithTag("settings-detail").assertIsDisplayed()
+        tapTab(R.string.nav_home)
+        compose.onNodeWithTag("home").assertIsDisplayed()
+        tapTab(R.string.nav_search)
+        tapTab(R.string.nav_home)
+        compose.onNodeWithTag("home").assertIsDisplayed()
     }
 }

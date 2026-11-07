@@ -38,7 +38,7 @@ class PlaybackPrefs(private val context: Context) {
         Background.schedule(context)
     }
 
-    private val reminder = MutableStateFlow(preferences.getBoolean(RECAP_REMINDER, true))
+    private val reminder = MutableStateFlow(preferences.getBoolean(RECAP_REMINDER, false))
 
     val recapReminder: StateFlow<Boolean> = reminder
 

@@ -71,13 +71,13 @@ internal fun RadioHero(candidates: List<Track>) {
                 val light = tone.copy(alpha = tone.alpha * if (palette.dark) 0.22f else 0.16f)
                 drawRect(Brush.radialGradient(listOf(light, Color.Transparent),
                     Offset(size.width * 0.85f, size.height * 0.25f), size.width * 0.85f))
-            }.padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+            }.padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Box(Modifier.fillMaxWidth().heightIn(min = 224.dp)) {
-            Box(Modifier.align(Alignment.CenterEnd).offset(x = 52.dp).width(180.dp).height(216.dp)) {
+        Box(Modifier.fillMaxWidth().heightIn(min = 152.dp)) {
+            Box(Modifier.align(Alignment.CenterEnd).offset(x = 52.dp).width(150.dp).height(152.dp)) {
                 VinylFace(lead, spinning = playing && !playback.buffering,
-                    Modifier.align(Alignment.TopEnd).size(180.dp))
+                    Modifier.align(Alignment.TopEnd).size(150.dp))
                 sleeves.reversed().forEachIndexed { index, track ->
                     Cover(trackCover(track, small = false), track.albumTitle ?: track.title,
                         Modifier.align(Alignment.BottomStart).offset(x = (24 + index * 16).dp, y = (-12 - index * 8).dp)
@@ -85,8 +85,8 @@ internal fun RadioHero(candidates: List<Track>) {
                 }
             }
             Column(Modifier.fillMaxWidth(0.56f).align(Alignment.CenterStart),
-                verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(stringResource(R.string.radio_mine), style = Type.display)
+                verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(stringResource(R.string.radio_mine), style = Type.title)
                 Text(stringResource(R.string.radio_hero_description), style = Type.small, color = palette.muted)
                 Row(Modifier.heightIn(min = 48.dp).testTag("radio-toggle").semantics { contentDescription = actionLabel }.clip(CircleShape).background(palette.action)
                     .clickable(enabled = !starting, role = Role.Button) {
@@ -114,7 +114,7 @@ internal fun RadioHero(candidates: List<Track>) {
             }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(palette.cabinetEdge))
-        Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically,
+        Row(Modifier.fillMaxWidth().heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Icon(Lucide.Radio, null, tint = palette.primary, modifier = Modifier.size(20.dp))
             Column(Modifier.weight(1f)) {

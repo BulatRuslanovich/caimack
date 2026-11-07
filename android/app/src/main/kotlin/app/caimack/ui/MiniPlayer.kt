@@ -71,8 +71,6 @@ fun MiniPlayer(state: PlayerState, onOpen: () -> Unit) {
     val container = LocalContainer.current
     val player = container.player
     val track = state.current ?: return
-    container.favorites.state.collectAsStateWithLifecycle().value
-    val liked = container.favorites.isFavorite(track)
     val openLabel = stringResource(R.string.player_open_full)
     val position = rememberPosition(state)
     val duration = state.durationMs.takeIf { it > 0 } ?: (track.durationSeconds * 1000L)
@@ -123,7 +121,7 @@ fun MiniPlayer(state: PlayerState, onOpen: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             val transition = LocalNowPlayingTransition.current
-            Box(Modifier.size(46.dp).semantics { contentDescription = openLabel }.clickable(onClick = onOpen)) {
+            Box(Modifier.size(48.dp).semantics { contentDescription = openLabel }.clickable(onClick = onOpen)) {
                 androidx.compose.animation.AnimatedVisibility(visible = transition?.full != true, enter = fadeIn(tween(if (motion) NOW_PLAYING_TRANSITION_MS else 0)), exit = fadeOut(tween(if (motion) NOW_PLAYING_TRANSITION_MS else 0))) {
                     Cover(trackCover(track), track.albumTitle ?: track.title, Modifier.fillMaxSize().nowPlayingCover(this))
                 }
@@ -133,12 +131,6 @@ fun MiniPlayer(state: PlayerState, onOpen: () -> Unit) {
                 Text(artistsOf(track), style = Type.small, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconAction(
-                    if (liked) Lucide.HeartFilled else Lucide.Heart,
-                    stringResource(if (liked) R.string.menu_unlike else R.string.menu_like),
-                    tint = if (liked) palette.primary else palette.muted,
-                    size = 19,
-                ) { container.favorites.toggle(track) }
                 Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                     Box(Modifier.size(40.dp).clip(CircleShape).background(palette.action))
                     IconAction(if (state.playing) Lucide.Pause else Lucide.Play,

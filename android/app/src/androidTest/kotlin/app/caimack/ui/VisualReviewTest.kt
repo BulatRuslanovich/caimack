@@ -186,7 +186,8 @@ class VisualReviewTest {
         container.appearance.setTheme(if (dark) Appearance.DARK else Appearance.LIGHT)
         shell("settings put system font_scale $fontScale")
         compose.activityRule.scenario.recreate()
-        compose.onNodeWithText(label(R.string.nav_library)).performClick()
+        compose.onNode(hasText(label(R.string.nav_library)) and hasClickAction()).performClick()
+        compose.onNodeWithText(label(R.string.nav_playlists)).performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText("Вечерний маршрут").fetchSemanticsNodes().isNotEmpty() }
         capture("$prefix-library")
         compose.onNodeWithText("Вечерний маршрут").performClick()
@@ -220,7 +221,8 @@ class VisualReviewTest {
         container.appearance.setTheme(Appearance.DARK)
         shell("settings put system font_scale 1.3")
         compose.activityRule.scenario.recreate()
-        compose.onNodeWithText(label(R.string.nav_library)).performClick()
+        compose.onNode(hasText(label(R.string.nav_library)) and hasClickAction()).performClick()
+        compose.onNodeWithText(label(R.string.nav_playlists)).performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText("Вечерний маршрут").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Вечерний маршрут").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription(label(R.string.menu_more)).fetchSemanticsNodes().isNotEmpty() }
@@ -363,11 +365,12 @@ class VisualReviewTest {
         capture("parity-layout-settings")
         compose.onNodeWithContentDescription(label(R.string.search_clear)).performClick()
         compose.onNodeWithContentDescription(label(R.string.settings_search)).performTextInput("плотность")
-        compose.onNodeWithText(label(R.string.settings_density_spacious)).performScrollTo().performClick()
+        compose.onNodeWithText(label(R.string.settings_density_comfortable)).performScrollTo().performClick()
+        compose.onNodeWithText(label(R.string.settings_density_spacious)).performClick()
         assertEquals(LibraryDensity.Spacious, Appearance(context).libraryDensity.value)
         capture("parity-density-settings")
         compose.activityRule.scenario.recreate()
-        compose.onNodeWithText(label(R.string.nav_library)).performClick()
+        compose.onNode(hasText(label(R.string.nav_library)) and hasClickAction()).performClick()
         compose.onNodeWithText(label(R.string.nav_albums)).performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText(original[0].title).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText(label(R.string.view_grid)).assertDoesNotExist()
@@ -387,59 +390,25 @@ class VisualReviewTest {
     }
 
     @Test
-    fun libraryMapLayoutOnPhone() {
+    fun mapIsAbsentFromAndroidNavigationAndIsNotFetched() {
         container.appearance.setLanguage("ru")
-        container.appearance.setTheme(Appearance.DARK)
-        context.getSharedPreferences("map_layers", 0).edit().remove("hidden").apply()
-        val random = kotlin.random.Random(42)
-        val centres = listOf(0.25f to 0.25f, 0.65f to 0.2f, 0.35f to 0.55f, 0.75f to 0.55f, 0.25f to 0.8f, 0.7f to 0.85f)
-        val points = (0 until 180).map { index ->
-            val centre = centres[index % centres.size]
-            app.caimack.api.MapPoint(
-                original.getOrNull(index)?.id ?: "map-$index",
-                centre.first + random.nextFloat() * 0.18f - 0.09f,
-                centre.second + random.nextFloat() * 0.18f - 0.09f,
-                original[index % original.size].title,
-                original[index % original.size].artistName,
-                genre = listOf("Electronic", "Ambient", "Indie rock")[index % 3], plays = index % 27,
-            )
-        }
-        val map = app.caimack.api.LibraryMap(points, points.size)
+        val requests = java.util.concurrent.atomic.AtomicInteger()
         val previous = web.dispatcher
         web.dispatcher = object : Dispatcher() {
-            override fun dispatch(request: RecordedRequest): MockResponse = when (request.url.encodedPath) {
-                "/api/library/map" -> MockResponse.Builder().code(200).addHeader("Content-Type", "application/json").body(Json.encodeToString(map)).build()
-                else -> previous.dispatch(request)
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                if (request.url.encodedPath == "/api/library/map") requests.incrementAndGet()
+                return previous.dispatch(request)
             }
         }
-        Remote.cache.clear()
         compose.activityRule.scenario.recreate()
-        compose.onNodeWithText(label(R.string.nav_library)).performClick()
-        capture("library-tabs")
-        compose.onNode(hasText(label(R.string.nav_map)) and hasClickAction()).performScrollTo().performClick()
-        compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription(localized.getString(R.string.map_region, points.size)).fetchSemanticsNodes().isNotEmpty() }
-        capture("library-map-dark")
-        val canvas = compose.onNodeWithContentDescription(localized.getString(R.string.map_region, points.size))
-        val bounds = canvas.fetchSemanticsNode().boundsInRoot
-        val view = fitView(bounds.width, bounds.height, boundsOf(points.map { Spot(it.x, it.y) }))
-        val spot = toScreen(Spot(points[0].x, points[0].y), view, minOf(bounds.width, bounds.height))
-        canvas.performTouchInput { click(Offset(spot.x, spot.y)) }
-        capture("library-map-picked")
-        compose.onNodeWithText(localized.getString(R.string.map_layers_count, MapLayer.entries.count { it != MapLayer.Motion })).performClick()
-        capture("library-map-layers")
-        MapLayer.entries.forEach { compose.onNodeWithText(label(it.label)).assertIsDisplayed() }
-        compose.onNodeWithText(label(R.string.map_layer_motion)).performClick()
-        compose.runOnIdle {
-            assertTrue(context.getSharedPreferences("map_layers", 0).getStringSet("hidden", emptySet())!!.contains("motion"))
-        }
-        compose.onNodeWithText(label(R.string.map_layer_links)).performClick()
-        compose.activityRule.scenario.recreate()
-        compose.onNodeWithText(label(R.string.nav_library)).performClick()
-        compose.onNode(hasText(label(R.string.nav_map)) and hasClickAction()).performScrollTo().performClick()
-        container.appearance.setTheme(Appearance.LIGHT)
-        capture("library-map-light")
-        repeat(6) { compose.onNodeWithContentDescription(label(R.string.map_zoom_in)).performClick() }
-        capture("library-map-cover-art")
+        compose.onNode(hasText(label(R.string.nav_library)) and hasClickAction()).performClick()
+        compose.onNodeWithText(label(R.string.nav_map)).assertDoesNotExist()
+        compose.onNodeWithText(label(R.string.nav_tracks)).assertIsDisplayed()
+        compose.onNodeWithText(label(R.string.downloads_title)).assertIsDisplayed()
+        capture("android-library-overview", seedPlayback = false)
+        compose.onNodeWithText(label(R.string.nav_tracks)).performClick()
+        compose.waitForIdle()
+        assertEquals(0, requests.get())
     }
 
     @Test

@@ -72,7 +72,10 @@ interface CaimackApi {
     suspend fun homeMix(@Path("kind") kind: String): HomeMix
 
     @GET("api/tracks")
-    suspend fun tracks(@Query("page") page: Int, @Query("pageSize") pageSize: Int, @Query("sort") sort: String = "Title"): Paged<Track>
+    suspend fun tracks(@Query("page") page: Int, @Query("pageSize") pageSize: Int, @Query("sort") sort: String = "Title", @Query("q") query: String? = null): Paged<Track>
+
+    @GET("api/tracks/shuffle")
+    suspend fun shuffleTracks(@Query("q") query: String? = null): List<Track>
 
     @GET("api/albums")
     suspend fun albums(@Query("page") page: Int, @Query("pageSize") pageSize: Int): Paged<Album>

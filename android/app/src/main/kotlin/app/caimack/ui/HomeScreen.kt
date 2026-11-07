@@ -45,7 +45,7 @@ import app.caimack.api.HomeBlock
 import app.caimack.api.Track
 
 private const val HERO_PREVIEW = 3
-private const val MOBILE_UP_NEXT = 3
+private const val MOBILE_UP_NEXT = 2
 private const val MOBILE_QUICK = 4
 private const val MOBILE_CHART = 5
 private const val MIN_DISTINCT = 3
@@ -75,10 +75,9 @@ fun HomeScreen(nav: NavController) {
         LazyColumn(
             Modifier.fillMaxSize(),
             contentPadding = PaddingValues(vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(32.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             if (recommendations) item("personal-radio") { RadioHero(blocks.flatMap { it.tracks.orEmpty() }) }
-            blocks.filter { it.zone == "Lead" }.forEach { block -> item(block.key) { Block(block, nav, shown, seen) } }
 
             val quick = blocks.filter { it.zone == "Quick" }
             if (quick.isNotEmpty()) {
@@ -88,6 +87,8 @@ fun HomeScreen(nav: NavController) {
                     QuickTiles(quick, nav) { tracks, index -> container.player.play(tracks, index, source) }
                 }
             }
+
+            blocks.filter { it.zone == "Lead" }.forEach { block -> item(block.key) { Block(block, nav, shown, seen) } }
 
             if (recommendations) item("recap") { RecapBanner() }
             val browse = blocks.filter { it.zone == "Browse" }
@@ -238,22 +239,22 @@ private fun Collage(collage: List<Track>, lead: Track, modifier: Modifier) {
 }
 
 @Composable
-fun PlayActions(modifier: Modifier = Modifier, onPlay: () -> Unit, onShuffle: () -> Unit) {
+fun PlayActions(modifier: Modifier = Modifier, enabled: Boolean = true, onPlay: () -> Unit, onShuffle: () -> Unit) {
     val palette = LocalPalette.current
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
-            Modifier.size(52.dp).clip(CircleShape).background(palette.action).clickable(onClick = onPlay),
+            Modifier.size(52.dp).clip(CircleShape).background(palette.action).clickable(enabled = enabled, onClick = onPlay),
             contentAlignment = Alignment.Center,
         ) {
             Icon(Lucide.Play, stringResource(R.string.action_play), tint = palette.onAction, modifier = Modifier.size(22.dp))
         }
         Row(
             Modifier
-                .height(40.dp)
+                .heightIn(min = 48.dp)
                 .clip(CircleShape)
                 .background(palette.background)
                 .border(1.dp, palette.controlBorder, CircleShape)
-                .clickable(onClick = onShuffle)
+                .clickable(enabled = enabled, onClick = onShuffle)
                 .padding(horizontal = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),

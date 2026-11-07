@@ -257,7 +257,7 @@ private fun Seekbar(positionMs: Long, durationMs: Long, peaks: List<Int>?, onSee
     BoxWithConstraints(
         Modifier
             .fillMaxWidth()
-            .height(if (peaks != null) 44.dp else 24.dp)
+            .height(48.dp)
             .systemGestureExclusion()
             .pointerInput(durationMs) {
                 detectTapGestures { onSeek((it.x / size.width * durationMs).toLong()) }
