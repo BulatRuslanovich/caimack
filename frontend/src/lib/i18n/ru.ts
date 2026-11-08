@@ -701,6 +701,23 @@ export const ru: Dictionary = {
   "settings.account": "Учётная запись",
   "settings.recommendations": "Рекомендации",
   "settings.experimental": "Эксперименты",
+  "settings.tatarMafia": "Режим татарской мафии",
+  "settings.tatarMafiaHint":
+    "Крути пластинку в полноэкранном плеере вперёд-назад — будут скретчи и искажения. Воспроизведение должно идти на этом устройстве. Кто поймёт, тот поймёт.",
+  "settings.tatarMafiaUnsupported":
+    "Звуковой скретч недоступен в этом браузере. Попробуй открыть сайт по HTTPS в браузере на компьютере.",
+  "player.djHint": "Крути пластинку вперёд-назад, чтобы скретчить",
+  "player.djReady": "Дека готова",
+  "player.djLoading": "Готовим пластинку…",
+  "player.djUnavailable": "Дека недоступна для этого файла",
+  "player.djLimitHint":
+    "Для деки нужен поддерживаемый браузером аудиофайл до 48 МБ и 10 минут. Обычное воспроизведение доступно.",
+  "player.djCrossfader": "Кроссфейдер · резкий срез",
+  "player.djClosed": "Закрыт",
+  "player.djOpen": "Открыт",
+  "player.djCut": "Удерживать, чтобы закрыть звук",
+  "player.djInstructions":
+    "Одной рукой крути пластинку, другой нажимай Cut. На клавиатуре звук закрывается удержанием X. Отпусти пластинку — трек продолжится из-под иглы.",
   "settings.yandexMusic": "Импорт из Яндекс Музыки",
   "settings.yandexToken": "Токен Яндекс Музыки",
   "settings.yandexTokenSave": "Сохранить токен",

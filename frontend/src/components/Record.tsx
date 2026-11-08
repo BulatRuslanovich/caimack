@@ -3,12 +3,17 @@
 
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Track } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { useVisualizer } from "@/lib/visualizer";
 import { trackCoverUrl } from "@/lib/media";
-import { usePlayerActions } from "@/contexts/PlayerContext";
+import { usePlayerActions, usePlayerProgress, usePlayerState } from "@/contexts/PlayerContext";
+import { useConnect } from "@/lib/playback/useConnectPlayback";
+import { useTatarMafia } from "@/lib/tatarMafia";
+import { endVinylScratch, moveVinylScratch, startVinylScratch } from "@/lib/playback/equalizer";
+import { useT } from "@/contexts/I18nContext";
+import { VINYL_TURN_SECONDS } from "@/lib/playback/vinylDeck";
 import { TrackCover } from "./Cover";
 import { RecordAura } from "./RecordAura";
 
@@ -16,7 +21,7 @@ type RecordTrack = Pick<Track, "id" | "title" | "albumId" | "albumTitle" | "hasC
   cues?: Track["cues"];
 };
 
-const TURN_MS = 1800;
+const TURN_MS = VINYL_TURN_SECONDS * 1000;
 const SPIN_UP_MS = 500;
 const SPIN_DOWN_MS = 1100;
 const SCRATCH_SECONDS_PER_TURN = 10;
@@ -42,11 +47,46 @@ export function Record({
   transitionCover?: boolean;
   className?: string;
 }) {
-  const { scrubBy, holdScrub, commitScrub } = usePlayerActions();
+  const { scrubBy, holdScrub, commitScrub, getDuration } = usePlayerActions();
+  const { getPosition } = usePlayerProgress();
+  const { volume, muted } = usePlayerState();
+  const connect = useConnect();
+  const tatarMafia = useTatarMafia();
+  const djMode = scratchable && tatarMafia && !connect.selectedId;
+  const t = useT();
   const visualizer = useVisualizer();
   const spinElement = useRef<HTMLDivElement>(null);
   const spin = useRef<Animation | null>(null);
   const scratchAngle = useRef<number | null>(null);
+  const scratchPointer = useRef<number | null>(null);
+  const scratchTime = useRef(0);
+  const needlePosition = useRef(0);
+  const audibleScratch = useRef(false);
+  const [scratching, setScratching] = useState(false);
+
+  const endScratch = useCallback(() => {
+    if (scratchAngle.current === null) return;
+    scratchAngle.current = null;
+    scratchPointer.current = null;
+    audibleScratch.current = false;
+    endVinylScratch();
+    spin.current?.play();
+    setScratching(false);
+    commitScrub();
+  }, [commitScrub]);
+
+  useEffect(() => {
+    const hidden = () => {
+      if (document.visibilityState !== "visible") endScratch();
+    };
+    window.addEventListener("blur", endScratch);
+    document.addEventListener("visibilitychange", hidden);
+    return () => {
+      window.removeEventListener("blur", endScratch);
+      document.removeEventListener("visibilitychange", hidden);
+      endScratch();
+    };
+  }, [endScratch, track.id, djMode, scratchable]);
 
   useEffect(() => {
     const animation = spinElement.current?.animate(
@@ -89,37 +129,38 @@ export function Record({
     );
   }
 
-  function endScratch() {
-    if (scratchAngle.current === null) return;
-
-    scratchAngle.current = null;
-    spin.current?.play();
-    commitScrub();
-  }
-
   return (
     <div
       className={cn("record", className)}
       data-out={out}
       data-scratchable={scratchable}
+      data-dj-scratching={djMode && scratching}
       data-axis={axis}
     >
       <div
         key={track.id}
         className="record-disc"
         aria-hidden="true"
+        title={djMode ? t("player.djHint") : undefined}
         onTouchStart={(event) => scratchable && event.stopPropagation()}
         onDragStart={(event) => scratchable && event.preventDefault()}
         onPointerDown={(event) => {
-          if (!scratchable || event.button !== 0) return;
+          if (!scratchable || event.button !== 0 || scratchPointer.current !== null) return;
 
+          event.preventDefault();
           event.currentTarget.setPointerCapture(event.pointerId);
+          scratchPointer.current = event.pointerId;
+          scratchTime.current = event.timeStamp;
+          needlePosition.current = getPosition();
           scratchAngle.current = angleAt(event);
           spin.current?.pause();
+          audibleScratch.current =
+            djMode && !muted && volume > 0 && startVinylScratch(track.id, needlePosition.current);
+          setScratching(true);
           holdScrub();
         }}
         onPointerMove={(event) => {
-          if (scratchAngle.current === null) return;
+          if (scratchAngle.current === null || event.pointerId !== scratchPointer.current) return;
 
           const angle = angleAt(event);
           let delta = angle - scratchAngle.current;
@@ -128,15 +169,34 @@ export function Record({
           scratchAngle.current = angle;
 
           const turns = delta / (2 * Math.PI);
+          const elapsed = Math.max(4, event.timeStamp - scratchTime.current) / 1000;
+          scratchTime.current = event.timeStamp;
+          const seconds = turns * (djMode ? VINYL_TURN_SECONDS : SCRATCH_SECONDS_PER_TURN);
+          const position = Math.max(
+            0,
+            Math.min(getDuration() || Infinity, needlePosition.current + seconds),
+          );
+          const moved = position - needlePosition.current;
+          needlePosition.current = position;
+          if (audibleScratch.current) {
+            moveVinylScratch(position, elapsed);
+          }
           const animation = spin.current;
           if (animation) {
             const time = Number(animation.currentTime ?? 0) + turns * TURN_MS;
             animation.currentTime = ((time % TURN_MS) + TURN_MS) % TURN_MS;
           }
-          scrubBy(turns * SCRATCH_SECONDS_PER_TURN);
+          scrubBy(moved);
         }}
-        onPointerUp={endScratch}
+        onPointerUp={(event) => {
+          if (event.pointerId !== scratchPointer.current) return;
+          endScratch();
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }
+        }}
         onPointerCancel={endScratch}
+        onLostPointerCapture={endScratch}
       >
         {aura && visualizer && (
           <RecordAura playing={spinning} bpm={track.cues?.bpm} offset={track.cues?.audioStart} />

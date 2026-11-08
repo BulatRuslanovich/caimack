@@ -23,6 +23,9 @@ import { useT } from "@/contexts/I18nContext";
 import { ArtBackdrop } from "./ArtBackdrop";
 import { ArtistLinks } from "./ArtistLinks";
 import { Record } from "./Record";
+import { DJControls } from "./DJControls";
+import { useTatarMafia } from "@/lib/tatarMafia";
+import { useConnect } from "@/lib/playback/useConnectPlayback";
 import { PlayerTransport } from "./PlayerTransport";
 import { PlayerVolume } from "./PlayerVolume";
 import { StreamQuality } from "./StreamQuality";
@@ -136,11 +139,14 @@ export function FullScreenPlayer({
   onToggleFavorite: () => void;
 }) {
   const player = usePlayer();
+  const tatarMafia = useTatarMafia();
+  const connect = useConnect();
+  const djMode = tatarMafia && !connect.selectedId;
   const t = useT();
   const [panel, setPanel] = useState<"art" | "queue" | "lyrics">("art");
   const [menuOpen, setMenuOpen] = useState(false);
   const track = player.currentTrack;
-  const idle = useIdle(IDLE_MS, panel === "art" && !menuOpen);
+  const idle = useIdle(IDLE_MS, panel === "art" && !menuOpen && !djMode);
   const stage = useRef<HTMLDivElement>(null);
   const swipeFrom = useRef<number | null>(null);
 
@@ -294,6 +300,7 @@ export function FullScreenPlayer({
               <div
                 className={cn(
                   "flex min-h-0 flex-1 flex-col justify-center gap-6 max-lg:flex-none max-lg:pb-4",
+                  djMode && "lg:overflow-x-hidden lg:overflow-y-auto lg:py-3 lg:[justify-content:safe_center]",
                   panel !== "art" && "max-lg:hidden lg:max-w-[50%] lg:flex-none lg:basis-1/2",
                 )}
               >
@@ -349,6 +356,8 @@ export function FullScreenPlayer({
                   <FullScreenProgress track={track} chrome={chrome} />
 
                   <PlayerTransport size="full" />
+
+                  {djMode && <DJControls key={track.id} track={track} />}
 
                   {player.nextTrack && (
                     <button

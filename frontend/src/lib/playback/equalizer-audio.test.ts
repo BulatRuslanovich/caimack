@@ -9,7 +9,7 @@ vi.mock("react", () => ({
 }));
 
 const parameter = () => ({ value: 0, setTargetAtTime: vi.fn() });
-const node = () => ({ connect: vi.fn().mockReturnThis() });
+const node = () => ({ connect: vi.fn().mockReturnThis(), disconnect: vi.fn() });
 const filterNode = () => ({
   ...node(),
   type: "",
@@ -24,8 +24,11 @@ class AudioGraph {
   filters: ReturnType<typeof filterNode>[] = [];
   sources: HTMLMediaElement[] = [];
   gain = { ...node(), gain: parameter() };
+  input = { ...node(), gain: parameter() };
+  gainsCreated = 0;
+  audioWorklet = { addModule: vi.fn().mockResolvedValue(undefined) };
   createGain() {
-    return this.gain;
+    return this.gainsCreated++ === 0 ? this.gain : this.input;
   }
   createBiquadFilter() {
     const filter = filterNode();
@@ -43,6 +46,7 @@ beforeEach(() => {
   vi.resetModules();
   const saved = new Map<string, string>();
   vi.stubGlobal("window", {
+    isSecureContext: true,
     localStorage: {
       getItem: (key: string) => saved.get(key) ?? null,
       setItem: (key: string, value: string) => saved.set(key, value),
@@ -88,4 +92,72 @@ it("attaches replacement player elements exactly once after a session remount", 
   connectEqualizer([replacement]);
   connectEqualizer([replacement]);
   expect(graph.sources).toEqual([original, replacement]);
+});
+
+it("adds scratch processing without reconnecting media sources and restores dry audio on processor failure", async () => {
+  const worklet = {
+    ...node(),
+    port: { postMessage: vi.fn() },
+    onprocessorerror: null as (() => void) | null,
+  };
+  const constructor = vi.fn(function () {
+    return worklet;
+  });
+  vi.stubGlobal("AudioWorkletNode", constructor);
+  const audio = {
+    dataset: { trackId: "track" },
+    volume: 0.6,
+    muted: false,
+  } as unknown as HTMLMediaElement;
+  const eq = await import("./equalizer");
+  eq.connectEqualizer([audio]);
+  eq.enableVinylScratch(true);
+  expect(await eq.prepareVinylScratch()).toBe(true);
+  expect(await eq.prepareVinylScratch()).toBe(true);
+  expect(constructor).toHaveBeenCalledTimes(1);
+  expect(graph.sources).toEqual([audio]);
+  expect(worklet.port.postMessage).toHaveBeenCalledWith({ type: "enabled", enabled: true });
+  expect(eq.startVinylScratch("track", 12)).toBe(false);
+  eq.loadVinylScratchTrack("track", [new Float32Array(128)], 24_000);
+  expect(eq.startVinylScratch("other-track", 12)).toBe(false);
+  expect(eq.startVinylScratch("track", 12)).toBe(true);
+  expect(worklet.port.postMessage).toHaveBeenLastCalledWith({
+    type: "start",
+    trackId: "track",
+    position: 12,
+    gain: 0.6,
+  });
+  eq.moveVinylScratch(11.8, 0.016);
+  expect(worklet.port.postMessage).toHaveBeenLastCalledWith({
+    type: "move",
+    position: 11.8,
+    seconds: 0.016,
+  });
+  eq.endVinylScratch();
+  expect(worklet.port.postMessage).toHaveBeenLastCalledWith({ type: "end" });
+  eq.enableVinylScratch(false);
+  expect(eq.startVinylScratch("track", 12)).toBe(false);
+  worklet.onprocessorerror?.();
+  expect(graph.input.disconnect).toHaveBeenCalledWith(worklet);
+  expect(graph.input.connect).toHaveBeenLastCalledWith(graph.filters[0]);
+});
+
+it("leaves the dry output connected when loading the scratch processor fails", async () => {
+  vi.stubGlobal("AudioWorkletNode", vi.fn());
+  const eq = await import("./equalizer");
+  eq.connectEqualizer([{} as HTMLMediaElement]);
+  eq.useEqualizer().setEnabled(true);
+  graph.audioWorklet.addModule.mockRejectedValue(new Error("offline"));
+  expect(await eq.prepareVinylScratch()).toBe(false);
+  expect(graph.gain.disconnect).not.toHaveBeenCalled();
+  expect(eq.startVinylScratch("track", 12)).toBe(false);
+});
+
+it("does not initialize Web Audio for scratching on unsupported browsers", async () => {
+  vi.stubGlobal("AudioWorkletNode", undefined);
+  const eq = await import("./equalizer");
+  eq.connectEqualizer([{} as HTMLMediaElement]);
+  expect(eq.vinylScratchSupported()).toBe(false);
+  expect(await eq.prepareVinylScratch()).toBe(false);
+  expect(AudioContext).not.toHaveBeenCalled();
 });

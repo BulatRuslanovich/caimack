@@ -54,7 +54,12 @@ function equalizerSupported(): boolean {
 let context: AudioContext | null = null;
 let filters: BiquadFilterNode[] = [];
 let preamp: GainNode | null = null;
+let inputMix: GainNode | null = null;
 let analyser: AnalyserNode | null = null;
+let scratch: AudioWorkletNode | null = null;
+let scratchLoading: Promise<boolean> | null = null;
+let scratchEnabled = false;
+let scratchTrackId: string | null = null;
 
 const ANALYSER_BIN_HZ = 12;
 let elements: HTMLMediaElement[] = [];
@@ -74,6 +79,8 @@ function ensureGraph(): void {
       return filter;
     });
     preamp = context.createGain();
+    inputMix = context.createGain();
+    inputMix.connect(filters[0]);
 
     for (let band = 1; band < filters.length; band++) filters[band - 1].connect(filters[band]);
     filters[filters.length - 1].connect(preamp).connect(context.destination);
@@ -81,12 +88,105 @@ function ensureGraph(): void {
 
   for (const element of elements) {
     if (attached.has(element)) continue;
-    context.createMediaElementSource(element).connect(filters[0]);
+    context.createMediaElementSource(element).connect(inputMix!);
     attached.add(element);
   }
 
   void context.resume().catch(() => {});
   apply();
+}
+
+export function vinylScratchSupported(): boolean {
+  return equalizerSupported() && typeof AudioWorkletNode !== "undefined" && window.isSecureContext;
+}
+
+export function prepareVinylScratch(): Promise<boolean> {
+  if (!vinylScratchSupported()) return Promise.resolve(false);
+  if (scratch) {
+    void context?.resume().catch(() => {});
+    return Promise.resolve(true);
+  }
+  if (scratchLoading) return scratchLoading;
+  ensureGraph();
+  const graph = context;
+  const input = inputMix;
+  if (!graph?.audioWorklet || !input) return Promise.resolve(false);
+
+  scratchLoading = graph.audioWorklet
+    .addModule("/audio/vinyl-deck.js")
+    .then(() => {
+      const node = new AudioWorkletNode(graph, "vinyl-deck", { outputChannelCount: [2] });
+      // Keep dry audio connected until the processor is ready. Reuse the existing
+      // media sources so the equalizer and scratch effect can coexist.
+      input.disconnect(filters[0]);
+      input.connect(node).connect(filters[0]);
+      scratch = node;
+      node.port.postMessage({ type: "enabled", enabled: scratchEnabled });
+      node.onprocessorerror = () => {
+        input.disconnect(node);
+        node.disconnect();
+        input.connect(filters[0]);
+        scratch = null;
+        scratchTrackId = null;
+        scratchLoading = null;
+      };
+      return true;
+    })
+    .catch(() => {
+      scratchLoading = null;
+      return false;
+    });
+  return scratchLoading;
+}
+
+export function enableVinylScratch(enabled: boolean): void {
+  scratchEnabled = enabled;
+  if (!enabled) scratchTrackId = null;
+  scratch?.port.postMessage({ type: "enabled", enabled });
+}
+
+export function loadVinylScratchTrack(
+  trackId: string,
+  channels: Float32Array[],
+  sampleRate: number,
+): boolean {
+  if (!scratch || !scratchEnabled) return false;
+  scratch.port.postMessage(
+    { type: "load", trackId, channels, sampleRate },
+    channels.map((channel) => channel.buffer),
+  );
+  scratchTrackId = trackId;
+  return true;
+}
+
+export function unloadVinylScratchTrack(): void {
+  scratchTrackId = null;
+  scratch?.port.postMessage({ type: "unload" });
+}
+
+export function startVinylScratch(trackId: string, position: number): boolean {
+  if (!scratch || !scratchEnabled || scratchTrackId !== trackId) return false;
+  const audio = elements.find((element) => element.dataset.trackId === trackId);
+  if (!audio || audio.muted) return false;
+  void context?.resume().catch(() => {});
+  scratch.port.postMessage({ type: "start", trackId, position, gain: audio.volume });
+  return true;
+}
+
+export function moveVinylScratch(position: number, seconds: number): void {
+  scratch?.port.postMessage({ type: "move", position, seconds });
+}
+
+export function setVinylCrossfader(value: number): void {
+  scratch?.port.postMessage({ type: "fader", value });
+}
+
+export function endVinylScratch(): void {
+  scratch?.port.postMessage({ type: "end" });
+}
+
+export function resetVinylScratch(): void {
+  scratch?.port.postMessage({ type: "reset" });
 }
 
 function apply(): void {

@@ -4,6 +4,7 @@
 "use client";
 
 import { useForm } from "react-hook-form";
+import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import { CheckIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,11 +16,25 @@ import { useYandexMusicSettings } from "@/lib/useYandexMusic";
 import { useT } from "@/contexts/I18nContext";
 import { useToast } from "@/lib/useToast";
 import { Panel } from "./Panel";
+import { setTatarMafia, useTatarMafia } from "@/lib/tatarMafia";
+import {
+  enableVinylScratch,
+  prepareVinylScratch,
+  vinylScratchSupported,
+} from "@/lib/playback/equalizer";
+
+const subscribeSupport = () => () => {};
 
 export function Experimental() {
   const t = useT();
   const { notify } = useToast();
   const yandex = useYandexMusicSettings();
+  const tatarMafia = useTatarMafia();
+  const scratchSupported = useSyncExternalStore(
+    subscribeSupport,
+    vinylScratchSupported,
+    () => false,
+  );
   const form = useForm<{ token: string }>({ defaultValues: { token: "" } });
 
   const save = form.handleSubmit(({ token }) => {
@@ -30,6 +45,26 @@ export function Experimental() {
 
   return (
     <Panel title={t("settings.experimental")}>
+      <label className="flex cursor-pointer items-start gap-3">
+        <Switch
+          className="mt-0.5"
+          checked={tatarMafia}
+          disabled={!scratchSupported}
+          aria-describedby="tatar-mafia-hint"
+          onCheckedChange={(enabled) => {
+            setTatarMafia(enabled);
+            enableVinylScratch(enabled);
+            if (enabled) void prepareVinylScratch();
+          }}
+        />
+        <span className="flex max-w-xl flex-col gap-1">
+          <span className="font-medium">{t("settings.tatarMafia")}</span>
+          <span id="tatar-mafia-hint" className="text-sm text-muted-foreground">
+            {t(scratchSupported ? "settings.tatarMafiaHint" : "settings.tatarMafiaUnsupported")}
+          </span>
+        </span>
+      </label>
+
       <p className="max-w-xl text-sm text-muted-foreground">{t("settings.yandexIntro")}</p>
       <label className="flex cursor-pointer items-center gap-3">
         <Switch checked={yandex.enabled} onCheckedChange={setYandexMusicEnabled} />

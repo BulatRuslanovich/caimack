@@ -30,6 +30,7 @@ import type {
   Standby,
 } from "@/lib/playback/playbackEngineTypes";
 import { bufferedAhead, silence, sourceKeyOf } from "@/lib/playback/audioSource";
+import { endVinylScratch, resetVinylScratch } from "@/lib/playback/equalizer";
 
 const SWITCH_TIMER_WINDOW_SECONDS = 0.6;
 
@@ -175,10 +176,18 @@ export function usePlaybackEngine({
   );
 
   const scrubRef = useRef<number | null>(null);
+  const scrubTrackRef = useRef<string | undefined>(undefined);
   const resumeAfterScrub = useRef({ muted, isPlaying });
   useLayoutEffect(() => {
     resumeAfterScrub.current = { muted, isPlaying };
   });
+
+  useLayoutEffect(() => {
+    resetVinylScratch();
+    scrubRef.current = null;
+    scrubTrackRef.current = undefined;
+    if (audioRef.current) audioRef.current.muted = resumeAfterScrub.current.muted;
+  }, [currentTrack?.id]);
 
   const scrubBy = useCallback(
     (deltaSeconds: number) => {
@@ -188,6 +197,7 @@ export function usePlaybackEngine({
       crossfader.finish();
 
       const from = scrubRef.current ?? audio.currentTime;
+      scrubTrackRef.current ??= audio.dataset.trackId;
       const target = Math.max(0, Math.min(from + deltaSeconds, audio.duration || from));
       scrubRef.current = target;
       audio.muted = true;
@@ -202,11 +212,14 @@ export function usePlaybackEngine({
     if (!audio) return;
 
     crossfader.finish();
+    clearSwitchTimer();
     scrubRef.current ??= audio.currentTime;
+    scrubTrackRef.current = audio.dataset.trackId;
     audio.pause();
-  }, [crossfader]);
+  }, [crossfader, clearSwitchTimer]);
 
   const commitScrub = useCallback(() => {
+    endVinylScratch();
     const target = scrubRef.current;
     if (target === null) return;
 
@@ -214,6 +227,8 @@ export function usePlaybackEngine({
     const { muted, isPlaying } = resumeAfterScrub.current;
     const audio = audioRef.current;
     if (audio) audio.muted = muted;
+    if (!audio || audio.dataset.trackId !== scrubTrackRef.current) return;
+    scrubTrackRef.current = undefined;
     seek(target);
     if (audio && isPlaying && audio.paused) void audio.play().catch(() => {});
   }, [seek]);
@@ -452,6 +467,7 @@ export function usePlaybackEngine({
     const primary = primaryRef.current;
     const secondary = secondaryRef.current;
     return () => {
+      resetVinylScratch();
       primary?.pause();
       secondary?.pause();
       if (retryTimerRef.current !== null) window.clearTimeout(retryTimerRef.current);
@@ -466,6 +482,8 @@ export function usePlaybackEngine({
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
+
+    if (!isPlaying) endVinylScratch();
 
     adaptiveRef.current?.setPlaying(isPlaying);
     recovery.setIntent(isPlaying);
@@ -494,6 +512,7 @@ export function usePlaybackEngine({
   }, [isPlaying, currentTrack, notify, t, setIsPlaying, crossfader, recovery]);
 
   useEffect(() => {
+    endVinylScratch();
     crossfader.setLevel(volume);
 
     for (const audio of [primaryRef.current, secondaryRef.current]) {

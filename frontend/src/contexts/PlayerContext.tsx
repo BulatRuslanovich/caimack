@@ -26,7 +26,12 @@ import type {
   RepeatMode,
 } from "@/lib/playback/playerTypes";
 import type { PlaybackHandoff, Track } from "@/lib/types";
-import { connectEqualizer } from "@/lib/playback/equalizer";
+import {
+  connectEqualizer,
+  enableVinylScratch,
+  prepareVinylScratch,
+} from "@/lib/playback/equalizer";
+import { useTatarMafia } from "@/lib/tatarMafia";
 import { useRadioSession } from "@/lib/playback/useRadioSession";
 import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
 import { useExclusivePlayback } from "@/lib/playback/useExclusivePlayback";
@@ -66,6 +71,7 @@ function PlayerSessionProvider({
   children: React.ReactNode;
   userId: string | null;
 }) {
+  const tatarMafia = useTatarMafia();
   const { notify, notifyError } = useToast();
   const t = useT();
 
@@ -223,6 +229,19 @@ function PlayerSessionProvider({
       ),
     );
   }, [primaryAudioRef, secondaryAudioRef]);
+
+  useEffect(() => {
+    enableVinylScratch(tatarMafia);
+    if (!tatarMafia) return;
+    const prepare = () => void prepareVinylScratch();
+    window.addEventListener("pointerdown", prepare, { capture: true, once: true });
+    window.addEventListener("keydown", prepare, { capture: true, once: true });
+    return () => {
+      window.removeEventListener("pointerdown", prepare, true);
+      window.removeEventListener("keydown", prepare, true);
+      enableVinylScratch(false);
+    };
+  }, [tatarMafia]);
 
   const replaceQueue = useCallback(
     (tracks: Track[], startIndex = 0, shuffled = live.current.shuffle) => {
