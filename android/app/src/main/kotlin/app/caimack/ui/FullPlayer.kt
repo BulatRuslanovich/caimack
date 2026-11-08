@@ -56,8 +56,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
@@ -224,11 +222,6 @@ fun FullPlayer(state: PlayerState, onClose: () -> Unit) {
                             tint = if (state.repeat == Player.REPEAT_MODE_OFF) palette.muted else palette.primary,
                         ) { player.cycleRepeat() }
                     }
-                    var volume by remember(state.volume) { mutableStateOf(state.volume) }
-                    val volumeLabel = stringResource(R.string.connect_volume)
-                    androidx.compose.material3.Slider(value = volume, onValueChange = { volume = it },
-                        onValueChangeFinished = { player.setVolume(volume) },
-                        modifier = Modifier.semantics { contentDescription = volumeLabel })
                 }
             }
 
