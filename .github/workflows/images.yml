@@ -36,6 +36,18 @@ jobs:
             contexts: ""
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - name: Check image inputs against the previous release
+        id: plan
+        env:
+          COMPONENT: ${{ matrix.name }}
+        run: node scripts/image-plan.mjs "$COMPONENT"
 
       - uses: docker/setup-buildx-action@v3
 
@@ -48,6 +60,20 @@ jobs:
       - id: owner
         run: echo "name=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
 
+      - name: Find the unchanged image in the registry
+        id: reuse
+        if: steps.plan.outputs.source_tag != ''
+        env:
+          IMAGE: ghcr.io/${{ steps.owner.outputs.name }}/caimack-${{ matrix.name }}
+          SOURCE_TAG: ${{ steps.plan.outputs.source_tag }}
+        run: |
+          if manifest=$(docker buildx imagetools inspect "$IMAGE:$SOURCE_TAG" --format '{{json .Manifest}}'); then
+            digest=$(jq -er '.digest | select(test("^sha256:[a-f0-9]{64}$"))' <<< "$manifest")
+            echo "source=$IMAGE@$digest" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Previous image is unavailable; rebuilding this component."
+          fi
+
       - id: meta
         uses: docker/metadata-action@v5
         with:
@@ -58,7 +84,22 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha
 
-      - uses: docker/build-push-action@v6
+      - name: Publish release tags for the unchanged image
+        if: steps.reuse.outputs.source != ''
+        env:
+          SOURCE_IMAGE: ${{ steps.reuse.outputs.source }}
+          IMAGE_METADATA: ${{ steps.meta.outputs.json }}
+        run: |
+          args=()
+          while IFS= read -r tag; do
+            args+=(--tag "$tag")
+          done < <(jq -er '.tags[]' <<< "$IMAGE_METADATA")
+          docker buildx imagetools create --prefer-index=false "${args[@]}" "$SOURCE_IMAGE"
+          echo "Reused $SOURCE_IMAGE" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build and publish the changed or missing image
+        if: steps.reuse.outputs.source == ''
+        uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}

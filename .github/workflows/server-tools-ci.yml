@@ -10,6 +10,9 @@ on:
         "tests/test_caimack_cli.py",
         "tests/test_telegram_apk.py",
         "scripts/send_telegram_apk.py",
+        "scripts/image-plan*.mjs",
+        "scripts/release*.mjs",
+        ".github/workflows/images.yml",
         ".github/workflows/android-release.yml",
         "docker-compose*.yml",
         ".env.example",
@@ -23,6 +26,9 @@ on:
         "tests/test_caimack_cli.py",
         "tests/test_telegram_apk.py",
         "scripts/send_telegram_apk.py",
+        "scripts/image-plan*.mjs",
+        "scripts/release*.mjs",
+        ".github/workflows/images.yml",
         ".github/workflows/android-release.yml",
         "docker-compose*.yml",
         ".env.example",
@@ -37,6 +43,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - name: Test image selection and release tooling
+        run: node --test scripts/image-plan.test.mjs scripts/release.test.mjs
       - name: Check Bash syntax and ShellCheck
         run: |
           bash -n caimack.sh

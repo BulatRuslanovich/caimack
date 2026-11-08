@@ -262,10 +262,19 @@ If the requested version is already set and has no tag, the script tags the curr
 To publish the commit and tag, run `git push origin HEAD && git push origin v1.0.1`.
 Only pushing a `v*` tag triggers the Images workflow; regular branch pushes do not build or
 publish Docker images. A stable tag such as `v1.0.1` publishes `1.0.1`, `1.0`, `latest`, and
-a commit SHA tag for both images. Prerelease tags do not update `latest`.
+a commit SHA tag for all three images. Prerelease tags do not update `latest`.
 Pin these with `CAIMACK_VERSION=1.0.1`. The script itself does not push anything.
 
-Test the release script with `node --test scripts/release.test.mjs`.
+Images are compared with the latest earlier stable release reachable in Git history.
+Only changed components are built: backend inputs include `db/migrations`, while
+MERT uses `backend/scripts` separately. Changes to Dockerfiles, dependencies and
+the Images workflow or its image selection script also trigger builds. Version-only
+changes made by the release script are ignored. Unchanged images receive the new release tags directly in the
+registry, preserving their digest, build version and source link. A missing previous
+image falls back to a build. The first release and changes to the Images workflow
+build all three images; the first release after introducing this optimization does too.
+
+Test release tooling with `node --test scripts/image-plan.test.mjs scripts/release.test.mjs`.
 
 ### Android
 
