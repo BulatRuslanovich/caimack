@@ -167,6 +167,26 @@ pub fn write(path: &Path, tags: &AudioTags) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Replace front artwork only; retain other tags and the encoded audio frames.
+pub fn write_front_cover(path: &Path, jpeg: &[u8]) -> anyhow::Result<bool> {
+    let mut tagged = Probe::open(path)?.guess_file_type()?.read()?;
+    let tag_type = tagged.primary_tag_type();
+    if tagged.tag(tag_type).is_none() {
+        tagged.insert_tag(Tag::new(tag_type));
+    }
+    let tag = tagged.tag_mut(tag_type).context("The file cannot hold artwork")?;
+    let fronts: Vec<_> = tag.pictures().iter().filter(|p| p.pic_type() == PictureType::CoverFront).collect();
+    if fronts.len() == 1 && fronts[0].data() == jpeg {
+        return Ok(false);
+    }
+    tag.remove_picture_type(PictureType::CoverFront);
+    tag.push_picture(
+        Picture::unchecked(jpeg.to_vec()).pic_type(PictureType::CoverFront).mime_type(MimeType::Jpeg).build(),
+    );
+    tagged.save_to_path(path, WriteOptions::default())?;
+    Ok(true)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
