@@ -64,6 +64,7 @@ class SettingsSearchUiTest {
             val resources = context.createConfigurationContext(configuration).resources
             assertEquals(setOf(SettingKey.Downloads), matchingSettings("wifi", resources))
             assertEquals(setOf(SettingKey.Theme), matchingSettings(if (language == "ru") "темная" else "dark", resources))
+            assertEquals(setOf(SettingKey.Updates), matchingSettings(if (language == "ru") "обновления" else "updates", resources))
         }
     }
 }

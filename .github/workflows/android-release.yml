@@ -12,7 +12,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: android-release-${{ inputs.release_tag || github.ref_name }}
@@ -85,6 +85,7 @@ jobs:
           CAIMACK_KEY_ALIAS: ${{ secrets.CAIMACK_KEY_ALIAS }}
           CAIMACK_KEY_PASSWORD: ${{ secrets.CAIMACK_KEY_PASSWORD }}
           CAIMACK_SOURCE_URL: https://github.com/${{ github.repository }}/tree/${{ env.SOURCE_REVISION }}
+          CAIMACK_UPDATE_REPOSITORY: ${{ github.repository }}
         run: ./gradlew :app:testDebugUnitTest :app:assembleRelease --no-daemon --no-configuration-cache
 
       - name: Verify signature and prepare artifact
@@ -98,6 +99,24 @@ jobs:
           path: dist/*.apk
           if-no-files-found: error
           retention-days: 30
+
+      # Manual rebuilds may target a tag older than the publishing helper.
+      - name: Check out release publishing tools
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-tools
+          sparse-checkout: scripts/publish_android_release.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Publish APK to GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 .release-tools/scripts/publish_android_release.py --apk "dist/$APK_NAME" \
+            --tag "$RELEASE_TAG" --repository "$SOURCE_REPOSITORY"
 
       - name: Send APK to the configured Telegram group
         env:

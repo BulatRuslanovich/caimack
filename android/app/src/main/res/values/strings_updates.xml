@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_updates">Updates</string>
+    <string name="settings_updates_intro">New versions and release notes</string>
+    <string name="update_installed">Installed version: %1$s</string>
+    <string name="update_available">Caimack %1$s is available</string>
+    <string name="update_check">Check for updates</string>
+    <string name="update_checking">Checking for updates…</string>
+    <string name="update_current">You have the latest version</string>
+    <string name="update_failed">Could not check for updates. Try again later.</string>
+    <string name="update_no_releases">No Android releases are available yet</string>
+    <string name="update_disabled">Update checks are not available in this build</string>
+    <string name="update_details">Details</string>
+    <string name="update_whats_new">What’s new · Download</string>
+    <string name="update_later">Later</string>
+    <string name="update_download">Download APK</string>
+    <string name="update_download_hint">The APK will open in your browser. Confirm installation in Android after downloading.</string>
+    <string name="update_notes_empty">No release notes were provided.</string>
+    <string name="update_browser_missing">No browser is available to download the update.</string>
+</resources>

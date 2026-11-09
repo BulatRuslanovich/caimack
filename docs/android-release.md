@@ -1,11 +1,66 @@
-# Android releases to Telegram
+# Android releases and in-app updates
 
 Pushing a version tag such as `v1.2.3` runs `.github/workflows/android-release.yml`.
 The tag must match `frontend/package.json`; the Android build reads that version.
 The workflow runs unit tests, builds and verifies a signed release APK, saves it
-as an Actions artifact for 30 days, then sends the file to one configured Telegram
-group. It does not create a GitHub Release. Master pushes and pull requests do not
-send messages.
+as an Actions artifact for 30 days, attaches it to the matching GitHub Release,
+then sends the file to one configured Telegram group. Master pushes and pull
+requests do not publish releases or send messages.
+
+## GitHub Releases
+
+The workflow uses the built-in GitHub token with `contents: write`; no additional
+release token is needed. The repository must be public for unauthenticated in-app
+update checks and downloads.
+
+If the tag has no release, the publisher creates a draft with generated release
+notes, uploads `caimack-vX.Y.Z-arm64.apk`, and publishes only after GitHub confirms
+the attachment. Existing release descriptions are preserved: you can prepare your
+own notes in a draft before pushing the tag. Rebuilding an existing release replaces
+its APK attachment when its content differs, uploading the replacement before
+removing the old file. Identical uploaded files are reused. If immutable releases
+are enabled for your repository, a published APK cannot be replaced; publish a
+new version instead.
+Rebuilding an older tag does not mark it as the latest release ahead of a newer one.
+
+A failed Telegram delivery does not remove the GitHub Release or its APK. A failed
+initial APK upload leaves the new release as a draft for a later retry.
+
+## Android update checks
+
+The app checks the latest public GitHub Release when the activity resumes, at most
+once every six hours after a successful check. Failed attempts back off for fifteen
+minutes. **Settings → Updates → Check for updates** bypasses that interval.
+The check uses a separate HTTPS client without music server cookies or credentials.
+Only stable numeric versions newer than the installed version and a completed,
+nonempty ARM64 APK attachment for that exact tag and repository are offered.
+
+An available update appears in a dismissible banner and remains accessible in
+Settings. Dismissal applies to that version only and survives restarts. Cached
+updates remain available offline. A release without a ready Android APK is treated
+as an unsuccessful check, rather than a claim that the installed app is up to date.
+Drafts and prereleases are not offered.
+
+The release notes dialog opens the APK download in the user's browser. Android
+handles installation after download and may ask the user to allow installation
+from that browser. The app does not request package installation permission.
+Use the original release signing key to allow updates without uninstalling.
+Users must install the first APK containing this feature manually; older APKs
+cannot gain an updater until they have been updated once.
+
+By default, builds derive the update repository from the GitHub `CAIMACK_SOURCE_URL`
+(or its `caimackSourceUrl` Gradle property). CI explicitly sets
+`CAIMACK_UPDATE_REPOSITORY` to the repository running the release workflow so forks
+check their own releases. To override it locally:
+
+```bash
+./gradlew :app:assembleDebug -PcaimackUpdateRepository=owner/repository
+```
+
+Set `CAIMACK_UPDATE_REPOSITORY` or `-PcaimackUpdateRepository=` to an empty value
+to disable checks in a custom build. A non-GitHub source URL disables checks unless
+an update repository is explicitly configured. Do not embed GitHub access tokens
+in the APK for private repositories.
 
 ## Retry a release after a CI fix
 
@@ -17,7 +72,9 @@ branch, and enter the existing release tag in **release_tag**, for example
 The workflow definition comes from the selected branch; application sources are
 checked out from `refs/tags/<release_tag>`. Version validation, artifact names,
 the APK source URL and the Telegram caption use the selected tag and its actual
-commit. The normal test, signing, artifact and Telegram delivery steps still run.
+commit. The normal test, signing, artifact, GitHub Release and Telegram delivery
+steps still run. The publisher is checked out from the workflow's own commit so
+manual runs can also publish APKs for tags predating the updater.
 The selected tag must already exist and match its own `frontend/package.json`.
 
 GitHub CLI equivalent:
@@ -89,11 +146,13 @@ Manually rerunning a workflow may send another copy to the same group.
 
 ## Validation
 
-The sender tests mock Telegram and never send actual messages:
+The publishing and sender tests mock external APIs and never publish or send messages:
 
 ```bash
 python -m unittest discover -s tests -p 'test_telegram_apk.py'
+python -m unittest discover -s tests -p 'test_publish_android_release.py'
 ```
 
 After configuring secrets, push the next version tag through the existing release
-process. Inspect the **Android release** workflow and the configured group.
+process. Inspect the **Android release** workflow, the APK attachment in GitHub
+Releases, and the configured group.

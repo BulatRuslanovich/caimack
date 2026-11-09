@@ -31,6 +31,11 @@ import app.caimack.ui.LocalContainer
 import app.caimack.ui.LoginScreen
 
 class MainActivity : ComponentActivity() {
+    override fun onResume() {
+        super.onResume()
+        (application as CaimackApp).container.updates.check()
+    }
+
     override fun attachBaseContext(newBase: Context) = super.attachBaseContext(Appearance.localized(newBase))
 
     override fun onCreate(savedInstanceState: Bundle?) {
