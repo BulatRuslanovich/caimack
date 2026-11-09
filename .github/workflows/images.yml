@@ -34,6 +34,12 @@ jobs:
             file: backend/scripts/Dockerfile.mert
             target: runtime
             contexts: ""
+          - name: mert-rocm
+            context: backend/scripts
+            file: backend/scripts/Dockerfile.mert
+            target: runtime
+            contexts: ""
+            build_args: TORCH_INDEX_URL=https://download.pytorch.org/whl/rocm6.4
     steps:
       - uses: actions/checkout@v7
         with:
@@ -107,6 +113,7 @@ jobs:
           build-contexts: ${{ matrix.contexts }}
           build-args: |
             CAIMACK_SOURCE_URL=https://github.com/${{ github.repository }}/tree/${{ github.sha }}
+            ${{ matrix.build_args }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

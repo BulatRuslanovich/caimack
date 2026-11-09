@@ -63,7 +63,7 @@ class Mert:
         from transformers import AutoConfig, AutoModel, Wav2Vec2FeatureExtractor
 
         if not torch.cuda.is_available():
-            raise RuntimeError("MERT requires CUDA; check Docker GPU access")
+            raise RuntimeError("MERT requires a CUDA or ROCm GPU; check Docker GPU access")
         torch.set_num_threads(int(os.environ.get("OMP_NUM_THREADS", "2")))
         torch.cuda.set_device(0)
         options = dict(revision=REVISION)
@@ -85,10 +85,11 @@ class Mert:
         load_weights(model, checkpoint)
         self.model = model.eval().to("cuda")
         logging.info(
-            "MERT ready: %s, revision %s, GPU %s",
+            "MERT ready: %s, revision %s, GPU %s, backend %s",
             MODEL,
             REVISION,
             torch.cuda.get_device_name(0),
+            "ROCm" if torch.version.hip else "CUDA",
         )
 
     def embed(self, windows: list[list[float]]) -> list[float]:
@@ -178,7 +179,7 @@ def main():
     )
     model = Mert()
     if not args.download_only:
-        # Serial execution bounds CUDA memory, regardless of callers' concurrency.
+        # Serial execution bounds GPU memory, regardless of callers' concurrency.
         with HTTPServer((args.host, args.port), handler(model)) as server:
             server.serve_forever()
 

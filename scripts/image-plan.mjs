@@ -9,6 +9,7 @@ const inputs = {
   backend: ["backend", "db/migrations"],
   frontend: ["frontend"],
   mert: ["backend/scripts"],
+  "mert-rocm": ["backend/scripts"],
 };
 
 function git(root, ...args) {

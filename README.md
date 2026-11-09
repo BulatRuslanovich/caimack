@@ -115,7 +115,7 @@ The entire manager is in English; no extra TUI packages are required.
 
 ```bash
 ./caimack.sh update                  # pull images and apply updates
-./caimack.sh recommendations on      # opt in to NVIDIA / MERT
+./caimack.sh recommendations on      # opt in to MERT; auto-detect NVIDIA / AMD
 ./caimack.sh recommendations off     # return to the CPU-only deployment
 ./caimack.sh reset once              # recover the owner password
 ./caimack.sh status
@@ -142,7 +142,7 @@ are required for a normal deployment. Add `-f docker-compose.recommendations.yml
 after your usual Compose files to enable the module. The API advertises this
 capability; clients hide recommendation controls when it is disabled.
 
-When enabled, track similarity uses **MERT-Large v1 (330M)** on an NVIDIA GPU. The `mert` container
+When enabled, track similarity uses **MERT-Large v1 (330M)** on an NVIDIA (CUDA) or supported AMD (ROCm) GPU. The `mert` container
 downloads the pinned, ready-to-use weights (about 1.26 GB) from Hugging Face once
 and keeps them in `storage/models/mert`. No training or model export runs on the server.
 The library and playback are available while the model loads. Existing CLAP vectors

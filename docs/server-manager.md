@@ -103,10 +103,27 @@ model asset tags. Wait for the image workflow to finish before deploying a new t
 ./caimack.sh recommendations off
 ```
 
-Enabling attaches `docker-compose.recommendations.yml`, acquires the GPU image,
-checks CUDA access, then starts the module. A failed CUDA probe restores the
-previous Compose configuration. NVIDIA Container Toolkit is required on Linux;
-`doctor` shows Docker runtimes and the host GPU if available.
+Enabling detects the host GPU, attaches `docker-compose.recommendations.yml`,
+acquires the GPU image and runs a small computation inside the container before
+starting the module. NVIDIA uses CUDA; AMD adds `docker-compose.mert-amd.yml`
+and uses ROCm. Device group IDs for AMD are read from `/dev/kfd` and a
+`/dev/dri/renderD*` node so the container can run as the configured non-root user.
+Image acquisition, device setup or probe failures restore the previous `.env`.
+
+`MERT_GPU_BACKEND=auto` is the default, including for older installations without
+that setting. Detection uses `nvidia-smi`, PCI devices, or Linux sysfs without
+requiring pciutils. NVIDIA takes priority when both vendors are detected.
+Set `MERT_GPU_BACKEND=nvidia` or `MERT_GPU_BACKEND=amd` in `.env` to override,
+then run `recommendations on` again. The selected Compose file list is saved;
+start, stop and update reuse it without detecting hardware again. Detection runs
+on the manager's host; with remote Docker, set the backend and, for AMD,
+`MERT_KFD_GID` and `MERT_RENDER_GID` from the Docker host explicitly.
+
+NVIDIA requires its driver and NVIDIA Container Toolkit. AMD requires Linux,
+a compatible amdgpu driver and a GPU supported by the image's ROCm 6.4 / PyTorch
+2.8 combination. Detection alone does not establish compatibility; unsupported
+cards fail the container probe. `doctor` shows Docker runtimes, available GPU
+utilities and AMD device permissions. See [GPU setup](mert.md).
 
 The manager waits for the application services, not the model download. MERT loads
 in the background; use `./caimack.sh logs mert -f` to watch its progress.

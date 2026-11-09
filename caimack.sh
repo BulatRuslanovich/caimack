@@ -7,10 +7,11 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd -- "$ROOT"
 ENV_FILE="$ROOT/.env" STATE="$ROOT/.caimack"
 MODULE=docker-compose.recommendations.yml
+AMD_MODULE=docker-compose.mert-amd.yml
 REPOSITORY=BulatRuslanovich/caimack
 ACTION='' MODE='' SERVICE='' DOMAIN='' LIBRARY='' OWNER='' VERSION=''
 YES=false BUILD=false FOLLOW=false RESET_PENDING=false
-STAGING='' COMPOSE=()
+STAGING='' GPU_ROLLBACK='' COMPOSE=()
 ACCENT='' DIM='' GREEN='' YELLOW='' NORMAL='' FOCUS='' RED=''
 RUNTIME='' DOCKER_READY=false COMPACT=false
 if [[ -t 1 && ${TERM:-dumb} != dumb && -z ${NO_COLOR:-} ]]; then
@@ -32,11 +33,11 @@ Usage: ./caimack.sh [command] [options]
   start | stop | restart     Manage services; database and music are preserved
   status                     Deployment configuration and container status
   logs [service] [-f]        Recent logs; -f follows output
-  recommendations on | off   Attach or detach the NVIDIA / MERT module
+  recommendations on | off   Attach or detach MERT (auto NVIDIA / AMD)
   owner [--owner NAME]       Assign the deployment owner / administrator
   reset once | on | off      One-time or persistent owner password reset
   credentials                Explicitly display owner credentials from .env
-  doctor                     Check Docker, Compose and NVIDIA GPU access
+  doctor                     Check Docker, Compose and GPU access
   self-update                Refresh this manager and deployment files
 
 Options:
@@ -156,15 +157,62 @@ compose_files() {
 }
 compose() { compose_files; "${COMPOSE[@]}" "$@"; }
 module_enabled() { [[ :$(cfg_get COMPOSE_FILE): == *":$MODULE:"* || :$(cfg_get COMPOSE_FILE): == *":./$MODULE:"* ]]; }
+amd_enabled() { [[ :$(cfg_get COMPOSE_FILE): == *":$AMD_MODULE:"* || :$(cfg_get COMPOSE_FILE): == *":./$AMD_MODULE:"* ]]; }
+detect_gpu() {
+  local requested devices='' path vendor class names
+  requested=$(cfg_get MERT_GPU_BACKEND auto)
+  case "$requested" in
+    nvidia|amd) printf '%s' "$requested"; return ;;
+    auto) ;;
+    *) die 'MERT_GPU_BACKEND must be auto, nvidia or amd.' ;;
+  esac
+  # A working NVIDIA driver is also detectable without PCI utilities (e.g. WSL).
+  if command -v nvidia-smi >/dev/null && names=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null) && [[ -n $names ]]; then
+    printf nvidia; return
+  fi
+  if command -v lspci >/dev/null; then
+    devices=$(lspci -Dn 2>/dev/null) || devices=''
+  fi
+  # sysfs is available on Linux even when pciutils is not installed.
+  if [[ -z $devices ]]; then
+    for path in /sys/bus/pci/devices/*; do
+      [[ -r $path/vendor && -r $path/class ]] || continue
+      read -r vendor < "$path/vendor"; read -r class < "$path/class"
+      [[ $class == 0x03* ]] || continue
+      devices+="sysfs 0300: ${vendor#0x}:0000"$'\n'
+    done
+  fi
+  # Prefer NVIDIA when both vendors are present; operators can override in .env.
+  if [[ $devices =~ 03[0-9a-fA-F]{2}:[[:space:]]+10de: ]]; then printf nvidia
+  elif [[ $devices =~ 03[0-9a-fA-F]{2}:[[:space:]]+1002: ]]; then printf amd
+  else die 'No NVIDIA or AMD GPU detected. Check host drivers or set MERT_GPU_BACKEND=nvidia/amd for a remote Docker host.'; fi
+}
+configure_amd_groups() {
+  [[ $(uname -s) == Linux ]] || die 'The AMD MERT container requires a Linux Docker host with ROCm support.'
+  local kfd render device
+  kfd=$(cfg_get MERT_KFD_GID)
+  render=$(cfg_get MERT_RENDER_GID)
+  if [[ -z $kfd ]]; then
+    kfd=$(stat -c '%g' /dev/kfd 2>/dev/null) || die 'AMD /dev/kfd is missing. Install a compatible amdgpu driver or set host device group IDs for remote Docker.'
+  fi
+  if [[ -z $render ]]; then
+    for device in /dev/dri/renderD*; do
+      render=$(stat -c '%g' "$device" 2>/dev/null) && break
+    done
+  fi
+  [[ $kfd =~ ^[0-9]+$ && $render =~ ^[0-9]+$ ]] || die 'Set numeric MERT_KFD_GID and MERT_RENDER_GID for the host AMD devices.'
+  cfg_set MERT_KFD_GID "$kfd"; cfg_set MERT_RENDER_GID "$render"
+}
 set_module() {
   local list file joined='' files=()
   list=$(cfg_get COMPOSE_FILE 'docker-compose.yml:docker-compose.images.yml')
   IFS=: read -r -a files <<< "$list"
   for file in "${files[@]}"; do
-    [[ $file == "$MODULE" || $file == "./$MODULE" ]] && continue
+    [[ $file == "$MODULE" || $file == "./$MODULE" || $file == "$AMD_MODULE" || $file == "./$AMD_MODULE" ]] && continue
     joined+="${joined:+:}$file"
   done
   [[ $1 == false ]] || joined+=":$MODULE"
+  if [[ $1 != false && ${2:-nvidia} == amd ]]; then joined+=":$AMD_MODULE"; fi
   cfg_set COMPOSE_FILE "$joined"
 }
 fetch() { curl --fail --silent --show-error --location --retry 3 --connect-timeout 15 --max-time 180 "$1" -o "$2"; }
@@ -186,7 +234,7 @@ download_files() {
   local ref destination file
   ref=$(release_ref)
   STAGING=$(mktemp -d "$STATE/download.XXXXXX")
-  local assets=(.env.example docker-compose.yml docker-compose.images.yml "$MODULE" deploy/Caddyfile caimack.sh setup.sh)
+  local assets=(.env.example docker-compose.yml docker-compose.images.yml "$MODULE" "$AMD_MODULE" deploy/Caddyfile caimack.sh setup.sh)
   for file in "${assets[@]}"; do
     mkdir -p -- "$STAGING/$(dirname -- "$file")"
     fetch "https://raw.githubusercontent.com/$REPOSITORY/$ref/$file" "$STAGING/$file" || die "Could not download $file from $ref. Existing files were preserved."
@@ -195,6 +243,7 @@ download_files() {
   if [[ -f $ENV_FILE ]]; then
     cp -- "$ENV_FILE" "$STAGING/.env"
     docker compose --env-file "$STAGING/.env" -f "$STAGING/docker-compose.yml" -f "$STAGING/docker-compose.images.yml" -f "$STAGING/$MODULE" config --quiet
+    MERT_KFD_GID=0 MERT_RENDER_GID=0 docker compose --env-file "$STAGING/.env" -f "$STAGING/docker-compose.yml" -f "$STAGING/docker-compose.images.yml" -f "$STAGING/$MODULE" -f "$STAGING/$AMD_MODULE" config --quiet
   fi
   destination=$(backup)
   for file in "${assets[@]}"; do
@@ -220,7 +269,10 @@ deployment_panel() {
   section deployment
   if [[ ! -f $ENV_FILE ]]; then printf '  No deployment yet. Run: ./caimack.sh install\n\n'; return; fi
   local reset='disarmed' recs='off / CPU only' reset_color=$DIM recs_color=$DIM
-  if module_enabled; then recs='on / NVIDIA + MERT'; recs_color=$GREEN; fi
+  if module_enabled; then
+    recs='on / NVIDIA + MERT'; recs_color=$GREEN
+    if amd_enabled; then recs='on / AMD + MERT'; fi
+  fi
   if [[ $(cfg_get OWNER_RESET_PASSWORD false) == true ]]; then reset='ARMED / every startup'; reset_color=$RED; fi
   printf '  %-16s %s\n' endpoint "https://$(cfg_get PUBLIC_DOMAIN)"
   printf '  %-16s %-20.20s %-9s %s\n' release "$(cfg_get CAIMACK_VERSION latest)" owner "$(cfg_get OWNER_USERNAME admin)"
@@ -268,7 +320,12 @@ acquire_images() {
   info 'Acquiring container images...'
   if [[ $BUILD == true || $(cfg_get COMPOSE_FILE) != *docker-compose.images.yml* ]]; then
     [[ -d backend && -d frontend ]] || die 'Source builds require backend/ and frontend/ directories.'; compose build
-  else compose pull --ignore-buildable; fi
+  else
+    compose pull --ignore-buildable || return
+    # AMD restores build metadata after images.yml for optional source builds.
+    # Release deployments must explicitly pull this buildable GPU service too.
+    if amd_enabled; then compose pull mert; fi
+  fi
 }
 credentials() {
   require_install
@@ -313,16 +370,21 @@ recommendations() {
   case "$MODE" in on|off) ;; *) die 'Use recommendations on or off.' ;; esac
   if [[ $MODE == on ]]; then
     [[ -f $MODULE ]] || die "$MODULE is missing. Run self-update to refresh deployment files."
-    confirm 'Enable recommendations? Requires an NVIDIA GPU and about 1.26 GB of model weights.' || return 0
-    local previous
-    previous=$(cfg_get COMPOSE_FILE 'docker-compose.yml:docker-compose.images.yml')
-    backup >/dev/null; set_module true
-    if ! acquire_images; then cfg_set COMPOSE_FILE "$previous"; die 'Download failed. Previous configuration restored.'; fi
-    if ! compose run --rm --no-deps --entrypoint python mert -c 'import torch; assert torch.cuda.is_available(), "CUDA is unavailable"'; then
-      cfg_set COMPOSE_FILE "$previous"
-      die 'GPU unavailable. Previous configuration restored; check NVIDIA Container Toolkit with doctor.'
+    confirm 'Enable recommendations? Requires an NVIDIA or ROCm-compatible AMD GPU and about 1.26 GB of model weights.' || return 0
+    local backend
+    backend=$(detect_gpu)
+    info "Selected MERT GPU backend: $backend"
+    [[ $backend != amd || -f $AMD_MODULE ]] || die "$AMD_MODULE is missing. Run self-update to refresh deployment files."
+    GPU_ROLLBACK="$(backup)/.env"
+    if [[ $backend == amd ]]; then configure_amd_groups; fi
+    set_module true "$backend"
+    if ! acquire_images; then die 'GPU image acquisition failed.'; fi
+    # Run kernels, not just enumeration: unsupported GPU architectures can enumerate.
+    # No model download or writable cache is needed for this probe.
+    if ! compose run --rm --no-deps --entrypoint python mert -c 'import torch; assert torch.cuda.is_available(), "CUDA/ROCm is unavailable"; x = torch.ones((32, 32), device="cuda"); y = x @ x; z = torch.nn.functional.conv1d(x[:1].reshape(1, 1, 32), x[:1, :3].reshape(1, 1, 3)); torch.cuda.synchronize(); assert y[0, 0].item() == 32 and z[0, 0, 0].item() == 3; print(torch.cuda.get_device_name(0), "ROCm" if torch.version.hip else "CUDA")'; then
+      die 'GPU unavailable or unsupported. Check the driver, CUDA/ROCm compatibility and Docker GPU access with doctor.'
     fi
-    apply; ok 'Recommendations enabled. Analysis starts after the weights finish loading.'
+    apply; GPU_ROLLBACK=''; ok 'Recommendations enabled. Analysis starts after the weights finish loading.'
   else
     confirm 'Disable recommendations? Cached weights and embeddings will be preserved.' || return 0
     backup >/dev/null; compose --profile recommendations stop mert mert-init
@@ -362,13 +424,21 @@ doctor() {
   docker version; docker compose version
   if [[ -f $ENV_FILE ]]; then compose config --quiet; ok 'Compose configuration is valid.'; fi
   if command -v nvidia-smi >/dev/null; then nvidia-smi; else info 'nvidia-smi not found. The standard deployment does not require a GPU.'; fi
+  if command -v rocminfo >/dev/null; then rocminfo; fi
+  if [[ -e /dev/kfd ]]; then ls -ln /dev/kfd /dev/dri/renderD*; fi
+  if [[ -f $ENV_FILE ]]; then info "MERT GPU preference: $(cfg_get MERT_GPU_BACKEND auto)"; fi
   docker info --format 'Docker runtimes: {{json .Runtimes}}'
   printf 'NVIDIA Container Toolkit: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html\n'
+  printf 'AMD ROCm Docker setup: https://rocm.docs.amd.com/projects/install-on-linux/en/latest/how-to/docker.html\n'
 }
 
 cleanup() {
   local result=$?
   trap - EXIT
+  if [[ -n $GPU_ROLLBACK ]]; then
+    cp -p -- "$GPU_ROLLBACK" "$ENV_FILE"
+    warn 'Previous configuration restored after unsuccessful GPU enablement.'
+  fi
   if [[ $RESET_PENDING == true ]]; then
     cfg_set OWNER_RESET_PASSWORD false || true
     warn 'One-time reset interrupted. Disarming reset and recreating the backend with normal configuration.'
