@@ -56,6 +56,7 @@ let filters: BiquadFilterNode[] = [];
 let preamp: GainNode | null = null;
 let inputMix: GainNode | null = null;
 let analyser: AnalyserNode | null = null;
+let transientAnalyser: AnalyserNode | null = null;
 let scratch: AudioWorkletNode | null = null;
 let scratchLoading: Promise<boolean> | null = null;
 let scratchEnabled = false;
@@ -200,7 +201,7 @@ function apply(): void {
   preamp.gain.setTargetAtTime(10 ** (effectivePreamp(state) / 20), context.currentTime, 0.02);
 }
 
-export function audioAnalyser(): AnalyserNode | null {
+export function audioAnalyser(profile: "ambient" | "transients" = "ambient"): AnalyserNode | null {
   if (!equalizerSupported() || elements.length === 0) return null;
 
   if (!context) {
@@ -208,19 +209,23 @@ export function audioAnalyser(): AnalyserNode | null {
     ensureGraph();
   }
 
-  if (!analyser && context && preamp) {
-    analyser = context.createAnalyser();
-    analyser.fftSize = Math.min(
-      32_768,
-      2 ** Math.ceil(Math.log2(context.sampleRate / ANALYSER_BIN_HZ)),
-    );
-    analyser.minDecibels = -85;
-    analyser.maxDecibels = -22;
-    analyser.smoothingTimeConstant = 0.7;
-    preamp.connect(analyser);
+  let selected = profile === "transients" ? transientAnalyser : analyser;
+  if (!selected && context && preamp) {
+    selected = context.createAnalyser();
+    selected.fftSize =
+      profile === "transients"
+        ? 2048
+        : Math.min(32_768, 2 ** Math.ceil(Math.log2(context.sampleRate / ANALYSER_BIN_HZ)));
+    selected.minDecibels = -85;
+    // Short windows and spare headroom preserve attacks in dense recordings.
+    selected.maxDecibels = profile === "transients" ? -6 : -22;
+    selected.smoothingTimeConstant = profile === "transients" ? 0.12 : 0.7;
+    preamp.connect(selected);
+    if (profile === "transients") transientAnalyser = selected;
+    else analyser = selected;
   }
 
-  return analyser;
+  return selected;
 }
 
 function attachOnGesture(): void {

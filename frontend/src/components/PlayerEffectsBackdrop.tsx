@@ -5,10 +5,10 @@ import { useEffect, useRef } from "react";
 import { usePlayerEffects, type PlayerEffect } from "@/lib/playerEffects";
 import { trackCoverUrl } from "@/lib/media";
 import { audioAnalyser } from "@/lib/playback/equalizer";
-import { bandLevel, beatPulse } from "@/lib/playback/spectrum";
+import { bandBins, bandLevel, beatPulse } from "@/lib/playback/spectrum";
 import { effectPalette, type EffectPalette } from "@/lib/visuals/effectPalette";
 import { createEffectsRenderer } from "@/lib/visuals/reactiveEffectsRenderer";
-import { AudioMotion } from "@/lib/visuals/audioMotion";
+import { AudioMotion, MOTION_BANDS } from "@/lib/visuals/audioMotion";
 import { usePlayerProgress } from "@/contexts/PlayerContext";
 import type { Track } from "@/lib/types";
 import type { Rgb } from "@/lib/cssColor";
@@ -91,9 +91,12 @@ function EffectCanvas({
       [237, 216, 186],
     ];
     let light = false;
-    let time = 8;
     const dynamics = new AudioMotion();
     let data: Uint8Array<ArrayBuffer> | null = null;
+    let waveform: Float32Array<ArrayBuffer> | null = null;
+    const spectrum = new Float32Array(MOTION_BANDS);
+    let ranges: [number, number][] = [];
+    let spectrumAnalyser: AnalyserNode | null = null;
     let previous = 0;
     let frame = 0;
     let disposed = false;
@@ -138,14 +141,26 @@ function EffectCanvas({
       const delta = Math.min(0.1, previous ? (now - previous) / 1000 : 1 / 30);
       previous = now;
       const current = live.current;
-      const analyser = current.playing && !motion.matches ? audioAnalyser() : null;
+      const analyser = current.playing && !motion.matches ? audioAnalyser("transients") : null;
       let low = 0,
         middle = 0,
         treble = 0;
+      spectrum.fill(0);
+      let rms: number | undefined;
       if (analyser) {
+        if (spectrumAnalyser !== analyser) {
+          ranges = bandBins(MOTION_BANDS, analyser.context.sampleRate, analyser.fftSize);
+          spectrumAnalyser = analyser;
+        }
         if (!data || data.length !== analyser.frequencyBinCount)
           data = new Uint8Array(analyser.frequencyBinCount);
         analyser.getByteFrequencyData(data);
+        if (!waveform || waveform.length !== analyser.fftSize)
+          waveform = new Float32Array(analyser.fftSize);
+        analyser.getFloatTimeDomainData(waveform);
+        let squares = 0;
+        for (const value of waveform) squares += value * value;
+        rms = Math.sqrt(squares / waveform.length);
         const hz = analyser.context.sampleRate / analyser.fftSize;
         const range = (from: number, to: number): [number, number] => [
           Math.min(data!.length - 1, Math.max(0, Math.floor(from / hz))),
@@ -154,6 +169,7 @@ function EffectCanvas({
         low = bandLevel(data, range(40, 180));
         middle = bandLevel(data, range(220, 2400));
         treble = bandLevel(data, range(3000, 11_000));
+        ranges.forEach((bins, i) => (spectrum[i] = bandLevel(data!, bins)));
       } else if (current.playing && current.bpm && !motion.matches) {
         const beat = beatPulse(current.getPosition(), current.bpm, current.offset ?? 0);
         low = beat * 0.45;
@@ -161,12 +177,17 @@ function EffectCanvas({
         treble = beat * 0.12;
       }
       const active = current.playing && !motion.matches;
-      const response = dynamics.step([low, middle, treble], delta, current.sensitivity, active);
-      if (active) time += delta * (0.4 + response.mid * 0.5);
+      const response = dynamics.step(
+        [low, middle, treble],
+        delta,
+        current.sensitivity,
+        active,
+        spectrum,
+        rms,
+      );
       renderer.draw({
         effect: current.effect,
         intensity: current.intensity / 100,
-        time,
         delta: active ? delta : 0,
         ...response,
         palette,
@@ -181,7 +202,7 @@ function EffectCanvas({
       schedule();
     };
     const gesture = () => {
-      if (live.current.playing && !motion.matches) audioAnalyser();
+      if (live.current.playing && !motion.matches) audioAnalyser("transients");
       schedule();
     };
     const lost = (event: Event) => {
@@ -247,7 +268,7 @@ function EffectCanvas({
       if (image) image.onload = null;
       renderer?.destroy();
     };
-  }, [source]);
+  }, [source, track.id]);
 
   return (
     <canvas

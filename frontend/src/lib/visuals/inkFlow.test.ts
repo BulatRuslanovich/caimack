@@ -56,4 +56,55 @@ describe("smooth ink emitters", () => {
     expect(ink.sources.length).toBe(INK_SOURCE_COUNT * 4);
     expect(ink.sources.every(Number.isFinite)).toBe(true);
   });
+  it("releases energetic plumes sooner while preserving their total pigment dose", () => {
+    const release = (drive: number) => {
+      const ink = new InkFlow();
+      let dose = 0,
+        deliveredEarly = 0;
+      for (let i = 0; i < 120; i++) {
+        const frame = i === 0 ? hit : idle;
+        const amount = ink.step({ ...frame, drive }, 1 / 60).sources[2];
+        dose += amount;
+        if (i < 24) deliveredEarly += amount;
+      }
+      return { dose, deliveredEarly };
+    };
+    const soft = release(0),
+      hard = release(1);
+    expect(soft.dose).toBeCloseTo(INK_DOSE, 6);
+    expect(hard.dose).toBeCloseTo(INK_DOSE, 6);
+    expect(hard.deliveredEarly).toBeGreaterThan(soft.deliveredEarly * 3);
+  });
+  it("keeps quiet recordings gentle even when normalized band energy is high", () => {
+    const quiet = new InkFlow(),
+      loud = new InkFlow();
+    for (let i = 0; i < 120; i++) {
+      quiet.step(
+        {
+          ...idle,
+          bass: 0.5,
+          mid: 0.5,
+          high: 0.5,
+          drive: 0.1,
+          spectrum: new Float32Array(24).fill(0.15),
+        },
+        1 / 30,
+      );
+      loud.step(
+        {
+          ...idle,
+          bass: 0.5,
+          mid: 0.5,
+          high: 0.5,
+          drive: 0.9,
+          spectrum: new Float32Array(24).fill(0.6),
+        },
+        1 / 30,
+      );
+    }
+    expect(loud.motion[0]).toBeGreaterThan(quiet.motion[0] * 5);
+    for (let i = 0; i < 180; i++)
+      quiet.step({ ...idle, drive: 0, spectrum: new Float32Array(24) }, 1 / 30);
+    expect(Math.max(...quiet.motion)).toBeLessThan(0.001);
+  });
 });
