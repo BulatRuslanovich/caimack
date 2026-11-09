@@ -225,3 +225,34 @@ async fn shared_companions_are_never_overwritten(db: PgPool) -> anyhow::Result<(
     assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM file_metadata_exports").fetch_one(&db).await?, 0);
     Ok(())
 }
+
+#[sqlx::test(migrations = "../../../db/migrations")]
+#[cfg_attr(not(feature = "integration-tests"), ignore = "requires PostgreSQL and ffmpeg")]
+async fn tag_exports_preserve_lookup_progress_but_audio_replacements_reset_it(db: PgPool) -> anyhow::Result<()> {
+    let (_folder, storage, audio) = fixture("mp3")?;
+    let (id, _) = seed(&db, &storage, &audio).await?;
+    sqlx::query(
+        "UPDATE enrichment_jobs SET last_outcome='not_found',next_attempt_at=now()+interval '7 days' WHERE track_id=$1",
+    )
+    .bind(id)
+    .execute(&db)
+    .await?;
+    assert_eq!(run(&db, &storage, &CancellationToken::new()).await?.exported, 1);
+    let outcomes: Vec<Option<String>> =
+        sqlx::query_scalar("SELECT last_outcome FROM enrichment_jobs WHERE track_id=$1")
+            .bind(id)
+            .fetch_all(&db)
+            .await?;
+    assert_eq!(outcomes, vec![Some("not_found".into()), Some("not_found".into())]);
+    sqlx::query("UPDATE tracks SET content_hash='different-audio',media_cache_hash=NULL WHERE id=$1")
+        .bind(id)
+        .execute(&db)
+        .await?;
+    let outcomes: Vec<Option<String>> =
+        sqlx::query_scalar("SELECT last_outcome FROM enrichment_jobs WHERE track_id=$1")
+            .bind(id)
+            .fetch_all(&db)
+            .await?;
+    assert_eq!(outcomes, vec![None, None]);
+    Ok(())
+}

@@ -42,3 +42,6 @@ SQLX_OFFLINE=true DATABASE_URL=postgres://music:password@localhost:5432/postgres
 ```
 
 Use a disposable local PostgreSQL server and a role allowed to create databases. SQLx creates isolated test databases. Do not run these tests against production.
+
+Migration 0005 keeps provider lookup progress across tag-only exports while
+restarting lookup after a real audio replacement or a title/artist edit.
