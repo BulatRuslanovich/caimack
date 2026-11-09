@@ -532,6 +532,8 @@ export const en = {
   "library.scan.files": "{count} files",
   "library.scan.added": "added: {count}",
   "library.scan.moved": "moved: {count}",
+  "library.scan.renamed": "renamed: {count}",
+  "library.scan.exported": "artwork/lyrics saved: {count}",
   "library.scan.updated": "changed: {count}",
   "library.scan.skipped": "already in the library: {count}",
   "library.scan.failed": "not added: {count}",

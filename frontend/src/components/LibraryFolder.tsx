@@ -26,7 +26,14 @@ export function LibraryFolder() {
   });
 
   const status = scan.data;
-  const changes = status ? status.added + status.moved + status.updated + status.removed : 0;
+  const changes = status
+    ? status.added +
+      status.moved +
+      (status.renamed ?? 0) +
+      (status.exported ?? 0) +
+      status.updated +
+      status.removed
+    : 0;
   const lastChanges = useRef(changes);
   useEffect(() => {
     if (changes > lastChanges.current) invalidate("library");
@@ -39,6 +46,8 @@ export function LibraryFolder() {
   const counts = [
     [status.added, "library.scan.added"],
     [status.moved, "library.scan.moved"],
+    [status.renamed, "library.scan.renamed"],
+    [status.exported, "library.scan.exported"],
     [status.updated, "library.scan.updated"],
     [status.skipped, "library.scan.skipped"],
     [status.failed, "library.scan.failed"],

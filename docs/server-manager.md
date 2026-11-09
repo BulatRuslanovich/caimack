@@ -35,7 +35,9 @@ passwords into automation logs.
 ./caimack.sh install --version v1.2.3 --domain music.example.com --yes
 ```
 
-The library is mounted read-only. An existing `.env` is never replaced by a second
+The library is mounted read-only by default. [Automatic file names](file-names.md)
+and [artwork/lyric export](metadata-export.md) can be enabled explicitly with
+write access. An existing `.env` is never replaced by a second
 installation. Relative paths are resolved from the manager's directory.
 
 ## Console

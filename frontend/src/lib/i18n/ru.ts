@@ -563,6 +563,8 @@ export const ru: Dictionary = {
   "library.scan.files": "файлов: {count}",
   "library.scan.added": "добавлено: {count}",
   "library.scan.moved": "перенесено: {count}",
+  "library.scan.renamed": "переименовано: {count}",
+  "library.scan.exported": "обложки/тексты сохранены: {count}",
   "library.scan.updated": "изменено: {count}",
   "library.scan.skipped": "уже в библиотеке: {count}",
   "library.scan.failed": "не добавлено: {count}",

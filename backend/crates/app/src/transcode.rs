@@ -111,6 +111,7 @@ pub fn spawn(
     let urgent_keys = Arc::clone(&queue.urgent_keys);
     let mut urgent = receivers.urgent;
     let (storage_u, running_u, cancel_u) = (storage.clone(), Arc::clone(&running), cancel.clone());
+    let db_u = db.clone();
     handles.push(tokio::spawn(async move {
         loop {
             let request = tokio::select! {
@@ -119,7 +120,7 @@ pub fn spawn(
             };
             let Some(request) = request else { break };
             dequeued(&urgent_keys, &request);
-            transcode(&storage_u, &running_u, request, &cancel_u).await;
+            transcode(&db_u, &storage_u, &running_u, request, &cancel_u).await;
         }
     }));
 
@@ -127,6 +128,7 @@ pub fn spawn(
         let (storage, running, cancel, warmup) =
             (storage.clone(), Arc::clone(&running), cancel.clone(), Arc::clone(&warmup));
         let keys = Arc::clone(&queue.warmup_keys);
+        let db = db.clone();
         handles.push(tokio::spawn(async move {
             loop {
                 let request = tokio::select! {
@@ -135,7 +137,7 @@ pub fn spawn(
                 };
                 let Some(request) = request else { break };
                 dequeued(&keys, &request);
-                transcode(&storage, &running, request, &cancel).await;
+                transcode(&db, &storage, &running, request, &cancel).await;
             }
         }));
     }
@@ -146,6 +148,7 @@ pub fn spawn(
 }
 
 async fn transcode(
+    db: &PgPool,
     storage: &Storage,
     running: &Mutex<HashSet<String>>,
     request: TranscodeRequest,
@@ -158,7 +161,22 @@ async fn transcode(
 
     let outcome = async {
         let Some(bitrate) = request.quality.hls_kbps() else { return Ok(()) };
-        let Some(source) = storage.existing(&request.source) else {
+        let _permit = tokio::select! {
+            () = cancel.cancelled() => return Ok(()),
+            permit = crate::background::permit() => permit?,
+        };
+        // Pin the current path until ffmpeg finishes reading it. Renames and
+        // replacements take an exclusive row lock.
+        let mut reading = db.begin().await?;
+        // Requests may have waited in the queue across a file rename. Resolve by
+        // content hash so a reused old filename cannot transcode another recording.
+        let current: Option<String> = sqlx::query_scalar(
+            "SELECT file_path FROM tracks WHERE content_hash=$1 OR media_cache_hash=$1 LIMIT 1 FOR SHARE",
+        )
+        .bind(&request.content_hash)
+        .fetch_optional(&mut *reading)
+        .await?;
+        let Some(source) = current.as_deref().and_then(|path| storage.existing(path)) else {
             tracing::warn!("Skipped transcoding {key}: {} is missing from storage", request.source);
             return Ok(());
         };
@@ -171,14 +189,11 @@ async fn transcode(
             tokio::fs::create_dir_all(parent).await?;
         }
         let started = Instant::now();
-        let _permit = tokio::select! {
-            () = cancel.cancelled() => return Ok(()),
-            permit = crate::background::permit() => permit?,
-        };
         let done = tokio::select! {
             () = cancel.cancelled() => return Ok(()),
             done = media::ffmpeg::transcode_to_hls(&source, &target, bitrate) => done?,
         };
+        reading.rollback().await?;
         if done {
             tracing::debug!(
                 "Prepared the {} HLS rendition of {} in {:.1} s",
@@ -205,9 +220,11 @@ async fn backfill(db: PgPool, storage: Storage, queue: TranscodeQueue, cancel: C
         () = tokio::time::sleep(BACKFILL_DELAY) => {}
     }
 
-    let tracks = match sqlx::query!("SELECT DISTINCT content_hash, file_path, codec, bitrate_kbps FROM tracks")
-        .fetch_all(&db)
-        .await
+    let tracks = match sqlx::query_as::<_, (String, String, Option<String>, Option<i32>)>(
+        "SELECT DISTINCT COALESCE(media_cache_hash,content_hash), file_path, codec, bitrate_kbps FROM tracks",
+    )
+    .fetch_all(&db)
+    .await
     {
         Ok(tracks) => tracks,
         Err(error) => {
@@ -218,7 +235,7 @@ async fn backfill(db: PgPool, storage: Storage, queue: TranscodeQueue, cancel: C
 
     let mut pending: std::collections::VecDeque<TranscodeRequest> = tracks
         .iter()
-        .flat_map(|t| warmup_for(&t.content_hash, &t.file_path, t.codec.as_deref(), t.bitrate_kbps))
+        .flat_map(|(hash, path, codec, rate)| warmup_for(hash, path, codec.as_deref(), *rate))
         .filter(|request| !storage.hls_variant_ready(&request.content_hash, request.quality))
         .collect();
     if pending.is_empty() {

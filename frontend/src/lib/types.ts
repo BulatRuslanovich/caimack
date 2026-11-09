@@ -492,6 +492,8 @@ export interface LibraryScan {
   checked: number;
   added: number;
   moved: number;
+  renamed: number;
+  exported: number;
   updated: number;
   skipped: number;
   failed: number;

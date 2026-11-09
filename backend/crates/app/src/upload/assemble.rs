@@ -51,6 +51,8 @@ pub(super) async fn assemble(
     format: AudioFormat,
     cover: Option<&str>,
 ) -> AppResult<Saved> {
+    let verified = metadata.title.as_deref().is_some_and(|s| !s.trim().is_empty())
+        && metadata.artists.iter().chain(&metadata.album_artists).any(|s| !s.trim().is_empty());
     if metadata.title.is_none()
         && metadata.artists.is_empty()
         && metadata.album_artists.is_empty()
@@ -105,6 +107,11 @@ pub(super) async fn assemble(
     }
 
     if lossless && let Some(lossy) = same_recording.iter().find(|t| !formats::is_lossless(t.codec.as_deref())) {
+        let old_cache: String =
+            sqlx::query_scalar("SELECT COALESCE(media_cache_hash,content_hash) FROM tracks WHERE id=$1")
+                .bind(lossy.id)
+                .fetch_one(&mut *conn)
+                .await?;
         sqlx::query!(
             "UPDATE tracks SET file_path = $2, original_file_name = $3, mime_type = $4, file_size = $5, content_hash = $6,
                                duration_seconds = $7, codec = $8, bitrate_kbps = $9, sample_rate_hz = $10, bits_per_sample = $11
@@ -123,12 +130,14 @@ pub(super) async fn assemble(
         )
         .execute(&mut *conn)
         .await?;
+        // The catalog title/artist are retained on a lossless replacement.
+        sqlx::query("UPDATE tracks SET media_cache_hash=NULL WHERE id=$1").bind(lossy.id).execute(&mut *conn).await?;
         tracing::info!("Track {} ({title}) upgraded to {codec} from {file_name}", lossy.id);
         return Ok(Saved {
             id: lossy.id,
             codec,
             bitrate_kbps: metadata.bitrate_kbps,
-            replaced: Some((lossy.file_path.clone(), lossy.content_hash.clone())),
+            replaced: Some((lossy.file_path.clone(), old_cache)),
             new_artists: vec![],
             cover_attached: false,
         });
@@ -187,6 +196,12 @@ pub(super) async fn assemble(
     )
     .execute(&mut *conn)
     .await?;
+
+    sqlx::query("UPDATE tracks SET file_name_verified=$2 WHERE id=$1")
+        .bind(id)
+        .bind(verified)
+        .execute(&mut *conn)
+        .await?;
 
     for (position, artist) in credits.iter().enumerate() {
         sqlx::query!(

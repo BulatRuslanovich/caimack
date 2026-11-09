@@ -24,6 +24,16 @@ so it works even when the backend's queries don't compile against the current da
 
 Add a new numbered migration for each change. Never modify an already deployed migration or rewrite its checksum. Migration 0002 adds durable enrichment jobs and catalog invalidation without changing the baseline.
 
+Migration 0003 adds filename metadata provenance and the durable `file_renames`
+journal for optional automatic music filenames. New queries use runtime SQL and
+are covered by `cargo test -p app --features integration-tests file_names` with
+the same local `DATABASE_URL` and `SQLX_OFFLINE=true` configuration below.
+
+Migration 0004 adds the metadata export journal, export state and a stable HLS
+cache hash for tag-only audio changes. Its recovery, audio preservation and lyric
+companion behavior are covered by `cargo test -p app --features integration-tests
+metadata_export`.
+
 Run migrations before starting the corresponding backend version. Regenerate SQLx metadata with `make sqlx` when changing compile-time checked queries. New enrichment queries are checked by PostgreSQL integration tests:
 
 ```bash

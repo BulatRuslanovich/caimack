@@ -53,6 +53,7 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "chrono"] }
 uuid = { version = "1.29.0", features = ["v4", "v7", "serde"] }
 walkdir = "2.5.0"
+same-file = "1.0.6"
 webp = { version = "0.3.1", default-features = false }
 
 [workspace.lints.rust]

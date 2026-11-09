@@ -151,6 +151,15 @@ compatible MERT vectors.
 
 See [optional module deployment and cache reuse](docs/mert.md).
 
+File names are left unchanged by default. Optional catalog-based renaming uses
+`Artist - Title.ext`, keeps track IDs, history, favorites and existing MERT vectors,
+and moves same-name lyric/image companion files together. See
+[automatic file names](docs/file-names.md) for write access, collision handling and recovery.
+
+Optional [metadata export](docs/metadata-export.md) embeds catalog artwork into
+audio files and saves synchronized lyrics as adjacent `.lrc` files (or `.txt`
+for plain lyrics). Enable `EXPORT_MUSIC_METADATA=true` with folder write access.
+
 Listening behavior automatically scores recommendations; see [recommendation quality](docs/recommendations.md).
 
 </details>

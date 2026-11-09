@@ -152,6 +152,8 @@ services:
       OWNER_PASSWORD: ${OWNER_PASSWORD:?OWNER_PASSWORD is required on first start}
       OWNER_RESET_PASSWORD: ${OWNER_RESET_PASSWORD:-false}
       LIBRARY_SCAN_INTERVAL_MINUTES: ${LIBRARY_SCAN_INTERVAL_MINUTES:-60}
+      RENAME_MUSIC_FILES: ${RENAME_MUSIC_FILES:-false}
+      EXPORT_MUSIC_METADATA: ${EXPORT_MUSIC_METADATA:-false}
       BACKGROUND_HEAVY_JOBS: ${BACKGROUND_HEAVY_JOBS:-}
       RECOMMENDATIONS_ENABLED: "false"
       MERT_URL: http://mert:8090
@@ -160,7 +162,7 @@ services:
       - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
     volumes:
       - ${MUSIC_STORAGE_PATH:-./storage}:/storage
-      - ${MUSIC_LIBRARY_PATH:-./library}:/storage/library:ro
+      - ${MUSIC_LIBRARY_PATH:-./library}:/storage/library:${MUSIC_LIBRARY_ACCESS:-ro}
     deploy:
       resources:
         limits:
