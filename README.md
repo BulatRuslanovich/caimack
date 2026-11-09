@@ -88,6 +88,11 @@ The home screen above brings together personal radio, a daily mix and new additi
 The web app is a PWA with its own mobile layout. There is also a native Android client with
 background playback, offline downloads and Android Auto.
 
+Android also supports opt-in [full library synchronization](docs/android-library-sync.md)
+to a folder you choose: original music, lyrics, artwork, vectors and server-prepared
+mixes/radio remain available away from your local network. Offline listening and
+playlist edits are merged back when the phone returns.
+
 The normal player can also control another signed-in web or Android device.
 Choose an output from the player's device button; playback controls, the queue
 and progress follow that device. See [playback devices](docs/playback-connect.md).
