@@ -24,6 +24,7 @@ pub mod recommendations;
 pub mod schema;
 pub mod storage;
 pub mod streaming;
+pub mod sync;
 pub mod text;
 pub mod transcode;
 pub mod upload;

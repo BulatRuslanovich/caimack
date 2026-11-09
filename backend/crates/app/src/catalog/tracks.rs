@@ -127,7 +127,7 @@ pub fn select(user: Uuid) -> QueryBuilder<Postgres> {
     query
 }
 
-pub async fn fetch(db: &PgPool, mut query: QueryBuilder<Postgres>) -> AppResult<Vec<TrackDto>> {
+pub async fn fetch<'e>(db: impl sqlx::PgExecutor<'e>, mut query: QueryBuilder<Postgres>) -> AppResult<Vec<TrackDto>> {
     let rows: Vec<TrackRow> = query.build_query_as().fetch_all(db).await?;
     Ok(rows.into_iter().map(TrackDto::from).collect())
 }

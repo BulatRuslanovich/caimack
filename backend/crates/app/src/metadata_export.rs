@@ -331,6 +331,7 @@ async fn finish(db: &PgPool, storage: &Storage, job: &Job) -> anyhow::Result<()>
         for query in [
             "UPDATE track_embeddings SET source_hash=$3 WHERE track_id=$1 AND source_hash=$2",
             "UPDATE track_cues SET source_hash=$3 WHERE track_id=$1 AND source_hash=$2",
+            "UPDATE sync_audio_payloads SET source_hash=$3 WHERE track_id=$1 AND source_hash=$2 AND audio_hash NOT LIKE 'opaque:%'",
         ] {
             sqlx::query(query).bind(job.track_id).bind(&job.old_hash).bind(&job.new_hash).execute(&mut *tx).await?;
         }
