@@ -14,6 +14,7 @@
 @import "./styles/boom.css" layer(components);
 @import "./styles/playing.css" layer(components);
 @import "./styles/backdrop.css" layer(components);
+@import "./styles/player-effects.css" layer(components);
 @import "./styles/recap.css" layer(components);
 @import "./styles/lean-back.css" layer(components);
 @import "./styles/home.css";

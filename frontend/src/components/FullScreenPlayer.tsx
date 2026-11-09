@@ -21,6 +21,7 @@ import { planTransition } from "@/lib/playback/transitions";
 import type { Track } from "@/lib/types";
 import { useT } from "@/contexts/I18nContext";
 import { ArtBackdrop } from "./ArtBackdrop";
+import { PlayerEffectsBackdrop } from "./PlayerEffectsBackdrop";
 import { ArtistLinks } from "./ArtistLinks";
 import { Record } from "./Record";
 import { DJControls } from "./DJControls";
@@ -180,7 +181,6 @@ export function FullScreenPlayer({
         <DialogPrimitive.Content asChild aria-describedby={undefined}>
           <div
             data-player-fullscreen="true"
-            data-aura-host
             onTouchStart={(event) => {
               const atTop = (stage.current?.scrollTop ?? 0) === 0;
               swipeFrom.current = panel === "art" && atTop ? event.touches[0].clientY : null;
@@ -198,17 +198,18 @@ export function FullScreenPlayer({
             </DialogPrimitive.Title>
 
             <ArtBackdrop mode="stage" src={trackCoverUrl(track, "thumb")} />
+            <PlayerEffectsBackdrop track={track} playing={player.isPlaying && !player.buffering} />
 
             <header
               className={cn(
-                "relative z-1 grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 max-sm:flex max-sm:justify-between",
+                "relative z-1 grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 max-sm:flex max-sm:justify-between max-sm:gap-0",
                 chrome,
               )}
             >
               <Button
                 variant="ghost"
                 size="icon-lg"
-                className="justify-self-start"
+                className="justify-self-start max-sm:size-10"
                 onClick={onClose}
                 aria-label={t("player.closeFull")}
               >
@@ -219,7 +220,7 @@ export function FullScreenPlayer({
                 {t("player.nowPlaying")}
               </span>
 
-              <div className="flex items-center gap-1 justify-self-end">
+              <div className="flex items-center gap-1 justify-self-end max-sm:gap-0 max-sm:[&_button]:size-10">
                 <PlaybackDevices compact />
                 <StreamQuality track={track} className="mr-1 max-sm:hidden" />
 
@@ -277,7 +278,6 @@ export function FullScreenPlayer({
                     out
                     spinning={player.isPlaying && !player.buffering}
                     scratchable
-                    aura
                     axis="x"
                     sizes="min(48vh, 28rem)"
                     transitionCover
@@ -288,7 +288,6 @@ export function FullScreenPlayer({
                     out
                     spinning={player.isPlaying && !player.buffering}
                     scratchable
-                    aura
                     axis="y"
                     sizes="min(76vw, 22rem)"
                     transitionCover
@@ -300,7 +299,8 @@ export function FullScreenPlayer({
               <div
                 className={cn(
                   "flex min-h-0 flex-1 flex-col justify-center gap-6 max-lg:flex-none max-lg:pb-4",
-                  djMode && "lg:overflow-x-hidden lg:overflow-y-auto lg:py-3 lg:[justify-content:safe_center]",
+                  djMode &&
+                    "lg:overflow-x-hidden lg:overflow-y-auto lg:py-3 lg:[justify-content:safe_center]",
                   panel !== "art" && "max-lg:hidden lg:max-w-[50%] lg:flex-none lg:basis-1/2",
                 )}
               >

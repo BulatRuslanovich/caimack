@@ -23,6 +23,7 @@ import { Switch } from "@/components/ui/switch";
 import { useI18n, useT } from "@/contexts/I18nContext";
 import { ColorwaySwatch, ThemeSwatch } from "./ThemeSwatch";
 import { Choice, Panel } from "./Panel";
+import { PlayerEffectsSettings } from "./PlayerEffectsSettings";
 
 export function Appearance() {
   const t = useT();
@@ -93,6 +94,8 @@ export function Appearance() {
           <SettingHelp hint={t("settings.help.visualizer")}>{t("settings.visualizer")}</SettingHelp>
         </span>
       </label>
+
+      <PlayerEffectsSettings />
 
       <label className="flex cursor-pointer items-start gap-3 pointer-coarse:hidden">
         <Switch
