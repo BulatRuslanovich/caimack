@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/contexts/I18nContext";
 import { isTypingTarget } from "@/lib/shortcuts";
 
+const TRIGGER = "meow";
+
 export function SecretCat() {
   const [visible, setVisible] = useState(false);
   const buffer = useRef("");
@@ -30,9 +32,9 @@ export function SecretCat() {
       const now = Date.now();
       buffer.current = (
         (now - lastKey.current > 1500 ? "" : buffer.current) + event.key.toLowerCase()
-      ).slice(-6);
+      ).slice(-TRIGGER.length);
       lastKey.current = now;
-      if (buffer.current === "разьеб") {
+      if (buffer.current === TRIGGER) {
         buffer.current = "";
         setVisible(true);
       }

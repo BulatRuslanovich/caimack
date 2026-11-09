@@ -57,7 +57,7 @@ function FullScreenProgress({ track, chrome }: { track: Track; chrome: string })
   const { nextTrack, crossfade, smartTransitions, repeat, sleepTimer } = usePlayerState();
 
   const plan =
-    sleepTimer?.kind === "trackEnd"
+    !smartTransitions || sleepTimer?.kind === "trackEnd"
       ? null
       : planTransition({
           crossfade,
