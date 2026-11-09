@@ -35,7 +35,9 @@ function fixture(t) {
 }
 
 function decisions(root, tag = "v1.0.6") {
-  return ["backend", "frontend", "mert"].map((component) => planImage(root, component, tag).reuse);
+  const result = ["backend", "frontend", "mert"].map((component) => planImage(root, component, tag).reuse);
+  assert.equal(planImage(root, "mert-rocm", tag).reuse, result[2], "ROCm follows the MERT build inputs");
+  return result;
 }
 
 test("first release builds every image", (t) => {

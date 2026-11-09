@@ -1,0 +1,25 @@
+# Add after docker-compose.recommendations.yml (and images.yml when used).
+# ROCm PyTorch intentionally uses the same torch.cuda API as CUDA PyTorch.
+services:
+  mert:
+    image: ghcr.io/bulatruslanovich/caimack-mert-rocm:${CAIMACK_VERSION:-latest}
+    build:
+      context: ./backend/scripts
+      dockerfile: Dockerfile.mert
+      target: runtime
+      args:
+        TORCH_INDEX_URL: https://download.pytorch.org/whl/rocm6.4
+    environment:
+      # Arbitrary PUIDs have no home directory; MIOpen still needs writable caches.
+      MIOPEN_USER_DB_PATH: /tmp/mert-miopen-db
+      MIOPEN_CUSTOM_CACHE_DIR: /tmp/mert-miopen-cache
+    deploy:
+      resources:
+        reservations:
+          devices: !reset []
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${MERT_KFD_GID:?Set MERT_KFD_GID to the host /dev/kfd group ID}"
+      - "${MERT_RENDER_GID:?Set MERT_RENDER_GID to the host render device group ID}"

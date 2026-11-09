@@ -264,7 +264,7 @@ def run_gpu(
 
     if not torch.cuda.is_available():
         raise RuntimeError(
-            "CUDA is unavailable. Check NVIDIA Container Toolkit and Docker GPU access; this experiment requires a GPU."
+            "CUDA/ROCm is unavailable. Check the GPU driver and Docker device access; this experiment requires a GPU."
         )
     torch.set_num_threads(int(os.environ.get("OMP_NUM_THREADS", "2")))
     torch.cuda.set_device(0)
@@ -273,6 +273,7 @@ def run_gpu(
             "device": torch.cuda.get_device_name(0),
             "torch": torch.__version__,
             "cuda": torch.version.cuda,
+            "hip": torch.version.hip,
             "gpuTotalBytes": torch.cuda.get_device_properties(0).total_memory,
             "gpuFreeBytesBeforeLoad": torch.cuda.mem_get_info()[0],
         }

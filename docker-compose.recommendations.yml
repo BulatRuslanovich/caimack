@@ -1,4 +1,4 @@
-# Optional NVIDIA/MERT module. Add this file after the base/image Compose files.
+# Optional MERT module (NVIDIA by default). For AMD also add mert-amd.yml last.
 services:
   mert-init:
     profiles: !reset []
