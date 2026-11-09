@@ -5,7 +5,7 @@ package app.caimack.api
 
 import app.caimack.session.Server
 
-class Media(private val server: Server) {
+class Media(private val server: Server, private val local: (String) -> String? = { null }) {
     private val versions = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     fun markChanged(path: String) {
@@ -32,7 +32,7 @@ class Media(private val server: Server) {
     }
 
     private fun url(path: String, small: Boolean): String? =
-        server.resolve(path)?.newBuilder()?.apply {
+        local(path) ?: server.resolve(path)?.newBuilder()?.apply {
             if (small) addQueryParameter("size", "thumb")
             versions[path]?.let { addQueryParameter("v", it.toString()) }
         }?.build()?.toString()

@@ -20,6 +20,7 @@ class CaimackApp : Application(), SingletonImageLoader.Factory {
         container.scope.launch { container.session.restore() }
         container.connect.start()
         Background.schedule(this)
+        app.caimack.sync.SyncScheduler.observe(this)
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader = ImageLoader.Builder(context)

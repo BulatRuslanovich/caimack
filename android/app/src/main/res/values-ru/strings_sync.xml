@@ -1,0 +1,16 @@
+<resources>
+    <string name="sync_title">Синхронизация медиатеки</string>
+    <string name="sync_description">Вся библиотека, тексты, обложки, векторы и подготовленные сервером миксы на телефоне. Исходное качество аудио. Автоматически по локальной сети Wi-Fi или Ethernet, в том числе от батареи.</string>
+    <string name="sync_enable">Синхронизировать эту библиотеку</string>
+    <string name="sync_choose_folder">Выбрать папку музыки</string>
+    <string name="sync_progress">Доступно: %1$d / %2$d треков</string>
+    <string name="sync_pending">Действий ожидают отправки: %1$d</string>
+    <string name="sync_rejected">Сервер отклонил изменений: %1$d. Журнал действий сохранён.</string>
+    <string name="sync_last">Последняя полная синхронизация: %1$s</string>
+    <string name="sync_now">Синхронизировать / продолжить</string>
+    <string name="sync_pause">Приостановить</string>
+    <string name="sync_paused">Синхронизация приостановлена</string>
+    <string name="sync_sign_in_again">Войдите на сервер заново для продолжения синхронизации. Офлайн-медиатека остаётся доступной.</string>
+    <string name="sync_pending_before_change">Перед сменой папки или аккаунта синхронизируйте накопленные действия.</string>
+    <string name="sync_files_hint">Музыка и тексты хранятся обычными файлами в отдельной подпапке Caimack. Удаление на сервере удаляет и синхронизированную копию. Отключение синхронизации сохраняет файлы. В офлайн-радио до 100 треков; в конце очереди воспроизведение останавливается.</string>
+</resources>

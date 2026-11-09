@@ -242,6 +242,7 @@ fun SettingsScreen(category: SettingsCategory? = null) {
 
             if (SettingKey.Downloads in visible) {
                 Panel(stringResource(R.string.settings_downloads)) {
+                    app.caimack.sync.SyncSettings()
                     if (SettingKey.Downloads in visible) {
                         val autoDownloads by container.playbackPrefs.autoDownloads.collectAsStateWithLifecycle()
                         Row(

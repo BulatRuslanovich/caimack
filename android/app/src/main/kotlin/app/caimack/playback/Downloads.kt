@@ -67,7 +67,7 @@ class Downloads(
 
     val playback: CacheDataSource.Factory = CacheDataSource.Factory()
         .setCache(cache)
-        .setUpstreamDataSourceFactory(upstream)
+        .setUpstreamDataSourceFactory(androidx.media3.datasource.DefaultDataSource.Factory(context,upstream))
         .setCacheWriteDataSinkFactory(null)
 
     init {
