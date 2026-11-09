@@ -778,7 +778,7 @@ export const en = {
   "lyrics.title": "Lyrics",
   "lyrics.show": "Show lyrics",
   "lyrics.hide": "Hide lyrics",
-  "lyrics.none": "No lyrics for this track.",
+  "lyrics.none": "Lyrics are not available yet",
   "lyrics.failed": "Could not load the lyrics.",
   "lyrics.seekTo": "Play from “{line}”",
   "lyrics.edit": "Edit lyrics",

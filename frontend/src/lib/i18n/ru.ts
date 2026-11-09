@@ -818,7 +818,7 @@ export const ru: Dictionary = {
   "lyrics.title": "Текст",
   "lyrics.show": "Показать текст",
   "lyrics.hide": "Скрыть текст",
-  "lyrics.none": "Для этого трека текста нет.",
+  "lyrics.none": "Текст пока недоступен",
   "lyrics.failed": "Не удалось загрузить текст.",
   "lyrics.seekTo": "Играть с «{line}»",
   "lyrics.edit": "Редактировать текст",

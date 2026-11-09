@@ -94,10 +94,56 @@ fn has_text(value: Option<&str>) -> bool {
 }
 
 fn key(value: &str) -> String {
-    normalize_key(value).replace(['\'', '\u{2019}'], "")
+    let value = normalize_key(value).replace(['\'', '\u{2019}'], "");
+    value
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { ' ' })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn clean_query(value: &str) -> String {
+    let mut value = value.trim();
+    if let Some(start) = value.find(['[', '(']) {
+        let suffix = &value[start..];
+        let advertisement = suffix.trim_matches(['[', ']', '(', ')', ' ']);
+        if !advertisement.chars().any(char::is_whitespace)
+            && [".cc", ".net", ".com", ".ru", ".kz", ".org"].iter().any(|domain| advertisement.ends_with(domain))
+        {
+            value = value[..start].trim();
+        }
+    }
+    value.to_owned()
+}
+
+fn usable(record: &Record) -> bool {
+    record.instrumental || has_text(record.synced_lyrics.as_deref()) || has_text(record.plain_lyrics.as_deref())
+}
+
+fn identity_matches(record: &Record, query: &LyricsQuery) -> bool {
+    let (Some(title), Some(artist)) = (&record.track_name, &record.artist_name) else { return false };
+    let wanted = key(&query.title);
+    if query.artist.eq_ignore_ascii_case("Unknown Artist") {
+        let artist = key(artist);
+        let title = key(title);
+        return !artist.is_empty()
+            && (wanted == format!("{artist} {title}")
+                || wanted == format!("{title} {artist}")
+                || (wanted == title
+                    && (wanted.starts_with(&format!("{artist} ")) || wanted.ends_with(&format!(" {artist}")))));
+    }
+    key(title) == wanted && key(artist) == key(&query.artist)
 }
 
 fn variants(query: &LyricsQuery) -> Vec<LyricsQuery> {
+    let query = &LyricsQuery {
+        title: clean_query(&query.title),
+        artist: clean_query(&query.artist),
+        album: query.album.as_deref().map(clean_query),
+        duration_seconds: query.duration_seconds,
+    };
     let artist = to_latin(&query.artist);
     let title = to_latin(&query.title);
     let album = if title == query.title { query.album.clone() } else { query.album.as_deref().map(to_latin) };
@@ -152,8 +198,15 @@ impl Lrclib {
     }
 
     pub async fn lookup(&self, query: &LyricsQuery) -> anyhow::Result<LyricsLookup> {
+        // LRCLIB accepts durations of 1..=3600 seconds. Mixes and invalid
+        // durations cannot be safely matched to a single song.
+        if !(1..=3600).contains(&query.duration_seconds) {
+            return Ok(LyricsLookup::NotFound);
+        }
         for variant in variants(query) {
-            let candidate = match self.exact(&variant).await? {
+            let exact =
+                if variant.artist.eq_ignore_ascii_case("Unknown Artist") { None } else { self.exact(&variant).await? };
+            let candidate = match exact.filter(usable) {
                 Some(record) => Some(record),
                 None => self.search(&variant).await?,
             };
@@ -188,19 +241,17 @@ impl Lrclib {
     }
 
     async fn search(&self, variant: &LyricsQuery) -> anyhow::Result<Option<Record>> {
-        let found: Vec<Record> = self
-            .request("/api/search", &[("artist_name", variant.artist.as_str()), ("track_name", variant.title.as_str())])
-            .await?
-            .error_for_status()?
-            .json()
-            .await?;
+        let parameters = if variant.artist.eq_ignore_ascii_case("Unknown Artist") {
+            vec![("q", variant.title.as_str())]
+        } else {
+            vec![("artist_name", variant.artist.as_str()), ("track_name", variant.title.as_str())]
+        };
+        let found: Vec<Record> = self.request("/api/search", &parameters).await?.error_for_status()?.json().await?;
 
-        let (title, artist) = (key(&variant.title), key(&variant.artist));
         let wanted = f64::from(variant.duration_seconds);
         let best = found
             .into_iter()
-            .filter(|r| r.track_name.as_deref().is_some_and(|t| key(t) == title))
-            .filter(|r| r.artist_name.as_deref().is_some_and(|a| key(a) == artist))
+            .filter(|r| identity_matches(r, variant))
             .filter_map(|record| {
                 // Unknown durations cannot safely distinguish album, live and remix versions.
                 let difference = (record.duration? - wanted).abs();
@@ -256,6 +307,54 @@ mod tests {
             "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n{headers}\r\n{body}",
             body.len()
         )
+    }
+
+    #[test]
+    fn advertising_suffixes_do_not_change_the_song_version() {
+        assert_eq!(clean_query("Imagine Dragons [mp3xa.cc"), "Imagine Dragons");
+        assert_eq!(clean_query("Natural (zaycev.net)"), "Natural");
+        assert_eq!(clean_query("Salt (Vadim Adamov & Hardphol Remix)"), "Salt (Vadim Adamov & Hardphol Remix)");
+        assert_eq!(key("Gods Don’t Pray"), key("Gods Don't Pray"));
+    }
+
+    #[tokio::test]
+    async fn empty_exact_record_falls_back_to_search() {
+        let (client, server) = server(vec![
+            response("200 OK", "", r#"{"plainLyrics":null,"syncedLyrics":null}"#),
+            response(
+                "200 OK",
+                "",
+                r#"[{"trackName":"Song","artistName":"Band","duration":200,"plainLyrics":"found"}]"#,
+            ),
+        ])
+        .await;
+        assert_eq!(client.lookup(&query()).await.unwrap(), LyricsLookup::Found("found".into()));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn unknown_artist_requires_both_artist_and_song_in_filename() {
+        let (client, server) = server(vec![response(
+            "200 OK",
+            "",
+            r#"[
+            {"trackName":"Band Song","artistName":"Other","duration":200,"plainLyrics":"wrong"},
+            {"trackName":"Song","artistName":"Band","duration":200,"plainLyrics":"found"}
+        ]"#,
+        )])
+        .await;
+        let q = LyricsQuery { artist: "Unknown Artist".into(), title: "Band - Song".into(), ..query() };
+        assert_eq!(client.lookup(&q).await.unwrap(), LyricsLookup::Found("found".into()));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn long_mixes_do_not_make_invalid_requests() {
+        let client = Lrclib::new("http://127.0.0.1:1");
+        assert_eq!(
+            client.lookup(&LyricsQuery { duration_seconds: 7265, ..query() }).await.unwrap(),
+            LyricsLookup::NotFound
+        );
     }
 
     #[tokio::test]

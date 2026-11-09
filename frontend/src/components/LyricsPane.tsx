@@ -38,7 +38,10 @@ export function LyricsPane({
   const [editing, setEditing] = useState(false);
   const [browsing, setBrowsing] = useState(false);
 
-  const query = useQuery(queries.lyrics(track.id));
+  const query = useQuery({
+    ...queries.lyrics(track.id),
+    refetchInterval: (query) => (query.state.data === null ? 15_000 : false),
+  });
   const lyrics = query.data ?? null;
   const lines = lyrics?.lines ?? [];
   const current = activeLineAt(lines, position * 1000);
