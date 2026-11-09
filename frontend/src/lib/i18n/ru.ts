@@ -1033,6 +1033,7 @@ export const ru: Dictionary = {
   "map.layer.route": "Очередь",
   "map.layer.covers": "Обложки",
   "map.layer.links": "Связи",
+  "map.layer.nebula": "Туманности",
   "map.layer.motion": "Анимация",
   "settings.help.coverTone": "Добавляет в интерфейс цвета обложки текущего трека.",
   "settings.help.quality":

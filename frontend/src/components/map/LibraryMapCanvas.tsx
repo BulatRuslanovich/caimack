@@ -30,6 +30,7 @@ import {
 } from "@/lib/libraryMap";
 import { coverTile } from "./covers";
 import { landmarkAt, mapLandmarks, visibleLandmarks } from "./landmarks";
+import { buildStarfield } from "./starfield";
 import { paintMap, readPalette, type HaloCache } from "./paint";
 import type { MapPoint } from "@/lib/types";
 import { useT } from "@/contexts/I18nContext";
@@ -50,7 +51,7 @@ export interface MapRoute {
   ahead: MapPoint[];
 }
 
-export const MAP_LAYERS = ["route", "covers", "links", "motion"] as const;
+export const MAP_LAYERS = ["route", "covers", "links", "nebula", "motion"] as const;
 
 export type MapLayer = (typeof MAP_LAYERS)[number];
 
@@ -127,6 +128,7 @@ export function LibraryMapCanvas({
   const scheduleRef = useRef(() => {});
   const dirtyRef = useRef(true);
   const paintedRef = useRef(0);
+  const coverHitsRef = useRef<{ point: MapPoint; spot: Spot; radius: number }[]>([]);
 
   const [hovered, setHovered] = useState<Placed | null>(null);
   const [picked, setPicked] = useState<Placed | null>(null);
@@ -141,10 +143,12 @@ export function LibraryMapCanvas({
   const bounds = useMemo(() => boundsOf(points), [points]);
   const allLinks = useMemo(() => constellation(points), [points]);
   const landmarks = useMemo(() => mapLandmarks(points), [points]);
+  const starfield = useMemo(() => buildStarfield(points), [points]);
   const links = layers.has("links") ? allLinks : NO_LINKS;
   const shownLabels = labels;
   const shownRoute = layers.has("route") ? route : null;
   const covers = layers.has("covers");
+  const nebula = layers.has("nebula");
   const animate = layers.has("motion");
 
   const latest = useRef({
@@ -156,11 +160,13 @@ export function LibraryMapCanvas({
     route: shownRoute,
     path,
     covers,
+    nebula,
     selectedIds,
     maxPlays,
     bounds,
     links,
     landmarks,
+    starfield,
   });
   useEffect(() => {
     latest.current = {
@@ -172,11 +178,13 @@ export function LibraryMapCanvas({
       route: shownRoute,
       path,
       covers,
+      nebula,
       selectedIds,
       maxPlays,
       bounds,
       links,
       landmarks,
+      starfield,
     };
   });
 
@@ -225,6 +233,7 @@ export function LibraryMapCanvas({
       intro,
       reveal,
       cover: (point) => coverTile(point, () => scheduleRef.current()),
+      coverHits: coverHitsRef,
     });
 
     if (moving || tweenRef.current || intro < 1 || reveal < 1) scheduleRef.current();
@@ -301,6 +310,7 @@ export function LibraryMapCanvas({
     shownRoute,
     path,
     covers,
+    nebula,
     links,
     selectedIds,
     hoveredId,
@@ -350,7 +360,7 @@ export function LibraryMapCanvas({
     const themes = new MutationObserver(redraw);
     themes.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["data-theme", "data-colorway"],
+      attributeFilter: ["data-theme", "data-colorway", "style"],
     });
     const scheme = window.matchMedia("(prefers-color-scheme: dark)");
     scheme.addEventListener("change", redraw);
@@ -395,6 +405,10 @@ export function LibraryMapCanvas({
         at,
       );
       if (landmark) return landmark;
+      for (let i = coverHitsRef.current.length - 1; i >= 0; i--) {
+        const hit = coverHitsRef.current[i];
+        if (Math.hypot(hit.spot.x - at.x, hit.spot.y - at.y) <= hit.radius) return hit.point;
+      }
     }
     let best: MapPoint | null = null;
     let bestDistance = HIT_RADIUS_PX ** 2;
@@ -556,12 +570,12 @@ export function LibraryMapCanvas({
 
       {card && (
         <div
-          className={`map-track-card absolute z-10 flex max-w-[17rem] items-center gap-2.5 rounded-lg bg-popover p-2 text-popover-foreground shadow-pop ${
+          className={`map-track-card absolute z-10 flex max-w-[17rem] items-center gap-3 rounded-xl bg-popover/95 p-3 text-popover-foreground shadow-pop ${
             picked ? "" : "pointer-events-none"
           }`}
           style={{
             left: `clamp(1rem, ${card.at.x + (card.flip ? -CARD_WIDTH_PX : 14)}px, calc(100% - var(--map-card-width) - 1rem))`,
-            top: `clamp(1rem, ${card.at.y - 28}px, calc(100% - 6rem))`,
+            top: `clamp(1rem, ${card.at.y - 28}px, calc(100% - 9rem))`,
           }}
           role={picked ? "dialog" : undefined}
           aria-label={picked ? card.point.title : undefined}
@@ -571,12 +585,14 @@ export function LibraryMapCanvas({
             trackId={card.point.id}
             hasCover={card.point.hasCover}
             name={card.point.title}
-            size="2.5rem"
+            size={picked ? "3rem" : "2.5rem"}
             className="shrink-0 rounded-sm"
           />
 
           <div className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate text-sm font-medium">{card.point.title}</span>
+            <span className={`${picked ? "line-clamp-2" : "truncate"} text-sm font-medium`}>
+              {card.point.title}
+            </span>
             <span className="truncate text-xs text-muted-foreground">{card.point.artist}</span>
             <span className="truncate text-xs text-faint">
               {[

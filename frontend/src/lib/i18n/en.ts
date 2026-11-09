@@ -979,6 +979,7 @@ export const en = {
   "map.layer.route": "Queue",
   "map.layer.covers": "Covers",
   "map.layer.links": "Links",
+  "map.layer.nebula": "Nebulae",
   "map.layer.motion": "Animation",
   "settings.help.quality":
     "The player may lower quality on slow connections. The actual quality is shown in the player.",

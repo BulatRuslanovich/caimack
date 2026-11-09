@@ -10,6 +10,7 @@ import {
   LayersIcon,
   OrbitIcon,
   RouteIcon,
+  SparklesIcon,
   WaypointsIcon,
 } from "lucide-react";
 import { useT } from "@/contexts/I18nContext";
@@ -27,6 +28,7 @@ const LAYER_ICONS = {
   route: RouteIcon,
   covers: ImageIcon,
   links: WaypointsIcon,
+  nebula: SparklesIcon,
   motion: OrbitIcon,
 };
 
