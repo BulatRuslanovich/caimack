@@ -8,7 +8,7 @@ describe("playback visual preferences", () => {
     for (const effect of [...PLAYER_EFFECTS, "off"]) {
       expect(playerEffectsState({ effect, intensity: 45 })).toEqual({
         effect,
-        intensity: 45,
+        intensity: 35,
         sensitivity: 65,
       });
     }
@@ -19,8 +19,8 @@ describe("playback visual preferences", () => {
     expect(playerEffectsState({ effect: "glass", intensity: -3 }).intensity).toBe(0);
     expect(playerEffectsState({ effect: "water", intensity: 45, sensitivity: 80 })).toEqual({
       effect: "glass",
-      intensity: 45,
-      sensitivity: 80,
+      intensity: 35,
+      sensitivity: 85,
     });
     expect(playerEffectsState({ effect: "fabric", sensitivity: 200 }).effect).toBe("glass");
     expect(playerEffectsState({ sensitivity: -10 }).sensitivity).toBe(0);

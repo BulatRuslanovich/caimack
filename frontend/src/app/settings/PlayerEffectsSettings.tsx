@@ -5,12 +5,67 @@ import { useId } from "react";
 import { useT } from "@/contexts/I18nContext";
 import {
   PLAYER_EFFECTS,
+  PLAYER_EFFECT_LEVELS,
+  playerEffectLevel,
   setPlayerEffects,
   usePlayerEffects,
   type PlayerEffectChoice,
 } from "@/lib/playerEffects";
 import { Choice } from "./Panel";
 import { SettingHelp } from "./SettingHelp";
+
+function EffectLevelSlider({
+  id,
+  label,
+  value,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: number;
+  disabled: boolean;
+  onChange: (value: number) => void;
+}) {
+  const t = useT();
+  const level = playerEffectLevel(value);
+  return (
+    <>
+      <label htmlFor={id} className="flex items-center justify-between gap-3 text-sm">
+        <span>{label}</span>
+        <output htmlFor={id} className="text-muted-foreground tabular-nums">
+          {level} / 5
+        </output>
+      </label>
+      <input
+        id={id}
+        type="range"
+        min="1"
+        max="5"
+        step="1"
+        value={level}
+        aria-valuetext={t("effects.level", { level })}
+        disabled={disabled}
+        className="h-9 w-full cursor-ew-resize accent-primary disabled:cursor-default disabled:opacity-40"
+        onChange={(event) => onChange(PLAYER_EFFECT_LEVELS[Number(event.target.value) - 1])}
+      />
+      <div
+        aria-hidden="true"
+        className={`mx-2 -mt-2 flex justify-between text-xs tabular-nums ${disabled ? "opacity-40" : ""}`}
+      >
+        {PLAYER_EFFECT_LEVELS.map((_, index) => (
+          <span
+            key={index}
+            className={`flex flex-col items-center gap-1 ${index + 1 === level ? "text-foreground" : "text-muted-foreground"}`}
+          >
+            <span className="h-1 w-px bg-current" />
+            {index + 1}
+          </span>
+        ))}
+      </div>
+    </>
+  );
+}
 
 export function PlayerEffectsSettings() {
   const t = useT();
@@ -36,49 +91,21 @@ export function PlayerEffectsSettings() {
         }))}
       />
       <div className="flex max-w-md flex-col gap-2">
-        <label htmlFor={intensityId} className="flex items-center justify-between gap-3 text-sm">
-          <span>{t("effects.intensity")}</span>
-          <output htmlFor={intensityId} className="text-muted-foreground tabular-nums">
-            {Math.round(state.intensity)}%
-          </output>
-        </label>
-        <input
+        <EffectLevelSlider
           id={intensityId}
-          type="range"
-          min="0"
-          max="100"
-          step="1"
+          label={t("effects.intensity")}
           value={state.intensity}
-          aria-valuetext={`${Math.round(state.intensity)}%`}
           disabled={state.effect === "off"}
-          className="h-9 w-full cursor-ew-resize accent-primary disabled:cursor-default disabled:opacity-40"
-          onChange={(event) => setPlayerEffects({ intensity: Number(event.target.value) })}
+          onChange={(intensity) => setPlayerEffects({ intensity })}
         />
       </div>
       <div className="flex max-w-md flex-col gap-2">
-        <label
-          htmlFor={`${intensityId}-sensitivity`}
-          className="flex items-center justify-between gap-3 text-sm"
-        >
-          <span>{t("effects.sensitivity")}</span>
-          <output
-            htmlFor={`${intensityId}-sensitivity`}
-            className="text-muted-foreground tabular-nums"
-          >
-            {Math.round(state.sensitivity)}%
-          </output>
-        </label>
-        <input
+        <EffectLevelSlider
           id={`${intensityId}-sensitivity`}
-          type="range"
-          min="0"
-          max="100"
-          step="1"
+          label={t("effects.sensitivity")}
           value={state.sensitivity}
-          aria-valuetext={`${Math.round(state.sensitivity)}%`}
           disabled={state.effect === "off"}
-          className="h-9 w-full cursor-ew-resize accent-primary disabled:cursor-default disabled:opacity-40"
-          onChange={(event) => setPlayerEffects({ sensitivity: Number(event.target.value) })}
+          onChange={(sensitivity) => setPlayerEffects({ sensitivity })}
         />
         <p className="text-xs text-muted-foreground">{t("effects.sensitivityHint")}</p>
       </div>

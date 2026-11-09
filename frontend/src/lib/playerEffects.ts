@@ -4,6 +4,19 @@ import { useSyncExternalStore } from "react";
 import { readStoredJson, writeStoredJson } from "@/lib/storage";
 
 export const PLAYER_EFFECTS = ["aurora", "glass", "ink"] as const;
+export const PLAYER_EFFECT_LEVELS = [0, 35, 65, 85, 100] as const;
+
+export function playerEffectLevel(value: number): number {
+  let nearest = 0;
+  PLAYER_EFFECT_LEVELS.forEach((level, index) => {
+    if (Math.abs(value - level) < Math.abs(value - PLAYER_EFFECT_LEVELS[nearest])) nearest = index;
+  });
+  return nearest + 1;
+}
+
+function snapLevel(value: number): number {
+  return PLAYER_EFFECT_LEVELS[playerEffectLevel(value) - 1];
+}
 export type PlayerEffect = (typeof PLAYER_EFFECTS)[number];
 export type PlayerEffectChoice = PlayerEffect | "off";
 export interface PlayerEffectsState {
@@ -27,11 +40,11 @@ export function playerEffectsState(value: unknown): PlayerEffectsState {
         : DEFAULT.effect,
     intensity:
       typeof saved.intensity === "number" && Number.isFinite(saved.intensity)
-        ? Math.max(0, Math.min(100, saved.intensity))
+        ? snapLevel(saved.intensity)
         : DEFAULT.intensity,
     sensitivity:
       typeof saved.sensitivity === "number" && Number.isFinite(saved.sensitivity)
-        ? Math.max(0, Math.min(100, saved.sensitivity))
+        ? snapLevel(saved.sensitivity)
         : DEFAULT.sensitivity,
   };
 }

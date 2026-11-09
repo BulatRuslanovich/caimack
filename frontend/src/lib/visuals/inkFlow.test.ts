@@ -15,6 +15,55 @@ const hit = {
 };
 
 describe("smooth ink emitters", () => {
+  it("lets each pair of frequency bands move its own current", () => {
+    for (let band = 0; band < INK_SOURCE_COUNT; band++) {
+      const ink = new InkFlow();
+      const spectrum = new Float32Array(24);
+      spectrum.fill(0.6, band * 2, band * 2 + 2);
+      for (let i = 0; i < 60; i++) ink.step({ ...idle, spectrum, drive: 0.6 }, 1 / 30);
+      expect(ink.levels[band]).toBeGreaterThan(0.3);
+      for (let i = 0; i < INK_SOURCE_COUNT; i++)
+        if (i !== band) expect(Math.abs(ink.currents[i * 4 + 2])).toBe(0);
+    }
+  });
+  it("conserves a spectral jet's pigment across frame rates and pause", () => {
+    for (const fps of [15, 30, 60]) {
+      const ink = new InkFlow();
+      const spectrum = new Float32Array(24).fill(0.2),
+        transients = new Float32Array(24);
+      transients.fill(0.8, 4, 6);
+      let dose = 0;
+      for (let i = 0; i < fps * 8; i++) {
+        const frame = {
+          ...idle,
+          spectrum,
+          transients,
+          pigment: i === 0 ? hit.pigment : idle.pigment,
+        };
+        if (i !== 0) transients.fill(0);
+        ink.step(frame, 1 / fps);
+        dose += ink.sources[2 * 4 + 2];
+        if (i === 3) {
+          const currents = [...ink.currents];
+          ink.step(frame, 0);
+          expect([...ink.currents]).toEqual(currents);
+          expect(ink.sources[2 * 4 + 2]).toBe(0);
+        }
+      }
+      expect(dose).toBeCloseTo(INK_DOSE, 5);
+    }
+  });
+  it("emits a high-frequency detail without requiring a global bass hit", () => {
+    const ink = new InkFlow(),
+      spectrum = new Float32Array(24).fill(0.2),
+      transients = new Float32Array(24);
+    transients.fill(0.3, 22, 24);
+    ink.step({ ...idle, spectrum, transients }, 1 / 30);
+    expect(ink.sources[11 * 4 + 2]).toBeGreaterThan(0);
+    expect(Array.from({ length: 11 }, (_, i) => ink.sources[i * 4 + 2])).toEqual(
+      new Array(11).fill(0),
+    );
+  });
   it("introduces a plume gradually, without putting a whole dense patch into one frame", () => {
     const ink = new InkFlow();
     const first = ink.step(hit, 1 / 30).sources[2];

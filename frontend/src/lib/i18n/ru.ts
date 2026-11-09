@@ -390,6 +390,7 @@ export const ru: Dictionary = {
   "effects.ink": "Тушь в воде",
   "effects.inkHint": "Цвета обложки распускаются облаками",
   "effects.intensity": "Интенсивность",
+  "effects.level": "Уровень {level} из 5",
   "effects.sensitivity": "Чувствительность",
   "effects.sensitivityHint":
     "Насколько сильно формы реагируют на музыку. Интенсивность отвечает за их заметность.",

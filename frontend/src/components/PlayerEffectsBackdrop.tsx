@@ -78,7 +78,7 @@ function EffectCanvas({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    let renderer = createEffectsRenderer(canvas);
+    let renderer = createEffectsRenderer(canvas, track.id);
     canvas.dataset.renderer = renderer?.kind ?? "unavailable";
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const sample = document.createElement("canvas");
@@ -212,7 +212,7 @@ function EffectCanvas({
     };
     const restored = () => {
       renderer?.destroy();
-      renderer = createEffectsRenderer(canvas);
+      renderer = createEffectsRenderer(canvas, track.id);
       canvas.dataset.renderer = renderer?.kind ?? "unavailable";
       sync();
     };

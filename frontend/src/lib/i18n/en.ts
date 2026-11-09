@@ -366,6 +366,7 @@ export const en = {
   "effects.ink": "Ink in water",
   "effects.inkHint": "Cover colours blooming into clouds",
   "effects.intensity": "Intensity",
+  "effects.level": "Level {level} of 5",
   "effects.sensitivity": "Sensitivity",
   "effects.sensitivityHint":
     "How strongly the shapes respond to the music. Intensity controls their visibility.",
