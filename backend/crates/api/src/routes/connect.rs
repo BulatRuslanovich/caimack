@@ -9,9 +9,9 @@ use app::playback::connect::{self, ConnectRegistry, Connection, Playback, Snapsh
 use app::playback::{self, PlaybackStateReport};
 use axum::Router;
 use axum::extract::{FromRef, Path, State};
+use axum::response::IntoResponse;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::routing::{get, post, put};
-use futures_util::Stream;
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -76,7 +76,7 @@ async fn events(
     State(state): State<ConnectApiState>,
     CurrentUser(user): CurrentUser,
     Query(query): Query<DeviceQuery>,
-) -> ApiResult<Sse<impl Stream<Item = Result<Event, Infallible>>>> {
+) -> ApiResult<impl IntoResponse> {
     let registry = state.playback.connect;
     let connection =
         registry.register_device(user.user_id, &query.device_id, &query.device_name, &query.device_kind)?;
@@ -105,10 +105,15 @@ async fn events(
                     }
                 }
             };
-            Some((Ok(event), (presence, false, shutdown)))
+            Some((Ok::<_, Infallible>(event), (presence, false, shutdown)))
         },
     );
-    Ok(Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15))))
+    // Compression can buffer snapshots until the device lease expires, before
+    // the browser has received its connection ID and can send a heartbeat.
+    Ok((
+        [("cache-control", "no-cache, no-transform"), ("x-accel-buffering", "no")],
+        Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15))),
+    ))
 }
 
 #[derive(Deserialize)]
@@ -276,6 +281,24 @@ mod tests {
             .error_for_status()
             .unwrap();
         Events { response, buffered: String::new() }
+    }
+
+    #[tokio::test]
+    async fn event_stream_disables_proxy_compression_and_buffering() {
+        let (url, client, shutdown) = server().await;
+        let response = client
+            .get(format!("{url}/api/playback/connect/events?deviceId=computer"))
+            .header("accept-encoding", "gzip, deflate, br")
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap();
+        assert_eq!(response.headers()["cache-control"], "no-cache, no-transform");
+        assert_eq!(response.headers()["x-accel-buffering"], "no");
+        let mut events = Events { response, buffered: String::new() };
+        assert_eq!(events.next("snapshot").await["devices"][0]["id"], "computer");
+        shutdown.cancel();
     }
 
     #[tokio::test]
