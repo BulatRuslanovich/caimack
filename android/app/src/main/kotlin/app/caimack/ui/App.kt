@@ -39,7 +39,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHostState
@@ -194,12 +193,10 @@ fun App(user: User) {
         LocalToneEnabled provides toneEnabled,
         LocalSnackbar provides snackbar,
     ) {
-    Scaffold(
+    PlayerScaffold(
         modifier = Modifier
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
             .then(if (full) Modifier.clearAndSetSemantics {} else Modifier),
-        containerColor = palette.background,
-        contentWindowInsets = WindowInsets(0),
         snackbarHost = {
             SnackbarHost(snackbar) { data ->
                 Snackbar(
@@ -218,12 +215,8 @@ fun App(user: User) {
                 UpdateBanner(appUpdate, onDetails = { updateDetails = true }, onDismiss = { container.updates.dismiss() })
             }
         },
-        bottomBar = {
-            Column {
-                MiniPlayer(playback) { expanded = true }
-                BottomBar(nav)
-            }
-        },
+        bottomBar = { BottomBar(nav) },
+        miniPlayer = { MiniPlayer(playback) { expanded = true } },
     ) { padding ->
         NavHost(nav, startDestination = HomeRoute, modifier = Modifier.padding(padding)) {
             composable<HomeRoute> { HomeScreen(nav) }

@@ -222,7 +222,7 @@ private fun PlaylistContent(loaded: PlaylistDetail, play: (List<Track>, Int) -> 
 
     val cover = { small: Boolean -> container.media.playlistCover(playlist.id, playlist.hasCover, playlist.coverTrackId, small) }
 
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(bottom = 24.dp)) {
         item {
             DetailHeader(
                 kind = stringResource(if (playlist.isPublic) R.string.playlist_kind_public else R.string.playlists_kind),
