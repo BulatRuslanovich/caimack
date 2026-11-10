@@ -44,7 +44,7 @@ import kotlinx.coroutines.launch
 fun AlbumScreen(id: String, nav: NavController, play: (List<Track>, Int) -> Unit) {
     val container = LocalContainer.current
     Load("album:$id", { container.api.album(id) }) { album ->
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(bottom = 24.dp)) {
             item {
                 DetailHeader(
                     kind = stringResource(R.string.albums_kind),
@@ -71,7 +71,7 @@ fun AlbumScreen(id: String, nav: NavController, play: (List<Track>, Int) -> Unit
 fun ArtistScreen(id: String, nav: NavController, play: (List<Track>, Int) -> Unit) {
     val container = LocalContainer.current
     Load("artist:$id", { container.api.artist(id) }) { artist ->
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(bottom = 24.dp)) {
             item {
                 DetailHeader(
                     kind = stringResource(R.string.artists_kind),
@@ -119,7 +119,7 @@ fun MixScreen(kind: String, play: (List<Track>, Int) -> Unit) {
     }
 
     Load("mix:$kind", { container.api.homeMix(kind).tracks }) { tracks ->
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(bottom = 24.dp)) {
             item {
                 DetailHeader(
                     kind = stringResource(R.string.mixes_kind),

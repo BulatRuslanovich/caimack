@@ -74,7 +74,7 @@ fun HomeScreen(nav: NavController) {
 
         LazyColumn(
             Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(vertical = 16.dp),
+            contentPadding = playerContentPadding(top = 16.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             if (recommendations) item("personal-radio") { RadioHero(blocks.flatMap { it.tracks.orEmpty() }) }

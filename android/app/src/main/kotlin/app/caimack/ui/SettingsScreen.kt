@@ -163,7 +163,7 @@ fun SettingsScreen(category: SettingsCategory? = null) {
             label = stringResource(R.string.settings_search),
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
         )
-        Column(Modifier.weight(1f).verticalScroll(scroll).padding(bottom = 24.dp)) {
+        Column(Modifier.weight(1f).verticalScroll(scroll).padding(bottom = 24.dp + LocalMiniPlayerInset.current)) {
             if (category == null && query.isBlank()) SettingsOverview()
             else if (visible.isEmpty()) Empty(stringResource(R.string.settings_search_empty))
             if (visible.any { it.section == R.string.settings_playback }) {

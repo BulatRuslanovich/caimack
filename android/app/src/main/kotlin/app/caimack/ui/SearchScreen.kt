@@ -91,7 +91,7 @@ fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit) {
         )
 
         if (query.length < MIN_LENGTH) {
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp + LocalMiniPlayerInset.current)) {
                 RecentSearches { recent ->
                     input = recent
                     query = recent
@@ -142,7 +142,7 @@ private fun AllResults(results: SearchResults, open: (Any) -> Unit, play: (List<
     val palette = LocalPalette.current
     val media = LocalContainer.current.media
 
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         results.top?.let { top ->
             item {
                 SectionHeader(stringResource(R.string.search_top_result))
