@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Bulat Ruslanovich
 
+import { rgbOf, rgba, type Rgb } from "@/lib/cssColor";
 import {
   easeOut,
   playsLevel,
-  alongPath,
   smoothPath,
   toScreen,
   type MapView,
   type Spot,
 } from "@/lib/libraryMap";
-import { rgbOf, rgba, type Rgb } from "@/lib/cssColor";
 import type { MapPoint } from "@/lib/types";
 import type { MapLabel, MapRoute } from "./LibraryMapCanvas";
 import { LANDMARK_ZOOM, visibleLandmarks } from "./landmarks";
@@ -20,8 +19,6 @@ const LEVELS = 8;
 const COVER_ZOOM = 3;
 const COVER_FADE = 3;
 const COVER_RADIUS = 14;
-const PULSE_MS = 2400;
-const HOP_MS = 1600;
 const HOP_SAMPLES = 12;
 const PATH_SAMPLES = 6;
 
@@ -67,7 +64,7 @@ function haloSprite(color: Rgb, strength: number): HTMLCanvasElement {
   return sprite;
 }
 
-function dotRadius(k: number, width: number): number {
+export function dotRadius(k: number, width: number): number {
   return Math.min(4.5, (width < 600 ? 0.75 : 1.1) + 0.55 * Math.log2(k + 1));
 }
 
@@ -113,7 +110,8 @@ export function paintMap(
   size: { width: number; height: number },
   halo: { current: HaloCache | null },
   scene: Scene,
-): boolean {
+  beginForeground?: () => CanvasRenderingContext2D,
+): void {
   const {
     points,
     labels,
@@ -124,25 +122,21 @@ export function paintMap(
     links,
     hoveredId,
     lasso,
-    playing,
     route,
     path,
-    time,
-    motion,
     intro,
     reveal,
     covers,
     cover,
   } = scene;
   const { width, height } = size;
-  const ratio = window.devicePixelRatio || 1;
+  const ratio = context.canvas.width / width;
   const base = Math.min(width, height);
   const radius = dotRadius(view.k, width);
   const colours = stellarColours(palette.primary, palette.light);
   const coverShare = covers ? clamp01((view.k - COVER_ZOOM) / COVER_FADE) : 0;
   const mark = coverShare > 0 ? radius + (COVER_RADIUS - radius) * coverShare : radius;
   const screen = (spot: Spot) => toScreen(spot, view, base);
-  let moving = false;
 
   context.setTransform(ratio, 0, 0, ratio, 0, 0);
   context.clearRect(0, 0, width, height);
@@ -251,25 +245,6 @@ export function paintMap(
         }
         context.strokeStyle = rgba(palette.primary, 0.12 + 0.68 * (1 - hop / hops));
         context.stroke();
-      }
-
-      if (motion && playing) {
-        const share = (time % (HOP_MS * hops)) / (HOP_MS * hops);
-        const spark = alongPath(line, share);
-        const reach = 16;
-
-        context.globalAlpha = 1 - 0.7 * share;
-        context.drawImage(sprite, spark.x - reach, spark.y - reach, reach * 2, reach * 2);
-        context.fillStyle = rgba(palette.primary, 1);
-        context.beginPath();
-        context.arc(spark.x, spark.y, 3, 0, Math.PI * 2);
-        context.fill();
-        context.fillStyle = rgba(palette.onPrimary, 0.9);
-        context.beginPath();
-        context.arc(spark.x, spark.y, 1.3, 0, Math.PI * 2);
-        context.fill();
-        context.globalAlpha = 1;
-        moving = true;
       }
     }
   }
@@ -449,21 +424,16 @@ export function paintMap(
     rings([screen(path[0])], mark + 4);
   }
 
+  const foreground = beginForeground?.();
+  if (foreground && foreground !== context) {
+    context = foreground;
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.clearRect(0, 0, width, height);
+    context.lineCap = "round";
+    context.lineJoin = "round";
+  }
+
   if (current) {
-    const beat = motion && playing;
-    const reach = radius * 9 * (beat ? 1 + 0.08 * Math.sin((time / PULSE_MS) * Math.PI * 2) : 1);
-    context.drawImage(sprite, current.x - reach, current.y - reach, reach * 2, reach * 2);
-
-    if (beat) {
-      context.lineWidth = 1.5;
-      for (const offset of [0, 0.5]) {
-        const phase = (time / PULSE_MS + offset) % 1;
-        context.strokeStyle = rgba(palette.primary, 0.55 * (1 - phase) ** 2);
-        rings([current], mark + 5 + phase * 26);
-      }
-      moving = true;
-    }
-
     if (coverShare === 0) {
       context.fillStyle = rgba(palette.primary, 1);
       dots([current], radius + 1.5);
@@ -599,6 +569,4 @@ export function paintMap(
     context.stroke();
     context.setLineDash([]);
   }
-
-  return moving;
 }

@@ -3,17 +3,17 @@
 
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { Track } from "@/lib/types";
-import { cn } from "@/lib/cn";
-import { useVisualizer } from "@/lib/visualizer";
-import { trackCoverUrl } from "@/lib/media";
-import { usePlayerActions, usePlayerProgress, usePlayerState } from "@/contexts/PlayerContext";
-import { useConnect } from "@/lib/playback/useConnectPlayback";
-import { useTatarMafia } from "@/lib/tatarMafia";
-import { endVinylScratch, moveVinylScratch, startVinylScratch } from "@/lib/playback/equalizer";
 import { useT } from "@/contexts/I18nContext";
+import { usePlayerActions, usePlayerClock, usePlayerState } from "@/contexts/PlayerContext";
+import { cn } from "@/lib/cn";
+import { trackCoverUrl } from "@/lib/media";
+import { endVinylScratch, moveVinylScratch, startVinylScratch } from "@/lib/playback/equalizer";
+import { useConnect } from "@/lib/playback/useConnectPlayback";
 import { VINYL_TURN_SECONDS } from "@/lib/playback/vinylDeck";
+import { useTatarMafia } from "@/lib/tatarMafia";
+import type { Track } from "@/lib/types";
+import { useVisualizer } from "@/lib/visualizer";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { TrackCover } from "./Cover";
 import { RecordAura } from "./RecordAura";
 
@@ -42,13 +42,13 @@ export function Record({
   spinning: boolean;
   scratchable?: boolean;
   aura?: boolean;
-  axis?: "x" | "y";
+  axis?: "x" | "y" | "responsive";
   sizes?: string;
   transitionCover?: boolean;
   className?: string;
 }) {
   const { scrubBy, holdScrub, commitScrub, getDuration } = usePlayerActions();
-  const { getPosition } = usePlayerProgress();
+  const getPosition = usePlayerClock();
   const { volume, muted } = usePlayerState();
   const connect = useConnect();
   const tatarMafia = useTatarMafia();

@@ -525,6 +525,100 @@ try {
   );
   await click(controller.page, "Remove Third tone from the queue");
   await until(() => playback?.trackIds.length === 2, "queue deletion reached the renderer");
+  await controller.page.eval(`(() => {
+    const history = document.querySelector('[data-queue-panel] button[aria-expanded="false"]');
+    history?.click();
+  })()`);
+  await until(
+    () =>
+      controller.page.eval(
+        "Boolean(document.querySelector('[aria-label=\"Reorder First tone\"]'))",
+      ),
+    "played queue entries revealed",
+  );
+  await controller.page.send("Page.bringToFront");
+  await controller.page.eval(`(() => {
+    const handle = document.querySelector('[aria-label="Reorder First tone"]');
+    window.__queueHandleBeforeMove = handle;
+    handle.focus();
+  })()`);
+  for (const [key, code, number] of [
+    [" ", "Space", 32],
+    ["ArrowDown", "ArrowDown", 40],
+    [" ", "Space", 32],
+  ]) {
+    await controller.page.send("Input.dispatchKeyEvent", {
+      type: "keyDown",
+      key,
+      code,
+      windowsVirtualKeyCode: number,
+    });
+    await controller.page.send("Input.dispatchKeyEvent", {
+      type: "keyUp",
+      key,
+      code,
+      windowsVirtualKeyCode: number,
+    });
+    await delay(250);
+  }
+  await until(
+    () => playback?.trackIds[0] === tracks[1].id,
+    "keyboard queue reordering reached the renderer",
+  );
+  assert.equal(
+    await controller.page.eval(
+      "window.__queueHandleBeforeMove === document.querySelector('[aria-label=\"Reorder First tone\"]')",
+    ),
+    true,
+    "moving an occurrence preserves its DOM node",
+  );
+  await click(controller.page, "Open the full player");
+  await until(
+    () =>
+      controller.page.eval(
+        "Boolean(document.querySelector('[aria-label=\"Close the full player\"]'))",
+      ),
+    "lazy fullscreen player opened",
+  );
+  await until(
+    () =>
+      controller.page.eval(
+        "Boolean(document.querySelector('canvas[data-player-effect][data-renderer]:not([data-renderer=\"unavailable\"])'))",
+      ),
+    "lazy effect renderer initialized",
+  );
+  assert.equal(
+    await controller.page.eval("document.querySelectorAll('[role=dialog] .record').length"),
+    1,
+    "fullscreen mounts one responsive record",
+  );
+  await controller.page.send("Emulation.setDeviceMetricsOverride", {
+    width: 390,
+    height: 844,
+    deviceScaleFactor: 1,
+    mobile: true,
+  });
+  await delay(800);
+  assert.equal(
+    await controller.page.eval("document.querySelectorAll('[role=dialog] .record').length"),
+    1,
+    "resizing preserves the same single record",
+  );
+  assert.equal(
+    await controller.page.eval("document.querySelector('[role=dialog] .record').dataset.axis"),
+    "responsive",
+  );
+  await click(controller.page, "Close the full player");
+  await until(
+    () => controller.page.eval("!document.querySelector('canvas[data-player-effect]')"),
+    "fullscreen cleans up its effect canvas",
+  );
+  await controller.page.send("Emulation.setDeviceMetricsOverride", {
+    width: 1440,
+    height: 1000,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
   const shot = await controller.page.send("Page.captureScreenshot", { format: "png" });
   await writeFile(join(artifacts, "controller.png"), Buffer.from(shot.data, "base64"));
   await fetch(`http://127.0.0.1:${debugging}/json/close/${renderer.target.id}`);
@@ -554,6 +648,10 @@ try {
         "transfer here",
         "transfer back",
         "queue editing",
+        "keyboard queue reorder and stable row identity",
+        "lazy fullscreen and effects",
+        "single responsive record",
+        "fullscreen cleanup",
         "offline output",
       ],
       screenshot: join(artifacts, "controller.png"),

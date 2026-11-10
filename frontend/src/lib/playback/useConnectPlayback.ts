@@ -3,6 +3,12 @@
 
 "use client";
 
+import { useT } from "@/contexts/I18nContext";
+import { api } from "@/lib/api";
+import type { Track } from "@/lib/types";
+import { useRequiredContext } from "@/lib/useRequiredContext";
+import { useToast } from "@/lib/useToast";
+import { replaceEqualDeep } from "@tanstack/react-query";
 import {
   createContext,
   useCallback,
@@ -13,25 +19,14 @@ import {
   useState,
 } from "react";
 import { flushSync } from "react-dom";
-import { api } from "@/lib/api";
-import { deviceId } from "@/lib/events";
-import { API_BASE, qs, refreshSession } from "@/lib/http";
-import { useToast } from "@/lib/useToast";
-import { useT } from "@/contexts/I18nContext";
-import { useRequiredContext } from "@/lib/useRequiredContext";
-import { deviceName } from "./deviceName";
-import { applyConnectCommand, lookupQueue } from "./connectCommands";
-import { positionAt, remoteActions, remoteState } from "./connect";
 import { CommandQueue } from "./commandQueue";
-import type {
-  ConnectCommand,
-  ConnectDevice,
-  ConnectEnvelope,
-  ConnectPlayback,
-  ConnectSnapshot,
-} from "./connect";
+import type { ConnectCommand, ConnectDevice, ConnectPlayback, ConnectSnapshot } from "./connect";
+import { positionAt, remoteState } from "./connect";
+import { lookupQueue } from "./connectCommands";
 import type { PlayerActions, PlayerProgress, PlayerState } from "./playerTypes";
-import type { Track } from "@/lib/types";
+import { queueEntries } from "./queueEntries";
+import { useConnectTransport, type ConnectRenderer } from "./useConnectTransport";
+import { useRemotePlaybackView, type RemoteView } from "./useRemotePlaybackView";
 
 interface ConnectControls {
   devices: ConnectDevice[];
@@ -45,12 +40,6 @@ interface ConnectControls {
 
 export const ConnectContext = createContext<ConnectControls | null>(null);
 export const useConnect = () => useRequiredContext(ConnectContext, "useConnect", "PlayerProvider");
-
-interface RemoteView {
-  active: ConnectPlayback;
-  tracks: Track[];
-  receivedAt: number;
-}
 
 function playbackState(
   state: PlayerState,
@@ -98,11 +87,10 @@ export function useConnectPlayback(
   const [remote, setRemote] = useState<RemoteView | null>(null);
   const [pending, setPending] = useState(0);
   const [lease, setLease] = useState(false);
-  const [now, tick] = useState(0);
   const own = useRef<string | null>(null);
   const connection = useRef<string | null>(null);
   const currentSnapshot = useRef(snapshot);
-  const latest = useRef({
+  const latest = useRef<ConnectRenderer>({
     local,
     localActions,
     localProgress,
@@ -164,14 +152,17 @@ export function useConnectPlayback(
       if (revision !== hydrated.current) return;
       for (const track of tracks) known.set(track.id, track);
       if (active.trackIds.some((id) => !known.has(id))) return;
-      setRemote((previous) => ({
-        active,
-        tracks: active.trackIds.map((id) => known.get(id)!),
-        receivedAt:
-          previous?.active.reportedAt === active.reportedAt
-            ? previous.receivedAt
-            : performance.now(),
-      }));
+      setRemote((previous) => {
+        const shared = replaceEqualDeep(previous, {
+          active,
+          tracks: active.trackIds.map((id) => known.get(id)!),
+          receivedAt:
+            previous?.active.reportedAt === active.reportedAt
+              ? previous.receivedAt
+              : performance.now(),
+        });
+        return { ...shared, tracks: queueEntries(shared.tracks, previous?.tracks) };
+      });
     };
     if (!missing.length) finish([]);
     else
@@ -210,137 +201,20 @@ export function useConnectPlayback(
     [receive],
   );
 
-  useEffect(() => {
-    if (!userId) return;
-    own.current = deviceId();
-    let stopped = false;
-    let source: EventSource | null = null;
-    let retry: number | null = null;
-    const executed = new Set<string>();
-    const executing = new Set<AbortController>();
-    const open = () => {
-      if (stopped) return;
-      source = new EventSource(
-        `${API_BASE}/playback/connect/events${qs({ deviceId: own.current ?? undefined, deviceName: deviceName() })}`,
-      );
-      source.addEventListener("snapshot", (event) => {
-        if (stopped) return;
-        try {
-          receive(JSON.parse(event.data) as ConnectSnapshot);
-          setConnected(true);
-        } catch {
-          /* Ignore malformed events; reconnect supplies a complete snapshot. */
-        }
-      });
-      source.addEventListener("command", (event) => {
-        let envelope: ConnectEnvelope;
-        try {
-          envelope = JSON.parse(event.data) as ConnectEnvelope;
-        } catch {
-          return;
-        }
-        executionChain.current = executionChain.current
-          .catch(() => {})
-          .then(async () => {
-            if (stopped || envelope.connectionId !== connection.current) return;
-            let error: string | null = null;
-            const cancellation = new AbortController();
-            executing.add(cancellation);
-            const deadline = window.setTimeout(
-              () => cancellation.abort(),
-              Math.max(0, Date.parse(envelope.expiresAt) - Date.now()),
-            );
-            try {
-              if (Date.parse(envelope.expiresAt) < Date.now())
-                throw new Error("Playback command expired.");
-              if (!executed.has(envelope.id)) {
-                if (envelope.queueRevision !== null) await report(cancellation.signal);
-                if (
-                  envelope.queueRevision !== null &&
-                  currentSnapshot.current.playback?.queueRevision !== envelope.queueRevision
-                )
-                  throw new Error("The playback queue changed.");
-                await applyConnectCommand(
-                  envelope.command,
-                  latest.current.local,
-                  latest.current.localActions,
-                  (tracks, command) => {
-                    cancellation.signal.throwIfAborted();
-                    wantsLocal.current = true;
-                    flushSync(() => {
-                      setSelectedId(null);
-                      setLease(true);
-                      latest.current.output(true);
-                      latest.current.load(tracks, command);
-                    });
-                  },
-                  cancellation.signal,
-                );
-                if (envelope.command.type === "startRadio") {
-                  wantsLocal.current = true;
-                  flushSync(() => {
-                    setSelectedId(null);
-                    setLease(true);
-                    latest.current.output(true);
-                  });
-                }
-                executed.add(envelope.id);
-                if (executed.size > 128) executed.delete(executed.values().next().value!);
-                // Let React commit the renderer state before publishing it and acknowledging.
-                await new Promise<void>((resolve) => setTimeout(resolve, 0));
-                for (let attempt = 0; ; attempt++) {
-                  cancellation.signal.throwIfAborted();
-                  try {
-                    await report(cancellation.signal);
-                    break;
-                  } catch (reason) {
-                    if (attempt >= 9) throw reason;
-                    await new Promise((resolve) => setTimeout(resolve, 100));
-                  }
-                }
-              }
-            } catch (reason) {
-              error = reason instanceof Error ? reason.message : "Playback command failed.";
-            } finally {
-              window.clearTimeout(deadline);
-              executing.delete(cancellation);
-            }
-            if (!stopped)
-              await api
-                .connectAck(envelope.id, own.current!, envelope.connectionId, error)
-                .catch(() => {});
-          });
-      });
-      source.addEventListener("error", () => {
-        if (stopped) return;
-        for (const command of executing) command.abort();
-        setConnected(false);
-        source?.close();
-        connection.current = null;
-        retry = window.setTimeout(() => {
-          void refreshSession().finally(open);
-        }, 1500);
-      });
-    };
-    open();
-    return () => {
-      stopped = true;
-      for (const command of executing) command.abort();
-      source?.close();
-      if (retry !== null) clearTimeout(retry);
-      connection.current = null;
-    };
-  }, [userId, receive, report]);
-
-  useEffect(() => {
-    if (!userId) return;
-    const heartbeat = window.setInterval(() => {
-      const id = connection.current;
-      if (id && own.current)
-        void api.connectHeartbeat(own.current, id).catch(() => setConnected(false));
-    }, 10_000);
-    return () => clearInterval(heartbeat);
-  }, [userId]);
+  useConnectTransport({
+    userId,
+    ownRef: own,
+    connectionRef: connection,
+    currentSnapshotRef: currentSnapshot,
+    latestRef: latest,
+    wantsLocalRef: wantsLocal,
+    executionChainRef: executionChain,
+    receive,
+    report,
+    setConnected,
+    setSelectedId,
+    setLease,
+  });
 
   useEffect(() => {
     if (!connected || selectedId) return;
@@ -476,42 +350,6 @@ export function useConnectPlayback(
     }
   }, [select, notifyError]);
 
-  useEffect(() => {
-    if (!selectedId) return;
-    const timer = window.setInterval(() => tick(performance.now()), 250);
-    return () => clearInterval(timer);
-  }, [selectedId]);
-
-  const displayed = selectedId && remote ? remoteState(remote.active, remote.tracks) : local;
-  const getRemotePosition = useCallback(
-    () =>
-      remote
-        ? positionAt(
-            remote.active,
-            remote.receivedAt,
-            performance.now(),
-            remote.tracks[remote.active.index]?.durationSeconds ?? 0,
-            available,
-          )
-        : 0,
-    [remote, available],
-  );
-  const progress = selectedId
-    ? {
-        position: remote
-          ? positionAt(
-              remote.active,
-              remote.receivedAt,
-              Math.max(now, remote.receivedAt),
-              displayed.currentTrack?.durationSeconds ?? 0,
-              available,
-            )
-          : 0,
-        duration: displayed.currentTrack?.durationSeconds ?? 0,
-        buffered: 0,
-        getPosition: getRemotePosition,
-      }
-    : localProgress;
   const patchRemote = useCallback(
     (id: string, changes: Partial<Track>) => {
       localActions.patchTrack(id, changes);
@@ -528,20 +366,17 @@ export function useConnectPlayback(
     },
     [localActions],
   );
-  // The adapter captures event callbacks without invoking them during render.
-  const actions = selectedId
-    ? remoteActions(
-        displayed,
-        progress,
-        remote?.active.queueRevision ?? 0,
-        // The factory only captures these event handlers; it does not call them.
-        // eslint-disable-next-line react-hooks/refs
-        send,
-        // eslint-disable-next-line react-hooks/refs
-        continueHere,
-        patchRemote,
-      )
-    : localActions;
+  const view = useRemotePlaybackView({
+    selectedId,
+    remote,
+    available,
+    local,
+    localActions,
+    localProgress,
+    send,
+    continueHere,
+    patchTrack: patchRemote,
+  });
   const controls = useMemo<ConnectControls>(
     () => ({
       devices: snapshot.devices,
@@ -559,9 +394,7 @@ export function useConnectPlayback(
     [snapshot.devices, selectedId, selectedName, t, connected, available, pending, select],
   );
   return {
-    state: displayed,
-    actions,
-    progress,
+    ...view,
     controls,
     shouldHold: !selectedId && (local.isPlaying || lease),
     report,

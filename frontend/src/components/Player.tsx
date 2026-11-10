@@ -3,32 +3,19 @@
 
 "use client";
 
-import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { flushSync } from "react-dom";
-import { cn } from "@/lib/cn";
-import { formatDuration } from "@/lib/format";
-import { reasonLabel } from "@/lib/recommendationReason";
-import { SEEK_STEP } from "@/lib/shortcuts";
-import { usePlaybackProgress } from "@/lib/playback/usePlaybackProgress";
-import { useToggleFavorite } from "@/lib/useToggleFavorite";
-import { trackCoverUrl } from "@/lib/media";
-import { useCoverLight } from "@/lib/useCoverTone";
-import { usePlayerShortcuts } from "@/lib/playback/usePlayerShortcuts";
+import { useT } from "@/contexts/I18nContext";
 import { usePlayerActions, usePlayerState } from "@/contexts/PlayerContext";
 import { usePlayerUi } from "@/contexts/PlayerUiContext";
-import { useT } from "@/contexts/I18nContext";
-import { ArtistLinks } from "./ArtistLinks";
-import { Record } from "./Record";
-import { Seekbar } from "./Seekbar";
-import { PlayerTransport } from "./PlayerTransport";
-import { PlayerVolume } from "./PlayerVolume";
-import { PlaybackDevices } from "./PlaybackDevices";
-import { StreamQuality } from "./StreamQuality";
-import { FullScreenPlayer } from "./FullScreenPlayer";
-import { BufferingRing } from "./PlaybackIndicators";
-import { SleepTimerButton } from "./SleepTimerButton";
-import { Button } from "./ui/button";
+import { cn } from "@/lib/cn";
+import { formatDuration } from "@/lib/format";
+import { trackCoverUrl } from "@/lib/media";
+import { usePlaybackProgress } from "@/lib/playback/usePlaybackProgress";
+import { usePlayerShortcuts } from "@/lib/playback/usePlayerShortcuts";
+import { reasonLabel } from "@/lib/recommendationReason";
+import { SEEK_STEP } from "@/lib/shortcuts";
+import { useCoverLight } from "@/lib/useCoverTone";
+import { useToast } from "@/lib/useToast";
+import { useToggleFavorite } from "@/lib/useToggleFavorite";
 import {
   HeartIcon,
   ListVideoIcon,
@@ -37,6 +24,24 @@ import {
   PlayIcon,
   SkipForwardIcon,
 } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
+import { ArtistLinks } from "./ArtistLinks";
+import {
+  DeferredFullPlayer as FullScreenPlayer,
+  loadFullPlayer,
+  preloadFullPlayer,
+} from "./FullPlayerLoader";
+import { PlaybackDevices } from "./PlaybackDevices";
+import { BufferingRing } from "./PlaybackIndicators";
+import { PlayerTransport } from "./PlayerTransport";
+import { PlayerVolume } from "./PlayerVolume";
+import { Record } from "./Record";
+import { Seekbar } from "./Seekbar";
+import { SleepTimerButton } from "./SleepTimerButton";
+import { StreamQuality } from "./StreamQuality";
+import { Button } from "./ui/button";
 
 const SWIPE_OPEN_PX = 40;
 
@@ -110,6 +115,8 @@ export function Player() {
   const t = useT();
 
   const [expanded, setExpandedNow] = useState(false);
+  const { notifyError } = useToast();
+  const expansionRequest = useRef(0);
   const { queueOpen, setQueueOpen } = usePlayerUi();
   const transition = useRef<ViewTransition | null>(null);
   const swipeFrom = useRef<{ x: number; y: number } | null>(null);
@@ -121,13 +128,14 @@ export function Player() {
 
   useEffect(
     () => () => {
+      expansionRequest.current++;
       transition.current?.skipTransition();
       delete document.documentElement.dataset.playerTransition;
     },
     [],
   );
 
-  const setExpanded = (next: boolean) => {
+  const applyExpanded = (next: boolean) => {
     transition.current?.skipTransition();
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!document.startViewTransition || reduceMotion) {
@@ -146,6 +154,16 @@ export function Player() {
       delete document.documentElement.dataset.playerTransition;
     };
     void running.finished.then(finish, finish);
+  };
+
+  const setExpanded = (next: boolean) => {
+    const request = ++expansionRequest.current;
+    if (!next) return applyExpanded(false);
+    void loadFullPlayer()
+      .then(() => {
+        if (request === expansionRequest.current) applyExpanded(true);
+      })
+      .catch(notifyError);
   };
 
   const toggleFavorite = useToggleFavorite();
@@ -219,6 +237,8 @@ export function Player() {
               type="button"
               onClick={() => setExpanded(true)}
               aria-label={t("player.openFull")}
+              onPointerEnter={preloadFullPlayer}
+              onFocus={preloadFullPlayer}
               className="player-artwork mr-2.5 shrink-0 leading-none"
             >
               <Record
@@ -346,6 +366,8 @@ export function Player() {
                 size="icon"
                 onClick={() => setExpanded(true)}
                 aria-label={t("player.openFull")}
+                onPointerEnter={preloadFullPlayer}
+                onFocus={preloadFullPlayer}
                 title={t("player.openFull")}
               >
                 <Maximize2Icon size={18} />

@@ -3,6 +3,18 @@
 
 "use client";
 
+import { api } from "@/lib/api";
+import { onSessionExpired, refreshSession } from "@/lib/http";
+import { describeDevice } from "@/lib/playback/deviceName";
+import { queries } from "@/lib/queries";
+import { cacheAppShell, clearStreamCache } from "@/lib/serviceWorker";
+import { readSessionHint } from "@/lib/session/sessionHint";
+import { renewalIntervalMs } from "@/lib/session/sessionRenewal";
+import type { User } from "@/lib/types";
+import { useRequiredContext } from "@/lib/useRequiredContext";
+import { useTimeZoneSync } from "@/lib/useTimeZoneSync";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import React, {
   createContext,
   useCallback,
@@ -11,17 +23,6 @@ import React, {
   useState,
   useSyncExternalStore,
 } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
-import { api } from "@/lib/api";
-import { useRequiredContext } from "@/lib/useRequiredContext";
-import { onSessionExpired, refreshSession } from "@/lib/http";
-import { queries } from "@/lib/queries";
-import { renewalIntervalMs } from "@/lib/session/sessionRenewal";
-import { readSessionHint } from "@/lib/session/sessionHint";
-import { describeDevice } from "@/lib/playback/deviceName";
-import { cacheAppShell, clearStreamCache } from "@/lib/serviceWorker";
-import type { User } from "@/lib/types";
 
 interface AuthState {
   user: User | null;
@@ -59,6 +60,7 @@ export function AuthProvider({
   const client = useQueryClient();
 
   const user = resolved ? resolved.user : hint;
+  useTimeZoneSync(user?.id ?? null);
   const loading = resolved === null && hint === null;
 
   const config = useQuery({ ...queries.config(), enabled: user !== null });

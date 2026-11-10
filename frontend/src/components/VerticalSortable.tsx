@@ -3,6 +3,7 @@
 
 "use client";
 
+import { cn } from "@/lib/cn";
 import {
   DndContext,
   KeyboardSensor,
@@ -12,7 +13,11 @@ import {
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { restrictToParentElement, restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import {
+  restrictToFirstScrollableAncestor,
+  restrictToParentElement,
+  restrictToVerticalAxis,
+} from "@dnd-kit/modifiers";
 import {
   SortableContext,
   sortableKeyboardCoordinates,
@@ -20,15 +25,18 @@ import {
 } from "@dnd-kit/sortable";
 import { GripVerticalIcon } from "lucide-react";
 import { useId, type ComponentProps, type ReactNode } from "react";
-import { cn } from "@/lib/cn";
 
 export function VerticalSortable({
   items,
   onDragEnd,
+  onActiveChange,
+  constrainToScroll = false,
   children,
 }: {
   items: string[];
   onDragEnd: (event: DragEndEvent) => void;
+  onActiveChange?: (id: string | null) => void;
+  constrainToScroll?: boolean;
   children: ReactNode;
 }) {
   const sensors = useSensors(
@@ -43,8 +51,16 @@ export function VerticalSortable({
       id={id}
       sensors={sensors}
       collisionDetection={closestCenter}
-      modifiers={[restrictToVerticalAxis, restrictToParentElement]}
-      onDragEnd={onDragEnd}
+      modifiers={[
+        restrictToVerticalAxis,
+        constrainToScroll ? restrictToFirstScrollableAncestor : restrictToParentElement,
+      ]}
+      onDragStart={(event) => onActiveChange?.(String(event.active.id))}
+      onDragCancel={() => onActiveChange?.(null)}
+      onDragEnd={(event) => {
+        onActiveChange?.(null);
+        onDragEnd(event);
+      }}
     >
       <SortableContext items={items} strategy={verticalListSortingStrategy}>
         {children}

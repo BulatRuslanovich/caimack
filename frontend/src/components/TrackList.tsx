@@ -3,20 +3,23 @@
 
 "use client";
 
+import { useT } from "@/contexts/I18nContext";
+import { useNowPlaying, usePlayerActions } from "@/contexts/PlayerContext";
+import { cn } from "@/lib/cn";
+import { formatAudioSpec, formatDuration, isLossless } from "@/lib/format";
+import { keyName } from "@/lib/musicalKey";
+import { queueEntryKey } from "@/lib/playback/queueEntries";
+import { smoothUnlessReduced } from "@/lib/scroll";
+import type { Track } from "@/lib/types";
+import { useFormat } from "@/lib/useFormat";
+import { useStableEntries } from "@/lib/useStableEntries";
+import { useToggleFavorite } from "@/lib/useToggleFavorite";
 import { type DragEndEvent } from "@dnd-kit/core";
 import { arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { EllipsisVerticalIcon, HeartIcon, MusicIcon, PauseIcon, PlayIcon } from "lucide-react";
 import Link from "next/link";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { cn } from "@/lib/cn";
-import { smoothUnlessReduced } from "@/lib/scroll";
-import { formatAudioSpec, formatDuration, isLossless } from "@/lib/format";
-import { keyName } from "@/lib/musicalKey";
-import { useFormat } from "@/lib/useFormat";
-import { useToggleFavorite } from "@/lib/useToggleFavorite";
-import type { Track } from "@/lib/types";
-import { useNowPlaying, usePlayerActions } from "@/contexts/PlayerContext";
-import { useT } from "@/contexts/I18nContext";
 import { ArtistLinks } from "./ArtistLinks";
 import { TrackCover } from "./Cover";
 import { EmptyState } from "./EmptyState";
@@ -24,9 +27,8 @@ import { NowPlayingBars } from "./PlaybackIndicators";
 import { TrackMenu } from "./TrackMenu";
 import { DragHandle, VerticalSortable } from "./VerticalSortable";
 import { Button } from "./ui/button";
-import { Checkbox } from "./ui/checkbox";
 import { Caption } from "./ui/caption";
-import { EllipsisVerticalIcon, HeartIcon, MusicIcon, PauseIcon, PlayIcon } from "lucide-react";
+import { Checkbox } from "./ui/checkbox";
 
 interface TrackSelection {
   selected: ReadonlySet<string>;
@@ -90,6 +92,7 @@ export function TrackList({
 }: TrackListProps) {
   const { currentTrackId, isPlaying } = useNowPlaying();
   const actions = usePlayerActions();
+  const entries = useStableEntries(tracks);
   const t = useT();
 
   const [menuFor, setMenuFor] = useState<string | null>(null);
@@ -211,8 +214,8 @@ export function TrackList({
     const { active, over } = event;
     if (!over || active.id === over.id || !onReorder) return;
 
-    const from = tracks.findIndex((track) => track.id === active.id);
-    const to = tracks.findIndex((track) => track.id === over.id);
+    const from = entries.findIndex((track) => queueEntryKey(track) === active.id);
+    const to = entries.findIndex((track) => queueEntryKey(track) === over.id);
     if (from < 0 || to < 0) return;
 
     onReorder(arrayMove(tracks, from, to).map((track) => track.id));
@@ -229,7 +232,8 @@ export function TrackList({
 
   const rows = tracks.map((track, index) => (
     <TrackRow
-      key={playlistId ? `${track.id}-${index}` : track.id}
+      key={queueEntryKey(entries[index])}
+      entryId={queueEntryKey(entries[index])}
       track={track}
       index={index}
       focused={index === Math.min(focused, tracks.length - 1)}
@@ -318,7 +322,7 @@ export function TrackList({
   return (
     <>
       {sortable ? (
-        <VerticalSortable items={tracks.map((track) => track.id)} onDragEnd={onDragEnd}>
+        <VerticalSortable items={entries.map(queueEntryKey)} onDragEnd={onDragEnd}>
           {body}
         </VerticalSortable>
       ) : (
@@ -343,6 +347,7 @@ export function TrackList({
 }
 
 interface TrackRowProps {
+  entryId: string;
   track: Track;
   index: number;
   grid: string;
@@ -372,6 +377,7 @@ interface TrackRowProps {
 }
 
 const TrackRow = memo(function TrackRow({
+  entryId,
   track,
   index,
   grid,
@@ -403,7 +409,7 @@ const TrackRow = memo(function TrackRow({
   const format = useFormat();
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: track.id,
+    id: entryId,
     disabled: !sortable,
   });
 

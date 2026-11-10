@@ -1,16 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Bulat Ruslanovich
 
-import {
-  infiniteQueryOptions,
-  keepPreviousData,
-  queryOptions,
-  type PlaceholderDataFunction,
-  type QueryClient,
-} from "@tanstack/react-query";
-import { CARD_PAGE_SIZE, TRACK_PAGE_SIZE } from "@/lib/pageSizes";
 import { api, type SearchTab } from "@/lib/api";
 import { ApiError } from "@/lib/http";
+import { CARD_PAGE_SIZE, TRACK_PAGE_SIZE } from "@/lib/pageSizes";
 import type {
   ArtistDetail,
   HomeMixSlug,
@@ -20,6 +13,13 @@ import type {
   TrackFilter,
   TrackSort,
 } from "@/lib/types";
+import {
+  infiniteQueryOptions,
+  keepPreviousData,
+  queryOptions,
+  type PlaceholderDataFunction,
+  type QueryClient,
+} from "@tanstack/react-query";
 
 function keepPreviousOf<TData>(id: string | null): PlaceholderDataFunction<TData> {
   return (previous, query) => (query?.queryKey[1] === id ? previous : undefined);
@@ -34,14 +34,7 @@ export const queries = {
   settings: () =>
     queryOptions({
       queryKey: ["settings"],
-      queryFn: async () => {
-        const saved = await api.settings();
-        const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-        return detected && detected !== saved.timeZone
-          ? await api.updateSettings({ timeZone: detected }).catch(() => saved)
-          : saved;
-      },
+      queryFn: () => api.settings(),
     }),
 
   sessions: () => queryOptions({ queryKey: ["sessions"], queryFn: () => api.sessions() }),

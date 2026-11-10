@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Bulat Ruslanovich
 
+import { SpatialIndex } from "./spatialIndex";
+
 export interface Spot {
   x: number;
   y: number;
@@ -240,32 +242,22 @@ export function median(values: number[]): number {
   return sorted[Math.floor(sorted.length / 2)] ?? 0;
 }
 
-export function constellation(spots: Spot[], neighbours = 2): [number, number][] {
+export function constellation(
+  spots: Spot[],
+  neighbours = 2,
+  index = new SpatialIndex(spots),
+): [number, number][] {
   if (spots.length < 2) return [];
 
-  const nearest = spots.map((spot, i) => {
-    const found: { j: number; distance: number }[] = [];
+  const nearest = spots.map((spot, i) => index.nearest(spot, neighbours, { exclude: i }));
 
-    for (let j = 0; j < spots.length; j++) {
-      if (j === i) continue;
-
-      const distance = (spots[j].x - spot.x) ** 2 + (spots[j].y - spot.y) ** 2;
-      if (found.length < neighbours || distance < found[found.length - 1].distance) {
-        found.push({ j, distance });
-        found.sort((a, b) => a.distance - b.distance);
-        if (found.length > neighbours) found.pop();
-      }
-    }
-
-    return found;
-  });
-
-  const reach = median(nearest.map((found) => found[0].distance)) * LINK_REACH ** 2;
+  const reach =
+    median(nearest.flatMap((found) => found[0]?.distanceSquared ?? [])) * LINK_REACH ** 2;
   const pairs = new Set<string>();
   const links: [number, number][] = [];
 
   nearest.forEach((found, i) => {
-    for (const { j, distance } of found) {
+    for (const { index: j, distanceSquared: distance } of found) {
       const key = i < j ? `${i}:${j}` : `${j}:${i}`;
       if (distance > reach || pairs.has(key)) continue;
 

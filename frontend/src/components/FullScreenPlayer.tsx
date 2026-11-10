@@ -5,51 +5,53 @@
 
 import { PlaybackDevices } from "./PlaybackDevices";
 
-import * as DialogPrimitive from "@radix-ui/react-dialog";
-import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useT } from "@/contexts/I18nContext";
+import { usePlayer, usePlayerClock, usePlayerState } from "@/contexts/PlayerContext";
 import { cn } from "@/lib/cn";
 import { displayTitleClass, formatArtists, formatDuration } from "@/lib/format";
+import { leanBack } from "@/lib/leanBack";
 import { trackCoverUrl } from "@/lib/media";
+import { planTransition } from "@/lib/playback/transitions";
+import { useConnect } from "@/lib/playback/useConnectPlayback";
+import { usePlaybackProgress } from "@/lib/playback/usePlaybackProgress";
 import { reasonLabel } from "@/lib/recommendationReason";
 import { SEEK_STEP } from "@/lib/shortcuts";
-import { useIdle } from "@/lib/useIdle";
-import { usePlaybackProgress } from "@/lib/playback/usePlaybackProgress";
-import { usePlayer, usePlayerProgress, usePlayerState } from "@/contexts/PlayerContext";
-import { leanBack } from "@/lib/leanBack";
-import { planTransition } from "@/lib/playback/transitions";
-import type { Track } from "@/lib/types";
-import { useT } from "@/contexts/I18nContext";
-import { ArtBackdrop } from "./ArtBackdrop";
-import { PlayerEffectsBackdrop } from "./PlayerEffectsBackdrop";
-import { ArtistLinks } from "./ArtistLinks";
-import { Record } from "./Record";
-import { DJControls } from "./DJControls";
 import { useTatarMafia } from "@/lib/tatarMafia";
-import { useConnect } from "@/lib/playback/useConnectPlayback";
-import { PlayerTransport } from "./PlayerTransport";
-import { PlayerVolume } from "./PlayerVolume";
-import { StreamQuality } from "./StreamQuality";
-import { WaveformSeekbar } from "./WaveformSeekbar";
-import { LyricsPane } from "./LyricsPane";
-import { QueueList } from "./QueuePanel";
-import { ShareCardDialog } from "./ShareCardDialog";
-import { SleepTimerButton } from "./SleepTimerButton";
-import { TrackMenu } from "./TrackMenu";
-import { Button } from "./ui/button";
+import type { Track } from "@/lib/types";
+import { useIdle } from "@/lib/useIdle";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   ChevronDownIcon,
   EllipsisVerticalIcon,
   HeartIcon,
-  ListVideoIcon,
   ImageIcon,
+  ListVideoIcon,
   MicVocalIcon,
   SofaIcon,
 } from "lucide-react";
+import dynamic from "next/dynamic";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+import { ArtBackdrop } from "./ArtBackdrop";
+import { ArtistLinks } from "./ArtistLinks";
+import { PlayerEffectsBackdrop } from "./PlayerEffectsBackdrop";
+import { PlayerTransport } from "./PlayerTransport";
+import { PlayerVolume } from "./PlayerVolume";
+import { Record } from "./Record";
+import { SleepTimerButton } from "./SleepTimerButton";
+import { StreamQuality } from "./StreamQuality";
+import { TrackMenu } from "./TrackMenu";
+import { Button } from "./ui/button";
+import { WaveformSeekbar } from "./WaveformSeekbar";
 
 const IDLE_MS = 2500;
 
 const SWIPE_CLOSE_PX = 120;
+
+const DJControls = dynamic(() => import("./DJControls").then((m) => m.DJControls));
+const QueueList = dynamic(() => import("./QueueList").then((m) => m.QueueList));
+const LyricsPane = dynamic(() => import("./LyricsPane").then((m) => m.LyricsPane));
+const ShareCardDialog = dynamic(() => import("./ShareCardDialog").then((m) => m.ShareCardDialog));
 
 function FullScreenProgress({ track, chrome }: { track: Track; chrome: string }) {
   const t = useT();
@@ -110,7 +112,7 @@ function FullScreenProgress({ track, chrome }: { track: Track; chrome: string })
 
 function ShareCardButton({ track }: { track: Track }) {
   const t = useT();
-  const { getPosition } = usePlayerProgress();
+  const getPosition = usePlayerClock();
   const [sharing, setSharing] = useState<number | null>(null);
 
   return (
@@ -278,20 +280,10 @@ export function FullScreenPlayer({
                     out
                     spinning={player.isPlaying && !player.buffering}
                     scratchable
-                    axis="x"
-                    sizes="min(48vh, 28rem)"
+                    axis="responsive"
+                    sizes="(max-width: 1023px) min(76vw, 22rem), min(48vh, 28rem)"
                     transitionCover
-                    className="w-[min(100%,48vh)] max-lg:hidden"
-                  />
-                  <Record
-                    track={track}
-                    out
-                    spinning={player.isPlaying && !player.buffering}
-                    scratchable
-                    axis="y"
-                    sizes="min(76vw, 22rem)"
-                    transitionCover
-                    className="w-[min(76vw,22rem)] [--record-out:22%] lg:hidden"
+                    className="w-[min(100%,48vh)] max-lg:w-[min(76vw,22rem)]"
                   />
                 </div>
               )}
