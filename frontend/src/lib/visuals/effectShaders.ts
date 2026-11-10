@@ -163,7 +163,6 @@ void main(){
  gl_FragColor=vec4(clamp(mix(result.rgb,result.rgb*.62,light),0.,1.),result.a*intensity*(.7+.3*edge)*(.65+.35*top)*readability);
 }`;
 
-
 export const inkFragment = `precision highp float;
 varying vec2 uv;
 uniform sampler2D history;
