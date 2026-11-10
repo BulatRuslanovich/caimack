@@ -24,7 +24,17 @@ class ArtworkProvider : ContentProvider() {
 
     override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
         val context = context ?: throw FileNotFoundException(uri.toString())
+        if (mode != "r") throw FileNotFoundException("Artwork is read-only")
         if (uri.path == "/placeholder") return placeholder(uri)
+        if (uri.pathSegments.firstOrNull() == "synced") {
+            val name = uri.pathSegments.getOrNull(1)
+                ?.takeIf { uri.pathSegments.size == 2 && it.startsWith("asset-") }
+                ?: throw FileNotFoundException(uri.toString())
+            val folder = File(context.filesDir, "library-sync").canonicalFile
+            val file = File(folder, name).canonicalFile
+            if (file.parentFile != folder || file.name != name) throw FileNotFoundException(uri.toString())
+            return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+        }
         val path = uri.path?.let { ARTWORK.find(it)?.value } ?: throw FileNotFoundException(uri.toString())
         val size = uri.getQueryParameter(SIZE)?.takeIf { it in SIZES }
         val folder = File(context.cacheDir, "artwork")
@@ -99,6 +109,14 @@ class ArtworkProvider : ContentProvider() {
                 .encodedPath(http.encodedPath)
                 .apply { http.queryParameter(SIZE)?.let { appendQueryParameter(SIZE, it) } }
                 .build()
+        } ?: url?.let(Uri::parse)?.takeIf { it.scheme == "file" }?.path?.let { path ->
+            val file = File(path)
+            // SyncStore.asset returns private files. Expose only synchronized assets through
+            // our provider so System UI and media browsers can read them without file:// access.
+            file.takeIf { it.parentFile?.name == "library-sync" && it.name.startsWith("asset-") }?.let {
+                Uri.Builder().scheme("content").authority(AUTHORITY)
+                    .appendPath("synced").appendPath(it.name).build()
+            }
         } ?: fallbackName?.let { name ->
             Uri.Builder().scheme("content").authority(AUTHORITY).path("/placeholder")
                 .appendQueryParameter("name", name).build()
