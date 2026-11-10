@@ -3,10 +3,10 @@
 
 "use client";
 
-import type { UseInfiniteQueryResult } from "@tanstack/react-query";
-import { useEffect, useRef, type ReactNode } from "react";
-import type { Paged } from "@/lib/types";
 import { useT } from "@/contexts/I18nContext";
+import type { Paged } from "@/lib/types";
+import type { UseInfiniteQueryResult } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { EmptyState } from "./EmptyState";
 import { Loading } from "./Loading";
 import { LoadError } from "./Query";
@@ -25,6 +25,7 @@ export function InfiniteQuery<T>({
   const t = useT();
   const { data, error, isPending, refetch, hasNextPage, isFetchingNextPage, fetchNextPage } =
     result;
+  const items = useMemo(() => data?.pages.flatMap((page) => page.items) ?? [], [data]);
 
   if (error && data === undefined) {
     return (
@@ -38,7 +39,6 @@ export function InfiniteQuery<T>({
   if (isPending) return skeleton ?? <Loading />;
   if (data === undefined) return null;
 
-  const items = data.pages.flatMap((page) => page.items);
   const total = data.pages[0]?.total ?? items.length;
 
   if (empty && total === 0) {

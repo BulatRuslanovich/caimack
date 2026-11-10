@@ -32,6 +32,12 @@ import app.caimack.ui.LoginScreen
 
 class MainActivity : ComponentActivity() {
     private val localNetworkPermission = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
+
+    override fun onResume() {
+        super.onResume()
+        (application as CaimackApp).container.updates.check()
+    }
+
     override fun attachBaseContext(newBase: Context) = super.attachBaseContext(Appearance.localized(newBase))
 
     override fun onCreate(savedInstanceState: Bundle?) {

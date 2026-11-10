@@ -318,8 +318,10 @@ keyPassword=...
 
 </details>
 
-Tagged releases can also build and deliver a signed APK to a fixed Telegram group.
-See [Android release automation](docs/android-release.md) for signing and bot secrets.
+Tagged releases build a signed APK, publish it to GitHub Releases and deliver it
+to a fixed Telegram group. The Android app checks for updates and shows release
+notes with an APK download button. See [Android release automation](docs/android-release.md)
+for signing, update sources and bot secrets.
 
 ## License
 

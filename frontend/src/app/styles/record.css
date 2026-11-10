@@ -35,6 +35,16 @@
   animation-name: record-rise;
 }
 
+@media (width < 64rem) {
+  .record[data-axis="responsive"] {
+    --record-out: 22%;
+  }
+  .record[data-axis="responsive"][data-out="true"] .record-disc {
+    transform: translateY(calc(var(--record-out) * -1));
+    animation-name: record-rise;
+  }
+}
+
 .record-spin {
   position: absolute;
   inset: 0;

@@ -3,17 +3,17 @@
 
 "use client";
 
-import dynamic from "next/dynamic";
-import { memo, useEffect, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
+import { useT } from "@/contexts/I18nContext";
+import { usePlayerProgress } from "@/contexts/PlayerContext";
 import { cn } from "@/lib/cn";
 import { activeLineAt } from "@/lib/lyrics";
 import { queries } from "@/lib/queries";
 import type { Track } from "@/lib/types";
-import { usePlayerProgress } from "@/contexts/PlayerContext";
-import { useAuth } from "@/contexts/AuthContext";
-import { useT } from "@/contexts/I18nContext";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { MicVocalIcon, PencilIcon } from "lucide-react";
+import dynamic from "next/dynamic";
+import { memo, useEffect, useRef, useState } from "react";
 import { EmptyState } from "./EmptyState";
 import { Loading } from "./Loading";
 import { Button } from "./ui/button";
@@ -108,7 +108,8 @@ export function LyricsPane({
             text={line.text}
             active={index === current}
             dim={visible(index - current, browsing)}
-            onSeek={() => onSeek(line.at / 1000)}
+            at={line.at / 1000}
+            onSeek={onSeek}
           />
         ))}
       </ol>
@@ -130,12 +131,14 @@ const LyricLine = memo(function LyricLine({
   text,
   active,
   dim,
+  at,
   onSeek,
 }: {
   text: string;
   active: boolean;
   dim: number;
-  onSeek: () => void;
+  at: number;
+  onSeek: (seconds: number) => void;
 }) {
   const t = useT();
   const element = useRef<HTMLLIElement | null>(null);
@@ -159,7 +162,7 @@ const LyricLine = memo(function LyricLine({
       {text ? (
         <button
           type="button"
-          onClick={onSeek}
+          onClick={() => onSeek(at)}
           aria-label={t("lyrics.seekTo", { line: text })}
           className={cn(
             styling,

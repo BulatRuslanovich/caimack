@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_updates">Обновления</string>
+    <string name="settings_updates_intro">Новые версии и список изменений</string>
+    <string name="update_installed">Установлена версия: %1$s</string>
+    <string name="update_available">Доступна Caimack %1$s</string>
+    <string name="update_check">Проверить обновления</string>
+    <string name="update_checking">Проверяем обновления…</string>
+    <string name="update_current">У вас последняя версия</string>
+    <string name="update_failed">Не удалось проверить обновления. Попробуйте позже.</string>
+    <string name="update_no_releases">Релизов для Android пока нет</string>
+    <string name="update_disabled">Проверка обновлений недоступна в этой сборке</string>
+    <string name="update_details">Подробнее</string>
+    <string name="update_whats_new">Что нового · Скачать</string>
+    <string name="update_later">Позже</string>
+    <string name="update_download">Скачать APK</string>
+    <string name="update_download_hint">APK откроется в браузере. После скачивания подтвердите установку в Android.</string>
+    <string name="update_notes_empty">Описание изменений не добавлено.</string>
+    <string name="update_browser_missing">Не найден браузер для скачивания обновления.</string>
+</resources>

@@ -3,11 +3,11 @@
 
 "use client";
 
-import { useEffect, useRef } from "react";
+import { usePlayerClock } from "@/contexts/PlayerContext";
 import { rgbOf, rgba, type Rgb } from "@/lib/cssColor";
 import { audioAnalyser } from "@/lib/playback/equalizer";
 import { bandBins, bandLevel, beatPulse, follow, onset } from "@/lib/playback/spectrum";
-import { usePlayerProgress } from "@/contexts/PlayerContext";
+import { useEffect, useRef } from "react";
 
 const BANDS = 32;
 
@@ -27,7 +27,7 @@ export function RecordAura({
   offset?: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { getPosition } = usePlayerProgress();
+  const getPosition = usePlayerClock();
   const live = useRef({ playing, bpm, offset, getPosition });
   const wake = useRef<() => void>(() => {});
 

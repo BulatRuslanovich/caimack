@@ -154,6 +154,8 @@ fun App(user: User) {
     var account by remember { mutableStateOf(false) }
     var expanded by rememberSaveable { mutableStateOf(false) }
     val playback by container.player.state.collectAsStateWithLifecycle()
+    val appUpdate by container.updates.state.collectAsStateWithLifecycle()
+    var updateDetails by rememberSaveable { mutableStateOf(false) }
     val play: (List<Track>, Int) -> Unit = { tracks, index ->
         container.player.play(tracks, index, sourceOf(nav.currentBackStackEntry))
     }
@@ -210,7 +212,12 @@ fun App(user: User) {
                 )
             }
         },
-        topBar = { Header(nav, user) { account = true } },
+        topBar = {
+            Column {
+                Header(nav, user) { account = true }
+                UpdateBanner(appUpdate, onDetails = { updateDetails = true }, onDismiss = { container.updates.dismiss() })
+            }
+        },
         bottomBar = {
             Column {
                 MiniPlayer(playback) { expanded = true }
@@ -247,6 +254,8 @@ fun App(user: User) {
     }
     }
     }
+
+    if (updateDetails) appUpdate.release?.let { UpdateDetails(it) { updateDetails = false } }
 
     if (account) {
         ModalBottomSheet(onDismissRequest = { account = false }, containerColor = palette.card) {

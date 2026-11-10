@@ -3,18 +3,18 @@
 
 "use client";
 
-import { useEffect, useRef } from "react";
 import { CROSSFADE_CHOICES } from "@/lib/playback/crossfade";
+import type { RadioSessionState, RepeatMode } from "@/lib/playback/playerTypes";
 import { validRadioSession } from "@/lib/playback/radioSession";
 import { readStoredJson, writeStored, writeStoredJson } from "@/lib/storage";
-import type { RadioSessionState, RepeatMode } from "@/lib/playback/playerTypes";
 import type { Track } from "@/lib/types";
+import { useEffect, useRef } from "react";
 
 const STORAGE_KEY = "music-streaming.player";
 
 const POSITION_SAVE_INTERVAL_MS = 10_000;
 
-interface PersistedPlayer {
+export interface PersistedPlayer {
   queue: Track[];
   index: number;
   position: number;

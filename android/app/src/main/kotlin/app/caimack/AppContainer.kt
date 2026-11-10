@@ -77,6 +77,8 @@ class AppContainer(context: Context) {
 
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    val updates = app.caimack.updates.AppUpdates(context.applicationContext, scope)
+
     val preferences: DataStore<Preferences> =
         PreferenceDataStoreFactory.create { context.preferencesDataStoreFile("caimack") }
 

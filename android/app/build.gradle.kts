@@ -25,6 +25,13 @@ require(sourceUri.scheme in listOf("http", "https") && sourceUri.host != null) {
     "CAIMACK_SOURCE_URL must be an HTTP(S) URL to this build's source code."
 }
 
+val updateRepository = providers.gradleProperty("caimackUpdateRepository")
+    .orElse(providers.environmentVariable("CAIMACK_UPDATE_REPOSITORY"))
+    .getOrElse(if (sourceUri.host.equals("github.com", ignoreCase = true)) sourceUri.path.trim('/').split('/').take(2).joinToString("/") else "")
+require(updateRepository.isEmpty() || Regex("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+").matches(updateRepository)) {
+    "CAIMACK_UPDATE_REPOSITORY must be a GitHub owner/repository, or empty to disable update checks."
+}
+
 val releaseSigning: Map<String, String> = run {
     val properties = Properties()
     providers.fileContents(rootProject.layout.projectDirectory.file("keystore.properties"))
@@ -50,6 +57,7 @@ android {
         targetSdk = 37
         versionName = appVersion
         buildConfigField("String", "SOURCE_URL", JsonOutput.toJson(appSourceUrl))
+        buildConfigField("String", "UPDATE_REPOSITORY", JsonOutput.toJson(updateRepository))
         // Keep 1.0.0 installable over the pre-release 2.4.0 (20400).
         versionCode = 1000000 + appVersion.split('.').map(String::toInt).fold(0) { code, part -> code * 100 + part }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

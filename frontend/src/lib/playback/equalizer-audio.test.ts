@@ -19,6 +19,7 @@ const filterNode = () => ({
 });
 class AudioGraph {
   currentTime = 0;
+  sampleRate = 48_000;
   destination = node();
   resume = vi.fn().mockResolvedValue(undefined);
   filters: ReturnType<typeof filterNode>[] = [];
@@ -29,6 +30,9 @@ class AudioGraph {
   audioWorklet = { addModule: vi.fn().mockResolvedValue(undefined) };
   createGain() {
     return this.gainsCreated++ === 0 ? this.gain : this.input;
+  }
+  createAnalyser() {
+    return { ...node(), fftSize: 0, minDecibels: 0, maxDecibels: 0, smoothingTimeConstant: 0 };
   }
   createBiquadFilter() {
     const filter = filterNode();
@@ -64,6 +68,22 @@ beforeEach(() => {
   );
 });
 afterEach(() => vi.unstubAllGlobals());
+
+it("uses a separate fast analyser with headroom for fullscreen drum attacks", async () => {
+  const { connectEqualizer, useEqualizer, audioAnalyser } = await import("./equalizer");
+  connectEqualizer([{} as HTMLMediaElement]);
+  useEqualizer().setEnabled(true);
+  const ambient = audioAnalyser()!;
+  const fast = audioAnalyser("transients")!;
+  expect(fast).not.toBe(ambient);
+  expect(fast.fftSize).toBe(2048);
+  expect(fast.smoothingTimeConstant).toBe(0.12);
+  expect(fast.maxDecibels).toBeGreaterThan(ambient.maxDecibels);
+  expect(ambient.smoothingTimeConstant).toBe(0.7);
+  expect(audioAnalyser("transients")).toBe(fast);
+  expect(graph.sources).toHaveLength(1);
+  expect(graph.gain.connect).toHaveBeenCalledWith(fast);
+});
 
 it("connects every band, applies preamp settings and bypasses processing at unity gain", async () => {
   const { connectEqualizer, useEqualizer, EQ_BANDS } = await import("./equalizer");

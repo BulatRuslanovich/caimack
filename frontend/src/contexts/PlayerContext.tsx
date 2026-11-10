@@ -3,6 +3,35 @@
 
 "use client";
 
+import { api } from "@/lib/api";
+import { deviceId, recordEvent } from "@/lib/events";
+import {
+  connectEqualizer,
+  enableVinylScratch,
+  prepareVinylScratch,
+} from "@/lib/playback/equalizer";
+import { advanceIn, buildOrder } from "@/lib/playback/playerQueue";
+import type {
+  PlayerActions,
+  PlayerNowPlaying,
+  PlayerProgress,
+  PlayerState,
+  QueueSnapshot,
+} from "@/lib/playback/playerTypes";
+import { radioSource, sourceOf, tagSource, usePlaySource } from "@/lib/playback/playSource";
+import { ConnectContext, useConnectPlayback } from "@/lib/playback/useConnectPlayback";
+import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
+import { usePlaybackPreferences } from "@/lib/playback/usePlaybackPreferences";
+import { usePlayerPlatform } from "@/lib/playback/usePlayerPlatform";
+import { usePlayerSession } from "@/lib/playback/usePlayerSession";
+import { useQueueEditing } from "@/lib/playback/useQueueEditing";
+import { useQueueState } from "@/lib/playback/useQueueState";
+import { useRadioSession } from "@/lib/playback/useRadioSession";
+import { useSleepTimer } from "@/lib/playback/useSleepTimer";
+import { useTatarMafia } from "@/lib/tatarMafia";
+import type { PlaybackHandoff, Track } from "@/lib/types";
+import { useRequiredContext } from "@/lib/useRequiredContext";
+import { useToast } from "@/lib/useToast";
 import React, {
   createContext,
   useCallback,
@@ -12,37 +41,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { api } from "@/lib/api";
-import { deviceId, recordEvent } from "@/lib/events";
-import { radioSource, sourceOf, tagSource, usePlaySource } from "@/lib/playback/playSource";
-import { useRequiredContext } from "@/lib/useRequiredContext";
-import { advanceIn, buildOrder } from "@/lib/playback/playerQueue";
-import type {
-  PlayerActions,
-  PlayerNowPlaying,
-  PlayerProgress,
-  PlayerState,
-  QueueSnapshot,
-  RepeatMode,
-} from "@/lib/playback/playerTypes";
-import type { PlaybackHandoff, Track } from "@/lib/types";
-import {
-  connectEqualizer,
-  enableVinylScratch,
-  prepareVinylScratch,
-} from "@/lib/playback/equalizer";
-import { useTatarMafia } from "@/lib/tatarMafia";
-import { useRadioSession } from "@/lib/playback/useRadioSession";
-import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
-import { useExclusivePlayback } from "@/lib/playback/useExclusivePlayback";
-import { useMediaSession } from "@/lib/playback/useMediaSession";
-import { ConnectContext, useConnectPlayback } from "@/lib/playback/useConnectPlayback";
-import { readPersistedPlayer, usePersistedPlayer } from "@/lib/playback/usePlayerStorage";
-import { useQueueEditing } from "@/lib/playback/useQueueEditing";
-import { useSleepTimer } from "@/lib/playback/useSleepTimer";
-import { useT } from "./I18nContext";
 import { useAuth } from "./AuthContext";
-import { useToast } from "@/lib/useToast";
 
 export type { RepeatMode } from "@/lib/playback/playerTypes";
 
@@ -51,6 +50,8 @@ const PlayerStateContext = createContext<PlayerState | null>(null);
 const PlayerActionsContext = createContext<PlayerActions | null>(null);
 
 const PlayerProgressContext = createContext<PlayerProgress | null>(null);
+
+const PlayerClockContext = createContext<PlayerProgress["getPosition"] | null>(null);
 
 const PlayerNowPlayingContext = createContext<PlayerNowPlaying | null>(null);
 
@@ -72,41 +73,41 @@ function PlayerSessionProvider({
   userId: string | null;
 }) {
   const tatarMafia = useTatarMafia();
-  const { notify, notifyError } = useToast();
-  const t = useT();
+  const { notifyError } = useToast();
 
-  const [queue, setQueue] = useState<Track[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(-1);
+  const {
+    queue,
+    order,
+    currentIndex,
+    setCurrentIndex,
+    shuffle,
+    setShuffle,
+    repeat,
+    setRepeat,
+    queueRef,
+    orderRef,
+    applyQueue,
+    currentTrack,
+    nextTrack,
+    restoreSession,
+  } = useQueueState();
   const [isPlaying, setIsPlaying] = useState(false);
-  const [volume, setVolumeState] = useState(1);
-  const [muted, setMuted] = useState(false);
-  const [shuffle, setShuffle] = useState(false);
-  const [repeat, setRepeat] = useState<RepeatMode>("off");
-  const [crossfade, setCrossfade] = useState(0);
-  const [smartTransitions, setSmartTransitions] = useState(true);
-  const [normalizeVolume, setNormalizeVolume] = useState(false);
-  const [autoplay, setAutoplay] = useState(true);
-  const [restored, setRestored] = useState(false);
+  const {
+    volume,
+    setVolumeState,
+    muted,
+    setMuted,
+    crossfade,
+    setCrossfade,
+    smartTransitions,
+    setSmartTransitions,
+    normalizeVolume,
+    setNormalizeVolume,
+    autoplay,
+    setAutoplay,
+    restorePreferences,
+  } = usePlaybackPreferences();
   const [localOutput, setLocalOutput] = useState(true);
-
-  const orderRef = useRef<number[]>([]);
-  const queueRef = useRef<Track[]>([]);
-
-  const [order, setOrder] = useState<number[]>([]);
-
-  const applyQueue = useCallback((next: Track[], nextOrder: number[]) => {
-    queueRef.current = next;
-    orderRef.current = nextOrder;
-    setQueue(next);
-    setOrder(nextOrder);
-  }, []);
-
-  const currentTrack = currentIndex >= 0 ? (queue[currentIndex] ?? null) : null;
-
-  const nextTrack = useMemo<Track | null>(() => {
-    const step = advanceIn(order, currentIndex, 1, repeat === "all");
-    return step.kind === "play" ? (queue[step.index] ?? null) : null;
-  }, [order, queue, currentIndex, repeat]);
 
   const trackEnded = useRef(() => {});
   const onTrackEnded = useCallback(() => trackEnded.current(), []);
@@ -174,35 +175,7 @@ function PlayerSessionProvider({
     live.current = { currentIndex, shuffle, repeat, radioSession };
   });
 
-  useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect */
-    const saved = readPersistedPlayer(userId);
-    if (saved) {
-      applyQueue(
-        saved.queue,
-        saved.queue.map((_, index) => index),
-      );
-      if (saved.index >= 0) {
-        setCurrentIndex(saved.index);
-        resumeAt(saved.queue[saved.index].id, saved.position);
-      }
-
-      setVolumeState(saved.volume);
-      setMuted(saved.muted);
-      setShuffle(saved.shuffle);
-      setRepeat(saved.repeat);
-      setCrossfade(saved.crossfade);
-      setSmartTransitions(saved.smartTransitions);
-      setNormalizeVolume(saved.normalizeVolume);
-      setAutoplay(saved.autoplay);
-      if (saved.radioSession) restoreRadioSession(saved.radioSession);
-    }
-
-    setRestored(true);
-    /* eslint-enable react-hooks/set-state-in-effect */
-  }, [userId, applyQueue, restoreRadioSession, resumeAt]);
-
-  usePersistedPlayer(
+  usePlayerSession(
     userId,
     {
       queue,
@@ -218,8 +191,13 @@ function PlayerSessionProvider({
       autoplay,
       radioSession,
     },
-    restored,
     isPlaying,
+    {
+      restoreQueue: restoreSession,
+      restorePreferences,
+      restoreRadio: restoreRadioSession,
+      resumeAt,
+    },
   );
 
   useEffect(() => {
@@ -257,7 +235,7 @@ function PlayerSessionProvider({
       setCurrentIndex(safeIndex);
       setIsPlaying(true);
     },
-    [applyQueue, resetRadio, startQueue],
+    [applyQueue, resetRadio, setCurrentIndex, setShuffle, startQueue],
   );
 
   const playQueue = useCallback(
@@ -305,7 +283,7 @@ function PlayerSessionProvider({
           setIsPlaying(true);
       }
     },
-    [resetProgress, seek],
+    [orderRef, resetProgress, seek, setCurrentIndex],
   );
 
   const { choose: chooseSleepTimer } = sleep;
@@ -328,7 +306,17 @@ function PlayerSessionProvider({
         seek(0);
       }
     };
-  }, [advance, chooseSleepTimer, currentIndex, repeat, resetProgress, seek, stopsAtTrackEnd]);
+  }, [
+    advance,
+    chooseSleepTimer,
+    currentIndex,
+    orderRef,
+    repeat,
+    resetProgress,
+    seek,
+    setCurrentIndex,
+    stopsAtTrackEnd,
+  ]);
 
   const startRadio = useCallback(
     async (seedTrack?: Track | null, signal?: AbortSignal) => {
@@ -368,14 +356,14 @@ function PlayerSessionProvider({
     const step = advanceIn(orderRef.current, current.currentIndex, -1, current.repeat === "all");
     if (step.kind === "play") replay(step.index);
     advance(-1);
-  }, [advance, getPosition, seek]);
+  }, [advance, getPosition, orderRef, queueRef, seek]);
 
   const toggle = useCallback(() => {
     if (!queueRef.current[live.current.currentIndex]) return;
 
     recoverSource();
     setIsPlaying((playing) => !playing);
-  }, [recoverSource]);
+  }, [queueRef, recoverSource]);
 
   const play = useCallback(() => {
     recoverSource();
@@ -383,13 +371,16 @@ function PlayerSessionProvider({
   }, [recoverSource]);
   const pause = useCallback(() => setIsPlaying(false), []);
 
-  const setVolume = useCallback((next: number) => {
-    const clamped = Math.max(0, Math.min(1, next));
-    setVolumeState(clamped);
-    if (clamped > 0) setMuted(false);
-  }, []);
+  const setVolume = useCallback(
+    (next: number) => {
+      const clamped = Math.max(0, Math.min(1, next));
+      setVolumeState(clamped);
+      if (clamped > 0) setMuted(false);
+    },
+    [setMuted, setVolumeState],
+  );
 
-  const toggleMute = useCallback(() => setMuted((value) => !value), []);
+  const toggleMute = useCallback(() => setMuted((value) => !value), [setMuted]);
 
   const toggleShuffle = useCallback(() => {
     const { currentIndex, shuffle } = live.current;
@@ -397,7 +388,7 @@ function PlayerSessionProvider({
 
     applyQueue(queueRef.current, buildOrder(queueRef.current.length, nowShuffled, currentIndex));
     setShuffle(nowShuffled);
-  }, [applyQueue]);
+  }, [applyQueue, queueRef, setShuffle]);
 
   const setShuffleMode = useCallback(
     (enabled: boolean) => {
@@ -408,7 +399,7 @@ function PlayerSessionProvider({
 
   const cycleRepeat = useCallback(() => {
     setRepeat((mode) => (mode === "off" ? "all" : mode === "all" ? "one" : "off"));
-  }, []);
+  }, [setRepeat]);
 
   const { addToQueue, playNext, removeFromQueue, moveInQueue, patchTrack } = useQueueEditing({
     pinRadioTrack,
@@ -429,7 +420,7 @@ function PlayerSessionProvider({
       radioFrom: radioFrom(),
       radioSession: live.current.radioSession,
     }),
-    [radioFrom, trackedPosition],
+    [orderRef, queueRef, radioFrom, trackedPosition],
   );
 
   const restoreQueue = useCallback(
@@ -440,7 +431,7 @@ function PlayerSessionProvider({
       applyQueue(snapshot.queue, snapshot.order);
       setCurrentIndex(snapshot.index);
     },
-    [applyQueue, restoreRadioSession, resumeAt],
+    [applyQueue, restoreRadioSession, resumeAt, setCurrentIndex],
   );
 
   const clearQueue = useCallback(() => {
@@ -451,7 +442,7 @@ function PlayerSessionProvider({
     setCurrentIndex(-1);
     setIsPlaying(false);
     resetProgress();
-  }, [applyQueue, resetProgress, resetRadio, stopRadioSession]);
+  }, [applyQueue, resetProgress, resetRadio, setCurrentIndex, stopRadioSession]);
 
   const jumpTo = useCallback(
     (index: number) => {
@@ -461,7 +452,7 @@ function PlayerSessionProvider({
       resetProgress();
       setIsPlaying(true);
     },
-    [resetProgress],
+    [queueRef, resetProgress, setCurrentIndex],
   );
 
   const takeOver = useCallback(
@@ -486,7 +477,18 @@ function PlayerSessionProvider({
 
       setIsPlaying(playing);
     },
-    [applyQueue, resetRadio, resumeAt, seek, startQueue, stopRadioSession],
+    [
+      applyQueue,
+      queueRef,
+      resetRadio,
+      resumeAt,
+      seek,
+      setCurrentIndex,
+      setRepeat,
+      setShuffle,
+      startQueue,
+      stopRadioSession,
+    ],
   );
 
   const continueHere = useCallback(async () => {
@@ -663,40 +665,7 @@ function PlayerSessionProvider({
   );
   const connected = useConnectPlayback(userId, state, actions, progress, output, load);
 
-  useExclusivePlayback(connected.shouldHold, {
-    onClaimed: () => {
-      connected.claimed();
-      void connected.report().catch(() => {});
-    },
-    onDisplaced: (takeover) => {
-      setIsPlaying(false);
-      connected.displaced();
-      notify(
-        t(takeover?.deviceName ? "player.playingOn" : "player.playingElsewhere", {
-          device: takeover?.deviceName ?? "",
-        }),
-        "info",
-      );
-    },
-  });
-  useMediaSession(
-    connected.state.currentTrack,
-    connected.state.isPlaying,
-    connected.progress.duration,
-    {
-      play: connected.controls.selectedId
-        ? () => {
-            if (!connected.state.isPlaying) connected.actions.toggle();
-          }
-        : play,
-      pause: connected.actions.pause,
-      next: connected.actions.next,
-      previous: connected.actions.previous,
-      seek: connected.actions.seek,
-      seekBy: connected.actions.seekBy,
-      getPosition: connected.progress.getPosition,
-    },
-  );
+  usePlayerPlatform(connected, play, setIsPlaying);
 
   const currentTrackId = connected.state.currentTrack?.id ?? null;
   const currentAlbumId = connected.state.currentTrack?.albumId ?? null;
@@ -712,9 +681,11 @@ function PlayerSessionProvider({
       <PlayerStateContext.Provider value={connected.state}>
         <PlayerActionsContext.Provider value={connected.actions}>
           <PlayerNowPlayingContext.Provider value={nowPlaying}>
-            <PlayerProgressContext.Provider value={connected.progress}>
-              {children}
-            </PlayerProgressContext.Provider>
+            <PlayerClockContext.Provider value={connected.progress.getPosition}>
+              <PlayerProgressContext.Provider value={connected.progress}>
+                {children}
+              </PlayerProgressContext.Provider>
+            </PlayerClockContext.Provider>
           </PlayerNowPlayingContext.Provider>
           <audio ref={primaryAudioRef} {...audioProps} />
           <audio ref={secondaryAudioRef} {...audioProps} />
@@ -762,6 +733,10 @@ export function usePlayer(): PlayerState & PlayerActions {
 
 export function usePlayerProgress(): PlayerProgress {
   return useRequiredContext(PlayerProgressContext, "usePlayerProgress", "PlayerProvider");
+}
+
+export function usePlayerClock(): PlayerProgress["getPosition"] {
+  return useRequiredContext(PlayerClockContext, "usePlayerClock", "PlayerProvider");
 }
 
 export function useNowPlaying(): PlayerNowPlaying {

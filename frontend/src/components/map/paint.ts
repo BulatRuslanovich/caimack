@@ -1,27 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Bulat Ruslanovich
 
+import { rgbOf, rgba, type Rgb } from "@/lib/cssColor";
 import {
   easeOut,
   playsLevel,
-  alongPath,
   smoothPath,
-  toMap,
   toScreen,
   type MapView,
   type Spot,
 } from "@/lib/libraryMap";
-import { rgbOf, rgba, type Rgb } from "@/lib/cssColor";
 import type { MapPoint } from "@/lib/types";
 import type { MapLabel, MapRoute } from "./LibraryMapCanvas";
-import { visibleLandmarks } from "./landmarks";
+import { LANDMARK_ZOOM, visibleLandmarks } from "./landmarks";
+import { nebulaTexture, stellarColours, type Starfield } from "./starfield";
 
 const LEVELS = 8;
-const COVER_ZOOM = 4;
-const COVER_FADE = 2;
+const COVER_ZOOM = 3;
+const COVER_FADE = 3;
 const COVER_RADIUS = 14;
-const PULSE_MS = 2400;
-const HOP_MS = 1600;
 const HOP_SAMPLES = 12;
 const PATH_SAMPLES = 6;
 
@@ -67,8 +64,8 @@ function haloSprite(color: Rgb, strength: number): HTMLCanvasElement {
   return sprite;
 }
 
-function dotRadius(k: number): number {
-  return Math.min(6, 2.2 + 0.9 * Math.log2(k + 1));
+export function dotRadius(k: number, width: number): number {
+  return Math.min(4.5, (width < 600 ? 0.75 : 1.1) + 0.55 * Math.log2(k + 1));
 }
 
 function clamp01(value: number): number {
@@ -78,10 +75,12 @@ function clamp01(value: number): number {
 export interface HaloCache {
   key: string;
   sprite: HTMLCanvasElement;
+  stars: HTMLCanvasElement[];
 }
 
 export interface Scene {
   points: MapPoint[];
+  starfield: Starfield;
   landmarks: MapPoint[];
   labels: MapLabel[];
   highlightGenre: string | null;
@@ -99,7 +98,9 @@ export interface Scene {
   intro: number;
   reveal: number;
   covers: boolean;
+  nebula: boolean;
   cover: (point: MapPoint) => CanvasImageSource | null;
+  coverHits: { current: { point: MapPoint; spot: Spot; radius: number }[] };
 }
 
 export function paintMap(
@@ -109,7 +110,8 @@ export function paintMap(
   size: { width: number; height: number },
   halo: { current: HaloCache | null },
   scene: Scene,
-): boolean {
+  beginForeground?: () => CanvasRenderingContext2D,
+): void {
   const {
     points,
     labels,
@@ -120,43 +122,43 @@ export function paintMap(
     links,
     hoveredId,
     lasso,
-    playing,
     route,
     path,
-    time,
-    motion,
     intro,
     reveal,
     covers,
     cover,
   } = scene;
   const { width, height } = size;
-  const ratio = window.devicePixelRatio || 1;
+  const ratio = context.canvas.width / width;
   const base = Math.min(width, height);
-  const radius = dotRadius(view.k);
+  const radius = dotRadius(view.k, width);
+  const colours = stellarColours(palette.primary, palette.light);
   const coverShare = covers ? clamp01((view.k - COVER_ZOOM) / COVER_FADE) : 0;
   const mark = coverShare > 0 ? radius + (COVER_RADIUS - radius) * coverShare : radius;
   const screen = (spot: Spot) => toScreen(spot, view, base);
-  let moving = false;
 
   context.setTransform(ratio, 0, 0, ratio, 0, 0);
   context.clearRect(0, 0, width, height);
   context.lineCap = "round";
   context.lineJoin = "round";
+  scene.coverHits.current = [];
 
-  const step = 0.1 / 2 ** Math.max(0, Math.floor(Math.log2(view.k)));
-  const from = toMap({ x: 0, y: 0 }, view, base);
-  const to = toMap({ x: width, y: height }, view, base);
-  context.fillStyle = rgba(palette.faint, palette.light ? 0.3 : 0.2);
-  context.beginPath();
-  for (let gx = Math.floor(from.x / step) * step; gx <= to.x; gx += step) {
-    for (let gy = Math.floor(from.y / step) * step; gy <= to.y; gy += step) {
-      const spot = screen({ x: gx, y: gy });
-      context.moveTo(spot.x + 1, spot.y);
-      context.arc(spot.x, spot.y, 1, 0, Math.PI * 2);
-    }
+  const field = scene.starfield;
+  const corner = screen({ x: field.bounds.minX, y: field.bounds.minY });
+  const far = screen({ x: field.bounds.maxX, y: field.bounds.maxY });
+  if (scene.nebula) {
+    context.globalAlpha =
+      clamp01(1 - (view.k - 1) / 9) * easeOut(intro) * (highlightGenre || selectedIds ? 0.3 : 1);
+    context.drawImage(
+      nebulaTexture(field, colours, palette.light),
+      corner.x,
+      corner.y,
+      far.x - corner.x,
+      far.y - corner.y,
+    );
+    context.globalAlpha = 1;
   }
-  context.fill();
 
   const hoveredIndex =
     hoveredId === null ? -1 : points.findIndex((point) => point.id === hoveredId);
@@ -173,8 +175,11 @@ export function paintMap(
       if (a === hoveredIndex) neighbours.push(end);
       else if (b === hoveredIndex) neighbours.push(start);
     }
-    context.lineWidth = 1;
-    context.strokeStyle = rgba(palette.ink, (palette.light ? 0.13 : 0.09) * linkShare);
+    context.lineWidth = 0.7;
+    context.strokeStyle = rgba(
+      palette.light ? palette.ink : colours[1],
+      (palette.light ? 0.15 : 0.19) * linkShare,
+    );
     context.stroke();
   }
 
@@ -209,6 +214,7 @@ export function paintMap(
     halo.current = {
       key: haloKey,
       sprite: haloSprite(palette.primary, palette.light ? 0.3 : 0.4),
+      stars: colours.map((colour) => haloSprite(colour, palette.light ? 0.2 : 0.35)),
     };
   }
   const sprite = halo.current.sprite;
@@ -240,25 +246,6 @@ export function paintMap(
         context.strokeStyle = rgba(palette.primary, 0.12 + 0.68 * (1 - hop / hops));
         context.stroke();
       }
-
-      if (motion && playing) {
-        const share = (time % (HOP_MS * hops)) / (HOP_MS * hops);
-        const spark = alongPath(line, share);
-        const reach = 16;
-
-        context.globalAlpha = 1 - 0.7 * share;
-        context.drawImage(sprite, spark.x - reach, spark.y - reach, reach * 2, reach * 2);
-        context.fillStyle = rgba(palette.primary, 1);
-        context.beginPath();
-        context.arc(spark.x, spark.y, 3, 0, Math.PI * 2);
-        context.fill();
-        context.fillStyle = rgba(palette.onPrimary, 0.9);
-        context.beginPath();
-        context.arc(spark.x, spark.y, 1.3, 0, Math.PI * 2);
-        context.fill();
-        context.globalAlpha = 1;
-        moving = true;
-      }
     }
   }
 
@@ -275,14 +262,16 @@ export function paintMap(
     return { spot: screen(point), grown: easeOut(clamp01(intro)) };
   };
 
-  const buckets = new Map<string, Spot[]>();
-  const glowing: { spot: Spot; level: number }[] = [];
+  const buckets = new Map<string, { spots: Spot[]; size: number; fill: string }>();
+  const glowing: { spot: Spot; level: number; tint: number }[] = [];
   const front: Spot[] = [];
   const tiles: { point: MapPoint; spot: Spot; ring: string; alpha: number }[] = [];
   let current: Spot | null = null;
   let ring: Spot | null = null;
 
-  for (const point of points) {
+  for (let index = 0; index < points.length; index++) {
+    const point = points[index],
+      star = field.stars[index];
     const { spot, grown } = arrive(point);
     if (grown <= 0) continue;
     if (spot.x < -mark || spot.y < -mark || spot.x > width + mark || spot.y > height + mark)
@@ -300,8 +289,12 @@ export function paintMap(
       fill = rgba(palette.faint, selectedIds ? 0.1 : 0.18);
     } else {
       const level = Math.round(playsLevel(point.plays, maxPlays) * LEVELS) / LEVELS;
-      fill = level === 0 ? rgba(palette.faint, 0.55) : rgba(palette.primary, 0.4 + 0.6 * level);
-      if (level > 0) glowing.push({ spot, level: level * grown });
+      fill =
+        level === 0
+          ? rgba(colours[star.tint], star.light * 0.85)
+          : rgba(palette.primary, 0.5 + 0.5 * level);
+      if (level > 0 || star.beacon)
+        glowing.push({ spot, level: (level || 0.25) * grown, tint: level > 0 ? -1 : star.tint });
     }
 
     if (coverShare > 0 && point.hasCover) {
@@ -309,9 +302,11 @@ export function paintMap(
     }
     if (marked === true) continue;
 
-    const bucket = buckets.get(fill);
-    if (bucket) bucket.push(spot);
-    else buckets.set(fill, [spot]);
+    const size = radius * star.size;
+    const key = `${fill}:${star.size}`;
+    const bucket = buckets.get(key);
+    if (bucket) bucket.spots.push(spot);
+    else buckets.set(key, { spots: [spot], size, fill });
   }
 
   const dots = (spots: Spot[], size: number) => {
@@ -333,15 +328,32 @@ export function paintMap(
   };
 
   context.globalCompositeOperation = palette.light ? "multiply" : "lighter";
-  for (const { spot, level } of glowing) {
+  for (const { spot, level, tint } of glowing) {
     const reach = radius * (2 + 3.5 * level);
-    context.drawImage(sprite, spot.x - reach, spot.y - reach, reach * 2, reach * 2);
+    context.drawImage(
+      tint < 0 ? sprite : halo.current.stars[tint],
+      spot.x - reach,
+      spot.y - reach,
+      reach * 2,
+      reach * 2,
+    );
+    if (level > 0.55) {
+      const reach = radius * (2 + level * 2);
+      context.strokeStyle = rgba(palette.primary, level * 0.4);
+      context.lineWidth = 0.65;
+      context.beginPath();
+      context.moveTo(spot.x - reach, spot.y);
+      context.lineTo(spot.x + reach, spot.y);
+      context.moveTo(spot.x, spot.y - reach);
+      context.lineTo(spot.x, spot.y + reach);
+      context.stroke();
+    }
   }
   context.globalCompositeOperation = "source-over";
 
-  for (const [fill, spots] of buckets) {
+  for (const { fill, spots, size } of buckets.values()) {
     context.fillStyle = fill;
-    dots(spots, radius);
+    dots(spots, size);
   }
 
   if (front.length > 0) {
@@ -355,9 +367,35 @@ export function paintMap(
   }
 
   context.lineWidth = 1.5;
+  const occupied = new Map<string, Spot[]>();
+  const cell = mark * 2 + 5;
+  tiles.sort(
+    (a, b) =>
+      Number(b.point.id === nowPlayingId || b.point.id === hoveredId) -
+        Number(a.point.id === nowPlayingId || a.point.id === hoveredId) ||
+      b.point.plays - a.point.plays,
+  );
   for (const tile of tiles) {
+    const gx = Math.floor(tile.spot.x / cell),
+      gy = Math.floor(tile.spot.y / cell);
+    let crowded = false;
+    for (let x = gx - 1; x <= gx + 1; x++)
+      for (let y = gy - 1; y <= gy + 1; y++)
+        if (
+          occupied
+            .get(`${x}:${y}`)
+            ?.some((other) => Math.hypot(other.x - tile.spot.x, other.y - tile.spot.y) < cell)
+        )
+          crowded = true;
+    if (crowded && tile.point.id !== nowPlayingId && tile.point.id !== hoveredId) continue;
+    const key = `${gx}:${gy}`;
+    const placed = occupied.get(key);
+    if (placed) placed.push(tile.spot);
+    else occupied.set(key, [tile.spot]);
     const image = cover(tile.point);
     if (!image) continue;
+    if (coverShare > 0.1)
+      scene.coverHits.current.push({ point: tile.point, spot: tile.spot, radius: mark });
 
     context.globalAlpha = coverShare * tile.alpha;
     context.drawImage(image, tile.spot.x - mark, tile.spot.y - mark, mark * 2, mark * 2);
@@ -386,21 +424,16 @@ export function paintMap(
     rings([screen(path[0])], mark + 4);
   }
 
+  const foreground = beginForeground?.();
+  if (foreground && foreground !== context) {
+    context = foreground;
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.clearRect(0, 0, width, height);
+    context.lineCap = "round";
+    context.lineJoin = "round";
+  }
+
   if (current) {
-    const beat = motion && playing;
-    const reach = radius * 9 * (beat ? 1 + 0.08 * Math.sin((time / PULSE_MS) * Math.PI * 2) : 1);
-    context.drawImage(sprite, current.x - reach, current.y - reach, reach * 2, reach * 2);
-
-    if (beat) {
-      context.lineWidth = 1.5;
-      for (const offset of [0, 0.5]) {
-        const phase = (time / PULSE_MS + offset) % 1;
-        context.strokeStyle = rgba(palette.primary, 0.55 * (1 - phase) ** 2);
-        rings([current], mark + 5 + phase * 26);
-      }
-      moving = true;
-    }
-
     if (coverShare === 0) {
       context.fillStyle = rgba(palette.primary, 1);
       dots([current], radius + 1.5);
@@ -421,6 +454,7 @@ export function paintMap(
   context.globalAlpha = clamp01((intro - 0.35) / 0.4);
 
   if (covers) {
+    context.globalAlpha *= clamp01((LANDMARK_ZOOM - view.k) / 0.9);
     const clipText = (text: string, max: number) => {
       if (context.measureText(text).width <= max) return text;
       let shortened = text;
@@ -436,20 +470,28 @@ export function paintMap(
       selectedIds,
     )) {
       const active = point.id === hoveredId || point.id === nowPlayingId;
-      context.beginPath();
-      context.roundRect(labelX - labelWidth / 2, at.y + 20, labelWidth, 45, 7);
-      context.fillStyle = rgba(palette.card, 0.97);
-      context.fill();
-      context.strokeStyle = rgba(active ? palette.primary : palette.ink, active ? 1 : 0.18);
-      context.lineWidth = 1;
-      context.stroke();
+      if (active) {
+        context.beginPath();
+        context.roundRect(labelX - labelWidth / 2, at.y + 20, labelWidth, 45, 7);
+        context.fillStyle = rgba(palette.card, 0.92);
+        context.fill();
+        context.strokeStyle = rgba(palette.primary, 0.6);
+        context.lineWidth = 1;
+        context.stroke();
+      }
       context.textAlign = "center";
       context.font = `600 13px ${palette.font}`;
+      context.lineWidth = 4;
+      context.strokeStyle = rgba(palette.card, 0.95);
+      const artist = clipText(point.artist || point.title, labelWidth - 16);
+      context.strokeText(artist, labelX, at.y + 34);
       context.fillStyle = rgba(palette.ink, 1);
-      context.fillText(clipText(point.artist || point.title, labelWidth - 16), labelX, at.y + 34);
+      context.fillText(artist, labelX, at.y + 34);
       context.font = `400 12px ${palette.font}`;
+      const title = clipText(point.title, labelWidth - 16);
+      context.strokeText(title, labelX, at.y + 51);
       context.fillStyle = rgba(palette.ink, 0.76);
-      context.fillText(clipText(point.title, labelWidth - 16), labelX, at.y + 51);
+      context.fillText(title, labelX, at.y + 51);
       const image = cover(point);
       context.fillStyle = rgba(palette.card, 1);
       dots([at], 21);
@@ -460,6 +502,7 @@ export function paintMap(
     }
     context.textAlign = "left";
   }
+  context.globalAlpha = clamp01((intro - 0.35) / 0.4);
 
   const placed: { left: number; right: number; top: number; bottom: number }[] = [];
 
@@ -526,6 +569,4 @@ export function paintMap(
     context.stroke();
     context.setLineDash([]);
   }
-
-  return moving;
 }

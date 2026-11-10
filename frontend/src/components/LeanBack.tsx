@@ -16,6 +16,7 @@ import type { Track } from "@/lib/types";
 import { usePlayerProgress, usePlayerState } from "@/contexts/PlayerContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { ArtBackdrop } from "./ArtBackdrop";
+import { PlayerEffectsBackdrop } from "./PlayerEffectsBackdrop";
 import { Record } from "./Record";
 
 const WAKE_DISTANCE_PX = 12;
@@ -85,8 +86,9 @@ function LeanBackScreen({ track }: { track: Track }) {
   }, []);
 
   return (
-    <div className="lean-back" data-aura-host role="presentation">
+    <div className="lean-back" role="presentation">
       <ArtBackdrop mode="stage" src={trackCoverUrl(track, "thumb")} />
+      <PlayerEffectsBackdrop track={track} playing={isPlaying && !buffering} />
 
       <div className="lean-back-stage">
         <div className="lean-back-clock">
@@ -99,7 +101,6 @@ function LeanBackScreen({ track }: { track: Track }) {
           track={track}
           out
           spinning={isPlaying && !buffering}
-          aura
           sizes="min(56vh, 40vw)"
           className="lean-back-record"
         />

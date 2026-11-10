@@ -5,50 +5,53 @@
 
 import { PlaybackDevices } from "./PlaybackDevices";
 
-import * as DialogPrimitive from "@radix-ui/react-dialog";
-import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useT } from "@/contexts/I18nContext";
+import { usePlayer, usePlayerClock, usePlayerState } from "@/contexts/PlayerContext";
 import { cn } from "@/lib/cn";
 import { displayTitleClass, formatArtists, formatDuration } from "@/lib/format";
+import { leanBack } from "@/lib/leanBack";
 import { trackCoverUrl } from "@/lib/media";
+import { planTransition } from "@/lib/playback/transitions";
+import { useConnect } from "@/lib/playback/useConnectPlayback";
+import { usePlaybackProgress } from "@/lib/playback/usePlaybackProgress";
 import { reasonLabel } from "@/lib/recommendationReason";
 import { SEEK_STEP } from "@/lib/shortcuts";
-import { useIdle } from "@/lib/useIdle";
-import { usePlaybackProgress } from "@/lib/playback/usePlaybackProgress";
-import { usePlayer, usePlayerProgress, usePlayerState } from "@/contexts/PlayerContext";
-import { leanBack } from "@/lib/leanBack";
-import { planTransition } from "@/lib/playback/transitions";
-import type { Track } from "@/lib/types";
-import { useT } from "@/contexts/I18nContext";
-import { ArtBackdrop } from "./ArtBackdrop";
-import { ArtistLinks } from "./ArtistLinks";
-import { Record } from "./Record";
-import { DJControls } from "./DJControls";
 import { useTatarMafia } from "@/lib/tatarMafia";
-import { useConnect } from "@/lib/playback/useConnectPlayback";
-import { PlayerTransport } from "./PlayerTransport";
-import { PlayerVolume } from "./PlayerVolume";
-import { StreamQuality } from "./StreamQuality";
-import { WaveformSeekbar } from "./WaveformSeekbar";
-import { LyricsPane } from "./LyricsPane";
-import { QueueList } from "./QueuePanel";
-import { ShareCardDialog } from "./ShareCardDialog";
-import { SleepTimerButton } from "./SleepTimerButton";
-import { TrackMenu } from "./TrackMenu";
-import { Button } from "./ui/button";
+import type { Track } from "@/lib/types";
+import { useIdle } from "@/lib/useIdle";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   ChevronDownIcon,
   EllipsisVerticalIcon,
   HeartIcon,
-  ListVideoIcon,
   ImageIcon,
+  ListVideoIcon,
   MicVocalIcon,
   SofaIcon,
 } from "lucide-react";
+import dynamic from "next/dynamic";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+import { ArtBackdrop } from "./ArtBackdrop";
+import { ArtistLinks } from "./ArtistLinks";
+import { PlayerEffectsBackdrop } from "./PlayerEffectsBackdrop";
+import { PlayerTransport } from "./PlayerTransport";
+import { PlayerVolume } from "./PlayerVolume";
+import { Record } from "./Record";
+import { SleepTimerButton } from "./SleepTimerButton";
+import { StreamQuality } from "./StreamQuality";
+import { TrackMenu } from "./TrackMenu";
+import { Button } from "./ui/button";
+import { WaveformSeekbar } from "./WaveformSeekbar";
 
 const IDLE_MS = 2500;
 
 const SWIPE_CLOSE_PX = 120;
+
+const DJControls = dynamic(() => import("./DJControls").then((m) => m.DJControls));
+const QueueList = dynamic(() => import("./QueueList").then((m) => m.QueueList));
+const LyricsPane = dynamic(() => import("./LyricsPane").then((m) => m.LyricsPane));
+const ShareCardDialog = dynamic(() => import("./ShareCardDialog").then((m) => m.ShareCardDialog));
 
 function FullScreenProgress({ track, chrome }: { track: Track; chrome: string }) {
   const t = useT();
@@ -56,7 +59,7 @@ function FullScreenProgress({ track, chrome }: { track: Track; chrome: string })
   const { nextTrack, crossfade, smartTransitions, repeat, sleepTimer } = usePlayerState();
 
   const plan =
-    sleepTimer?.kind === "trackEnd"
+    !smartTransitions || sleepTimer?.kind === "trackEnd"
       ? null
       : planTransition({
           crossfade,
@@ -109,7 +112,7 @@ function FullScreenProgress({ track, chrome }: { track: Track; chrome: string })
 
 function ShareCardButton({ track }: { track: Track }) {
   const t = useT();
-  const { getPosition } = usePlayerProgress();
+  const getPosition = usePlayerClock();
   const [sharing, setSharing] = useState<number | null>(null);
 
   return (
@@ -180,7 +183,6 @@ export function FullScreenPlayer({
         <DialogPrimitive.Content asChild aria-describedby={undefined}>
           <div
             data-player-fullscreen="true"
-            data-aura-host
             onTouchStart={(event) => {
               const atTop = (stage.current?.scrollTop ?? 0) === 0;
               swipeFrom.current = panel === "art" && atTop ? event.touches[0].clientY : null;
@@ -198,17 +200,18 @@ export function FullScreenPlayer({
             </DialogPrimitive.Title>
 
             <ArtBackdrop mode="stage" src={trackCoverUrl(track, "thumb")} />
+            <PlayerEffectsBackdrop track={track} playing={player.isPlaying && !player.buffering} />
 
             <header
               className={cn(
-                "relative z-1 grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 max-sm:flex max-sm:justify-between",
+                "relative z-1 grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 max-sm:flex max-sm:justify-between max-sm:gap-0",
                 chrome,
               )}
             >
               <Button
                 variant="ghost"
                 size="icon-lg"
-                className="justify-self-start"
+                className="justify-self-start max-sm:size-10"
                 onClick={onClose}
                 aria-label={t("player.closeFull")}
               >
@@ -219,7 +222,7 @@ export function FullScreenPlayer({
                 {t("player.nowPlaying")}
               </span>
 
-              <div className="flex items-center gap-1 justify-self-end">
+              <div className="flex items-center gap-1 justify-self-end max-sm:gap-0 max-sm:[&_button]:size-10">
                 <PlaybackDevices compact />
                 <StreamQuality track={track} className="mr-1 max-sm:hidden" />
 
@@ -277,22 +280,10 @@ export function FullScreenPlayer({
                     out
                     spinning={player.isPlaying && !player.buffering}
                     scratchable
-                    aura
-                    axis="x"
-                    sizes="min(48vh, 28rem)"
+                    axis="responsive"
+                    sizes="(max-width: 1023px) min(76vw, 22rem), min(48vh, 28rem)"
                     transitionCover
-                    className="w-[min(100%,48vh)] max-lg:hidden"
-                  />
-                  <Record
-                    track={track}
-                    out
-                    spinning={player.isPlaying && !player.buffering}
-                    scratchable
-                    aura
-                    axis="y"
-                    sizes="min(76vw, 22rem)"
-                    transitionCover
-                    className="w-[min(76vw,22rem)] [--record-out:22%] lg:hidden"
+                    className="w-[min(100%,48vh)] max-lg:w-[min(76vw,22rem)]"
                   />
                 </div>
               )}
@@ -300,7 +291,8 @@ export function FullScreenPlayer({
               <div
                 className={cn(
                   "flex min-h-0 flex-1 flex-col justify-center gap-6 max-lg:flex-none max-lg:pb-4",
-                  djMode && "lg:overflow-x-hidden lg:overflow-y-auto lg:py-3 lg:[justify-content:safe_center]",
+                  djMode &&
+                    "lg:overflow-x-hidden lg:overflow-y-auto lg:py-3 lg:[justify-content:safe_center]",
                   panel !== "art" && "max-lg:hidden lg:max-w-[50%] lg:flex-none lg:basis-1/2",
                 )}
               >
