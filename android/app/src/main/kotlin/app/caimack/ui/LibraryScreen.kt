@@ -21,7 +21,7 @@ import app.caimack.R
 
 @Composable
 fun LibraryScreen(nav: NavController) {
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(bottom = 24.dp)) {
         item { PageTitle(stringResource(R.string.nav_library), stringResource(R.string.library_intro)) }
         item { LibraryShortcuts({ nav.navigate(FavoritesRoute) }, { nav.navigate(DownloadsRoute) }) }
         item { LibraryEntry(stringResource(R.string.nav_tracks), stringResource(R.string.library_tracks_hint), Lucide.AudioLines) { nav.navigate(TracksRoute) } }
