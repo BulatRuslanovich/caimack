@@ -2,7 +2,7 @@
 "use client";
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleCheckIcon, CirclePlusIcon, EllipsisIcon, FolderInputIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LibraryMoveDialog } from "./LibraryOrganization";
 import { api } from "@/lib/api";
 import { queries } from "@/lib/queries";
@@ -32,6 +32,7 @@ function useLibrarySave(kind: LibraryKind, id: string) {
     saved,
     folderId: library.data?.find((item) => item.kind === kind && item.id === id)?.folderId ?? null,
     pending,
+    ready: Boolean(library.data),
     disabled: !library.data || pending,
     label: t(saved ? "collection.remove" : "collection.add"),
     toggle: () => mutation.mutate(),
@@ -39,7 +40,7 @@ function useLibrarySave(kind: LibraryKind, id: string) {
 }
 
 export function LibrarySaveButton({ kind, id }: { kind: LibraryKind; id: string }) {
-  const { saved, pending, disabled, label, toggle } = useLibrarySave(kind, id);
+  const { saved, pending, ready, disabled, label, toggle } = useLibrarySave(kind, id);
   return (
     <Button
       variant="ghost"
@@ -52,8 +53,53 @@ export function LibrarySaveButton({ kind, id }: { kind: LibraryKind; id: string 
       disabled={disabled}
       onClick={toggle}
     >
-      {saved ? <CircleCheckIcon size={20} /> : <CirclePlusIcon size={20} />}
+      {ready ? (
+        <LibrarySaveIcon key={`${kind}:${id}`} saved={saved} />
+      ) : (
+        <CirclePlusIcon size={20} />
+      )}
     </Button>
+  );
+}
+
+function LibrarySaveIcon({ saved }: { saved: boolean }) {
+  const icon = useRef<SVGSVGElement>(null);
+  const previous = useRef(saved);
+  useEffect(() => {
+    const changed = previous.current !== saved;
+    previous.current = saved;
+    if (!changed || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const animation = icon.current?.animate(
+      [
+        { transform: "scale(1)", offset: 0 },
+        { transform: "scale(0.82)", offset: 0.15 },
+        { transform: "scale(1.2)", offset: 0.42 },
+        { transform: "scale(0.96)", offset: 0.7 },
+        { transform: "scale(1)", offset: 1 },
+      ],
+      { duration: 540, easing: "ease-in-out" },
+    );
+    return () => animation?.cancel();
+  }, [saved]);
+  return (
+    <svg
+      ref={icon}
+      className="library-save-icon"
+      data-saved={saved}
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle className="library-save-ring" cx="12" cy="12" r="9" fill="currentColor" />
+      <path className="library-save-plus" d="M8 12h8M12 8v8" />
+      <path className="library-save-check" d="m7 12 3.5 3.5L17 9" pathLength="1" />
+    </svg>
   );
 }
 

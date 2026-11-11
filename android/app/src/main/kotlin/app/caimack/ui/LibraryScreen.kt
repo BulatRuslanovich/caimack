@@ -297,7 +297,7 @@ private fun LibraryToggle(kind: String, id: String, library: List<LibraryItem>, 
         }
         Unit
     }
-    val icon: @Composable () -> Unit = { Icon(if (saved) Lucide.CircleCheck else Lucide.CirclePlus, label, tint = if (saved) LocalPalette.current.primary else LocalPalette.current.muted) }
+    val icon: @Composable () -> Unit = { LibrarySaveIcon(saved, label) }
     if (menu) DropdownMenuItem(
         text = { Text(label) }, leadingIcon = icon, enabled = !pending, onClick = toggle,
     ) else IconButton(onClick = toggle, enabled = !pending, modifier = modifier.semantics { selected = saved }) { icon() }
