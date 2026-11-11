@@ -17,7 +17,6 @@ import { useInvalidate } from "@/lib/useInvalidate";
 import { useRowSelection } from "@/lib/useRowSelection";
 import { useAuth } from "@/contexts/AuthContext";
 import { useT } from "@/contexts/I18nContext";
-import { usePlayerActions } from "@/contexts/PlayerContext";
 import { useToast } from "@/lib/useToast";
 import { PageHeader, Section } from "@/components/PageHeader";
 import { Pagination, PageToolbar, SortSelect } from "@/components/PageToolbar";
@@ -29,12 +28,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PlayAllButton } from "@/components/PlayAllButton";
+import { ShuffleButton } from "@/components/ShuffleButton";
 import { Query } from "@/components/Query";
 import { TrackList } from "@/components/TrackList";
 import { TrackDisplayMenu } from "@/components/TrackDisplayMenu";
 import { useTrackDisplay } from "@/lib/trackDisplay";
 import { Button } from "@/components/ui/button";
-import { CheckIcon, ShuffleIcon } from "lucide-react";
+import { CheckIcon } from "lucide-react";
 import { useConfirm } from "@/components/ui/alert-dialog";
 
 const sortKeys: Record<TrackSort, TranslationKey> = {
@@ -60,7 +60,6 @@ export function TracksPage() {
   const t = useT();
   const display = useTrackDisplay();
   const format = useFormat();
-  const player = usePlayerActions();
   const { isAdmin } = useAuth();
   const [confirm, confirmDialog] = useConfirm();
 
@@ -113,16 +112,6 @@ export function TracksPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [selecting, stopSelecting]);
 
-  const shuffle = useMutation({
-    mutationFn: () => api.shuffleTracks({ q: search || undefined, ...filter }),
-    onSuccess: (shuffled) => {
-      if (shuffled.length === 0) return;
-
-      player.setShuffle(true);
-      player.playQueue(shuffled, 0);
-    },
-  });
-
   return (
     <>
       <PageHeader
@@ -146,10 +135,7 @@ export function TracksPage() {
           items.length > 0 && (
             <>
               <PlayAllButton tracks={items} />
-              <Button onClick={() => shuffle.mutate()} disabled={shuffle.isPending}>
-                <ShuffleIcon size={16} />
-                {shuffle.isPending ? t("action.shuffling") : t("action.shuffle")}
-              </Button>
+              <ShuffleButton tracks={items} />
             </>
           )
         }

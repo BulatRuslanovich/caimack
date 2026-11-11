@@ -103,7 +103,7 @@ function MapExplorer({ points, totalTracks }: { points: MapPoint[]; totalTracks:
   const t = useT();
   const { notifyError } = useToast();
   const { currentTrack, currentIndex, queue, nextTrack, shuffle, isPlaying } = usePlayerState();
-  const { playQueue, playTrack, startRadio } = usePlayerActions();
+  const { playQueue, playTrack, startRadio, toggleShuffle } = usePlayerActions();
   const controller = useRef<MapController>(null);
 
   const [genre, setGenre] = useState<string | null>(null);
@@ -225,14 +225,14 @@ function MapExplorer({ points, totalTracks }: { points: MapPoint[]; totalTracks:
       if (track) await startRadio(track);
     });
 
-  const playSelection = (shuffled: boolean) =>
+  const playSelection = () =>
     run(async () => {
       if (!path) return;
 
       const tracks = await api.lookupTracks(path.map((point) => point.id));
       if (tracks.length === 0) return;
 
-      playQueue(tracks, 0, { shuffle: shuffled });
+      playQueue(tracks, 0);
       setSelection(null);
     });
 
@@ -365,7 +365,7 @@ function MapExplorer({ points, totalTracks }: { points: MapPoint[]; totalTracks:
               variant="primary"
               size="sm"
               disabled={busy}
-              onClick={() => void playSelection(false)}
+              onClick={() => void playSelection()}
             >
               <PlayIcon size={14} /> {t("action.play")}
             </Button>
@@ -373,7 +373,12 @@ function MapExplorer({ points, totalTracks }: { points: MapPoint[]; totalTracks:
               variant="outline"
               size="sm"
               disabled={busy}
-              onClick={() => void playSelection(true)}
+              onClick={toggleShuffle}
+              aria-pressed={shuffle}
+              className={cn(
+                shuffle &&
+                  "border-primary bg-primary text-primary-foreground hover:border-primary hover:bg-primary/90",
+              )}
             >
               <ShuffleIcon size={14} /> {t("action.shuffle")}
             </Button>

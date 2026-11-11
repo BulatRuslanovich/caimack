@@ -167,7 +167,6 @@ fun <T : Any> PagedGrid(
 internal fun TrackPage(
     key: String, title: String, emptyTitle: String, emptyDescription: String?,
     play: (List<Track>, Int) -> Unit,
-    shuffle: (suspend () -> List<Track>)? = null,
     toolbar: (@Composable () -> Unit)? = null,
     load: suspend (Int) -> Paged<Track>,
 ) {
@@ -179,13 +178,12 @@ internal fun TrackPage(
     var preparing by remember(key) { mutableStateOf(false) }
     var preparation by remember { mutableStateOf<Job?>(null) }
     DisposableEffect(key) { onDispose { preparation?.cancel() } }
-    val prepare: (Boolean) -> Unit = { shuffled ->
+    val prepare: () -> Unit = {
         if (!preparing) {
             preparing = true
             preparation = scope.launch {
                 try {
-                    val tracks = if (shuffled && shuffle != null) shuffle()
-                        else collectionTracks { withNetworkRetries { load(it) } }.let { if (shuffled) it.shuffled() else it }
+                    val tracks = collectionTracks { withNetworkRetries { load(it) } }
                     if (tracks.isNotEmpty()) play(tracks, 0)
                 } catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) { snackbar.showSnackbar(failure) }
@@ -198,7 +196,7 @@ internal fun TrackPage(
         toolbar?.let { item { it() } }
         if (total != null && total > 0) item {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                PlayActions(enabled = !preparing, onPlay = { prepare(false) }, onShuffle = { prepare(true) })
+                PlayActions(enabled = !preparing, onPlay = prepare)
                 if (preparing) Text(stringResource(R.string.tracks_preparing), style = Type.small, color = LocalPalette.current.muted)
             }
         }
@@ -215,7 +213,6 @@ fun TracksScreen(play: (List<Track>, Int) -> Unit) {
     // Keep controls mounted while the paged result reloads.
     TrackPage("tracks:$query:$sort", stringResource(R.string.nav_tracks),
         stringResource(if (query.isBlank()) R.string.tracks_empty else R.string.tracks_no_match), null, play,
-        shuffle = { api.shuffleTracks(query.takeIf { it.isNotBlank() }) },
         toolbar = {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 SearchInput(input, { input = it }, stringResource(R.string.tracks_search))

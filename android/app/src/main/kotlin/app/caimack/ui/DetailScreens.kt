@@ -156,7 +156,7 @@ internal fun Actions(tracks: List<Track>, play: (List<Track>, Int) -> Unit, onMo
     val complete = mine.count { it.done } == tracks.size
 
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        PlayActions(Modifier.weight(1f), onPlay = { play(tracks, 0) }, onShuffle = { play(tracks.shuffled(), 0) })
+        PlayActions(Modifier.weight(1f), onPlay = { play(tracks, 0) })
         Box(
             Modifier.size(48.dp).clip(CircleShape).clickable {
                 if (pending || complete) container.downloads.remove(mine.map { it.download.request.id })
