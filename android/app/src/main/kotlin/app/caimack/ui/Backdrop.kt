@@ -4,6 +4,9 @@
 package app.caimack.ui
 
 import android.graphics.Bitmap
+import android.util.LruCache
+import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -42,6 +45,9 @@ enum class BackdropMode { Stage, Header }
 
 private const val BACKDROP_PX = 48
 
+// Small decoded thumbnails survive destination disposal and make Back immediate.
+private val backdrops = LruCache<String, ImageBitmap>(80)
+
 private val saturate = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(1.4f) })
 
 @Composable
@@ -55,53 +61,59 @@ fun ArtBackdrop(
     val palette = LocalPalette.current
     val context = LocalPlatformContext.current
 
-    val art by produceState<ImageBitmap?>(null, url) {
-        val request = ImageRequest.Builder(context).data(url).size(BACKDROP_PX).allowHardware(false).build()
-        val result = SingletonImageLoader.get(context).execute(request)
-        (result as? SuccessResult)?.let { value = it.image.toBitmap().asImageBitmap() }
-    }
-
-    Box(modifier.clipToBounds()) {
-        Crossfade(art, animationSpec = tween(600), label = "backdrop") { bitmap ->
-            if (bitmap != null) {
-                Image(
-                    bitmap,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    filterQuality = FilterQuality.Low,
-                    colorFilter = saturate,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer { scaleX = 1.2f; scaleY = 1.2f }
-                        .blur(32.dp, BlurredEdgeTreatment.Rectangle),
-                )
+    key(url) {
+        val cached = remember(url) { backdrops.get(url) }
+        val art by produceState<ImageBitmap?>(cached, url) {
+            if (cached != null) return@produceState
+            val request = ImageRequest.Builder(context).data(url).size(BACKDROP_PX).allowHardware(false).build()
+            val result = SingletonImageLoader.get(context).execute(request)
+            (result as? SuccessResult)?.let {
+                value = it.image.toBitmap().asImageBitmap().also { bitmap -> backdrops.put(url, bitmap) }
             }
         }
 
-        Canvas(Modifier.fillMaxSize()) {
-            val background = palette.background
-            when (mode) {
-                BackdropMode.Stage -> drawRect(
-                    Brush.verticalGradient(
-                        0f to background.copy(alpha = 0.58f),
-                        0.6f to background.copy(alpha = 0.72f),
-                        1f to background.copy(alpha = 0.9f),
-                    ),
-                )
-                BackdropMode.Header -> {
-                    drawRect(
-                        Brush.linearGradient(
-                            0f to background.copy(alpha = 0.2f),
-                            0.5f to background.copy(alpha = 0.58f),
-                            0.92f to background,
-                            start = Offset.Zero,
-                            end = Offset(size.width * 0.36f, size.height),
-                        ),
+        Box(modifier.clipToBounds()) {
+            Crossfade(art, animationSpec = tween(if (cached == null) 600 else 0), label = "backdrop") { bitmap ->
+                if (bitmap != null) {
+                    Image(
+                        bitmap,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        filterQuality = FilterQuality.Low,
+                        colorFilter = saturate,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer { scaleX = 1.2f; scaleY = 1.2f }
+                            .blur(32.dp, BlurredEdgeTreatment.Rectangle),
                     )
                 }
             }
-            drawRect(ShaderBrush(ImageShader(grain, TileMode.Repeated, TileMode.Repeated)), alpha = (if (palette.dark) GRAIN_DARK else GRAIN_LIGHT) * grainStrength)
-            if (mode == BackdropMode.Header) drawRect(Brush.verticalGradient(0.45f to background.copy(alpha = 0f), 1f to background))
+
+            Canvas(Modifier.fillMaxSize()) {
+                val background = palette.background
+                when (mode) {
+                    BackdropMode.Stage -> drawRect(
+                        Brush.verticalGradient(
+                            0f to background.copy(alpha = 0.58f),
+                            0.6f to background.copy(alpha = 0.72f),
+                            1f to background.copy(alpha = 0.9f),
+                        ),
+                    )
+                    BackdropMode.Header -> {
+                        drawRect(
+                            Brush.linearGradient(
+                                0f to background.copy(alpha = 0.2f),
+                                0.5f to background.copy(alpha = 0.58f),
+                                0.92f to background,
+                                start = Offset.Zero,
+                                end = Offset(size.width * 0.36f, size.height),
+                            ),
+                        )
+                    }
+                }
+                drawRect(ShaderBrush(ImageShader(grain, TileMode.Repeated, TileMode.Repeated)), alpha = (if (palette.dark) GRAIN_DARK else GRAIN_LIGHT) * grainStrength)
+                if (mode == BackdropMode.Header) drawRect(Brush.verticalGradient(0.45f to background.copy(alpha = 0f), 1f to background))
+            }
         }
     }
 }
