@@ -71,7 +71,7 @@ fun DownloadsScreen(play: (List<Track>, Int) -> Unit) {
 
         if (ready.isNotEmpty()) {
             item {
-                PlayActions(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), onPlay = { play(ready, 0) }, onShuffle = { play(ready.shuffled(), 0) })
+                PlayActions(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), onPlay = { play(ready, 0) })
             }
         }
 
