@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import coil3.SingletonImageLoader
@@ -148,7 +149,7 @@ fun CoverTone.color(palette: Palette, colorway: Colorway, alpha: Float = 1f): Co
     return oklch(lightness, min(chroma * 1.5, ceiling) * strength, hue, alpha)
 }
 
-val LocalNowPlayingTone = staticCompositionLocalOf { Color.Unspecified }
+val LocalNowPlayingTone = compositionLocalOf { Color.Unspecified }
 
 private val tones by lazy { LruCache<String, Optional>(400) }
 
