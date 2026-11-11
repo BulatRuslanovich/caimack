@@ -50,7 +50,7 @@ fun DownloadsScreen(play: (List<Track>, Int) -> Unit) {
         item { PageTitle(stringResource(R.string.downloads_title)) }
         if(library.isNotEmpty()) {
             item { Text(stringResource(R.string.sync_progress,synchronized.completed,synchronized.total),Modifier.padding(16.dp),style=Type.small) }
-            item { PlayActions(Modifier.padding(horizontal=16.dp,vertical=8.dp),onPlay={play(library,0)},onShuffle={play(library.shuffled(),0)}) }
+            item { PlayActions(Modifier.padding(horizontal=16.dp,vertical=8.dp),onPlay={play(library,0)}) }
             itemsIndexed(library,key={_,track -> "sync-${track.id}"}) { index,track -> TrackRow(track,{play(library,index)}) }
         }
 
@@ -79,7 +79,7 @@ fun DownloadsScreen(play: (List<Track>, Int) -> Unit) {
 
         if (ready.isNotEmpty()) {
             item {
-                PlayActions(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), onPlay = { play(ready, 0) }, onShuffle = { play(ready.shuffled(), 0) })
+                PlayActions(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), onPlay = { play(ready, 0) })
             }
         }
 
