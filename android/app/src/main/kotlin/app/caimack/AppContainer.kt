@@ -149,7 +149,7 @@ class AppContainer(context: Context) {
 
     val favorites = Favorites(api, scope, signals)
 
-    val downloads by lazy { Downloads(context.applicationContext, http, server, json) }
+    val downloads by lazy { Downloads(context.applicationContext, http, server, json) { !syncStore.active } }
 
     val player = PlayerConnection(context.applicationContext, media, tracks, radio, signals)
     val connect by lazy { ConnectPlayback(context.applicationContext, this) }

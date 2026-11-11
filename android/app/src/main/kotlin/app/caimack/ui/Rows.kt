@@ -133,7 +133,12 @@ fun TrackRow(
 ) {
     val palette = LocalPalette.current
     val density = LocalLibraryDensity.current
-    val playback = LocalContainer.current.player.state.collectAsState().value
+    val container = LocalContainer.current
+    val playback = container.player.state.collectAsState().value
+    val downloads by container.downloads.state.collectAsState()
+    val synchronization by container.syncStore.status.collectAsState()
+    val librarySync = synchronization.enabled && container.syncStore.active
+    val showDownloadBadge = !librarySync && downloads[track.id]?.done == true
     val current = playback.current?.id == track.id
     val playing = current && playback.playing
     var actions by remember { mutableStateOf(false) }
@@ -189,8 +194,8 @@ fun TrackRow(
             )
             Text(artistsOf(track), style = Type.small, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        if (LocalContainer.current.downloads.state.collectAsState().value[track.id]?.done == true) {
-            Icon(Lucide.CircleCheck, null, tint = palette.faint, modifier = Modifier.size(14.dp))
+        if (showDownloadBadge) {
+            Icon(Lucide.CircleArrowDown, stringResource(R.string.downloads_available), tint = palette.primary, modifier = Modifier.size(14.dp))
         }
         Text(durationOf(track.durationSeconds), style = Type.tiny, color = palette.faint)
         Icon(

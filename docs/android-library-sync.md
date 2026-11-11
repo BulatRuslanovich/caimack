@@ -44,6 +44,13 @@ searching, lyrics and playback work without a server after restarting the app.
 Vectors are exported as data; the Android client does not run MERT or recommendation
 algorithms.
 
+While synchronization is active for the signed-in account, manual download
+buttons and per-track download badges are hidden, and new manual/background
+download requests are ignored. Transfer progress remains available in sync
+settings. Outside library synchronization, completed individual downloads have
+an offline badge. Downloads lists each track once when it exists in both stores;
+existing individual downloads are kept intact.
+
 Only new/replaced audio is downloaded. The server identifies encoded audio
 separately from its ID3/FLAC metadata, including external tag edits. Metadata
 envelopes let the phone rebuild updated tags from its existing audio bytes. Both
