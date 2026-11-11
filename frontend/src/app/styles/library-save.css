@@ -1,0 +1,43 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+.library-save-icon {
+  overflow: visible;
+}
+
+.library-save-ring {
+  fill-opacity: 0;
+  transition: fill-opacity 320ms ease;
+}
+
+.library-save-plus {
+  transform-origin: center;
+  transition:
+    transform 320ms ease,
+    opacity 180ms ease;
+}
+
+.library-save-check {
+  stroke: var(--primary-foreground);
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  opacity: 0;
+  transition:
+    stroke-dashoffset 260ms ease,
+    opacity 180ms ease;
+}
+
+.library-save-icon[data-saved="true"] {
+  .library-save-ring {
+    fill-opacity: 1;
+  }
+
+  .library-save-plus {
+    opacity: 0;
+    transform: rotate(90deg) scale(0.5);
+  }
+
+  .library-save-check {
+    opacity: 1;
+    stroke-dashoffset: 0;
+    transition-delay: 90ms;
+  }
+}
