@@ -79,7 +79,7 @@ Track-seeded radio and the library map are not part of this offline feature.
 Existing online device selection and playback transfer remain unchanged;
 joining Wi-Fi does not initiate a transfer.
 
-Listening, skips, likes, dislikes/taste rules and ordinary playlist edits are
+Listening, skips, likes, dislikes/taste rules, personal library saves/removals and ordinary playlist edits are
 saved durably before they are acknowledged locally. On return, the phone uploads
 them to the authenticated server/account. The server commits each effect and its
 receipt in the same transaction. Retrying after a lost response therefore cannot
@@ -94,6 +94,27 @@ An edit to a playlist deleted on the server is rejected, retained in the local
 rejection journal, and shown in sync settings. Other valid actions still proceed.
 Confirmed actions remain visible locally until a subsequent server snapshot
 includes them, including across a crash between acknowledgement and refresh.
+
+The personal Library contains saved albums, artists and playlists. Its membership
+is included in `savedLibrary` in each snapshot. Album/artist saves are independent
+of track favourites and do not automatically download audio. Offline `library`
+actions carry the entity ID and `{kind: "album" | "artist" | "playlist", value: boolean}`;
+they use the same durable journal and receipts as playlist edits. New playlists
+are saved automatically. Removing a saved playlist only removes its shortcut,
+not the playlist or its tracks.
+
+Personal library folders can contain saved albums, artists, playlists and nested
+folders. `libraryFolders` in the snapshot stores `{id,name,parentId,createdAt}`;
+each saved item has a nullable `folderId`. Creating, renaming, moving and deleting
+folders works offline through `libraryOrganize` actions. Their payload matches
+`POST /api/me/library/organize`: `operation` is `create`, `rename`, `moveFolder`,
+`delete` or `moveItem`, with `id`, and the relevant `name`, nullable `folderId`,
+and item `kind`. Clients generate folder UUIDs so subsequent offline actions can
+refer to them before uploading. The server serializes changes per account and
+rejects cross-account destinations and cycles. Deleting a folder moves its direct
+contents to its parent; it never deletes saved music or playlists. Rejected
+changes use the existing rejection journal. `GET /api/me/library/folders` lists
+the signed-in account's folders.
 
 ## Protocol and verification
 

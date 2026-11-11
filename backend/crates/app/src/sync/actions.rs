@@ -117,6 +117,10 @@ async fn track_exists(db: &mut PgConnection, id: Uuid) -> AppResult<bool> {
 async fn apply(db: &mut PgConnection, user: Uuid, action: &Action) -> AppResult<()> {
     let p = &action.payload;
     match action.kind.as_str() {
+        "libraryOrganize" => {
+            let change = serde_json::from_value(p.clone()).map_err(|_| invalid())?;
+            crate::library::folders::apply(db, user, &change, time(action)).await?;
+        }
         "signal" => {
             let event: PlaybackEventRequest = serde_json::from_value(p.clone()).map_err(|_| invalid())?;
             let kind = event.kind.as_deref().and_then(EventType::parse).ok_or_else(invalid)?;
@@ -164,6 +168,14 @@ async fn apply(db: &mut PgConnection, user: Uuid, action: &Action) -> AppResult<
                 .bind(seconds(&p["playbackPosition"]))
                 .execute(&mut *db)
                 .await?;
+            }
+        }
+        "library" => {
+            let kind = serde_json::from_value(p["kind"].clone()).map_err(|_| invalid())?;
+            if p["value"].as_bool().ok_or_else(invalid)? {
+                crate::library::collection::save(db, user, kind, id(action)?, time(action)).await?;
+            } else {
+                crate::library::collection::remove(db, user, kind, id(action)?).await?;
             }
         }
         "favorite" => {

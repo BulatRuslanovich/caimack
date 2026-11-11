@@ -45,3 +45,22 @@ Use a disposable local PostgreSQL server and a role allowed to create databases.
 
 Migration 0005 keeps provider lookup progress across tag-only exports while
 restarting lookup after a real audio replacement or a title/artist edit.
+
+Migration 0008 adds account-scoped saved albums, artists and playlists with
+foreign-key cleanup. It backfills existing owned playlists; an insert trigger
+also saves playlists created by imports and offline synchronization. Saving an
+album or artist does not change track favourites. Run the updated backend's
+`caimack migrate` before starting it. Verify with
+`SQLX_OFFLINE=true cargo test -p app --features integration-tests --test saved_library`.
+
+Authenticated collection routes: `GET /api/me/library` and
+`PUT` / `DELETE /api/me/library/{kind}/{id}`, where kind is `album`, `artist` or
+`playlist`. Writes are idempotent; saving again preserves the original save time.
+Private playlists are visible and saveable only by their owner. Unsave never
+deletes catalog content. The returned list is sorted by save time, newest first.
+
+Migration 0009 adds `library_folders` and nullable `library_items.folder_id`.
+Composite foreign keys restrict destinations to the same user. The folder API
+serializes tree edits per account to prevent cycles, including concurrent moves.
+Deleting a folder lifts its contents to its parent without unsaving or deleting
+music. Verify with `cargo test -p app --features integration-tests --test library_folders`.

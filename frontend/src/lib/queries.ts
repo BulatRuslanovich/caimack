@@ -28,6 +28,20 @@ function keepPreviousOf<TData>(id: string | null): PlaceholderDataFunction<TData
 export const SEARCH_MIN_LENGTH = 3;
 
 export const queries = {
+  libraryFolders: () =>
+    queryOptions({
+      queryKey: ["libraryFolders"],
+      queryFn: () => api.libraryFolders(),
+      staleTime: 15_000,
+      refetchOnWindowFocus: true,
+    }),
+  savedLibrary: () =>
+    queryOptions({
+      queryKey: ["savedLibrary"],
+      queryFn: () => api.savedLibrary(),
+      staleTime: 15_000,
+      refetchOnWindowFocus: true,
+    }),
   config: () =>
     queryOptions({ queryKey: ["config"], queryFn: () => api.config(), staleTime: Infinity }),
 
@@ -258,6 +272,8 @@ export const navigationPrefetch: Record<string, (client: QueryClient) => Promise
 
 export const invalidates = {
   library: [
+    ["libraryFolders"],
+    ["savedLibrary"],
     ["tracks"],
     ["albums"],
     ["album"],
@@ -271,7 +287,7 @@ export const invalidates = {
     ["libraryMap"],
     ["duplicates"],
   ],
-  playlists: [["playlists"], ["playlist"], ["homeFeed"]],
+  playlists: [["savedLibrary"], ["playlists"], ["playlist"], ["homeFeed"]],
   favorites: [["favorites"], ["tracks"], ["homeFeed"], ["homeMix"], ["libraryOverview"]],
   history: [["history"], ["homeFeed"], ["homeMix"]],
   recommendations: [["tasteRules"], ["homeFeed"], ["homeMix"]],

@@ -78,6 +78,12 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
         val parts = path.split('/')
         fun action(kind: String, id: String? = null, payload: JsonObject = body) =
             SyncAction(kind = kind, entityId = id, payload = payload)
+        if (path == "me/library/organize" && method == "POST") {
+            val mutation = action("libraryOrganize")
+            try { organizeLibrary(view(snapshot, store.edits()), body, mutation.occurredAt) }
+            catch (error: IllegalArgumentException) { throw IOException(error.message, error) }
+            return mutation
+        }
         if (
             parts.size == 3 &&
                 parts[0] == "tracks" &&
@@ -85,6 +91,13 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
                 method in listOf("POST", "DELETE")
         )
             return action("favorite", parts[1], buildJsonObject { put("value", method == "POST") })
+        if (parts.size == 4 && parts.take(2) == listOf("me", "library") && method in listOf("PUT", "DELETE")) {
+            if (parts[2] !in listOf("album", "artist", "playlist")) throw IOException("Unknown library item")
+            val data = view(snapshot, store.edits())
+            if (method == "PUT" && data.objects(parts[2] + "s").none { it.string("id") == parts[3] })
+                throw IOException("Library item is unavailable offline")
+            return action("library", parts[3], buildJsonObject { put("kind", parts[2]); put("value", method == "PUT") })
+        }
         if (path == "history" && method == "POST") return action("history")
         if (path == "recommendations/rules" && method == "POST") return action("tasteRule")
         if (parts.first() != "playlists") return null
@@ -143,12 +156,34 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
         fun view(snapshot: JsonObject, actions: List<SyncAction>): JsonObject {
             var tracks = snapshot.objects("tracks")
             var playlists = snapshot.objects("playlists")
+            var savedLibrary = snapshot.objects("savedLibrary")
+            var libraryFolders = snapshot.objects("libraryFolders")
+            fun save(kind: String, id: String?, at: String) {
+                if (savedLibrary.none { it.string("kind") == kind && it.string("id") == id }) {
+                    savedLibrary = savedLibrary + buildJsonObject { put("kind", kind); put("id", id); put("savedAt", at) }
+                }
+            }
             val membership = (snapshot["playlistTracks"] as? JsonObject).orEmpty().toMutableMap()
             var recent = (snapshot["recent"] as? JsonArray).orEmpty()
             for (action in actions) {
                 val p = action.payload
                 val id = action.entityId
                 when (action.kind) {
+                    "libraryOrganize" -> {
+                        val current = buildJsonObject {
+                            put("savedLibrary", JsonArray(savedLibrary)); put("libraryFolders", JsonArray(libraryFolders))
+                        }
+                        // A concurrently removed destination must not break offline browsing.
+                        val next = try { organizeLibrary(current, p, action.occurredAt) }
+                            catch (_: IllegalArgumentException) { current }
+                        savedLibrary = next.objects("savedLibrary")
+                        libraryFolders = next.objects("libraryFolders")
+                    }
+                    "library" -> {
+                        val kind = p.string("kind")
+                        if (p["value"]?.jsonPrimitive?.booleanOrNull == true) save(kind, id, action.occurredAt)
+                        else savedLibrary = savedLibrary.filterNot { it.string("kind") == kind && it.string("id") == id }
+                    }
                     "favorite" -> tracks = tracks.map {
                             if (it.string("id") == id) it.with("isFavorite" to p.getValue("value"))
                             else it
@@ -156,7 +191,8 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
                     "history" ->
                         recent =
                             listOf(p.getValue("trackId")) + recent.filter { it != p["trackId"] }
-                    "playlistCreate" ->
+                    "playlistCreate" -> {
+                        save("playlist", id, action.occurredAt)
                         playlists =
                             playlists.filter { it.string("id") != id } +
                                 p.with(
@@ -168,6 +204,7 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
                                     "trackCount" to JsonPrimitive(0),
                                     "durationSeconds" to JsonPrimitive(0),
                                 )
+                    }
                     "playlistUpdate" -> playlists = playlists.map {
                             if (it.string("id") == id) JsonObject(it + p) else it
                         }
@@ -204,7 +241,20 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
                         ),
                 )
             }
+            savedLibrary = savedLibrary.mapNotNull { saved ->
+                val kind = saved.string("kind")
+                val source = (if (kind == "playlist") playlists else snapshot.objects(kind + "s"))
+                    .find { it.string("id") == saved.string("id") } ?: return@mapNotNull null
+                saved.with(
+                    "title" to (source[if (kind == "album") "title" else "name"] ?: JsonPrimitive("")),
+                    "subtitle" to (source[when (kind) { "album" -> "artistName"; "playlist" -> "ownerName"; else -> "" }] ?: JsonPrimitive("")),
+                    "hasImage" to (source[if (kind == "artist") "hasImage" else "hasCover"] ?: JsonPrimitive(false)),
+                    "coverTrackId" to (source["coverTrackId"] ?: JsonNull),
+                )
+            }
             return snapshot.with(
+                "savedLibrary" to JsonArray(savedLibrary),
+                "libraryFolders" to JsonArray(libraryFolders),
                 "tracks" to JsonArray(tracks),
                 "playlists" to JsonArray(playlists),
                 "playlistTracks" to JsonObject(membership),
@@ -268,6 +318,8 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
                 if (value == null) Result(code = 404) else Result(value)
             val playlists = data.objects("playlists")
             return when {
+                path == "me/library" -> result(data["savedLibrary"] ?: JsonArray(emptyList()))
+                path == "me/library/folders" -> result(data["libraryFolders"] ?: JsonArray(emptyList()))
                 path == "auth/me" -> result(data["user"])
                 path == "config" ->
                     Result(

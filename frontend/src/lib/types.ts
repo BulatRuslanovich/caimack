@@ -517,3 +517,28 @@ export interface YandexImport {
   failures: { title: string; reason: string }[];
   createdAt: string;
 }
+
+export type LibraryKind = "album" | "artist" | "playlist";
+export interface LibraryItem {
+  kind: LibraryKind;
+  id: string;
+  title: string;
+  subtitle: string;
+  hasImage: boolean;
+  coverTrackId: string | null;
+  savedAt: string;
+  folderId: string | null;
+}
+
+export interface LibraryFolder {
+  id: string;
+  name: string;
+  parentId: string | null;
+  createdAt: string;
+}
+export type LibraryChange =
+  | { operation: "create"; id: string; name: string; folderId: string | null }
+  | { operation: "rename"; id: string; name: string }
+  | { operation: "moveFolder"; id: string; folderId: string | null }
+  | { operation: "delete"; id: string }
+  | { operation: "moveItem"; id: string; kind: LibraryKind; folderId: string | null };

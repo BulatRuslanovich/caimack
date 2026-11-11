@@ -16,6 +16,21 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface CaimackApi {
+    @GET("api/me/library")
+    suspend fun savedLibrary(): List<LibraryItem>
+
+    @GET("api/me/library/folders")
+    suspend fun libraryFolders(): List<LibraryFolder>
+
+    @POST("api/me/library/organize")
+    suspend fun organizeLibrary(@Body change: LibraryChange)
+
+    @PUT("api/me/library/{kind}/{id}")
+    suspend fun saveLibraryItem(@Path("kind") kind: String, @Path("id") id: String)
+
+    @DELETE("api/me/library/{kind}/{id}")
+    suspend fun removeLibraryItem(@Path("kind") kind: String, @Path("id") id: String)
+
     @POST("api/playback/connect/heartbeat")
     suspend fun connectHeartbeat(@Body heartbeat: ConnectHeartbeat)
 

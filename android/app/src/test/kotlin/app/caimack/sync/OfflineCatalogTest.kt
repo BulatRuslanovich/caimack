@@ -47,6 +47,63 @@ class OfflineCatalogTest {
             .jsonObject
 
     @Test
+    fun foldersReplayMovesAndDeletionWithoutRemovingSavedMusic() {
+        fun organize(payload: String) = action("libraryOrganize", null, payload)
+        val actions = listOf(
+            action("library", "album", """{"kind":"album","value":true}"""),
+            organize("""{"operation":"create","id":"parent","name":" Music "}"""),
+            organize("""{"operation":"create","id":"child","name":"Albums","folderId":"parent"}"""),
+            organize("""{"operation":"create","id":"leaf","name":"Nested","folderId":"child"}"""),
+            organize("""{"operation":"moveItem","kind":"album","id":"album","folderId":"child"}"""),
+            organize("""{"operation":"rename","id":"parent","name":"Collection"}"""),
+        )
+        val nested = OfflineCatalog.view(snapshot, actions)
+        assertEquals("child", nested.objects("savedLibrary").single().string("folderId"))
+        assertEquals("Collection", nested.objects("libraryFolders").first().string("name"))
+        val deleted = OfflineCatalog.view(snapshot, actions + organize("""{"operation":"delete","id":"child"}"""))
+        assertEquals("parent", deleted.objects("savedLibrary").single().string("folderId"))
+        assertEquals("parent", deleted.objects("libraryFolders").first { it.string("id") == "leaf" }.string("parentId"))
+        val root = OfflineCatalog.view(snapshot, actions + listOf(organize("""{"operation":"delete","id":"child"}"""), organize("""{"operation":"delete","id":"parent"}""")))
+        assertEquals(JsonNull, root.objects("savedLibrary").single()["folderId"])
+        assertEquals(1, root.objects("albums").size)
+    }
+
+    @Test
+    fun invalidFolderMovesAreRejectedAndStaleDestinationsDoNotBreakReplay() {
+        val tree = Json.parseToJsonElement("""{"libraryFolders":[{"id":"parent","name":"A"},{"id":"child","name":"B","parentId":"parent"}],"savedLibrary":[]}""").jsonObject
+        val cycle = Json.parseToJsonElement("""{"operation":"moveFolder","id":"parent","folderId":"child"}""").jsonObject
+        assertThrows(IllegalArgumentException::class.java) { organizeLibrary(tree, cycle, "now") }
+        val absent = action("libraryOrganize", null, """{"operation":"moveFolder","id":"missing","folderId":"child"}""")
+        assertEquals(tree.objects("libraryFolders"), OfflineCatalog.view(tree, listOf(absent)).objects("libraryFolders"))
+    }
+
+    @Test
+    fun librarySavesReplayIndependentlyOfFavoritesAndUseUpdatedMetadata() {
+        val save = action("library", "album", """{"kind":"album","value":true}""")
+        val view = OfflineCatalog.view(snapshot, listOf(save, save))
+        assertEquals(1, view.objects("savedLibrary").size)
+        assertEquals("Album", view.objects("savedLibrary").single().string("title"))
+        assertTrue(view.objects("tracks").none { it["isFavorite"]?.jsonPrimitive?.boolean == true })
+        val renamed = JsonObject(snapshot + ("albums" to Json.parseToJsonElement("""[{"id":"album","title":"Renamed"}]""")))
+        assertEquals("Renamed", OfflineCatalog.view(renamed, listOf(save)).objects("savedLibrary").single().string("title"))
+        val remove = action("library", "album", """{"kind":"album","value":false}""")
+        assertTrue(OfflineCatalog.view(snapshot, listOf(save, remove)).objects("savedLibrary").isEmpty())
+    }
+
+    @Test
+    fun newPlaylistsEnterLibraryAndRemovalDoesNotDeletePlaylist() {
+        val create = action("playlistCreate", "new", """{"name":"New mix"}""")
+        val created = OfflineCatalog.view(snapshot, listOf(create))
+        assertEquals("new", created.objects("savedLibrary").single().string("id"))
+        val remove = action("library", "new", """{"kind":"playlist","value":false}""")
+        val removed = OfflineCatalog.view(snapshot, listOf(create, remove))
+        assertTrue(removed.objects("savedLibrary").isEmpty())
+        assertTrue(removed.objects("playlists").any { it.string("id") == "new" })
+        val deleted = OfflineCatalog.view(snapshot, listOf(create, action("playlistDelete", "new", "{}")))
+        assertTrue(deleted.objects("savedLibrary").isEmpty())
+    }
+
+    @Test
     fun pendingActionsSurviveSnapshotReplacementAndPreserveUneditedFields() {
         val edits =
             listOf(
