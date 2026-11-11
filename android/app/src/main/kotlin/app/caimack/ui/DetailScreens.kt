@@ -53,7 +53,7 @@ fun AlbumScreen(id: String, nav: NavController, play: (List<Track>, Int) -> Unit
                     backdrop = container.media.cover(album.id, null, album.hasCover, small = true),
                 ) { Cover(container.media.cover(album.id, null, album.hasCover, small = false), album.title, it) }
             }
-            item { Actions(album.tracks, play) }
+            item { Actions(album.tracks, play, libraryAction = { LibrarySaveButton("album", id) }) }
             itemsIndexed(album.tracks) { index, track -> TrackRow(track, { play(album.tracks, index) }, index = index + 1) }
             item {
                 Load("artist:${album.artistId}", { container.api.artist(album.artistId) }) { artist ->
@@ -85,9 +85,9 @@ fun ArtistScreen(id: String, nav: NavController, play: (List<Track>, Int) -> Uni
                 ) { Cover(container.media.artistImage(artist.id, artist.hasImage, small = false), artist.name, it, round = true) }
             }
             item {
-                Load("artist-top:$id", { container.api.artistTopTracks(id) }, isEmpty = { it.isEmpty() }) { top ->
+                Load("artist-top:$id", { container.api.artistTopTracks(id) }) { top ->
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Actions(top, play)
+                        Actions(top, play, libraryAction = { LibrarySaveButton("artist", id) })
                         SectionHeader(stringResource(R.string.artists_top_tracks))
                         top.take(5).forEachIndexed { index, track -> TrackRow(track, { play(top, index) }, index = index + 1) }
                     }
@@ -142,9 +142,12 @@ fun MixScreen(kind: String, play: (List<Track>, Int) -> Unit) {
 
 @OptIn(UnstableApi::class)
 @Composable
-internal fun Actions(tracks: List<Track>, play: (List<Track>, Int) -> Unit, onMore: (() -> Unit)? = null) {
+internal fun Actions(tracks: List<Track>, play: (List<Track>, Int) -> Unit, onMore: (() -> Unit)? = null, libraryAction: (@Composable () -> Unit)? = null) {
     if (tracks.isEmpty()) {
-        if (onMore != null) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.End) { MoreButton(onMore) }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            libraryAction?.invoke()
+            onMore?.let { MoreButton(it) }
+        }
         return
     }
     val palette = LocalPalette.current
@@ -159,6 +162,7 @@ internal fun Actions(tracks: List<Track>, play: (List<Track>, Int) -> Unit, onMo
 
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         PlayActions(Modifier.weight(1f), onPlay = { play(tracks, 0) })
+        libraryAction?.invoke()
         if (!librarySync) Box(
             Modifier.size(48.dp).clip(CircleShape).clickable {
                 if (pending || complete) container.downloads.remove(mine.map { it.download.request.id })

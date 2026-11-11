@@ -235,7 +235,7 @@ private fun PlaylistContent(loaded: PlaylistDetail, play: (List<Track>, Int) -> 
                 backdrop = cover(true),
             ) { Cover(cover(false), playlist.name, it) }
         }
-        item { Actions(playlist.tracks, play, onMore = if (owner) ({ editing = Editing.Manage }) else null) }
+        item { Actions(playlist.tracks, play, onMore = if (owner) ({ editing = Editing.Manage }) else null, libraryAction = { LibrarySaveButton("playlist", playlist.id) }) }
         if (playlist.tracks.isEmpty()) {
             item { Empty(stringResource(R.string.playlists_empty_playlist_title)) }
         } else {

@@ -4,6 +4,21 @@
 import type { Phrase, PluralPhrase } from "./types";
 
 export const en = {
+  "collection.all": "All",
+  "collection.add": "Save to library",
+  "collection.remove": "Remove from library",
+  "collection.saved": "In your library",
+  "collection.search": "Search your library",
+  "collection.recent": "Recently added",
+  "collection.name": "By name",
+  "collection.sort": "Sort library",
+  "collection.grid": "Grid view",
+  "collection.list": "List view",
+  "collection.empty": "Nothing here yet",
+  "collection.hint": "Save albums, artists and playlists using the + button.",
+  "collection.noResults": "No matches in your library",
+  "collection.catalog": "Browse catalog",
+  "collection.failed": "Could not update your library. Try again.",
   "connect.title": "Playback devices",
   "connect.description": "Choose where the music plays. Use this player to control it.",
   "connect.thisDevice": "This device",
@@ -997,6 +1012,19 @@ export const en = {
   "settings.help.visualizer": "Show an animation that responds to music.",
   "settings.help.leanBack": "Open the listening screen automatically when idle.",
   "settings.help.yandexMusic": "Enable music search and import from Yandex Music.",
+  "folders.new": "New folder",
+  "folders.name": "Folder name",
+  "folders.rename": "Rename folder",
+  "folders.move": "Move to folder",
+  "folders.destination": "Destination",
+  "folders.moveHere": "Move here",
+  "folders.delete": "Delete folder",
+  "folders.deleteHint":
+    "Contents will move up one level. Your saved music will stay in your library.",
+  "folders.failed": "Could not update the folder. Please try again.",
+  "folders.path": "Folder path",
+  "folders.items": "Items: {count}",
+  "folders.emptyHint": "Create a subfolder or move saved music here using the Move to folder menu.",
 } satisfies Record<string, Phrase>;
 
 export type TranslationKey = keyof typeof en;

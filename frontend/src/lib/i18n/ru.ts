@@ -4,6 +4,21 @@
 import type { Dictionary } from "./en";
 
 export const ru: Dictionary = {
+  "collection.all": "Всё",
+  "collection.add": "Добавить в медиатеку",
+  "collection.remove": "Убрать из медиатеки",
+  "collection.saved": "В медиатеке",
+  "collection.search": "Поиск в медиатеке",
+  "collection.recent": "Недавно добавленные",
+  "collection.name": "По названию",
+  "collection.sort": "Сортировка медиатеки",
+  "collection.grid": "Сетка",
+  "collection.list": "Список",
+  "collection.empty": "Здесь пока пусто",
+  "collection.hint": "Сохраняйте альбомы, исполнителей и плейлисты кнопкой +.",
+  "collection.noResults": "В медиатеке ничего не найдено",
+  "collection.catalog": "Весь каталог",
+  "collection.failed": "Не удалось изменить медиатеку. Попробуйте ещё раз.",
   "connect.title": "Устройства воспроизведения",
   "connect.description": "Выберите, где звучит музыка. Управляйте ей в этом плеере.",
   "connect.thisDevice": "Это устройство",
@@ -1053,4 +1068,18 @@ export const ru: Dictionary = {
     "Настройте звучание с помощью десяти частотных полос или выберите готовый пресет.",
   "settings.equalizerControls":
     "Перетаскивайте точки или используйте стрелки; двойной щелчок сбрасывает полосу.",
+  "folders.new": "Новая папка",
+  "folders.name": "Название папки",
+  "folders.rename": "Переименовать папку",
+  "folders.move": "Переместить в папку",
+  "folders.destination": "Куда переместить",
+  "folders.moveHere": "Переместить сюда",
+  "folders.delete": "Удалить папку",
+  "folders.deleteHint":
+    "Содержимое папки переместится на уровень выше. Сохранённая музыка останется в медиатеке.",
+  "folders.failed": "Не удалось изменить папку. Попробуйте ещё раз.",
+  "folders.path": "Путь к папке",
+  "folders.items": "Элементов: {count}",
+  "folders.emptyHint":
+    "Добавляйте вложенные папки или переносите сюда музыку через меню «Переместить в папку».",
 };
