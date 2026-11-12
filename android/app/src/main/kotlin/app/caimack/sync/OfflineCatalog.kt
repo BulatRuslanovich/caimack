@@ -423,7 +423,7 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
                                     "albums" to
                                         JsonArray(
                                             data.objects("albums").filter {
-                                                it.string("artistId") == id
+                                                it.string("id") in artistTracks.map { track -> track.string("albumId") }.toSet()
                                             }
                                         ),
                                 )
