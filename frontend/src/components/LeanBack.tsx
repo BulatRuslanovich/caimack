@@ -23,6 +23,7 @@ const WAKE_DISTANCE_PX = 12;
 
 export function LeanBack() {
   const { currentTrack, isPlaying } = usePlayerState();
+  const artworkDirection = useArtworkDirection();
   const { open, auto } = useLeanBack();
 
   const idle = useIdle(LEAN_BACK_IDLE_MS, auto && isPlaying && !open && currentTrack !== null);
@@ -33,12 +34,15 @@ export function LeanBack() {
 
   if (!open || !currentTrack) return null;
 
-  return <LeanBackScreen track={currentTrack} />;
+  return (
+    <ArtworkScene track={currentTrack} direction={artworkDirection}>
+      <LeanBackScreen track={currentTrack} />
+    </ArtworkScene>
+  );
 }
 
 function LeanBackScreen({ track }: { track: Track }) {
   const { isPlaying, buffering } = usePlayerState();
-  const artworkDirection = useArtworkDirection();
   const { locale } = useI18n();
   const clock = useClock(locale);
 
@@ -87,36 +91,34 @@ function LeanBackScreen({ track }: { track: Track }) {
   }, []);
 
   return (
-    <ArtworkScene track={track} direction={artworkDirection}>
-      <div className="lean-back" role="presentation">
-        <PlayerBackdrop />
-        <PlayerEffectsBackdrop playing={isPlaying && !buffering} />
+    <div className="lean-back" role="presentation">
+      <PlayerBackdrop />
+      <PlayerEffectsBackdrop playing={isPlaying && !buffering} />
 
-        <div className="lean-back-stage">
-          <div className="lean-back-clock">
-            <span className="font-display tabular-nums">{clock.time}</span>
-            <span className="text-muted-foreground">{clock.date}</span>
-          </div>
-
-          <RecordTransition
-            out
-            spinning={isPlaying && !buffering}
-            sizes="min(56vh, 40vw)"
-            className="lean-back-record"
-          />
-
-          <div className="lean-back-meta">
-            <h2 className={cn("font-display text-balance", "lean-back-title")}>{track.title}</h2>
-            <p className="text-xl text-muted-foreground">
-              {[formatArtists(track), track.albumTitle].filter(Boolean).join(" — ")}
-            </p>
-            {track.hasLyrics && <LyricLine trackId={track.id} />}
-          </div>
+      <div className="lean-back-stage">
+        <div className="lean-back-clock">
+          <span className="font-display tabular-nums">{clock.time}</span>
+          <span className="text-muted-foreground">{clock.date}</span>
         </div>
 
-        <LeanBackProgress fallback={track.durationSeconds} />
+        <RecordTransition
+          out
+          spinning={isPlaying && !buffering}
+          sizes="min(56vh, 40vw)"
+          className="lean-back-record"
+        />
+
+        <div className="lean-back-meta">
+          <h2 className={cn("font-display text-balance", "lean-back-title")}>{track.title}</h2>
+          <p className="text-xl text-muted-foreground">
+            {[formatArtists(track), track.albumTitle].filter(Boolean).join(" — ")}
+          </p>
+          {track.hasLyrics && <LyricLine trackId={track.id} />}
+        </div>
       </div>
-    </ArtworkScene>
+
+      <LeanBackProgress fallback={track.durationSeconds} />
+    </div>
   );
 }
 

@@ -8,17 +8,13 @@ import type { BackdropTone } from "@/lib/coverTone";
 import type { ArtworkDirection } from "@/lib/playback/useArtworkNavigation";
 import { useCoverTone } from "@/lib/useCoverTone";
 import { useArtworkTransition } from "@/lib/visuals/useArtworkTransition";
+import { backdropPalette } from "@/lib/visuals/backdropPalette";
 import { useArtworkScene } from "./ArtworkScene";
 
 function paletteStyle(tone: BackdropTone | null): CSSProperties {
-  const lightness = tone ? Math.max(0.27, Math.min(0.44, tone.lightness * 0.85)) : 0.44;
-  const chroma = tone
-    ? Math.min(tone.chroma * Math.max(0.6, Math.min(1, 1 - (tone.lightness - 0.4) * 1.5)), 0.1)
-    : 0;
+  const { lightness, chroma, hue } = backdropPalette(tone);
   return {
-    "--art-color": tone
-      ? `oklch(var(--art-lightness, ${lightness}) ${chroma} ${tone.hue})`
-      : "oklch(var(--art-lightness, 0.44) 0 0)",
+    "--art-color": `oklch(var(--art-lightness, ${lightness}) ${chroma} ${hue})`,
   } as CSSProperties;
 }
 

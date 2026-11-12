@@ -24,8 +24,10 @@ export function createCoverToneCache(
       .then(() => sample(url, kind))
       .catch((): CoverTones => (kind === "accent" ? { accent: null } : { backdrop: null }))
       .then((tone) => {
+        const profile =
+          kind === "accent" ? { accent: tone.accent ?? null } : { backdrop: tone.backdrop ?? null };
         if (tones.size >= limit && !tones.has(url)) tones.delete(tones.keys().next().value!);
-        tones.set(url, { ...tones.get(url), ...tone });
+        tones.set(url, { ...tones.get(url), ...profile });
         listeners.forEach((listener) => listener());
       })
       .finally(() => pending.delete(key));

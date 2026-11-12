@@ -15,6 +15,14 @@ const GREY_CHROMA = 0.02;
 const NEUTRAL_CHROMA = 0.025;
 const MAX_CHROMA = 0.3;
 
+const BACKDROP_SAMPLES = { maximumLightness: 0.94, minimumChroma: 0.008 };
+const MUTED_SAMPLES = { minimumLightness: 0.35, maximumLightness: 0.92, maximumChroma: 0.08 };
+const FAMILY_RADIUS_DEGREES = 30;
+const SWATCH_SHARE = { minimum: 0.1, maximum: 0.25, coverageOffset: 0.15 };
+const RGB_CONTRAST_GAMMA = 2.2;
+const MUTED_REFINEMENT = { threshold: 0.05, hueMix: 0.35, chromaMix: 0.65 };
+const SWATCH_LIGHTNESS_MIX = 0.9;
+
 function linear(channel: number): number {
   const c = channel / 255;
   return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
@@ -111,7 +119,11 @@ export function backdropTone(pixels: ArrayLike<number>): BackdropTone | null {
     const chroma = Math.hypot(a, b);
     const hue = ((Math.atan2(b, a) * 180) / Math.PI + 360) % 360;
     const index = Math.floor(hue / (360 / HUE_BINS));
-    if (lightness >= 0.12 && lightness <= 0.94 && chroma >= 0.008) {
+    if (
+      lightness >= MIN_LIGHTNESS &&
+      lightness <= BACKDROP_SAMPLES.maximumLightness &&
+      chroma >= BACKDROP_SAMPLES.minimumChroma
+    ) {
       samples.push({
         lightness,
         a,
@@ -126,7 +138,12 @@ export function backdropTone(pixels: ArrayLike<number>): BackdropTone | null {
 
     // Muted highlights still carry a useful colour on dark photographic covers.
     // Keep them separate from the coloured shadows that fill most of the image.
-    if (lightness >= 0.35 && lightness <= 0.92 && chroma >= 0.008 && chroma <= 0.08) {
+    if (
+      lightness >= MUTED_SAMPLES.minimumLightness &&
+      lightness <= MUTED_SAMPLES.maximumLightness &&
+      chroma >= BACKDROP_SAMPLES.minimumChroma &&
+      chroma <= MUTED_SAMPLES.maximumChroma
+    ) {
       const muted = mutedBins[index];
       muted.count++;
       muted.a += a;
@@ -179,9 +196,14 @@ export function backdropTone(pixels: ArrayLike<number>): BackdropTone | null {
   const baseChroma = chroma / count;
   const baseLightness = lightness / count;
   const family = samples
-    .filter((sample) => Math.abs(((sample.hue - baseHue + 540) % 360) - 180) <= 30)
+    .filter(
+      (sample) => Math.abs(((sample.hue - baseHue + 540) % 360) - 180) <= FAMILY_RADIUS_DEGREES,
+    )
     .sort((first, second) => second.chroma - first.chroma);
-  const share = Math.max(0.1, Math.min(0.25, family.length / opaque - 0.15));
+  const share = Math.max(
+    SWATCH_SHARE.minimum,
+    Math.min(SWATCH_SHARE.maximum, family.length / opaque - SWATCH_SHARE.coverageOffset),
+  );
   const swatch = family.slice(0, Math.max(1, Math.ceil(family.length * share)));
   if (!swatch.length) return null;
 
@@ -201,19 +223,31 @@ export function backdropTone(pixels: ArrayLike<number>): BackdropTone | null {
   // Pick a chromatic swatch inside the dominant family instead of averaging
   // its colour with white highlights. RGB contrast keeps the darker palette
   // from turning bright blues cyan and oranges muddy.
-  const contrast = (channel: number) => (channel / swatch.length / 255) ** 2.2 * 255;
+  const contrast = (channel: number) => (channel / swatch.length / 255) ** RGB_CONTRAST_GAMMA * 255;
   const [, contrastA, contrastB] = oklab(contrast(red), contrast(green), contrast(blue));
   const swatchHue = ((Math.atan2(contrastB, contrastA) * 180) / Math.PI + 360) % 360;
-  const muted = baseChroma < 0.05;
-  const hue = baseHue + (((swatchHue - baseHue + 540) % 360) - 180) * (muted ? 0.35 : 1);
+  const muted = baseChroma < MUTED_REFINEMENT.threshold;
+  const hue =
+    baseHue + (((swatchHue - baseHue + 540) % 360) - 180) * (muted ? MUTED_REFINEMENT.hueMix : 1);
   const swatchChroma = Math.hypot(a, b) / swatch.length;
 
   return {
     hue: Math.round(((hue + 360) % 360) * 10) / 10,
     chroma:
       Math.round(
-        Math.min(MAX_CHROMA, muted ? swatchChroma * 0.65 + baseChroma * 0.35 : swatchChroma) * 1000,
+        Math.min(
+          MAX_CHROMA,
+          muted
+            ? swatchChroma * MUTED_REFINEMENT.chromaMix +
+                baseChroma * (1 - MUTED_REFINEMENT.chromaMix)
+            : swatchChroma,
+        ) * 1000,
       ) / 1000,
-    lightness: Math.round(((lightness / swatch.length) * 0.9 + baseLightness * 0.1) * 1000) / 1000,
+    lightness:
+      Math.round(
+        ((lightness / swatch.length) * SWATCH_LIGHTNESS_MIX +
+          baseLightness * (1 - SWATCH_LIGHTNESS_MIX)) *
+          1000,
+      ) / 1000,
   };
 }
