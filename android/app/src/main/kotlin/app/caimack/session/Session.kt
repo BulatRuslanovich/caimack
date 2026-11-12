@@ -23,6 +23,8 @@ sealed interface SessionState {
 }
 
 sealed interface LoginFailure {
+    data object LocalHttpDisabled : LoginFailure
+    data object NonLocalHttp : LoginFailure
     data object BadAddress : LoginFailure
 
     data object Unreachable : LoginFailure
@@ -81,6 +83,8 @@ class Session(
         return try {
             publish(version, SessionState.SignedIn(api.login(LoginRequest(username.trim(), password, deviceName(), longLived = true))))
             null
+        } catch (denied: LocalHttpPolicy.Denied) {
+            if (denied.disabled) LoginFailure.LocalHttpDisabled else LoginFailure.NonLocalHttp
         } catch (_: IOException) {
             LoginFailure.Unreachable
         } catch (refused: HttpException) {

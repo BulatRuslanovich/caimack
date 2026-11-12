@@ -79,6 +79,10 @@ class AppContainer(context: Context) {
     val server = Server(preferences) { appearance.language.ifEmpty { Locale.getDefault().toLanguageTag() } }
 
     private val cookies = PersistentCookieJar(preferences, scope)
+    val connectionPreferences = app.caimack.session.ConnectionPreferences(context.applicationContext)
+    private val localHttp = app.caimack.session.LocalHttpPolicy(
+        { connectionPreferences.allowLocalHttp.value }, { server.url.value },
+    )
 
     private fun libraryIdentity(): String? = (session.state.value as? app.caimack.session.SessionState.SignedIn)
         ?.let { user -> server.url.value?.let { "$it|${user.user.id}" } }
@@ -94,9 +98,12 @@ class AppContainer(context: Context) {
     ) }
 
     val http: OkHttpClient = OkHttpClient.Builder()
+        .followSslRedirects(false)
         .cookieJar(cookies)
         .addInterceptor(server.interceptor)
         .addInterceptor { libraryCache.interceptor.intercept(it) }
+        .addInterceptor(localHttp.interceptor)
+        .addNetworkInterceptor(localHttp.networkInterceptor)
         .authenticator(SessionAuthenticator(server, { http }) { session.expire() })
         .build()
 
@@ -155,6 +162,18 @@ class AppContainer(context: Context) {
     private val connectionProbe = kotlinx.coroutines.sync.Mutex()
 
     fun refreshDownloadArtwork() { artworkRefresh.trySend(Unit) }
+
+    fun setAllowLocalHttp(value: Boolean) {
+        connectionPreferences.setAllowLocalHttp(value)
+        if (!value && server.url.value?.scheme == "http") {
+            http.dispatcher.cancelAll()
+            http.connectionPool.evictAll()
+            libraryCache.offline.value = true
+        } else if (value) {
+            refreshLibraryConnection()
+            refreshDownloadArtwork()
+        }
+    }
 
     fun refreshLibraryConnection() {
         scope.launch {

@@ -8,6 +8,7 @@ import app.caimack.R
 import java.util.Locale
 
 internal enum class SettingKey(val section: Int, vararg val terms: Int) {
+    LocalHttp(R.string.nav_account, R.string.settings_connection, R.string.settings_local_http, R.string.settings_local_http_hint),
     Quality(R.string.settings_playback, R.string.settings_quality, R.string.settings_help_quality, R.string.settings_quality_low, R.string.settings_quality_normal, R.string.settings_quality_original),
     Transitions(R.string.settings_playback, R.string.settings_smart_transitions, R.string.settings_help_smartTransitions),
     Loudness(R.string.settings_playback, R.string.settings_normalize_volume, R.string.settings_help_normalizeVolume),

@@ -91,6 +91,8 @@ background playback, offline downloads and Android Auto.
 Android retains artwork and previously browsed metadata for individual downloads.
 See [individual Android downloads](docs/android-downloads.md) for offline browsing
 and session behavior.
+HTTPS is the default; an optional [local HTTP setting](docs/android-local-http.md)
+is off by default and restricted to the selected local server.
 
 The normal player can also control another signed-in web or Android device.
 Choose an output from the player's device button; playback controls, the queue

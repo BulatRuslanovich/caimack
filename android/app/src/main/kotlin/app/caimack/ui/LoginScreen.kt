@@ -124,7 +124,11 @@ fun LoginScreen(session: Session, lastAddress: String, expired: Boolean) {
                 hidden = true,
             )
 
+            LocalHttpSetting()
+
             val message = when (val shown = failure) {
+                LoginFailure.LocalHttpDisabled -> stringResource(R.string.auth_local_http_disabled)
+                LoginFailure.NonLocalHttp -> stringResource(R.string.auth_non_local_http)
                 LoginFailure.BadAddress -> stringResource(R.string.auth_bad_address)
                 LoginFailure.Unreachable -> stringResource(R.string.auth_unreachable)
                 is LoginFailure.Refused -> shown.reason ?: stringResource(R.string.auth_failed)
