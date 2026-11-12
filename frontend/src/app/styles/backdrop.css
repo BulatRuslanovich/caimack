@@ -1,11 +1,27 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 /* Copyright (c) 2026 Bulat Ruslanovich */
 
+.art-backdrop,
+.record-transition,
+.player-effects-transition {
+  --art-direction: 1;
+  --art-duration: 900ms;
+  --art-ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 .art-backdrop {
+  --art-slide-distance: 100%;
+  --art-color: oklch(var(--art-lightness, 0.44) 0 0);
   position: absolute;
   inset: 0;
   overflow: hidden;
   pointer-events: none;
+}
+
+.art-backdrop[data-direction="previous"],
+.record-transition[data-direction="previous"],
+.player-effects-transition[data-direction="previous"] {
+  --art-direction: -1;
 }
 
 .art-backdrop[data-mode="header"] {
@@ -15,43 +31,86 @@
   mask-image: linear-gradient(to bottom, #000 45%, transparent);
 }
 
-.art-backdrop-art {
+.art-backdrop-palette {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  scale: 1.2;
-  filter: blur(48px) saturate(1.5) brightness(0.9);
-  opacity: 0;
-  transition: opacity 600ms var(--ease);
-}
-
-.art-backdrop-art[data-shown="true"] {
-  opacity: 1;
-}
-
-.art-backdrop-scrim {
-  position: absolute;
-  inset: 0;
-}
-
-.art-backdrop[data-mode="stage"] .art-backdrop-scrim {
   background: linear-gradient(
-    to bottom,
-    color-mix(in oklab, var(--background) 58%, transparent),
-    color-mix(in oklab, var(--background) 72%, transparent) 60%,
-    color-mix(in oklab, var(--background) 90%, transparent)
+    180deg,
+    var(--art-color),
+    color-mix(in oklab, var(--art-color) 88%, var(--background)) 72%,
+    color-mix(in oklab, var(--art-color) 72%, var(--background))
   );
 }
 
-.art-backdrop[data-mode="header"] .art-backdrop-scrim {
+.art-backdrop[data-mode="header"] .art-backdrop-palette {
   background: linear-gradient(
-    160deg,
-    color-mix(in oklab, var(--background) 20%, transparent),
-    color-mix(in oklab, var(--background) 58%, transparent) 50%,
-    var(--background) 92%
+    180deg,
+    color-mix(in oklab, var(--art-color) 88%, var(--background)),
+    color-mix(in oklab, var(--art-color) 38%, var(--background)) 62%,
+    var(--background)
   );
+}
+
+.record-transition {
+  --art-slide-distance: 100vw;
+  position: relative;
+  aspect-ratio: 1;
+}
+
+.record-transition .record-disc {
+  animation: none;
+}
+
+.record-transition-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.player-effects-transition {
+  --art-slide-distance: 100%;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.player-effects-transition-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.record-transition-layer[data-state="leaving"] {
+  pointer-events: none;
+}
+
+.art-backdrop-palette[data-state="entering"],
+.record-transition-layer[data-state="entering"],
+.player-effects-transition-layer[data-state="entering"] {
+  animation: art-palette-enter var(--art-duration) var(--art-ease) both;
+}
+
+.art-backdrop-palette[data-state="leaving"],
+.record-transition-layer[data-state="leaving"],
+.player-effects-transition-layer[data-state="leaving"] {
+  animation: art-palette-leave var(--art-duration) var(--art-ease) both;
+}
+
+@keyframes art-palette-enter {
+  from {
+    transform: translateX(calc(var(--art-slide-distance) * var(--art-direction)));
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes art-palette-leave {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-1 * var(--art-slide-distance) * var(--art-direction)));
+  }
 }
 
 .art-backdrop-grain {
@@ -59,13 +118,8 @@
   inset: 0;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   background-size: 160px;
-  opacity: 0.08;
+  opacity: 0.025;
   mix-blend-mode: overlay;
-}
-
-[data-aura-host] .art-backdrop[data-mode="stage"] .art-backdrop-art {
-  transform: scale(calc(1 + var(--beat, 0) * 0.025));
-  will-change: transform;
 }
 
 [data-aura-host] .art-backdrop[data-mode="stage"]::after {
@@ -74,18 +128,18 @@
   inset: 0;
   background: radial-gradient(
     circle at 50% 45%,
-    color-mix(in oklab, var(--primary) 30%, transparent),
+    color-mix(in oklab, var(--art-color) 40%, transparent),
     transparent 65%
   );
-  opacity: calc(var(--beat, 0) * 0.32);
+  opacity: calc(var(--beat, 0) * 0.2);
   will-change: opacity;
 }
 
-:root[data-theme="light"] .art-backdrop-art {
-  filter: blur(48px) saturate(1.2) brightness(1.05);
+:root[data-theme="light"] .art-backdrop {
+  --art-lightness: 0.8;
 }
 
 :root[data-theme="light"] .art-backdrop-grain {
-  opacity: 0.05;
+  opacity: 0.02;
   mix-blend-mode: multiply;
 }

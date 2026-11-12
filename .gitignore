@@ -28,3 +28,5 @@ Thumbs.db
 __pycache__/
 /.caimack/
 /.env.tmp.*
+
+/NeDotify

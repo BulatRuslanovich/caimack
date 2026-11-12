@@ -3,73 +3,73 @@
 
 "use client";
 
-import { useCallback, useState, useSyncExternalStore, type CSSProperties } from "react";
-import { coverTone, TONE_SAMPLE_EDGE, type CoverTone } from "./coverTone";
+import { useCallback, useEffect, useState, useSyncExternalStore, type CSSProperties } from "react";
+import { createCoverToneCache, type CoverTones, type CoverToneKind } from "./coverToneCache";
+import {
+  backdropTone,
+  BACKDROP_SAMPLE_EDGE,
+  coverTone,
+  TONE_SAMPLE_EDGE,
+  type BackdropTone,
+  type CoverTone,
+} from "./coverTone";
 
-const tones = new Map<string, CoverTone | null>();
-const pending = new Map<string, Promise<void>>();
-const listeners = new Set<() => void>();
-
-const MAX_CACHED = 400;
-
-function remember(url: string, tone: CoverTone | null): void {
-  if (tones.size >= MAX_CACHED) tones.delete(tones.keys().next().value!);
-  tones.set(url, tone);
-  listeners.forEach((listener) => listener());
-}
-
-function sample(url: string): Promise<void> {
+function sample(url: string, kind: CoverToneKind): Promise<CoverTones> {
   const image = new Image();
   image.decoding = "async";
   image.src = url;
 
-  return image
-    .decode()
-    .then(() => {
-      const canvas = document.createElement("canvas");
-      canvas.width = canvas.height = TONE_SAMPLE_EDGE;
-      const context = canvas.getContext("2d", { willReadFrequently: true });
-      if (!context) return remember(url, null);
+  return image.decode().then(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = kind === "backdrop" ? BACKDROP_SAMPLE_EDGE : TONE_SAMPLE_EDGE;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) throw new Error("Canvas sampling is unavailable");
 
-      context.drawImage(image, 0, 0, TONE_SAMPLE_EDGE, TONE_SAMPLE_EDGE);
-      const { data } = context.getImageData(0, 0, TONE_SAMPLE_EDGE, TONE_SAMPLE_EDGE);
-      remember(url, coverTone(data));
-    })
-    .catch(() => remember(url, null))
-    .finally(() => pending.delete(url));
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+    return kind === "backdrop" ? { backdrop: backdropTone(data) } : { accent: coverTone(data) };
+  });
 }
 
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
+const cache = createCoverToneCache(sample);
 
-export function useCoverTone(url: string | null | undefined): CoverTone | null | undefined {
+export function useCoverTone(url: string | null | undefined): CoverTone | null | undefined;
+export function useCoverTone(
+  url: string | null | undefined,
+  kind: "accent",
+): CoverTone | null | undefined;
+export function useCoverTone(
+  url: string | null | undefined,
+  kind: "backdrop",
+): BackdropTone | null | undefined;
+export function useCoverTone(
+  url: string | null | undefined,
+  kind: keyof CoverTones = "accent",
+): CoverTone | null | undefined {
   const tone = useSyncExternalStore(
-    subscribe,
-    () => (url ? tones.get(url) : null),
+    cache.subscribe,
+    () => {
+      if (!url) return null;
+      return cache.get(url, kind);
+    },
     () => undefined,
   );
 
-  if (tone === undefined) request(url);
+  useEffect(() => {
+    if (url && tone === undefined) void cache.load(url, kind);
+  }, [url, kind, tone]);
 
   return tone;
 }
 
-function request(url: string | null | undefined): void {
-  if (url && !tones.has(url) && !pending.has(url) && typeof window !== "undefined") {
-    pending.set(url, sample(url));
-  }
-}
-
 export function useVividTone(urls: (string | null | undefined)[]): CoverTone | null | undefined {
   const tone = useSyncExternalStore(
-    subscribe,
+    cache.subscribe,
     () => {
       let best: CoverTone | null | undefined = null;
       for (const url of urls) {
         if (!url) continue;
-        const tone = tones.get(url);
+        const tone = cache.get(url, "accent");
         if (tone === undefined) return undefined;
         if (tone && (!best || tone.chroma > best.chroma)) best = tone;
       }
@@ -78,7 +78,12 @@ export function useVividTone(urls: (string | null | undefined)[]): CoverTone | n
     () => undefined,
   );
 
-  urls.forEach(request);
+  useEffect(() => {
+    if (tone === undefined)
+      urls.forEach((url) => {
+        if (url) void cache.load(url, "accent");
+      });
+  }, [urls, tone]);
 
   return tone;
 }

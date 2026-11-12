@@ -363,8 +363,6 @@ export const en = {
   "effects.auroraHint": "Luminous ribbons unfolding with the music",
   "effects.glass": "Light through glass",
   "effects.glassHint": "Prismatic light and soft refractions",
-  "effects.ink": "Ink in water",
-  "effects.inkHint": "Cover colours blooming into clouds",
   "effects.intensity": "Intensity",
   "effects.level": "Level {level} of 5",
   "effects.sensitivity": "Sensitivity",

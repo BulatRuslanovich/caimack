@@ -22,6 +22,7 @@ import { radioSource, sourceOf, tagSource, usePlaySource } from "@/lib/playback/
 import { ConnectContext, useConnectPlayback } from "@/lib/playback/useConnectPlayback";
 import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
 import { usePlaybackPreferences } from "@/lib/playback/usePlaybackPreferences";
+import { useArtworkNavigation, type ArtworkDirection } from "@/lib/playback/useArtworkNavigation";
 import { usePlayerPlatform } from "@/lib/playback/usePlayerPlatform";
 import { usePlayerSession } from "@/lib/playback/usePlayerSession";
 import { useQueueEditing } from "@/lib/playback/useQueueEditing";
@@ -54,6 +55,7 @@ const PlayerProgressContext = createContext<PlayerProgress | null>(null);
 const PlayerClockContext = createContext<PlayerProgress["getPosition"] | null>(null);
 
 const PlayerNowPlayingContext = createContext<PlayerNowPlaying | null>(null);
+const ArtworkDirectionContext = createContext<ArtworkDirection>("next");
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -664,8 +666,13 @@ function PlayerSessionProvider({
     [takeOver, applyQueue, restoreRadioSession],
   );
   const connected = useConnectPlayback(userId, state, actions, progress, output, load);
+  const artwork = useArtworkNavigation(
+    connected.state,
+    connected.actions,
+    connected.progress.getPosition,
+  );
 
-  usePlayerPlatform(connected, play, setIsPlaying);
+  usePlayerPlatform({ ...connected, actions: artwork.actions }, play, setIsPlaying);
 
   const currentTrackId = connected.state.currentTrack?.id ?? null;
   const currentAlbumId = connected.state.currentTrack?.albumId ?? null;
@@ -679,11 +686,13 @@ function PlayerSessionProvider({
   return (
     <ConnectContext.Provider value={connected.controls}>
       <PlayerStateContext.Provider value={connected.state}>
-        <PlayerActionsContext.Provider value={connected.actions}>
+        <PlayerActionsContext.Provider value={artwork.actions}>
           <PlayerNowPlayingContext.Provider value={nowPlaying}>
             <PlayerClockContext.Provider value={connected.progress.getPosition}>
               <PlayerProgressContext.Provider value={connected.progress}>
-                {children}
+                <ArtworkDirectionContext.Provider value={artwork.direction}>
+                  {children}
+                </ArtworkDirectionContext.Provider>
               </PlayerProgressContext.Provider>
             </PlayerClockContext.Provider>
           </PlayerNowPlayingContext.Provider>
@@ -697,6 +706,10 @@ function PlayerSessionProvider({
 
 export function usePlayerState(): PlayerState {
   return useRequiredContext(PlayerStateContext, "usePlayerState", "PlayerProvider");
+}
+
+export function useArtworkDirection(): ArtworkDirection {
+  return React.useContext(ArtworkDirectionContext);
 }
 
 export function usePlayerActions(): PlayerActions {

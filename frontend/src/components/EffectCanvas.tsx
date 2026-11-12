@@ -12,7 +12,7 @@ import type { Track } from "@/lib/types";
 import { AudioMotion, MOTION_BANDS } from "@/lib/visuals/audioMotion";
 import { effectPalette, type EffectPalette } from "@/lib/visuals/effectPalette";
 import { createEffectsRenderer } from "@/lib/visuals/reactiveEffectsRenderer";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 
 export function EffectCanvas({
   effect,
@@ -20,12 +20,14 @@ export function EffectCanvas({
   sensitivity,
   track,
   playing,
+  frozen = false,
 }: {
   effect: PlayerEffect;
   intensity: number;
   sensitivity: number;
   track: Track;
   playing: boolean;
+  frozen?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const getPosition = usePlayerClock();
@@ -35,18 +37,20 @@ export function EffectCanvas({
     intensity,
     sensitivity,
     playing,
+    frozen,
     bpm: track.cues?.bpm,
     offset: track.cues?.audioStart,
     getPosition,
   });
   const wake = useRef(() => {});
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     live.current = {
       effect,
       intensity,
       sensitivity,
       playing,
+      frozen,
       bpm: track.cues?.bpm,
       offset: track.cues?.audioStart,
       getPosition,
@@ -57,6 +61,7 @@ export function EffectCanvas({
     intensity,
     sensitivity,
     playing,
+    frozen,
     track.cues?.bpm,
     track.cues?.audioStart,
     getPosition,
@@ -107,6 +112,7 @@ export function EffectCanvas({
         frame = requestAnimationFrame(draw);
     };
     const resize = () => {
+      if (live.current.frozen) return;
       const box = canvas.getBoundingClientRect();
       if (!box.width || !box.height) return;
       const ratio = Math.min(
@@ -114,13 +120,18 @@ export function EffectCanvas({
         window.devicePixelRatio || 1,
         Math.sqrt(650_000 / (box.width * box.height)),
       );
-      canvas.width = Math.max(1, Math.round(box.width * ratio));
-      canvas.height = Math.max(1, Math.round(box.height * ratio));
+      const width = Math.max(1, Math.round(box.width * ratio));
+      const height = Math.max(1, Math.round(box.height * ratio));
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
       schedule();
     };
     const draw = (now: number) => {
       frame = 0;
-      if (disposed || document.visibilityState !== "visible" || !renderer) return;
+      if (disposed || document.visibilityState !== "visible" || !renderer || live.current.frozen)
+        return;
       if (previous && now - previous < 1000 / 30 && live.current.playing && !motion.matches) {
         schedule();
         return;

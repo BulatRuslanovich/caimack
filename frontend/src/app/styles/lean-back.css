@@ -11,10 +11,6 @@
   animation: lean-back-in 900ms var(--ease);
 }
 
-.lean-back .art-backdrop-art {
-  animation: lean-back-pan 70s ease-in-out infinite alternate;
-}
-
 .lean-back-stage {
   position: relative;
   display: grid;
@@ -112,15 +108,6 @@
   }
 }
 
-@keyframes lean-back-pan {
-  from {
-    translate: -4% -3%;
-  }
-  to {
-    translate: 4% 3%;
-  }
-}
-
 @keyframes lean-back-drift {
   from {
     translate: -1.2% -1%;
@@ -140,7 +127,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .lean-back,
-  .lean-back .art-backdrop-art,
   .lean-back-stage,
   .lean-back-lyric {
     animation: none;

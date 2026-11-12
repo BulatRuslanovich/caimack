@@ -4,23 +4,46 @@
 "use client";
 
 import { usePlayerEffects } from "@/lib/playerEffects";
-import type { Track } from "@/lib/types";
+import { useArtworkScene } from "./ArtworkScene";
 import dynamic from "next/dynamic";
 
 const EffectCanvas = dynamic(() => import("./EffectCanvas").then((m) => m.EffectCanvas), {
   ssr: false,
 });
 
-export function PlayerEffectsBackdrop({ track, playing }: { track: Track; playing: boolean }) {
+export function PlayerEffectsBackdrop({ playing }: { playing: boolean }) {
   const { effect, intensity, sensitivity } = usePlayerEffects();
+  const { current, previous, direction, trackId, onAnimationEnd } = useArtworkScene();
   if (effect === "off" || intensity === 0) return null;
   return (
-    <EffectCanvas
-      effect={effect}
-      intensity={intensity}
-      sensitivity={sensitivity}
-      track={track}
-      playing={playing}
-    />
+    <div className="player-effects-transition" data-direction={direction} aria-hidden="true">
+      {previous && (
+        <div key={previous.key} className="player-effects-transition-layer" data-state="leaving">
+          <EffectCanvas
+            effect={effect}
+            intensity={intensity}
+            sensitivity={sensitivity}
+            track={previous.item}
+            playing={false}
+            frozen
+          />
+        </div>
+      )}
+      <div
+        key={current.key}
+        className="player-effects-transition-layer"
+        data-state={previous ? "entering" : "settled"}
+        onAnimationEnd={onAnimationEnd}
+      >
+        <EffectCanvas
+          effect={effect}
+          intensity={intensity}
+          sensitivity={sensitivity}
+          track={current.item}
+          playing={playing && current.item.id === trackId}
+          frozen={current.item.id !== trackId}
+        />
+      </div>
+    </div>
   );
 }

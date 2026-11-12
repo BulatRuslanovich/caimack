@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { readStoredJson, writeStoredJson } from "@/lib/storage";
 
-export const PLAYER_EFFECTS = ["aurora", "glass", "ink"] as const;
+export const PLAYER_EFFECTS = ["aurora", "glass"] as const;
 export const PLAYER_EFFECT_LEVELS = [0, 35, 65, 85, 100] as const;
 
 export function playerEffectLevel(value: number): number {

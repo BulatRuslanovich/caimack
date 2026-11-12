@@ -387,8 +387,6 @@ export const ru: Dictionary = {
   "effects.auroraHint": "Светящиеся ленты раскрываются под музыку",
   "effects.glass": "Свет через стекло",
   "effects.glassHint": "Цветные блики и мягкие преломления",
-  "effects.ink": "Тушь в воде",
-  "effects.inkHint": "Цвета обложки распускаются облаками",
   "effects.intensity": "Интенсивность",
   "effects.level": "Уровень {level} из 5",
   "effects.sensitivity": "Чувствительность",

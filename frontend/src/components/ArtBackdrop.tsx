@@ -3,49 +3,90 @@
 
 "use client";
 
-import { useState } from "react";
+import type { CSSProperties } from "react";
+import type { BackdropTone } from "@/lib/coverTone";
+import type { ArtworkDirection } from "@/lib/playback/useArtworkNavigation";
+import { useCoverTone } from "@/lib/useCoverTone";
+import { useArtworkTransition } from "@/lib/visuals/useArtworkTransition";
+import { useArtworkScene } from "./ArtworkScene";
 
-export function ArtBackdrop({ src, mode }: { src: string | null; mode: "stage" | "header" }) {
-  const [art, setArt] = useState<{ settled: string | null; previous: string | null }>({
-    settled: null,
-    previous: null,
-  });
+function paletteStyle(tone: BackdropTone | null): CSSProperties {
+  const lightness = tone ? Math.max(0.27, Math.min(0.44, tone.lightness * 0.85)) : 0.44;
+  const chroma = tone
+    ? Math.min(tone.chroma * Math.max(0.6, Math.min(1, 1 - (tone.lightness - 0.4) * 1.5)), 0.1)
+    : 0;
+  return {
+    "--art-color": tone
+      ? `oklch(var(--art-lightness, ${lightness}) ${chroma} ${tone.hue})`
+      : "oklch(var(--art-lightness, 0.44) 0 0)",
+  } as CSSProperties;
+}
 
-  if (src === null) return null;
+export function ArtBackdrop({
+  src,
+  mode,
+  direction = "next",
+}: {
+  src: string | null;
+  mode: "stage" | "header";
+  direction?: ArtworkDirection;
+}) {
+  if (src === null && mode === "header") return null;
+  return <CoverBackdrop src={src} mode={mode} direction={direction} />;
+}
 
-  const settle = () =>
-    setArt((current) =>
-      current.settled === src ? current : { settled: src, previous: current.settled },
-    );
+export function PlayerBackdrop() {
+  const scene = useArtworkScene();
+  return <BackdropLayers {...scene} mode="stage" />;
+}
 
-  const layers = [...new Set([art.previous, art.settled, src])].filter(
-    (layer): layer is string => layer !== null,
-  );
+function CoverBackdrop({
+  src,
+  mode,
+  direction,
+}: {
+  src: string | null;
+  mode: "stage" | "header";
+  direction: ArtworkDirection;
+}) {
+  const tone = useCoverTone(src, "backdrop");
+  const scene = useArtworkTransition({ key: src ?? "neutral", item: src, src, tone, direction });
+  return <BackdropLayers {...scene} mode={mode} />;
+}
 
+function BackdropLayers({
+  current,
+  previous,
+  direction,
+  onAnimationEnd,
+  mode,
+}: Pick<
+  ReturnType<typeof useArtworkTransition<unknown>>,
+  "current" | "previous" | "direction" | "onAnimationEnd"
+> & { mode: "stage" | "header" }) {
   return (
-    <div aria-hidden="true" className="art-backdrop" data-mode={mode}>
-      {layers.map((layer) => (
-        <img
-          key={layer}
-          src={layer}
-          alt=""
-          decoding="async"
-          ref={
-            layer === src
-              ? (image) => {
-                  if (image?.complete && image.naturalWidth > 0) settle();
-                }
-              : undefined
-          }
-          onLoad={layer === src ? settle : undefined}
-          onTransitionEnd={() => {
-            if (layer === art.settled) setArt((current) => ({ ...current, previous: null }));
-          }}
-          data-shown={layer === art.settled || layer === art.previous}
-          className="art-backdrop-art"
+    <div
+      aria-hidden="true"
+      className="art-backdrop"
+      data-mode={mode}
+      data-direction={direction}
+      style={paletteStyle(current.tone)}
+    >
+      {previous && (
+        <div
+          key={previous.key}
+          className="art-backdrop-palette"
+          data-state="leaving"
+          style={paletteStyle(previous.tone)}
         />
-      ))}
-      <div className="art-backdrop-scrim" />
+      )}
+      <div
+        key={current.key}
+        className="art-backdrop-palette"
+        data-state={previous ? "entering" : "settled"}
+        style={paletteStyle(current.tone)}
+        onAnimationEnd={onAnimationEnd}
+      />
       <div className="art-backdrop-grain" />
     </div>
   );
