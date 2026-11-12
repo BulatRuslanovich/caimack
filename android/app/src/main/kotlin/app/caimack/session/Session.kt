@@ -38,10 +38,18 @@ class Session(
     private val deviceName: () -> String,
 ) {
     private val current = MutableStateFlow<SessionState>(SessionState.Restoring)
+    private var revision = 0L
+
+    private fun nextRevision(): Long = synchronized(current) { ++revision }
+
+    private fun publish(version: Long, state: SessionState) = synchronized(current) {
+        if (revision == version) current.value = state
+    }
 
     val state: StateFlow<SessionState> = current
 
     suspend fun restore() {
+        val version = nextRevision()
         server.restore()
         cookies.restore()
 
@@ -49,7 +57,10 @@ class Session(
             runCatching { json.decodeFromString<User>(String(Base64.getUrlDecoder().decode(hint))) }.getOrNull()
         }
 
-        current.value = when {
+        // Reach individual downloads immediately while validating the saved session.
+        if (server.url.value != null && hinted != null) publish(version, SessionState.SignedIn(hinted))
+
+        val restored = when {
             server.url.value == null || hinted == null -> SessionState.SignedOut()
             else -> try {
                 SessionState.SignedIn(api.me())
@@ -59,14 +70,16 @@ class Session(
                 if (failure.code() == UNAUTHORIZED) SessionState.SignedOut(expired = true) else SessionState.SignedIn(hinted)
             }
         }
+        publish(version, restored)
     }
 
     suspend fun login(address: String, username: String, password: String): LoginFailure? {
+        val version = nextRevision()
         server.remember(address) ?: return LoginFailure.BadAddress
         cookies.clear()
 
         return try {
-            current.value = SessionState.SignedIn(api.login(LoginRequest(username.trim(), password, deviceName(), longLived = true)))
+            publish(version, SessionState.SignedIn(api.login(LoginRequest(username.trim(), password, deviceName(), longLived = true))))
             null
         } catch (_: IOException) {
             LoginFailure.Unreachable
@@ -77,18 +90,20 @@ class Session(
     }
 
     suspend fun logout() {
+        val version = nextRevision()
         try {
             api.logout()
         } catch (_: IOException) {
         } catch (_: HttpException) {
         }
         cookies.clear()
-        current.value = SessionState.SignedOut()
+        publish(version, SessionState.SignedOut())
     }
 
     fun expire() {
         cookies.clear()
-        current.value = SessionState.SignedOut(expired = true)
+        val version = nextRevision()
+        publish(version, SessionState.SignedOut(expired = true))
     }
 
     private companion object {
