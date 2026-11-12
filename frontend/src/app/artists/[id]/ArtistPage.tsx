@@ -3,6 +3,7 @@
 
 "use client";
 
+import { LibrarySaveButton } from "@/components/LibrarySaveButton";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
@@ -84,6 +85,7 @@ export function ArtistPage() {
                 {detail.tracks.items.length > 0 && (
                   <RadioButton seed={topTracks[0] ?? detail.tracks.items[0]} />
                 )}
+                <LibrarySaveButton kind="artist" id={id} />
                 {isAdmin && (
                   <Button
                     variant="ghost"

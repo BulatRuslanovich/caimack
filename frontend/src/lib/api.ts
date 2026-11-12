@@ -5,6 +5,10 @@ import { deviceId, flushEvents } from "@/lib/events";
 import { fileForm, qs, request, requestFile } from "@/lib/http";
 import { markImageChanged } from "@/lib/media";
 import type {
+  LibraryItem,
+  LibraryFolder,
+  LibraryChange,
+  LibraryKind,
   AdminUser,
   Album,
   AlbumDetail,
@@ -88,6 +92,12 @@ async function withoutImage(
 }
 
 export const api = {
+  savedLibrary: () => request<LibraryItem[]>("/me/library"),
+  libraryFolders: () => request<LibraryFolder[]>("/me/library/folders"),
+  organizeLibrary: (change: LibraryChange) =>
+    request<void>("/me/library/organize", { method: "POST", body: change }),
+  saveLibraryItem: (kind: LibraryKind, id: string, saved: boolean) =>
+    request<void>(`/me/library/${kind}/${id}`, { method: saved ? "PUT" : "DELETE" }),
   connectHeartbeat: (deviceId: string, connectionId: string) =>
     request<void>("/playback/connect/heartbeat", {
       method: "POST",
