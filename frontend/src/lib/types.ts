@@ -192,6 +192,15 @@ export type TrackFilter = {
 export interface LyricLine {
   at: number;
   text: string;
+  end?: number;
+  words?: LyricWord[];
+  background?: boolean;
+}
+
+export interface LyricWord {
+  at: number;
+  end: number;
+  text: string;
 }
 
 export interface Lyrics {
@@ -199,6 +208,10 @@ export interface Lyrics {
   plain: string;
   lines: LyricLine[];
   source: "Embedded" | "Manual" | "Provider";
+  provider?: string | null;
+  originalLyrics?: string | null;
+  syncType?: "plain" | "line" | "word" | "syllable";
+  attribution?: { url?: string; submitter?: string; submitterUrl?: string } | null;
 }
 
 export interface HomeBlock {

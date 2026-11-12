@@ -19,6 +19,7 @@ pub struct Config {
     pub storage_root: PathBuf,
     pub owner: OwnerConfig,
     pub lrclib_base_url: String,
+    pub better_lyrics_api_key: Option<String>,
     pub deezer_base_url: String,
     pub yandex_music: YandexMusicConfig,
     pub trusted_proxies: Vec<IpNet>,
@@ -123,6 +124,8 @@ struct Env {
     owner_reset_password: bool,
     #[serde(default = "default_lrclib_base_url")]
     lrclib_base_url: String,
+    #[serde(default)]
+    better_lyrics_api_key: Option<String>,
     #[serde(default = "default_deezer_base_url")]
     deezer_base_url: String,
     #[serde(default = "default_yandex_base_url")]
@@ -223,6 +226,7 @@ impl Config {
                 reset_password: env.owner_reset_password,
             },
             lrclib_base_url: env.lrclib_base_url,
+            better_lyrics_api_key: env.better_lyrics_api_key.filter(|key| !key.trim().is_empty()),
             deezer_base_url: env.deezer_base_url,
             yandex_music: YandexMusicConfig {
                 base_url: env.yandex_music_base_url,

@@ -12,8 +12,9 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use super::deezer::Deezer;
-use super::lrclib::{Lrclib, LyricsLookup, LyricsQuery};
-use crate::catalog::lyrics::{self, LyricsSource};
+use super::lrclib::LyricsQuery;
+use super::lyrics::{Candidate, LyricsProviders};
+use crate::catalog::lyrics::LyricsSource;
 use crate::catalog::tags;
 use crate::covers;
 use crate::storage::{ARTIST_IMAGE_DIRECTORY, COVER_DIRECTORY, CoverSize, Storage};
@@ -66,7 +67,7 @@ pub struct Enrichment {
     pub db: PgPool,
     pub storage: Storage,
     pub deezer: Deezer,
-    pub lrclib: Lrclib,
+    pub lyrics_providers: LyricsProviders,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -211,16 +212,25 @@ impl Enrichment {
     }
 
     async fn lyrics(&self, track: Uuid) -> anyhow::Result<Outcome> {
-        let row = sqlx::query!(
-            r#"SELECT t.title, t.duration_seconds, ar.name AS artist_name, al.title AS "album_title?",
-                      EXISTS (SELECT 1 FROM track_lyrics l WHERE l.track_id = t.id) AS "has_lyrics!"
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            title: String,
+            duration_seconds: i32,
+            artist_name: String,
+            album_title: Option<String>,
+            content_hash: String,
+            manual: bool,
+        }
+        let row = sqlx::query_as::<_, Row>(
+            "SELECT t.title, t.duration_seconds, t.content_hash, ar.name AS artist_name, al.title AS album_title,
+                      EXISTS (SELECT 1 FROM track_lyrics l WHERE l.track_id = t.id AND l.source=1) AS manual
                FROM tracks t JOIN artists ar ON ar.id = t.artist_id LEFT JOIN albums al ON al.id = t.album_id
-               WHERE t.id = $1"#,
-            track
+               WHERE t.id = $1",
         )
+        .bind(track)
         .fetch_optional(&self.db)
         .await?;
-        let Some(row) = row.filter(|row| !row.has_lyrics) else { return Ok(Outcome::Skipped) };
+        let Some(row) = row.filter(|row| !row.manual) else { return Ok(Outcome::Skipped) };
 
         let query = LyricsQuery {
             title: row.title,
@@ -228,33 +238,64 @@ impl Enrichment {
             album: row.album_title,
             duration_seconds: row.duration_seconds,
         };
-        let text = match self.lrclib.lookup(&query).await? {
-            LyricsLookup::Found(text) => text,
-            LyricsLookup::NotFound => return Ok(Outcome::NotFound),
-            LyricsLookup::Instrumental => return Ok(Outcome::Instrumental),
+        let found = self.lyrics_providers.lookup(&query).await?;
+        let Some(found) = found.best else {
+            return Ok(if found.instrumental { Outcome::Instrumental } else { Outcome::NotFound });
         };
-        let parsed = lyrics::parse(Some(&text));
-        if parsed.is_empty() {
-            return Ok(Outcome::NotFound);
-        }
+        save_lyrics(&self.db, track, &query, &row.content_hash, &found).await
+    }
+}
 
-        let saved = sqlx::query(
-            "INSERT INTO track_lyrics (track_id, plain, synced, source, updated_at)
-             SELECT $1,$2,$3,$4,$5 FROM tracks t JOIN artists ar ON ar.id=t.artist_id
-             WHERE t.id=$1 AND t.title=$6 AND ar.name=$7
-             ON CONFLICT (track_id) DO NOTHING",
+async fn save_lyrics(
+    db: &PgPool,
+    track: Uuid,
+    query: &LyricsQuery,
+    hash: &str,
+    found: &Candidate,
+) -> anyhow::Result<Outcome> {
+    // The network is finished. Lock the identity only for the short write transaction.
+    let mut tx = db.begin().await?;
+    let unchanged: Option<Uuid> = sqlx::query_scalar(
+        "SELECT t.id FROM tracks t JOIN artists ar ON ar.id=t.artist_id
+             LEFT JOIN albums al ON al.id=t.album_id
+             WHERE t.id=$1 AND t.title=$2 AND ar.name=$3 AND t.duration_seconds=$4 AND t.content_hash=$5
+               AND al.title IS NOT DISTINCT FROM $6 FOR SHARE OF t,ar",
+    )
+    .bind(track)
+    .bind(&query.title)
+    .bind(&query.artist)
+    .bind(query.duration_seconds)
+    .bind(hash)
+    .bind(&query.album)
+    .fetch_optional(&mut *tx)
+    .await?;
+    if unchanged.is_none() {
+        return Ok(Outcome::Skipped);
+    }
+    let saved = sqlx::query(
+            "INSERT INTO track_lyrics (track_id,plain,synced,source,updated_at,provider,source_format,original_lyrics,attribution,match_exact,match_distance_ms)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+             ON CONFLICT (track_id) DO UPDATE SET plain=EXCLUDED.plain,synced=EXCLUDED.synced,
+                source=EXCLUDED.source,updated_at=EXCLUDED.updated_at,provider=EXCLUDED.provider,
+                source_format=EXCLUDED.source_format,original_lyrics=EXCLUDED.original_lyrics,attribution=EXCLUDED.attribution,
+                match_exact=EXCLUDED.match_exact,match_distance_ms=EXCLUDED.match_distance_ms
+             WHERE track_lyrics.source<>1
+               AND (EXCLUDED.match_exact,EXCLUDED.quality,-EXCLUDED.match_distance_ms)
+                   > (track_lyrics.match_exact,track_lyrics.quality,-track_lyrics.match_distance_ms)
+               AND char_length(regexp_replace(EXCLUDED.plain,'[[:space:][:punct:]]','','g'))*10
+                   >=char_length(regexp_replace(track_lyrics.plain,'[[:space:][:punct:]]','','g'))*7",
         )
         .bind(track)
-        .bind(parsed.plain)
-        .bind(sqlx::types::Json(&parsed.lines))
+        .bind(&found.parsed.plain)
+        .bind(sqlx::types::Json(&found.parsed.lines))
         .bind(LyricsSource::Provider as i32)
         .bind(Utc::now())
-        .bind(&query.title)
-        .bind(&query.artist)
-        .execute(&self.db)
+        .bind(found.provider).bind(&found.format).bind(&found.original).bind(&found.attribution)
+        .bind(found.exact).bind(found.duration_difference)
+        .execute(&mut *tx)
         .await?;
-        Ok(if saved.rows_affected() == 1 { Outcome::Saved } else { Outcome::Skipped })
-    }
+    tx.commit().await?;
+    Ok(if saved.rows_affected() == 1 { Outcome::Saved } else { Outcome::Skipped })
 }
 
 pub fn spawn(
@@ -291,13 +332,6 @@ pub fn spawn(
                         Err(error) => { tracing::error!("Enrichment {kind} discovery failed: {error}"); Duration::from_secs(30) }
                     };
                     next_seed = tokio::time::Instant::now() + delay;
-                }
-                if kind == "lyrics" {
-                    // Provider cooldowns can outlast a job lease; wait before claiming the next track.
-                    tokio::select! {
-                        () = cancel.cancelled() => return,
-                        () = enrichment.lrclib.wait_ready() => {},
-                    }
                 }
                 let job = match super::enrichment_jobs::claim(&enrichment.db, kind).await {
                     Ok(job) => job,
@@ -352,6 +386,39 @@ async fn pause(cancel: &CancellationToken, how_long: Duration) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[sqlx::test(migrations = "../../../db/migrations")]
+    #[cfg_attr(not(feature = "integration-tests"), ignore = "requires local PostgreSQL")]
+    async fn lyric_upgrades_preserve_manual_edits_and_reject_stale_recordings(db: PgPool) -> anyhow::Result<()> {
+        let artist = Uuid::now_v7();
+        let track = Uuid::now_v7();
+        sqlx::query("INSERT INTO artists(id,name,normalized_name,created_at) VALUES ($1,'Artist','artist',now())")
+            .bind(artist)
+            .execute(&db)
+            .await?;
+        sqlx::query("INSERT INTO tracks(id,title,normalized_title,artist_id,duration_seconds,file_path,original_file_name,mime_type,file_size,content_hash,created_at) VALUES ($1,'Song','song',$2,180,'music/test.mp3','test.mp3','audio/mpeg',100,'hash',now())").bind(track).bind(artist).execute(&db).await?;
+        let query = LyricsQuery { title: "Song".into(), artist: "Artist".into(), album: None, duration_seconds: 180 };
+        let mut found = Candidate {
+            parsed: crate::catalog::lyrics::parse_format("Hello world", "plain", 180000)?,
+            provider: "Test",
+            format: "plain".into(),
+            original: "Hello world".into(),
+            attribution: serde_json::json!({}),
+            exact: true,
+            duration_difference: 0,
+        };
+        assert_eq!(save_lyrics(&db, track, &query, "hash", &found).await?, Outcome::Saved);
+        found.parsed = crate::catalog::lyrics::parse_format("[00:01]<00:01>Hello <00:02>world<00:03>", "lrc", 180000)?;
+        assert_eq!(save_lyrics(&db, track, &query, "hash", &found).await?, Outcome::Saved);
+        let dto = crate::catalog::lyrics::get(&db, track).await?.unwrap();
+        assert_eq!(dto.sync_type, "word");
+        assert_eq!(dto.lines[0].words.len(), 2);
+        crate::catalog::lyrics::replace(&db, track, Some("Manual text")).await?;
+        assert_eq!(save_lyrics(&db, track, &query, "hash", &found).await?, Outcome::Skipped);
+        assert_eq!(crate::catalog::lyrics::get(&db, track).await?.unwrap().plain, "Manual text");
+        assert_eq!(save_lyrics(&db, track, &query, "different-hash", &found).await?, Outcome::Skipped);
+        Ok(())
+    }
 
     #[sqlx::test(migrations = "../../../db/migrations")]
     #[cfg_attr(not(feature = "integration-tests"), ignore = "requires local PostgreSQL and ffmpeg")]
@@ -428,7 +495,7 @@ mod tests {
             db: db.clone(),
             storage: storage.clone(),
             deezer: Deezer::new("http://127.0.0.1:9"),
-            lrclib: Lrclib::new("http://127.0.0.1:9"),
+            lyrics_providers: LyricsProviders::new(super::super::lrclib::Lrclib::new("http://127.0.0.1:9"), None),
         };
         assert_eq!(enrichment.track_cover(track).await?, Outcome::Saved);
         let path: String =

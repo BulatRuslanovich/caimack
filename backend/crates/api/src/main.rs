@@ -106,7 +106,10 @@ async fn run() -> anyhow::Result<()> {
         db: db.clone(),
         storage: storage.clone(),
         deezer: Deezer::new(&config.deezer_base_url),
-        lrclib: Lrclib::new(&config.lrclib_base_url),
+        lyrics_providers: app::integrations::lyrics::LyricsProviders::new(
+            Lrclib::new(&config.lrclib_base_url),
+            config.better_lyrics_api_key.clone(),
+        ),
     };
     workers.extend(enrichment::spawn(enricher, enrichment_queue.clone(), enrichment_requests, background.clone()));
 

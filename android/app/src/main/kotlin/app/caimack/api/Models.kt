@@ -192,13 +192,31 @@ data class SearchResults(
 data class UserSettings(val quality: String = "Original")
 
 @Serializable
-data class LyricLine(val at: Long, val text: String)
+data class LyricLine(
+    val at: Long,
+    val text: String,
+    val end: Long? = null,
+    val words: List<LyricWord> = emptyList(),
+    val background: Boolean = false,
+)
+
+@Serializable
+data class LyricWord(val at: Long, val end: Long, val text: String)
+
+@Serializable
+data class LyricsAttribution(val url: String? = null, val submitter: String? = null, val submitterUrl: String? = null)
 
 @Serializable
 data class Waveform(val peaks: List<Int> = emptyList())
 
 @Serializable
-data class Lyrics(val plain: String = "", val lines: List<LyricLine> = emptyList())
+data class Lyrics(
+    val plain: String = "",
+    val lines: List<LyricLine> = emptyList(),
+    val source: String = "Embedded",
+    val provider: String? = null,
+    val attribution: LyricsAttribution? = null,
+)
 
 @Serializable
 data class PlaybackSignal(

@@ -28,7 +28,7 @@ export function EditLyricsDialog({
 
   const form = useForm<LyricsValues>({
     resolver: zodResolver(lyricsSchema),
-    defaultValues: { text: lyrics ? toLrc(lyrics) : "" },
+    defaultValues: { text: lyrics ? (lyrics.originalLyrics ?? toLrc(lyrics)) : "" },
   });
 
   return (

@@ -125,7 +125,7 @@ impl Lrclib {
         }
     }
 
-    pub(super) async fn wait_ready(&self) {
+    pub async fn wait_ready(&self) {
         let schedule = self.requests.lock().await;
         sleep_until(schedule.next_request_at).await;
     }
@@ -152,11 +152,28 @@ impl Lrclib {
     }
 
     pub async fn lookup(&self, query: &LyricsQuery) -> anyhow::Result<LyricsLookup> {
+        Ok(self.lookup_with_duration(query).await?.0)
+    }
+
+    pub(crate) async fn lookup_with_duration(
+        &self,
+        query: &LyricsQuery,
+    ) -> anyhow::Result<(LyricsLookup, Option<f64>)> {
         for variant in variants(query) {
-            let candidate = match self.exact(&variant).await? {
+            let exact = self.exact(&variant).await?.filter(|record| {
+                record.track_name.as_deref().is_none_or(|name| key(name) == key(&variant.title))
+                    && record.artist_name.as_deref().is_none_or(|artist| key(artist) == key(&variant.artist))
+                    && record.duration.is_none_or(|duration| {
+                        duration.is_finite()
+                            && duration > 0.0
+                            && (duration - f64::from(variant.duration_seconds)).abs() <= DURATION_TOLERANCE_SECONDS
+                    })
+            });
+            let candidate = match exact {
                 Some(record) => Some(record),
                 None => self.search(&variant).await?,
             };
+            let duration = candidate.as_ref().and_then(|r| r.duration);
             let result = match candidate {
                 Some(record) if record.instrumental => LyricsLookup::Instrumental,
                 Some(Record { synced_lyrics: Some(text), .. }) if has_text(Some(&text)) => LyricsLookup::Found(text),
@@ -164,10 +181,10 @@ impl Lrclib {
                 _ => LyricsLookup::NotFound,
             };
             if result != LyricsLookup::NotFound {
-                return Ok(result);
+                return Ok((result, duration));
             }
         }
-        Ok(LyricsLookup::NotFound)
+        Ok((LyricsLookup::NotFound, None))
     }
 
     async fn exact(&self, variant: &LyricsQuery) -> anyhow::Result<Option<Record>> {
@@ -184,16 +201,16 @@ impl Lrclib {
         if response.status() == reqwest::StatusCode::NOT_FOUND {
             return Ok(None);
         }
-        Ok(Some(response.error_for_status()?.json().await?))
+        let bytes = super::read_limited(response.error_for_status()?, 2 * 1024 * 1024).await?;
+        Ok(Some(serde_json::from_slice(&bytes)?))
     }
 
     async fn search(&self, variant: &LyricsQuery) -> anyhow::Result<Option<Record>> {
-        let found: Vec<Record> = self
+        let response = self
             .request("/api/search", &[("artist_name", variant.artist.as_str()), ("track_name", variant.title.as_str())])
             .await?
-            .error_for_status()?
-            .json()
-            .await?;
+            .error_for_status()?;
+        let found: Vec<Record> = serde_json::from_slice(&super::read_limited(response, 2 * 1024 * 1024).await?)?;
 
         let (title, artist) = (key(&variant.title), key(&variant.artist));
         let wanted = f64::from(variant.duration_seconds);

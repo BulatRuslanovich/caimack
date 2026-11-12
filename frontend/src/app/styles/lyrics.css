@@ -1,0 +1,19 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* The fill follows genuine source intervals; plain LRC receives no word spans. */
+.lyric-word {
+  --lyric-word-fill: 0%;
+  white-space: pre-wrap;
+  color: transparent;
+  background: linear-gradient(
+    to right,
+    var(--foreground) 0%,
+    var(--foreground) var(--lyric-word-fill),
+    color-mix(in oklab, var(--foreground) 38%, transparent) var(--lyric-word-fill),
+    color-mix(in oklab, var(--foreground) 38%, transparent) 100%
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}

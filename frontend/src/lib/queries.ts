@@ -80,7 +80,13 @@ export const queries = {
     queryOptions({
       queryKey: ["lyrics", trackId],
       queryFn: async () => (await api.lyrics(trackId)) ?? null,
-      staleTime: Infinity,
+      staleTime: 60_000,
+      refetchInterval: (query) => {
+        const lyrics = query.state.data;
+        if (lyrics?.source === "Manual" || lyrics?.lines.some((line) => line.words?.length))
+          return false;
+        return 15_000;
+      },
     }),
 
   homeMix: (kind: HomeMixSlug) =>

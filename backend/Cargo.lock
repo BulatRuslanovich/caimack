@@ -76,7 +76,9 @@ dependencies = [
  "chrono",
  "envy",
  "fs4",
+ "futures-util",
  "hmac 0.13.0",
+ "html-escape",
  "ipnet",
  "jsonwebtoken",
  "media",
@@ -85,6 +87,7 @@ dependencies = [
  "reco",
  "regex",
  "reqwest",
+ "roxmltree",
  "serde",
  "serde_json",
  "serde_with",
@@ -1251,6 +1254,12 @@ checksum = "6303bc9732ae41b04cb554b844a762b4115a61bfaa81e3e83050991eeb56863f"
 dependencies = [
  "digest 0.11.3",
 ]
+
+[[package]]
+name = "html-escape"
+version = "0.2.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9356095b4b41197bba32173600e1582792cda618f65d12f68e2e77d273413c5"
 
 [[package]]
 name = "http"
@@ -2510,6 +2519,15 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "roxmltree"
+version = "0.21.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9da7f59328b09405b181fee1018925fad50f157afb43c0c0f5c522c256dd5907"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]

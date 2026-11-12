@@ -54,6 +54,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,6 +72,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -85,6 +87,8 @@ import app.caimack.playback.PlayerState
 import app.caimack.playback.QueueSnapshot
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
 
 private enum class Panel { None, Lyrics, Queue }
 @Composable
@@ -154,7 +158,7 @@ fun FullPlayer(state: PlayerState, onClose: () -> Unit) {
                 Box(modifier) {
                     when (panel) {
                         Panel.None -> Deck(state, onScrub = { scrub = it }, modifier = Modifier.fillMaxSize())
-                        Panel.Lyrics -> LyricsPanel(track, position)
+                        Panel.Lyrics -> LyricsPanel(track, position, state.playing)
                         Panel.Queue -> QueuePanel(state, undoable)
                     }
                 }
@@ -365,9 +369,27 @@ fun Record(
     }
 }
 @Composable
-private fun LyricsPanel(track: Track, positionMs: Long) {
+private fun LyricsPanel(track: Track, positionMs: Long, playing: Boolean) {
     val palette = LocalPalette.current
     val container = LocalContainer.current
+    val motion = playerMotionEnabled()
+    val framePosition = produceState(positionMs, track.id, playing, motion) {
+        if (playing && motion) while (true) withFrameNanos { value = container.player.position }
+        else value = positionMs
+    }
+    LaunchedEffect(track.id) {
+        while (true) {
+            delay(15_000)
+            val key = "lyrics:${track.id}"
+            val current = Remote.cache[key] as? Lyrics
+            if (current?.source == "Manual" || current?.lines?.any { it.words.isNotEmpty() } == true) break
+            try {
+                val response = container.api.lyrics(track.id)
+                if (response.isSuccessful) Remote.update(key, response.body() ?: Lyrics())
+            } catch (cancel: CancellationException) { throw cancel }
+            catch (_: Exception) { /* Keep the last text while this source is unavailable. */ }
+        }
+    }
 
     Load(
         "lyrics:${track.id}",
@@ -378,6 +400,7 @@ private fun LyricsPanel(track: Track, positionMs: Long) {
         if (lyrics.lines.isEmpty()) {
             LazyColumn(Modifier.fillMaxSize().fadeEdges(), contentPadding = PaddingValues(vertical = 16.dp)) {
                 item { Text(lyrics.plain, style = Type.body.copy(lineHeight = Type.body.lineHeight * 1.2f), color = palette.foreground) }
+                item { LyricsCredit(lyrics) }
             }
             return@Load
         }
@@ -388,10 +411,13 @@ private fun LyricsPanel(track: Track, positionMs: Long) {
 
         LazyColumn(Modifier.fillMaxSize().fadeEdges(), state = list, contentPadding = PaddingValues(vertical = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             itemsIndexed(lyrics.lines) { index, line ->
-                Text(
-                    line.text.ifBlank { "♪" },
+                TimedLyricText(
+                    line = line,
+                    positionMs = { if (playing && motion) framePosition.value else positionMs },
                     style = Type.section.copy(fontSize = Type.section.fontSize * 1.15f),
-                    color = when {
+                    foreground = palette.foreground,
+                    upcoming = when {
+                        line.words.isNotEmpty() -> palette.muted
                         index == active -> palette.foreground
                         index < active -> palette.faint
                         else -> palette.muted
@@ -399,6 +425,27 @@ private fun LyricsPanel(track: Track, positionMs: Long) {
                     modifier = Modifier.clickable { container.player.seekTo(line.at) },
                 )
             }
+            item { LyricsCredit(lyrics) }
+        }
+    }
+}
+
+@Composable
+private fun LyricsCredit(lyrics: Lyrics) {
+    val provider = lyrics.provider ?: return
+    val palette = LocalPalette.current
+    val uriHandler = LocalUriHandler.current
+    val attribution = lyrics.attribution
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 16.dp)) {
+        Text(provider, style = Type.small, color = palette.muted,
+            modifier = Modifier.clickable(enabled = attribution?.url != null) {
+                attribution?.url?.takeIf { it.startsWith("https://unison.betterlyrics.org/") }?.let(uriHandler::openUri)
+            })
+        attribution?.submitter?.takeIf { it.isNotBlank() }?.let { submitter ->
+            Text("· $submitter", style = Type.small, color = palette.muted,
+                modifier = Modifier.clickable(enabled = attribution.submitterUrl != null) {
+                    attribution.submitterUrl?.takeIf { it.startsWith("https://unison.betterlyrics.org/") }?.let(uriHandler::openUri)
+                })
         }
     }
 }

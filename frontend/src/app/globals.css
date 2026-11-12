@@ -9,6 +9,7 @@
 @import "./styles/tone.css";
 
 @import "./styles/seekbar.css";
+@import "./styles/lyrics.css";
 
 @import "./styles/record.css" layer(components);
 @import "./styles/boom.css" layer(components);

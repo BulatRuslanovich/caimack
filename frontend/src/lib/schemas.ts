@@ -12,7 +12,7 @@ export const limits = {
   genreName: 150,
   username: 20,
   password: { min: 8, max: 72 },
-  lyrics: 20_000,
+  lyrics: 200_000,
 } as const;
 
 const trimmed = (max: number) => z.string().trim().max(max);
