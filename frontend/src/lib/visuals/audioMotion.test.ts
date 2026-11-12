@@ -23,7 +23,7 @@ describe("music-driven material motion", () => {
     expect(motion.frame.beatEvents[0]).toBeGreaterThan(8);
     expect(motion.frame.pulse).toBeLessThan(0.001);
   });
-  it("places wave and pigment sources according to the attacking frequencies", () => {
+  it("places wave sources according to the attacking frequencies", () => {
     const low = new Float32Array(MOTION_BANDS),
       middle = new Float32Array(MOTION_BANDS);
     low[3] = 0.5;
@@ -32,7 +32,6 @@ describe("music-driven material motion", () => {
     const voice = new AudioMotion().step([0.4, 0.4, 0], 1 / 30, 65, true, middle);
     expect(bass.beatEvents[2]).toBeCloseTo(3 / 23);
     expect(voice.beatEvents[2]).toBeCloseTo(15 / 23);
-    expect(voice.pigment[0] - bass.pigment[0]).toBeGreaterThan(0.3);
   });
   it("does not let normalized FFT attacks give quiet music the force of loud drums", () => {
     const play = (loud: boolean) => {
@@ -205,13 +204,12 @@ describe("music-driven material motion", () => {
     expect(Math.max(...zero.spectrum)).toBe(0);
     expect(Math.max(...zero.transients)).toBe(0);
   });
-  it("turns bass attacks into traveling events, a lens impulse and new pigment", () => {
+  it("turns bass attacks into traveling events, a lens impulse", () => {
     const motion = new AudioMotion();
     for (let i = 0; i < 20; i++) motion.step([0, 0, 0], 1 / 30, 65);
     const hit = motion.step([0.5, 0.2, 0.04], 1 / 30, 65);
     expect(hit.beatEvents[0]).toBe(0);
     expect(hit.beatEvents[1]).toBeGreaterThan(0.1);
-    expect(hit.pigment[2]).toBeGreaterThan(0.1);
     expect(Math.hypot(...hit.spring)).toBeGreaterThan(0);
   });
   it("does not invent repeated drum hits from sustained sound", () => {
@@ -220,7 +218,6 @@ describe("music-driven material motion", () => {
     const frame = motion.frame;
     expect(frame.beatEvents[4]).toBe(-1);
     expect(frame.beatEvents[0]).toBeGreaterThan(3);
-    expect(frame.pigment[2]).toBe(0);
   });
   it("separates high-frequency spark attacks from bass impulses", () => {
     const motion = new AudioMotion();
@@ -238,7 +235,7 @@ describe("music-driven material motion", () => {
     expect(high.bass).toBeGreaterThan(low.bass);
     expect(high.mid).toBeGreaterThan(low.mid);
   });
-  it("preserves phase, spring and events on pause while preventing another pigment injection", () => {
+  it("preserves phase, spring and events on pause", () => {
     const motion = new AudioMotion();
     const frame = motion.step([0.4, 0.2, 0.2], 1 / 30, 65);
     const before = { age: frame.beatEvents[0], spring: [...frame.spring], bass: frame.bass };
@@ -246,7 +243,6 @@ describe("music-driven material motion", () => {
     expect(paused.beatEvents[0]).toBe(before.age);
     expect(paused.spring).toEqual(before.spring);
     expect(paused.bass).toBe(before.bass);
-    expect(paused.pigment[2]).toBe(0);
   });
   it("bounds history and settles the spring after repeated beats and silence", () => {
     const motion = new AudioMotion();

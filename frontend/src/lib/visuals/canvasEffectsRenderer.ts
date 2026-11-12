@@ -2,8 +2,7 @@
 // Copyright (c) 2026 Bulat Ruslanovich
 
 import { MOTION_BANDS } from "./audioMotion";
-import { createEffectLayout, GLASS_LENSES, INK_FLOWS } from "./effectLayout";
-import { InkFlow, inkVelocity } from "./inkFlow";
+import { createEffectLayout, GLASS_LENSES } from "./effectLayout";
 import { materialLevels } from "./materialLevels";
 import type { EffectsRenderer } from "./reactiveEffectsRenderer";
 import { softBand } from "./softBand";
@@ -15,11 +14,6 @@ export function createCanvasEffectsRenderer(
 ): EffectsRenderer | null {
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
-  const ink = document.createElement("canvas"),
-    paint = ink.getContext("2d");
-  const transport = document.createElement("canvas"),
-    snapshot = transport.getContext("2d");
-  const inkFlow = new InkFlow(layout.ink);
   const ribbonWaves = new RibbonWaves();
   const spectrum = new Float32Array(MOTION_BANDS);
   const transients = new Float32Array(MOTION_BANDS);
@@ -32,101 +26,7 @@ export function createCanvasEffectsRenderer(
         `rgba(${f.palette[i % 3].join(",")},${Math.max(0, Math.min(1, alpha))})`;
       ctx.clearRect(0, 0, w, h);
       ctx.globalAlpha = f.intensity;
-      if (f.effect === "ink" && paint) {
-        const flow = inkFlow.step(f, f.delta);
-        if (ink.width !== w || ink.height !== h) {
-          ink.width = w;
-          ink.height = h;
-          for (let i = 0; i < INK_FLOWS; i++) {
-            const x = w * layout.ink[i * 4],
-              y = h * layout.ink[i * 4 + 1],
-              r = h * layout.ink[i * 4 + 2] * 0.8;
-            const g = paint.createRadialGradient(x, y, 0, x, y, r);
-            g.addColorStop(0, color(i, 0.12));
-            g.addColorStop(1, color(i, 0));
-            paint.fillStyle = g;
-            paint.fillRect(0, 0, w, h);
-          }
-        }
-        if (f.delta > 0) {
-          if (snapshot) {
-            if (transport.width !== w || transport.height !== h) {
-              transport.width = w;
-              transport.height = h;
-            }
-            snapshot.globalCompositeOperation = "copy";
-            snapshot.drawImage(ink, 0, 0);
-            paint.clearRect(0, 0, w, h);
-            const columns = 10,
-              rows = 8;
-            const points = Array.from({ length: (columns + 1) * (rows + 1) }, (_, at) => {
-              const x = (at % (columns + 1)) / columns,
-                y = Math.floor(at / (columns + 1)) / rows;
-              const [vx, vy] = inkVelocity(flow.currents, x, y, w / h);
-              return { sx: x * w, sy: y * h, x: (x + vx * f.delta) * w, y: (y + vy * f.delta) * h };
-            });
-            const triangle = (
-              a: (typeof points)[number],
-              b: (typeof points)[number],
-              c: (typeof points)[number],
-            ) => {
-              const dx = b.sx - a.sx,
-                dy = c.sy - a.sy;
-              const aa = (b.x - a.x) / dx,
-                bb = (b.y - a.y) / dx,
-                cc = (c.x - a.x) / dy,
-                dd = (c.y - a.y) / dy;
-              const cx = (a.x + b.x + c.x) / 3,
-                cy = (a.y + b.y + c.y) / 3;
-              paint.save();
-              paint.beginPath();
-              [a, b, c].forEach((p, i) => {
-                const length = Math.hypot(p.x - cx, p.y - cy) || 1;
-                const x = p.x + ((p.x - cx) / length) * 0.6,
-                  y = p.y + ((p.y - cy) / length) * 0.6;
-                if (i) paint.lineTo(x, y);
-                else paint.moveTo(x, y);
-              });
-              paint.closePath();
-              paint.clip();
-              paint.globalCompositeOperation = "copy";
-              paint.setTransform(
-                aa,
-                bb,
-                cc,
-                dd,
-                a.x - aa * a.sx - cc * a.sy,
-                a.y - bb * a.sx - dd * a.sy,
-              );
-              paint.drawImage(transport, 0, 0);
-              paint.restore();
-            };
-            for (let y = 0; y < rows; y++)
-              for (let x = 0; x < columns; x++) {
-                const at = y * (columns + 1) + x;
-                triangle(points[at], points[at + 1], points[at + columns + 1]);
-                triangle(points[at + columns + 2], points[at + columns + 1], points[at + 1]);
-              }
-          }
-          paint.globalCompositeOperation = "destination-out";
-          paint.fillStyle = `rgba(0,0,0,${f.delta * 0.07})`;
-          paint.fillRect(0, 0, w, h);
-          paint.globalCompositeOperation = "source-over";
-        }
-        for (let source = 0; source < INK_FLOWS; source++) {
-          const at = source * 4;
-          if (flow.sources[at + 2] <= 0) continue;
-          const x = flow.sources[at] * w,
-            y = flow.sources[at + 1] * h,
-            r = h * (0.13 - flow.sources[at + 3] * 0.095);
-          const g = paint.createRadialGradient(x, y, 0, x, y, r);
-          g.addColorStop(0, color(Math.floor(flow.sources[at + 3] * 3), flow.sources[at + 2]));
-          g.addColorStop(1, color(0, 0));
-          paint.fillStyle = g;
-          paint.fillRect(0, 0, w, h);
-        }
-        ctx.drawImage(ink, 0, 0);
-      } else if (f.effect === "glass") {
+      if (f.effect === "glass") {
         const material = materialLevels(f);
         let stress = 0;
         for (let i = 0; i < 8; i++) {
@@ -215,8 +115,6 @@ export function createCanvasEffectsRenderer(
     },
     destroy() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ink.width = ink.height = 0;
-      transport.width = transport.height = 0;
     },
   };
 }

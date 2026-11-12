@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Bulat Ruslanovich
 
-import { GLASS_LENSES, INK_FLOWS } from "./effectLayout";
+import { GLASS_LENSES } from "./effectLayout";
 import { spectrumGlsl } from "./soundGeometry";
 
 export const vertex = `attribute vec2 position; varying vec2 uv;
@@ -10,7 +10,6 @@ void main(){uv=position*.5+.5;gl_Position=vec4(position,0.,1.);}`;
 const noise = `
 float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x),mix(hash(i+vec2(0.,1.)),hash(i+1.),f.x),f.y);}
-float fbm(vec2 p){float n=0.,a=.5;for(int i=0;i<4;i++){n+=a*noise(p);p=mat2(1.6,1.2,-1.2,1.6)*p+4.7;a*=.5;}return n;}
 `;
 
 export const fragment = `precision highp float;
@@ -23,7 +22,6 @@ uniform float layoutSeed;
 uniform vec4 beatEvents[8],sparkEvents[6];
 uniform vec4 ribbons[5];
 uniform float ribbonPhase[5];
-uniform sampler2D inkHistory;
 uniform sampler2D spectrum;
 uniform int effect;
 ${noise}
@@ -142,63 +140,11 @@ vec4 glass(vec2 p){
  return vec4(color,clamp(.14+pool*.3+edge*.5+prism*.25+caustic*.3+flash*.25+facet*.15,0.,.94));
 }
 
-vec4 ink(vec2 p){
- vec2 q=(p-.5)*vec2(resolution.x/resolution.y,1.);
- vec2 drift=vec2(fbm(q*1.1+material.y*.2),fbm(q*1.2-vec2(0.,material.x*.2)+7.));
- vec4 paint=texture2D(inkHistory,clamp(p+(drift-.5)*.075,0.,1.));
- vec3 color=clamp(paint.rgb/max(.04,paint.a),0.,1.);
- float cloud=fbm(q*2.7+drift*4.5);
- float body=smoothstep(.27,.7,cloud);
- float tendrils=pow(max(0.,1.-abs(cloud-.48)*3.),14.)*.3;
- float density=1.-exp(-paint.a*3.4);
- return vec4(color*(.45+body*.7),clamp((body*.75+tendrils)*density,0.,.94));
-}
-
 void main(){
  vec4 result;
- if(effect==0)result=aurora(uv);else if(effect==1)result=glass(uv);else result=ink(uv);
+ if(effect==0)result=aurora(uv);else result=glass(uv);
  float top=1.-smoothstep(.78,1.,uv.y);
  float edge=1.-smoothstep(.22,1.2,length((uv-.5)*vec2(1.,.8)));
  float readability=1.-smoothstep(.48,.85,uv.x)*.3;
  gl_FragColor=vec4(clamp(mix(result.rgb,result.rgb*.62,light),0.,1.),result.a*intensity*(.7+.3*edge)*(.65+.35*top)*readability);
-}`;
-
-export const inkFragment = `precision highp float;
-varying vec2 uv;
-uniform sampler2D history;
-uniform vec2 texel;
-uniform float delta,bass,mid,high,tick;
-uniform vec4 sources[${INK_FLOWS}],flows[${INK_FLOWS}];
-uniform vec3 primary,secondary,accent;
-void main(){
- float aspect=texel.y/texel.x;
- vec2 velocity=vec2(0.);
- for(int i=0;i<${INK_FLOWS};i++){
-  vec2 d=(uv-flows[i].xy)*vec2(aspect,1.);
-  float radius=flows[i].w,frequency=float(i)/${INK_FLOWS - 1}.;
-  float local=exp(-dot(d,d)/(radius*radius));
-  vec2 curl=vec2(-d.y,d.x)/radius*local*flows[i].z*.16;
-  velocity+=vec2(curl.x/aspect,curl.y);
-  velocity+=vec2(sin(uv.y*(12.+frequency*45.)),cos(uv.x*(10.+frequency*40.)))*abs(flows[i].z)*local*.009*frequency;
-  d=uv-sources[i].xy;
-  float rate=min(2.,sources[i].z/max(delta,.001));
-  velocity+=vec2(-d.y,d.x)*rate*.01/(.035+dot(d,d));
- }
- vec2 from=clamp(uv-velocity*delta,texel,1.-texel);
- vec4 old=texture2D(history,from);
- vec4 neighbors=(texture2D(history,from+vec2(texel.x,0.))+texture2D(history,from-vec2(texel.x,0.))+texture2D(history,from+vec2(0.,texel.y))+texture2D(history,from-vec2(0.,texel.y)))*.25;
- old=mix(old,neighbors,min(.08,delta*(.65+mid*.4)))*exp(-delta*.065);
- for(int i=0;i<${INK_FLOWS};i++){
-  float frequency=sources[i].w;
-  vec2 d=(uv-sources[i].xy)*vec2(aspect,1.2+sin(frequency*3.14159)*1.5);
-  float radius=mix(.13,.035,frequency);
-  float injection=exp(-dot(d,d)/(radius*radius))*sources[i].z;
-  vec3 paintColor=mix(primary,mix(secondary,accent,sources[i].w),sources[i].w);
-  float amount=1.-exp(-injection*1.8);
-  old.rgb=mix(old.rgb,paintColor,amount);
-  old.a+=amount*(1.-old.a);
- }
- // Unbiased rounding lets low-density pigment dissipate in RGBA8 textures.
- float rounding=(fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233))+tick*91.73)*43758.5453)-.5)/255.;
- gl_FragColor=clamp(old+vec4(rounding),0.,1.);
 }`;

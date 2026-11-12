@@ -27,7 +27,6 @@ export interface AudioMotionFrame {
   spring: [number, number];
   beatEvents: Float32Array;
   sparkEvents: Float32Array;
-  pigment: [number, number, number, number];
 }
 
 // Frequency envelopes control the material; positive spectral changes create
@@ -64,7 +63,6 @@ export class AudioMotion {
     spring: [0, 0],
     beatEvents: new Float32Array(BEATS * 4).fill(-1),
     sparkEvents: new Float32Array(SPARKS * 4).fill(-1),
-    pigment: [0.5, 0.5, 0, 0],
   };
 
   step(
@@ -75,10 +73,7 @@ export class AudioMotion {
     spectrum: ArrayLike<number> = [],
     rms?: number,
   ): AudioMotionFrame {
-    if (!active) {
-      this.frame.pigment[2] = 0;
-      return this.frame;
-    }
+    if (!active) return this.frame;
     const dt = Math.min(0.06, Math.max(0, Number.isFinite(delta) ? delta : 0));
     this.clock += dt;
     const gain = (clamp(sensitivity / 100) * 2) ** 1.4;
@@ -195,7 +190,6 @@ export class AudioMotion {
     // distorted guitars keep the total bass and mid energy nearly constant.
     const beatStrength = candidate * impact;
     const sparkStrength = clamp(punch(rises[2] * 1.1) * gain) * impact;
-    f.pigment[2] = 0;
     if (beat) {
       const seed = attackWeight > 0 ? attackMoment / attackWeight : 0.5;
       this.beats.unshift({ at: this.clock, strength: beatStrength, seed });
@@ -204,20 +198,12 @@ export class AudioMotion {
       f.pulse = Math.max(f.pulse, beatStrength);
       this.velocity[0] += Math.cos(seed * Math.PI * 2) * beatStrength * 2.4;
       this.velocity[1] += Math.sin(seed * Math.PI * 2) * beatStrength * 1.8;
-      f.pigment = [
-        0.12 + seed * 0.76,
-        0.36 + (0.5 - Math.abs(seed - 0.5)) * 0.4,
-        beatStrength,
-        seed,
-      ];
     }
     if (sparkStrength > 0.09 && raw[2] > 0.005 && this.clock - this.lastSpark > 0.08) {
       const seed = trebleWeight > 0 ? trebleMoment / trebleWeight : 0.85;
       this.sparks.unshift({ at: this.clock, strength: sparkStrength, seed });
       this.sparks.length = Math.min(SPARKS, this.sparks.length);
       this.lastSpark = this.clock;
-      if (!f.pigment[2])
-        f.pigment = [0.12 + seed * 0.76, 0.4 + (1 - seed) * 0.2, sparkStrength * 0.22, seed];
     }
     f.pulse = approach(f.pulse, 0, 0.18, dt);
     // A damped lens spring reacts on the attack and settles, rather than

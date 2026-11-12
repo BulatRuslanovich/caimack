@@ -15,13 +15,14 @@ describe("playback visual preferences", () => {
     expect(playerEffectsState({ effect: "invalid", intensity: Number.NaN })).toEqual(
       playerEffectsState(null),
     );
-    expect(playerEffectsState({ effect: "ink", intensity: 200 }).intensity).toBe(100);
+    expect(playerEffectsState({ effect: "aurora", intensity: 200 }).intensity).toBe(100);
     expect(playerEffectsState({ effect: "glass", intensity: -3 }).intensity).toBe(0);
     expect(playerEffectsState({ effect: "water", intensity: 45, sensitivity: 80 })).toEqual({
       effect: "glass",
       intensity: 35,
       sensitivity: 85,
     });
+    expect(playerEffectsState({ effect: "ink" }).effect).toBe("glass");
     expect(playerEffectsState({ effect: "fabric", sensitivity: 200 }).effect).toBe("glass");
     expect(playerEffectsState({ sensitivity: -10 }).sensitivity).toBe(0);
     expect(playerEffectsState({ sensitivity: 200 }).sensitivity).toBe(100);
