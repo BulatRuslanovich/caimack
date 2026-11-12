@@ -52,9 +52,11 @@ class Session(
             runCatching { json.decodeFromString<User>(String(Base64.getUrlDecoder().decode(hint))) }.getOrNull()
         } ?: offlineUser()
 
-        // Show the account-bound local catalog immediately; an unreachable
-        // server must not leave an offline launch on a blank restoring screen.
-        offlineUser()?.takeIf { it.id==hinted?.id }?.let { current.value=SessionState.SignedIn(it) }
+        // Restore the local UI before checking the server, including accounts
+        // with individual downloads but no full library synchronization.
+        if (server.url.value != null && hinted != null) {
+            current.value = SessionState.SignedIn(hinted)
+        }
 
         current.value = when {
             server.url.value == null || hinted == null -> SessionState.SignedOut()
