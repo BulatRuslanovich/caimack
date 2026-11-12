@@ -183,6 +183,7 @@ export function FullScreenPlayer({
         <DialogPrimitive.Content asChild aria-describedby={undefined}>
           <div
             data-player-fullscreen="true"
+            data-aura-host
             onTouchStart={(event) => {
               const atTop = (stage.current?.scrollTop ?? 0) === 0;
               swipeFrom.current = panel === "art" && atTop ? event.touches[0].clientY : null;
@@ -280,6 +281,7 @@ export function FullScreenPlayer({
                     out
                     spinning={player.isPlaying && !player.buffering}
                     scratchable
+                    aura
                     axis="responsive"
                     sizes="(max-width: 1023px) min(76vw, 22rem), min(48vh, 28rem)"
                     transitionCover

@@ -360,7 +360,7 @@ export const ru: Dictionary = {
   "player.closeFull": "Закрыть полноэкранный плеер",
   "player.transitionAt": "Отсюда начнётся «{title}»",
   "leanBack.open": "Заставка",
-  "settings.visualizer": "Живая пластинка",
+  "settings.visualizer": "Аура вокруг пластинки",
   "settings.leanBack": "Заставка",
   "view.label": "Вид",
   "view.layout": "Отображение",
@@ -1045,7 +1045,8 @@ export const ru: Dictionary = {
   "settings.help.theme": "Светлый, тёмный режим или автоматический выбор по системе.",
   "settings.help.crossfade": "Плавно смешивает конец трека с началом следующего.",
   "settings.help.language": "Меняет язык интерфейса.",
-  "settings.help.visualizer": "Показывает анимацию, реагирующую на музыку.",
+  "settings.help.visualizer":
+    "Свечение и кольца вокруг пластинки в полноэкранном плеере реагируют на музыку.",
   "settings.help.normalizeVolume": "Уменьшает разницу громкости между треками.",
   "settings.help.equalizer":
     "Настройте звучание с помощью десяти частотных полос или выберите готовый пресет.",

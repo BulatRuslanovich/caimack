@@ -336,7 +336,7 @@ export const en = {
   "player.closeFull": "Close the full player",
   "player.transitionAt": "“{title}” starts here",
   "leanBack.open": "Lean back",
-  "settings.visualizer": "Live record",
+  "settings.visualizer": "Record aura",
   "settings.leanBack": "Screensaver",
   "view.label": "View",
   "view.layout": "Layout",
@@ -992,7 +992,8 @@ export const en = {
   "settings.help.colorway": "Change the colours of backgrounds, surfaces and accents.",
   "settings.help.language": "Change the interface language.",
   "settings.help.coverTone": "Tint the interface with colours from the current cover.",
-  "settings.help.visualizer": "Show an animation that responds to music.",
+  "settings.help.visualizer":
+    "Show a glow and rings around the record that respond to music in the full-screen player.",
   "settings.help.leanBack": "Open the listening screen automatically when idle.",
   "settings.help.yandexMusic": "Enable music search and import from Yandex Music.",
 } satisfies Record<string, Phrase>;
