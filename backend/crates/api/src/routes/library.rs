@@ -51,6 +51,10 @@ async fn enrichment_status(State(state): State<AppState>, Admin(_): Admin) -> Ap
 
 pub fn router() -> Router<AppState> {
     Router::new()
+        .route("/api/me/library", get(saved_library))
+        .route("/api/me/library/folders", get(library_folders))
+        .route("/api/me/library/organize", post(organize_library))
+        .route("/api/me/library/{kind}/{id}", put(save_library_item).delete(remove_library_item))
         .route("/api/config", get(client_config))
         .route("/api/library/enrichment", get(enrichment_status))
         .route("/api/me/settings", get(get_settings).put(update_settings))
@@ -330,5 +334,45 @@ async fn revoke_user_sessions(
     RoutePath(id): RoutePath<Uuid>,
 ) -> ApiResult<StatusCode> {
     admin::revoke_sessions(&state.db, &state.auth, id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn saved_library(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> ApiResult<impl IntoResponse> {
+    Ok(Json(app::library::collection::list(&state.db, user.user_id).await?))
+}
+
+async fn library_folders(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+) -> ApiResult<impl IntoResponse> {
+    Ok(Json(app::library::folders::list(&state.db, user.user_id).await?))
+}
+
+async fn organize_library(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Json(change): Json<app::library::folders::Change>,
+) -> ApiResult<StatusCode> {
+    let mut tx = state.db.begin().await.map_err(app::AppError::from)?;
+    app::library::folders::apply(&mut tx, user.user_id, &change, chrono::Utc::now()).await?;
+    tx.commit().await.map_err(app::AppError::from)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+async fn save_library_item(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    RoutePath((kind, id)): RoutePath<(app::library::collection::Kind, Uuid)>,
+) -> ApiResult<StatusCode> {
+    let mut conn = state.db.acquire().await.map_err(app::AppError::from)?;
+    app::library::collection::save(&mut conn, user.user_id, kind, id, chrono::Utc::now()).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+async fn remove_library_item(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    RoutePath((kind, id)): RoutePath<(app::library::collection::Kind, Uuid)>,
+) -> ApiResult<StatusCode> {
+    let mut conn = state.db.acquire().await.map_err(app::AppError::from)?;
+    app::library::collection::remove(&mut conn, user.user_id, kind, id).await?;
     Ok(StatusCode::NO_CONTENT)
 }

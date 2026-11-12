@@ -32,3 +32,20 @@ SQLX_OFFLINE=true DATABASE_URL=postgres://music:password@localhost:5432/postgres
 ```
 
 Use a disposable local PostgreSQL server and a role allowed to create databases. SQLx creates isolated test databases. Do not run these tests against production.
+
+## Personal library
+
+Migration 0008 adds account-scoped saved albums, artists and playlists, independently
+of track favourites and playlist ownership. Existing and newly created playlists
+are automatically saved to their owner's library. Removing a saved item does not
+delete it from the catalog.
+
+Migration 0009 adds nested personal folders. Folder deletion moves saved items and
+child folders to the parent. Folder moves reject cycles and cross-account targets;
+organization changes are serialized per account inside a transaction.
+
+These migration numbers are retained from the source branch. The sequence does
+not need to be contiguous.
+
+The `saved_library` and `library_folders` integration tests cover account isolation,
+playlist visibility, idempotent saves, folder moves and preservation of contents.

@@ -6,3 +6,6 @@ pub mod favorites;
 pub mod history;
 pub mod playlists;
 pub mod settings;
+
+pub mod collection;
+pub mod folders;
