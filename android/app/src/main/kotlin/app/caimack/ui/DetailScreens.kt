@@ -43,7 +43,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun AlbumScreen(id: String, nav: NavController, play: (List<Track>, Int) -> Unit) {
     val container = LocalContainer.current
-    Load("album:$id", { container.api.album(id) }) { album ->
+    val api = catalogApi()
+    Load("album:$id", { api.album(id) }) { album ->
         LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(bottom = 24.dp)) {
             item {
                 DetailHeader(
@@ -56,7 +57,7 @@ fun AlbumScreen(id: String, nav: NavController, play: (List<Track>, Int) -> Unit
             item { Actions(album.tracks, play, libraryAction = { LibrarySaveButton("album", id) }) }
             itemsIndexed(album.tracks) { index, track -> TrackRow(track, { play(album.tracks, index) }, index = index + 1) }
             item {
-                Load("artist:${album.artistId}", { container.api.artist(album.artistId) }) { artist ->
+                Load("artist:${album.artistId}", { api.artist(album.artistId) }) { artist ->
                     val others = artist.albums.filter { it.id != album.id }
                     if (others.isNotEmpty()) {
                         AlbumShelf(stringResource(R.string.albums_more_by_artist, artist.name), others, nav)
@@ -70,7 +71,14 @@ fun AlbumScreen(id: String, nav: NavController, play: (List<Track>, Int) -> Unit
 @Composable
 fun ArtistScreen(id: String, nav: NavController, play: (List<Track>, Int) -> Unit) {
     val container = LocalContainer.current
-    Load("artist:$id", { container.api.artist(id) }) { artist ->
+    val api = catalogApi()
+    val local = LocalOfflineLibrary.current
+    Load("artist:$id", { api.artist(id).also { artist ->
+        if (!local) kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            container.downloadedCatalog.remember(artist)
+            if (artist.hasImage) container.scope.launch { container.downloadedCatalog.cacheArtwork(listOf("api/artists/${artist.id}/image"), container.http) }
+        }
+    } }) { artist ->
         LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(bottom = 24.dp)) {
             item {
                 DetailHeader(
@@ -85,10 +93,10 @@ fun ArtistScreen(id: String, nav: NavController, play: (List<Track>, Int) -> Uni
                 ) { Cover(container.media.artistImage(artist.id, artist.hasImage, small = false), artist.name, it, round = true) }
             }
             item {
-                Load("artist-top:$id", { container.api.artistTopTracks(id) }) { top ->
+                Load("artist-top:$id", { if (local) collectionTracks { api.artist(id, it, TRACK_PAGE_SIZE).tracks } else api.artistTopTracks(id) }) { top ->
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Actions(top, play, libraryAction = { LibrarySaveButton("artist", id) })
-                        SectionHeader(stringResource(R.string.artists_top_tracks))
+                        SectionHeader(stringResource(if (local) R.string.nav_tracks else R.string.artists_top_tracks))
                         top.take(5).forEachIndexed { index, track -> TrackRow(track, { play(top, index) }, index = index + 1) }
                     }
                 }
@@ -102,7 +110,7 @@ fun ArtistScreen(id: String, nav: NavController, play: (List<Track>, Int) -> Uni
 
 @Composable
 fun GenreScreen(id: String, name: String, play: (List<Track>, Int) -> Unit) {
-    val api = LocalContainer.current.api
+    val api = catalogApi()
     TrackPage("genre:$id", readableGenre(name), stringResource(R.string.tracks_empty), null, play) {
         api.genreTracks(id, it, TRACK_PAGE_SIZE)
     }
@@ -112,13 +120,14 @@ fun GenreScreen(id: String, name: String, play: (List<Track>, Int) -> Unit) {
 fun MixScreen(kind: String, play: (List<Track>, Int) -> Unit) {
     if (!recommendationsEnabled()) return
     val container = LocalContainer.current
+    val api = catalogApi()
     val title = when (kind) {
         "new" -> R.string.home_new_arrivals
         "top" -> R.string.home_top_this_week
         else -> R.string.home_daily_mix
     }
 
-    Load("mix:$kind", { container.api.homeMix(kind).tracks }) { tracks ->
+    Load("mix:$kind", { api.homeMix(kind).tracks }) { tracks ->
         LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(bottom = 24.dp)) {
             item {
                 DetailHeader(
@@ -142,7 +151,7 @@ fun MixScreen(kind: String, play: (List<Track>, Int) -> Unit) {
 
 @OptIn(UnstableApi::class)
 @Composable
-internal fun Actions(tracks: List<Track>, play: (List<Track>, Int) -> Unit, onMore: (() -> Unit)? = null, libraryAction: (@Composable () -> Unit)? = null) {
+internal fun Actions(tracks: List<Track>, play: (List<Track>, Int) -> Unit, onMore: (() -> Unit)? = null, libraryAction: (@Composable () -> Unit)? = null, beforeDownload: suspend () -> Unit = {}) {
     if (tracks.isEmpty()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             libraryAction?.invoke()
@@ -152,6 +161,7 @@ internal fun Actions(tracks: List<Track>, play: (List<Track>, Int) -> Unit, onMo
     }
     val palette = LocalPalette.current
     val container = LocalContainer.current
+    val api = catalogApi()
     val scope = rememberCoroutineScope()
     val offline by container.downloads.state.collectAsStateWithLifecycle()
     val synchronization by container.syncStore.status.collectAsStateWithLifecycle()
@@ -161,12 +171,15 @@ internal fun Actions(tracks: List<Track>, play: (List<Track>, Int) -> Unit, onMo
     val complete = mine.count { it.done } == tracks.size
 
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        PlayActions(Modifier.weight(1f), onPlay = { play(tracks, 0) })
+        PlayActions(Modifier.weight(1f), enabled = !LocalOfflineLibrary.current || tracks.any { it.id in LocalAvailableTracks.current }, onPlay = { play(tracks, 0) })
         libraryAction?.invoke()
-        if (!librarySync) Box(
+        if (!librarySync && !LocalOfflineLibrary.current) Box(
             Modifier.size(48.dp).clip(CircleShape).clickable {
                 if (pending || complete) container.downloads.remove(mine.map { it.download.request.id })
-                else scope.launch { container.downloads.add(tracks, container.settings.value) }
+                else scope.launch {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { beforeDownload() }
+                    container.downloads.add(tracks, container.settings.value)
+                }
             },
             contentAlignment = Alignment.Center,
         ) {

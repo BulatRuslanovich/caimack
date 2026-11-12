@@ -69,7 +69,13 @@ import kotlinx.coroutines.withContext
 @Composable
 fun PlaylistScreen(id: String, play: (List<Track>, Int) -> Unit, onDeleted: () -> Unit) {
     val container = LocalContainer.current
-    Load("playlist:$id", { container.api.playlist(id) }) { loaded ->
+    val api = catalogApi()
+    val local = LocalOfflineLibrary.current
+    Load("playlist:$id", {
+        api.playlist(id).also { playlist ->
+            if (!local) kotlinx.coroutines.withContext(Dispatchers.IO) { container.downloadedCatalog.remember(playlist) }
+        }
+    }) { loaded ->
         PlaylistContent(loaded, play, onDeleted)
     }
 }
@@ -88,7 +94,7 @@ private fun PlaylistContent(loaded: PlaylistDetail, play: (List<Track>, Int) -> 
     val me = currentUserId()
     var playlist by remember(loaded) { mutableStateOf(loaded) }
     var editing by remember { mutableStateOf(Editing.None) }
-    val owner = me != null && playlist.ownerId == me
+    val owner = !LocalOfflineLibrary.current && me != null && playlist.ownerId == me
     val say = { message: String -> Toast.makeText(context, message, Toast.LENGTH_SHORT).show() }
 
     fun background(work: suspend () -> Unit) {
@@ -235,7 +241,9 @@ private fun PlaylistContent(loaded: PlaylistDetail, play: (List<Track>, Int) -> 
                 backdrop = cover(true),
             ) { Cover(cover(false), playlist.name, it) }
         }
-        item { Actions(playlist.tracks, play, onMore = if (owner) ({ editing = Editing.Manage }) else null, libraryAction = { LibrarySaveButton("playlist", playlist.id) }) }
+        item { Actions(playlist.tracks, play, onMore = if (owner) ({ editing = Editing.Manage }) else null, libraryAction = { LibrarySaveButton("playlist", playlist.id) }, beforeDownload = { container.downloadedCatalog.remember(playlist)
+            if (playlist.hasCover) container.scope.launch { container.downloadedCatalog.cacheArtwork(listOf("api/playlists/${playlist.id}/cover"), container.http) }
+        }) }
         if (playlist.tracks.isEmpty()) {
             item { Empty(stringResource(R.string.playlists_empty_playlist_title)) }
         } else {

@@ -23,8 +23,14 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 
+internal val LocalArtworkRevision = androidx.compose.runtime.staticCompositionLocalOf { 0L }
+internal val LocalArtworkResolver = androidx.compose.runtime.staticCompositionLocalOf<(String) -> String?> { { null } }
+
 @Composable
 fun Cover(url: String?, name: String, modifier: Modifier = Modifier, round: Boolean = false, fadeIn: Boolean = true) {
+    val revision = LocalArtworkRevision.current
+    val resolve = LocalArtworkResolver.current
+    val resolvedUrl = remember(url, revision, resolve) { url?.let { resolve(it) ?: it } }
     val palette = LocalPalette.current
     val shape: Shape = if (round) CircleShape else Radius.cover
 
@@ -39,15 +45,15 @@ fun Cover(url: String?, name: String, modifier: Modifier = Modifier, round: Bool
             }
         }
 
-        if (url == null) {
+        if (resolvedUrl == null) {
             fallback()
         } else {
             val context = LocalPlatformContext.current
-            val request = remember(url, context, fadeIn) {
-                ImageRequest.Builder(context).data(url).crossfade(fadeIn).build()
+            val request = remember(resolvedUrl, context, fadeIn) {
+                ImageRequest.Builder(context).data(resolvedUrl).crossfade(fadeIn).build()
             }
             // A recycled image painter must never display the previous song while loading.
-            key(url) {
+            key(resolvedUrl) {
                 SubcomposeAsyncImage(
                     model = request,
                     contentDescription = null,

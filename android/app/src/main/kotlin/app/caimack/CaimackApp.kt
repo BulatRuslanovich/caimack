@@ -19,6 +19,16 @@ class CaimackApp : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         container.scope.launch { container.session.restore() }
         container.connect.start()
+        getSystemService(android.net.ConnectivityManager::class.java).registerNetworkCallback(
+            android.net.NetworkRequest.Builder().build(),
+            object : android.net.ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: android.net.Network) { container.refreshDownloadArtwork(); container.refreshLibraryConnection() }
+                override fun onLost(network: android.net.Network) {
+                    container.libraryCache.offline.value = true
+                    container.refreshLibraryConnection()
+                }
+            },
+        )
         Background.schedule(this)
         app.caimack.sync.SyncScheduler.observe(this)
     }

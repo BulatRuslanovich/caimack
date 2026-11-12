@@ -55,6 +55,11 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 
 val LocalContainer = staticCompositionLocalOf<AppContainer> { error("No container") }
+val LocalOfflineLibrary = staticCompositionLocalOf { false }
+val LocalAvailableTracks = staticCompositionLocalOf<Set<String>> { emptySet() }
+@Composable
+internal fun catalogApi() = LocalContainer.current.api
+
 val LocalSnackbar = staticCompositionLocalOf<androidx.compose.material3.SnackbarHostState> { error("No snackbar host") }
 object Remote {
     val cache = ConcurrentHashMap<String, Any>()
@@ -73,12 +78,15 @@ fun <T : Any> Load(
     empty: @Composable () -> Unit = {},
     content: @Composable (T) -> Unit,
 ) {
+    val local = LocalOfflineLibrary.current
+    val artworkRevision = if (local) LocalArtworkRevision.current else 0L
     @Suppress("UNCHECKED_CAST")
-    var value by remember(key) { mutableStateOf(Remote.cache[key] as T?) }
+    var value by remember(key, local) { mutableStateOf(if (local) null else Remote.cache[key] as T?) }
     var failed by remember(key) { mutableStateOf(false) }
     var attempt by remember(key) { mutableIntStateOf(0) }
 
-    LaunchedEffect(key) {
+    LaunchedEffect(key, local) {
+        if (local) return@LaunchedEffect
         Remote.updates.collect { (updatedKey, updatedValue) ->
             if (updatedKey == key) {
                 @Suppress("UNCHECKED_CAST")
@@ -87,18 +95,18 @@ fun <T : Any> Load(
         }
     }
 
-    LaunchedEffect(key, attempt) {
+    LaunchedEffect(key, attempt, artworkRevision, local) {
         failed = false
         val cachedBeforeRequest = Remote.cache[key]
         runCatching { withNetworkRetries(load) }
             .onSuccess {
                 // A completed edit takes precedence over an older in-flight read.
-                val edited = Remote.cache[key]
+                val edited = if (local) null else Remote.cache[key]
                 if (edited != null && edited !== cachedBeforeRequest) {
                     @Suppress("UNCHECKED_CAST")
                     value = edited as T
                 } else {
-                    Remote.cache[key] = it
+                    if (!local) Remote.cache[key] = it
                     value = it
                 }
             }

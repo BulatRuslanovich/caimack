@@ -31,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.draw.shadow
@@ -139,6 +140,7 @@ fun TrackRow(
     val synchronization by container.syncStore.status.collectAsState()
     val librarySync = synchronization.enabled && container.syncStore.active
     val showDownloadBadge = !librarySync && downloads[track.id]?.done == true
+    val available = !LocalOfflineLibrary.current || track.id in LocalAvailableTracks.current
     val current = playback.current?.id == track.id
     val playing = current && playback.playing
     var actions by remember { mutableStateOf(false) }
@@ -164,7 +166,8 @@ fun TrackRow(
                     )
                 },
             )
-            .combinedClickable(onLongClick = { actions = true }, onClick = onClick)
+            .alpha(if (available) 1f else 0.38f)
+            .combinedClickable(enabled = available, onLongClick = { actions = true }, onClick = onClick)
             .heightIn(min = 48.dp)
             .padding(start = inset, top = density.rowPadding, bottom = density.rowPadding, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -202,7 +205,7 @@ fun TrackRow(
             Lucide.EllipsisVertical,
             stringResource(R.string.menu_more),
             tint = palette.faint,
-            modifier = Modifier.clip(CircleShape).clickable { actions = true }.padding(15.dp).size(18.dp),
+            modifier = Modifier.clip(CircleShape).clickable(enabled = available) { actions = true }.padding(15.dp).size(18.dp),
         )
     }
 }

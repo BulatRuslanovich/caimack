@@ -41,6 +41,9 @@ import app.caimack.session.SessionAuthenticator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -95,10 +98,15 @@ class AppContainer(context: Context) {
 
     private val cookies = PersistentCookieJar(preferences, scope)
 
+    val libraryCache by lazy { app.caimack.playback.LibraryCache(File(context.filesDir, "library-cache"),
+        { (session.state.value as? SessionState.SignedIn)?.let { "${server.url.value}|${it.user.id}" } },
+        { downloadedCatalog.localSnapshot() }, json) }
+
     val http: OkHttpClient = OkHttpClient.Builder()
         .cookieJar(cookies)
         .addInterceptor(server.interceptor)
         .addInterceptor(offlineCatalog.interceptor)
+        .addInterceptor { libraryCache.interceptor.intercept(it) }
         .authenticator(SessionAuthenticator(server, { http }) { session.expire() })
         .build()
 
@@ -111,7 +119,7 @@ class AppContainer(context: Context) {
 
     val session = Session(api, server, cookies, json, { deviceName }, syncStore::offlineUser, syncStore::login, syncStore::logout)
 
-    val media = Media(server,syncStore::asset)
+    val media = Media(server) { path -> syncStore.asset(path) ?: downloadedCatalog.asset(path) }
 
     val settings = MutableStateFlow(UserSettings())
     val playbackDelivery = MutableStateFlow<app.caimack.playback.PlaybackDelivery?>(null)
@@ -151,15 +159,51 @@ class AppContainer(context: Context) {
 
     val downloads by lazy { Downloads(context.applicationContext, http, server, json) { !syncStore.active } }
 
+    val downloadedCatalog by lazy { app.caimack.playback.DownloadedCatalog(context.applicationContext, json,
+        { server.url.value?.toString() },
+        { downloads.tracks() + syncStore.tracks() },
+        { if (syncStore.active) app.caimack.sync.OfflineCatalog.view(syncStore.snapshot ?: kotlinx.serialization.json.buildJsonObject {}, syncStore.edits()) else null }) }
+
     val player = PlayerConnection(context.applicationContext, media, tracks, radio, signals)
     val connect by lazy { ConnectPlayback(context.applicationContext, this) }
 
+    private val artworkRefresh = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
+    fun refreshDownloadArtwork() { artworkRefresh.trySend(Unit) }
+    private val connectionProbe = kotlinx.coroutines.sync.Mutex()
+    fun refreshLibraryConnection() {
+        scope.launch {
+            if (session.state.value !is SessionState.SignedIn || !connectionProbe.tryLock()) return@launch
+            try { withTimeoutOrNull(5_000) { runCatching { api.me() } } }
+            finally { connectionProbe.unlock() }
+        }
+    }
+
+    fun locallyAvailable(id: String): Boolean = downloads.state.value[id]?.done == true || syncStore.audio(id) != null
+    fun playable(tracks: List<Track>): List<Track> = if (libraryCache.offline.value) tracks.filter { locallyAvailable(it.id) } else tracks
+
+
     init {
+        scope.launch {
+            for (request in artworkRefresh) {
+                if (session.state.value !is SessionState.SignedIn) continue
+                val songs = kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    downloads.state.value.values.mapNotNull { it.track }
+                }
+                downloadedCatalog.cacheTrackArtwork(songs, http)
+            }
+        }
+        scope.launch {
+            session.state.first { it is SessionState.SignedIn }
+            val state = kotlinx.coroutines.withContext(Dispatchers.Main) { downloads.state }
+            state.map { entries -> entries.values.mapNotNull { it.track }.toSet() }
+                .distinctUntilChanged().collect { refreshDownloadArtwork() }
+        }
         player.remoteRoute = { command -> connect.route(command) }
         player.remoteSelected = { connect.isRemote }
         scope.launch {
             session.state.collect { state ->
                 syncStore.session((state as? SessionState.SignedIn)?.user)
+                if (state is SessionState.SignedIn) refreshDownloadArtwork()
                 if(syncStore.active) {
                     syncStore.snapshot?.get("tracks")?.let { rows ->
                         json.decodeFromJsonElement<List<Track>>(rows).forEach { tracks[it.id]=it }

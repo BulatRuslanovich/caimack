@@ -36,6 +36,8 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         (application as CaimackApp).container.updates.check()
+        (application as CaimackApp).container.refreshDownloadArtwork()
+        (application as CaimackApp).container.refreshLibraryConnection()
     }
 
     override fun attachBaseContext(newBase: Context) = super.attachBaseContext(Appearance.localized(newBase))

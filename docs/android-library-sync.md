@@ -69,6 +69,28 @@ Account and server identity are checked before reading the offline catalog or
 uploading changes. Switching folders/accounts never claims an older folder's files;
 pending actions must be synchronized before changing their binding.
 
+## Browsing individual downloads
+
+The main **Library** remains usable without the server. Saved catalog metadata
+is stored per server/account; known albums, artists, folders and playlists retain
+their structure after a restart. Only explicitly saved albums, artists and playlists appear in the main library;
+downloading audio never adds library shortcuts. Tracks without local
+audio remain visible in cached lists, are dimmed and cannot be tapped to play.
+Playing a collection offline queues its downloaded tracks only. A successful
+server check restores normal browsing and playback availability.
+
+**Library → Downloads** remains a flat list of individual transfers, with
+progress, playback and download removal. Browsing previously unseen server
+content requires a connection once so its metadata can be retained. Older
+individual downloads already contain album and artist metadata; open an older
+playlist online once to save its membership and order.
+
+Manual and automatic downloads retain album covers and images of all track
+artists, including collaborators. Missing artwork is retried on launch/resume
+and after reconnecting. Images are kept in private app storage independently of
+the evictable image cache and appear on open screens as soon as they are saved.
+Unavailable artwork does not prevent audio downloads.
+
 ## Recommendations and changes made offline
 
 The server prepares the daily, new and top mixes and a general radio station of

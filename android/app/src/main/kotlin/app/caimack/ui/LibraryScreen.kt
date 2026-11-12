@@ -17,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -46,12 +47,21 @@ internal val libraryMutation = Mutex()
 @Composable
 fun LibraryScreen(nav: NavController) {
     val api = LocalContainer.current.api
-    Load(LIBRARY_FOLDERS, { api.libraryFolders() }) { folders -> LibraryBrowser(nav, folders) }
+    Column(Modifier.fillMaxSize()) {
+        LibraryEntry(stringResource(R.string.downloads_title), null, Lucide.Download) {
+            nav.navigate(DownloadsRoute)
+        }
+        Box(Modifier.weight(1f)) {
+            Load(LIBRARY_FOLDERS, { api.libraryFolders() }) { folders -> LibraryBrowser(nav, folders) }
+        }
+    }
 }
 
 @Composable
-private fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
+internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
     val container = LocalContainer.current
+    val local = LocalOfflineLibrary.current
+    val api = catalogApi()
     val palette = LocalPalette.current
     var filter by rememberSaveable { mutableStateOf("all") }
     var alphabetical by rememberSaveable { mutableStateOf(false) }
@@ -67,7 +77,7 @@ private fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
     val scope = rememberCoroutineScope()
     val showFavorites = folderId == null && (filter == "all" || filter == "playlist")
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        scope.launch {
+        if (!local) scope.launch {
             libraryMutation.withLock {
                 try {
                     refreshLibrary(container.api)
@@ -94,7 +104,7 @@ private fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
             if (currentFolder != null) IconButton(onClick = { selectedFolder = currentFolder.parentId }) { Icon(Lucide.ArrowLeft, stringResource(R.string.folders_up)) }
             Text(currentFolder?.name ?: stringResource(R.string.nav_library), style = Type.title, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (currentFolder != null) LibraryFolderMenu(currentFolder, folders)
-            Box {
+            if (!local) Box {
                 IconButton(onClick = { createMenu = true }) { Icon(Lucide.Plus, stringResource(R.string.folders_create)) }
                 DropdownMenu(createMenu, onDismissRequest = { createMenu = false }) {
                     DropdownMenuItem(text = { Text(stringResource(R.string.playlist_new)) }, onClick = { createMenu = false; creating = true })
@@ -133,16 +143,6 @@ private fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
                     ),
                 )
             }
-            item(key = "downloads") { FilterChip(
-                modifier = Modifier.animateItem(
-                    fadeInSpec = tween(220),
-                    placementSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
-                    fadeOutSpec = tween(140),
-                ),
-                selected = false, onClick = { nav.navigate(DownloadsRoute) },
-                label = { Text(stringResource(R.string.downloads_title)) }, shape = CircleShape, border = null,
-                colors = FilterChipDefaults.filterChipColors(containerColor = palette.raised, labelColor = palette.foreground),
-            ) }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = { alphabetical = !alphabetical }, modifier = Modifier.weight(1f)) { Text(stringResource(if (alphabetical) R.string.collection_name else R.string.collection_recent), maxLines = 1, overflow = TextOverflow.Ellipsis) }
@@ -160,7 +160,7 @@ private fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
             }
             IconButton(onClick = { grid = !grid }) { Icon(if (grid) Lucide.List else Lucide.LayoutGrid, stringResource(if (grid) R.string.collection_list else R.string.collection_grid)) }
         }
-        Load(SAVED_LIBRARY, { container.api.savedLibrary() }) { library ->
+        Load(SAVED_LIBRARY, { api.savedLibrary() }) { library ->
             val shown = library.filter { it.folderId == folderId && (filter == "all" || it.kind == filter) }
                 .let { if (alphabetical) it.sortedBy { item -> item.title.lowercase() } else it.sortedByDescending { item -> Instant.parse(item.savedAt) } }
             val shownFolders = folders.filter { it.parentId == folderId }.let { if (alphabetical) it.sortedBy { folder -> folder.name.lowercase() } else it.sortedByDescending { folder -> folder.createdAt } }
@@ -198,7 +198,12 @@ private fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
 
 @Composable
 private fun LibraryItemView(item: LibraryItem, library: List<LibraryItem>, folders: List<LibraryFolder>, nav: NavController, grid: Boolean, modifier: Modifier = Modifier) {
-    val media = LocalContainer.current.media
+    val local = LocalOfflineLibrary.current
+    val availableTracks = LocalAvailableTracks.current
+    val container = LocalContainer.current
+    val hasAudio = remember(item.kind, item.id, availableTracks) { container.downloadedCatalog.availableCollection(item.kind, item.id) }
+    val availability = Modifier.alpha(if (local && !hasAudio) 0.45f else 1f)
+    val media = container.media
     val url = when (item.kind) {
         "album" -> media.cover(item.id, null, item.hasImage, small = true)
         "artist" -> media.artistImage(item.id, item.hasImage, small = true)
@@ -210,18 +215,18 @@ private fun LibraryItemView(item: LibraryItem, library: List<LibraryItem>, folde
         Text(item.title, style = Type.body, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(listOf(kind, item.subtitle).filter { it.isNotBlank() }.joinToString(" · "), style = Type.small, color = LocalPalette.current.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
-    if (grid) Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    if (grid) Column(modifier.then(availability), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Cover(url, item.title, Modifier.fillMaxWidth().aspectRatio(1f).clickable(onClick = open), round = item.kind == "artist")
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f).clickable(onClick = open)) { text() }
-            LibraryItemMenu(item, library, folders)
+            if (!local) LibraryItemMenu(item, library, folders)
         }
-    } else Row(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    } else Row(modifier.then(availability).fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.weight(1f).clickable(onClick = open), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Cover(url, item.title, Modifier.size(64.dp), round = item.kind == "artist")
             Column(Modifier.weight(1f)) { text() }
         }
-        LibraryItemMenu(item, library, folders)
+        if (!local) LibraryItemMenu(item, library, folders)
     }
 }
 
@@ -243,6 +248,7 @@ private fun LibraryItemMenu(item: LibraryItem, library: List<LibraryItem>, folde
 
 @Composable
 internal fun LibrarySaveButton(kind: String, id: String) {
+    if (LocalOfflineLibrary.current) return
     val api = LocalContainer.current.api
     @Suppress("UNCHECKED_CAST")
     var library by remember { mutableStateOf(Remote.cache[SAVED_LIBRARY] as? List<LibraryItem>) }
