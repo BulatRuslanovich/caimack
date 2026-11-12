@@ -7,7 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -114,7 +113,7 @@ fun <T : Any> PagedColumn(
     header: LazyListScope.() -> Unit,
     row: @Composable (Int, T) -> Unit,
 ) {
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(bottom = 16.dp)) {
         header()
         itemsIndexed(pager.items) { index, item ->
             if (index >= pager.items.size - 10) pager.more()
@@ -145,7 +144,7 @@ fun <T : Any> PagedGrid(
     LazyVerticalGrid(
         GridCells.Adaptive(density.cardWidth),
         Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
+        contentPadding = playerContentPadding(start = 16.dp, end = 16.dp, bottom = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(density.gap),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
@@ -168,7 +167,6 @@ fun <T : Any> PagedGrid(
 internal fun TrackPage(
     key: String, title: String, emptyTitle: String, emptyDescription: String?,
     play: (List<Track>, Int) -> Unit,
-    shuffle: (suspend () -> List<Track>)? = null,
     toolbar: (@Composable () -> Unit)? = null,
     load: suspend (Int) -> Paged<Track>,
 ) {
@@ -180,13 +178,12 @@ internal fun TrackPage(
     var preparing by remember(key) { mutableStateOf(false) }
     var preparation by remember { mutableStateOf<Job?>(null) }
     DisposableEffect(key) { onDispose { preparation?.cancel() } }
-    val prepare: (Boolean) -> Unit = { shuffled ->
+    val prepare: () -> Unit = {
         if (!preparing) {
             preparing = true
             preparation = scope.launch {
                 try {
-                    val tracks = if (shuffled && shuffle != null) shuffle()
-                        else collectionTracks { withNetworkRetries { load(it) } }.let { if (shuffled) it.shuffled() else it }
+                    val tracks = collectionTracks { withNetworkRetries { load(it) } }
                     if (tracks.isNotEmpty()) play(tracks, 0)
                 } catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) { snackbar.showSnackbar(failure) }
@@ -199,7 +196,7 @@ internal fun TrackPage(
         toolbar?.let { item { it() } }
         if (total != null && total > 0) item {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                PlayActions(enabled = !preparing, onPlay = { prepare(false) }, onShuffle = { prepare(true) })
+                PlayActions(enabled = !preparing, onPlay = prepare)
                 if (preparing) Text(stringResource(R.string.tracks_preparing), style = Type.small, color = LocalPalette.current.muted)
             }
         }
@@ -216,7 +213,6 @@ fun TracksScreen(play: (List<Track>, Int) -> Unit) {
     // Keep controls mounted while the paged result reloads.
     TrackPage("tracks:$query:$sort", stringResource(R.string.nav_tracks),
         stringResource(if (query.isBlank()) R.string.tracks_empty else R.string.tracks_no_match), null, play,
-        shuffle = { api.shuffleTracks(query.takeIf { it.isNotBlank() }) },
         toolbar = {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 SearchInput(input, { input = it }, stringResource(R.string.tracks_search))
@@ -299,7 +295,7 @@ fun GenresScreen(nav: NavController) {
         isEmpty = { it.isEmpty() },
         empty = { Column { PageTitle(stringResource(R.string.nav_genres)); Empty(stringResource(R.string.genres_empty)) } },
     ) { genres ->
-        LazyColumn(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding()) {
             item { PageTitle(stringResource(R.string.nav_genres), pluralStringResource(R.plurals.count_genres, genres.size, genres.size)) }
             itemsIndexed(genres) { _, genre -> GenreRow(genre) { nav.navigate(GenreRoute(genre.id, genre.name)) } }
         }
@@ -376,7 +372,7 @@ fun PlaylistsScreen(nav: NavController) {
         ) { playlists ->
             LazyVerticalGrid(
                 GridCells.Adaptive(140.dp),
-                contentPadding = PaddingValues(16.dp),
+                contentPadding = playerContentPadding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {

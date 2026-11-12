@@ -111,13 +111,17 @@ async fn session(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     Query(query): Query<DeviceQuery>,
-) -> ApiResult<Sse<impl Stream<Item = Result<Event, Infallible>>>> {
+) -> ApiResult<impl IntoResponse> {
     let device_id = playback::require_device(query.device_id.as_deref())?.to_owned();
     let device_name = query.device_name.unwrap_or_default();
     let holder = state.playback.claim(user.user_id, &device_id, &device_name);
     let claim = Claim { registry: state.playback, user: user.user_id, holder };
 
-    Ok(Sse::new(session_events(claim, device_id, state.shutdown)))
+    // Deliver claims and displacement events immediately through HTTP proxies.
+    Ok((
+        [("cache-control", "no-cache, no-transform"), ("x-accel-buffering", "no")],
+        Sse::new(session_events(claim, device_id, state.shutdown)),
+    ))
 }
 
 fn session_events(

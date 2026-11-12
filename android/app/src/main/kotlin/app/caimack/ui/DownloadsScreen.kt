@@ -8,7 +8,6 @@ import androidx.annotation.OptIn
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -45,7 +44,7 @@ fun DownloadsScreen(play: (List<Track>, Int) -> Unit) {
     val ready = entries.filter { it.done }.map { it.track!! }
     val pending = entries.count { !it.done }
 
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(bottom = 24.dp)) {
         item { PageTitle(stringResource(R.string.downloads_title)) }
 
         if (entries.isEmpty()) {
@@ -72,7 +71,7 @@ fun DownloadsScreen(play: (List<Track>, Int) -> Unit) {
 
         if (ready.isNotEmpty()) {
             item {
-                PlayActions(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), onPlay = { play(ready, 0) }, onShuffle = { play(ready.shuffled(), 0) })
+                PlayActions(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), onPlay = { play(ready, 0) })
             }
         }
 

@@ -3,6 +3,7 @@
 
 package app.caimack.ui
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,9 +23,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -32,10 +35,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -74,7 +79,7 @@ fun HomeScreen(nav: NavController) {
 
         LazyColumn(
             Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(vertical = 16.dp),
+            contentPadding = playerContentPadding(top = 16.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             if (recommendations) item("personal-radio") { RadioHero(blocks.flatMap { it.tracks.orEmpty() }) }
@@ -239,8 +244,12 @@ private fun Collage(collage: List<Track>, lead: Track, modifier: Modifier) {
 }
 
 @Composable
-fun PlayActions(modifier: Modifier = Modifier, enabled: Boolean = true, onPlay: () -> Unit, onShuffle: () -> Unit) {
+fun PlayActions(modifier: Modifier = Modifier, enabled: Boolean = true, onPlay: () -> Unit) {
     val palette = LocalPalette.current
+    val player = LocalContainer.current.player
+    val state by player.state.collectAsStateWithLifecycle()
+    val background by animateColorAsState(if (state.shuffle) palette.primary else palette.background, label = "shuffle background")
+    val foreground by animateColorAsState(if (state.shuffle) palette.onPrimary else palette.foreground, label = "shuffle foreground")
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
             Modifier.size(52.dp).clip(CircleShape).background(palette.action).clickable(enabled = enabled, onClick = onPlay),
@@ -252,15 +261,15 @@ fun PlayActions(modifier: Modifier = Modifier, enabled: Boolean = true, onPlay: 
             Modifier
                 .heightIn(min = 48.dp)
                 .clip(CircleShape)
-                .background(palette.background)
-                .border(1.dp, palette.controlBorder, CircleShape)
-                .clickable(enabled = enabled, onClick = onShuffle)
+                .background(background)
+                .border(1.dp, if (state.shuffle) palette.primary else palette.controlBorder, CircleShape)
+                .toggleable(value = state.shuffle, enabled = enabled, role = Role.Checkbox, onValueChange = player::setShuffle)
                 .padding(horizontal = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Icon(Lucide.Shuffle, null, tint = palette.foreground, modifier = Modifier.size(16.dp))
-            Text(stringResource(R.string.action_shuffle), style = Type.small.copy(fontWeight = FontWeight.Medium))
+            Icon(Lucide.Shuffle, null, tint = foreground, modifier = Modifier.size(16.dp))
+            Text(stringResource(R.string.action_shuffle), color = foreground, style = Type.small.copy(fontWeight = FontWeight.Medium))
         }
     }
 }

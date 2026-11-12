@@ -8,8 +8,9 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -39,7 +40,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHostState
@@ -194,12 +194,10 @@ fun App(user: User) {
         LocalToneEnabled provides toneEnabled,
         LocalSnackbar provides snackbar,
     ) {
-    Scaffold(
+    PlayerScaffold(
         modifier = Modifier
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
             .then(if (full) Modifier.clearAndSetSemantics {} else Modifier),
-        containerColor = palette.background,
-        contentWindowInsets = WindowInsets(0),
         snackbarHost = {
             SnackbarHost(snackbar) { data ->
                 Snackbar(
@@ -218,14 +216,14 @@ fun App(user: User) {
                 UpdateBanner(appUpdate, onDetails = { updateDetails = true }, onDismiss = { container.updates.dismiss() })
             }
         },
-        bottomBar = {
-            Column {
-                MiniPlayer(playback) { expanded = true }
-                BottomBar(nav)
-            }
-        },
+        bottomBar = { BottomBar(nav) },
+        miniPlayer = { MiniPlayer(playback) { expanded = true } },
     ) { padding ->
-        NavHost(nav, startDestination = HomeRoute, modifier = Modifier.padding(padding)) {
+        NavHost(
+            nav,
+            startDestination = HomeRoute,
+            modifier = Modifier.padding(padding).fillMaxSize().background(palette.background),
+        ) {
             composable<HomeRoute> { HomeScreen(nav) }
             composable<SearchRoute> { SearchScreen(nav, play) }
             composable<TracksRoute> { TracksScreen(play) }
@@ -247,7 +245,11 @@ fun App(user: User) {
         }
     }
 
-    AnimatedVisibility(full, enter = fadeIn(tween(if (motion) 360 else 0)), exit = fadeOut(tween(if (motion) NOW_PLAYING_TRANSITION_MS else 0))) {
+    AnimatedVisibility(
+        full,
+        enter = slideInVertically(tween(if (motion) NOW_PLAYING_TRANSITION_MS else 0, easing = FastOutSlowInEasing)) { it },
+        exit = slideOutVertically(tween(if (motion) NOW_PLAYING_TRANSITION_MS else 0, easing = FastOutSlowInEasing)) { it },
+    ) {
         CompositionLocalProvider(LocalFullPlayerVisibility provides this) {
             FullPlayer(playback) { expanded = false }
         }
