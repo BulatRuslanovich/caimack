@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
+
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (c) 2026 Bulat Ruslanovich
+
 set -euo pipefail
 umask 077
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
