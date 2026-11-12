@@ -159,9 +159,9 @@ internal fun Actions(tracks: List<Track>, play: (List<Track>, Int) -> Unit, onMo
     val complete = mine.count { it.done } == tracks.size
 
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        PlayActions(Modifier.weight(1f), onPlay = { play(tracks, 0) })
+        PlayActions(Modifier.weight(1f), enabled = !LocalOfflineLibrary.current || tracks.any { it.id in LocalAvailableTracks.current }, onPlay = { play(tracks, 0) })
         libraryAction?.invoke()
-        Box(
+        if (!LocalOfflineLibrary.current) Box(
             Modifier.size(48.dp).clip(CircleShape).clickable {
                 if (pending || complete) container.downloads.remove(mine.map { it.download.request.id })
                 else scope.launch { container.downloads.add(tracks, container.settings.value) }
@@ -176,7 +176,7 @@ internal fun Actions(tracks: List<Track>, play: (List<Track>, Int) -> Unit, onMo
                     trackColor = palette.raised,
                     strokeWidth = 2.5.dp,
                 )
-                complete -> Icon(Lucide.CircleCheck, stringResource(R.string.downloads_remove), tint = palette.primary)
+                complete -> Icon(Lucide.CircleArrowDown, stringResource(R.string.downloads_remove), tint = palette.primary)
                 else -> Icon(Lucide.Download, stringResource(R.string.downloads_add), tint = palette.muted)
             }
         }

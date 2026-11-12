@@ -78,9 +78,12 @@ class Downloads(
         current.value = all + current.value
     }
 
-    fun completed(trackId: String): Download? = current.value[trackId]?.takeIf { it.done }?.download
+    fun visible(entry: Offline): Boolean = server.url.value?.toString()
+        ?.let { entry.download.request.uri.toString().startsWith(it) } == true
 
-    fun tracks(): List<Track> = current.value.values.filter { it.done }.mapNotNull { it.track }.sortedBy { it.title.lowercase() }
+    fun completed(trackId: String): Download? = current.value[trackId]?.takeIf { it.done && visible(it) }?.download
+
+    fun tracks(): List<Track> = current.value.values.filter { it.done && visible(it) }.mapNotNull { it.track }.sortedBy { it.title.lowercase() }
 
     suspend fun add(tracks: List<Track>, settings: UserSettings) {
         for (track in missing(tracks)) {

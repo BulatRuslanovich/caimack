@@ -5,11 +5,12 @@ package app.caimack.api
 
 import app.caimack.session.Server
 
-class Media(private val server: Server) {
+class Media(private val server: Server, private val changed: (String) -> Unit = {}) {
     private val versions = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     fun markChanged(path: String) {
         versions[path] = System.currentTimeMillis()
+        changed(path)
     }
 
     fun playlistCoverPath(id: String) = "api/playlists/$id/cover"

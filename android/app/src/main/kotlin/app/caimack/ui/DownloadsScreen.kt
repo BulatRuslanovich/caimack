@@ -40,7 +40,7 @@ fun DownloadsScreen(play: (List<Track>, Int) -> Unit) {
     val container = LocalContainer.current
     val context = LocalContext.current
     val offline by container.downloads.state.collectAsStateWithLifecycle()
-    val entries = offline.values.filter { it.track != null }.sortedBy { it.track!!.title.lowercase() }
+    val entries = offline.values.filter { it.track != null && container.downloads.visible(it) }.sortedBy { it.track!!.title.lowercase() }
     val ready = entries.filter { it.done }.map { it.track!! }
     val pending = entries.count { !it.done }
 
@@ -63,7 +63,7 @@ fun DownloadsScreen(play: (List<Track>, Int) -> Unit) {
                     )
                     if (pending > 0) Text(pluralStringResource(R.plurals.downloads_pending, pending, pending), style = Type.small, color = palette.muted)
                 }
-                TextButton(onClick = { container.downloads.remove(offline.keys) }) {
+                TextButton(onClick = { container.downloads.remove(entries.map { it.download.request.id }) }) {
                     Text(stringResource(R.string.downloads_remove_all), color = palette.muted)
                 }
             }

@@ -89,7 +89,7 @@ fun HomeScreen(nav: NavController) {
                 item("quick") {
                     val source = "home:quickTiles"
                     Shown(source, seen)
-                    QuickTiles(quick, nav) { tracks, index -> container.player.play(tracks, index, source) }
+                    QuickTiles(quick, nav) { tracks, index -> val ready = container.playable(tracks); if (ready.isNotEmpty()) container.player.play(ready, ready.indexOfFirst { it.id == tracks.getOrNull(index)?.id }.coerceAtLeast(0), source) }
                 }
             }
 
@@ -107,7 +107,7 @@ fun HomeScreen(nav: NavController) {
 private fun Block(block: HomeBlock, nav: NavController, shown: Set<String>, seen: MutableSet<String>) {
     val source = "home:${block.baseKey}"
     val container = LocalContainer.current
-    val play: (List<Track>, Int) -> Unit = { tracks, index -> container.player.play(tracks, index, source) }
+    val play: (List<Track>, Int) -> Unit = { tracks, index -> val ready = container.playable(tracks); if (ready.isNotEmpty()) container.player.play(ready, ready.indexOfFirst { it.id == tracks.getOrNull(index)?.id }.coerceAtLeast(0), source) }
     Shown(source, seen)
     val title = blockTitle(block)
     val note = when {

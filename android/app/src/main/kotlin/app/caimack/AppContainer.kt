@@ -41,6 +41,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
@@ -78,9 +80,23 @@ class AppContainer(context: Context) {
 
     private val cookies = PersistentCookieJar(preferences, scope)
 
+    private fun libraryIdentity(): String? = (session.state.value as? app.caimack.session.SessionState.SignedIn)
+        ?.let { user -> server.url.value?.let { "$it|${user.user.id}" } }
+
+    val downloadedCatalog by lazy { app.caimack.playback.DownloadedCatalog(
+        File(context.filesDir, "downloaded-artwork"), json,
+        { server.url.value?.toString() }, ::libraryIdentity, { downloads.tracks() },
+    ) }
+
+    val libraryCache by lazy { app.caimack.playback.LibraryCache(
+        File(context.filesDir, "library-cache"), ::libraryIdentity,
+        { downloadedCatalog.localSnapshot() }, json, { server.url.value?.toString() },
+    ) }
+
     val http: OkHttpClient = OkHttpClient.Builder()
         .cookieJar(cookies)
         .addInterceptor(server.interceptor)
+        .addInterceptor { libraryCache.interceptor.intercept(it) }
         .authenticator(SessionAuthenticator(server, { http }) { session.expire() })
         .build()
 
@@ -93,7 +109,10 @@ class AppContainer(context: Context) {
 
     val session = Session(api, server, cookies, json) { deviceName }
 
-    val media = Media(server)
+    val media = Media(server) { path ->
+        downloadedCatalog.invalidateArtwork(path)
+        refreshDownloadArtwork()
+    }
 
     val settings = MutableStateFlow(UserSettings())
     val playbackDelivery = MutableStateFlow<app.caimack.playback.PlaybackDelivery?>(null)
@@ -132,7 +151,46 @@ class AppContainer(context: Context) {
     val player = PlayerConnection(context.applicationContext, media, tracks, radio, signals)
     val connect by lazy { ConnectPlayback(context.applicationContext, this) }
 
+    private val artworkRefresh = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
+    private val connectionProbe = kotlinx.coroutines.sync.Mutex()
+
+    fun refreshDownloadArtwork() { artworkRefresh.trySend(Unit) }
+
+    fun refreshLibraryConnection() {
+        scope.launch {
+            if (session.state.value !is app.caimack.session.SessionState.SignedIn || !connectionProbe.tryLock()) return@launch
+            try { withTimeoutOrNull(5_000) { runCatching { api.me() } } }
+            finally { connectionProbe.unlock() }
+        }
+    }
+
+    fun locallyAvailable(id: String): Boolean = downloads.completed(id) != null
+    fun playable(tracks: List<Track>): List<Track> =
+        if (libraryCache.offline.value) tracks.filter { locallyAvailable(it.id) } else tracks
+
     init {
+        val downloadState = downloads.state
+        scope.launch {
+            for (request in artworkRefresh) {
+                if (session.state.value !is app.caimack.session.SessionState.SignedIn) continue
+                val songs = kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    downloads.state.value.values.filter { downloads.visible(it) }.mapNotNull { it.track }
+                }
+                downloadedCatalog.cacheTrackArtwork(songs, http)
+            }
+        }
+        scope.launch {
+            session.state.collect { state ->
+                if (state is app.caimack.session.SessionState.SignedIn) {
+                    refreshDownloadArtwork()
+                    refreshLibraryConnection()
+                }
+            }
+        }
+        scope.launch {
+            downloadState.map { entries -> entries.values.mapNotNull { it.track }.toSet() }
+                .distinctUntilChanged().collect { refreshDownloadArtwork() }
+        }
         player.remoteRoute = { command -> connect.route(command) }
         player.remoteSelected = { connect.isRemote }
     }

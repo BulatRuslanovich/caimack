@@ -148,16 +148,29 @@ internal fun NavController.openSection(route: Any) {
 fun App(user: User) {
     val palette = LocalPalette.current
     val container = LocalContainer.current
+    val address by container.server.url.collectAsStateWithLifecycle()
+    Remote.bind("$address|${user.id}")
     val nav = rememberNavController()
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     var account by remember { mutableStateOf(false) }
     var expanded by rememberSaveable { mutableStateOf(false) }
     val playback by container.player.state.collectAsStateWithLifecycle()
+    val offlineLibrary by container.libraryCache.offline.collectAsStateWithLifecycle()
+    val downloaded by container.downloads.state.collectAsStateWithLifecycle()
+    val availableTracks = remember(downloaded, address, user.id) {
+        downloaded.filterValues { it.done && container.downloads.visible(it) }.keys
+    }
+    val artworkRevision by container.downloadedCatalog.revision.collectAsStateWithLifecycle()
+    val resolveArtwork = remember(container) { container.downloadedCatalog::cachedUrl }
     val appUpdate by container.updates.state.collectAsStateWithLifecycle()
     var updateDetails by rememberSaveable { mutableStateOf(false) }
     val play: (List<Track>, Int) -> Unit = { tracks, index ->
-        container.player.play(tracks, index, sourceOf(nav.currentBackStackEntry))
+        val playable = container.playable(tracks)
+        if (playable.isNotEmpty()) {
+            val selected = tracks.getOrNull(index)?.id
+            container.player.play(playable, playable.indexOfFirst { it.id == selected }.coerceAtLeast(0), sourceOf(nav.currentBackStackEntry))
+        }
     }
 
     val full = expanded && playback.current != null
@@ -190,9 +203,13 @@ fun App(user: User) {
         LocalNowPlayingTransition provides NowPlayingTransition(this, full),
         LocalLibraryDensity provides libraryDensity,
         LocalNavigate provides navigate,
+        LocalOfflineLibrary provides offlineLibrary,
+        LocalAvailableTracks provides availableTracks,
         LocalNowPlayingTone provides nowPlayingTone,
         LocalToneEnabled provides toneEnabled,
         LocalSnackbar provides snackbar,
+        LocalArtworkRevision provides artworkRevision,
+        LocalArtworkResolver provides resolveArtwork,
     ) {
     PlayerScaffold(
         modifier = Modifier
@@ -212,7 +229,7 @@ fun App(user: User) {
         },
         topBar = {
             Column {
-                Header(nav, user) { account = true }
+                Header(nav, user, onBack = { nav.popBackStack() }) { account = true }
                 UpdateBanner(appUpdate, onDetails = { updateDetails = true }, onDismiss = { container.updates.dismiss() })
             }
         },
@@ -303,7 +320,7 @@ internal fun SheetRow(label: String, icon: ImageVector, onClick: () -> Unit) {
 }
 
 @Composable
-private fun Header(nav: NavController, user: User, onAccount: () -> Unit) {
+private fun Header(nav: NavController, user: User, onBack: () -> Unit, onAccount: () -> Unit) {
     val palette = LocalPalette.current
     val destination = nav.currentBackStackEntryAsState().value?.destination
     val isSettings = destination?.let { it.hasRoute(SettingsRoute::class) || it.hasRoute(SettingsSectionRoute::class) } == true
@@ -312,7 +329,7 @@ private fun Header(nav: NavController, user: User, onAccount: () -> Unit) {
     Column(Modifier.background(palette.background).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(52.dp).padding(start = if (showBack) 4.dp else 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             if (showBack) {
-                IconButton(onClick = { nav.popBackStack() }) {
+                IconButton(onClick = onBack) {
                     Icon(Lucide.ArrowLeft, stringResource(R.string.nav_back), tint = palette.foreground)
                 }
             } else {

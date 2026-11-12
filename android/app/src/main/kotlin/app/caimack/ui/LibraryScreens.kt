@@ -90,7 +90,8 @@ class Pager<T : Any>(private val scope: CoroutineScope, private val load: suspen
 @Composable
 fun <T : Any> rememberPager(key: String, load: suspend (Int) -> Paged<T>): Pager<T> {
     val scope = rememberCoroutineScope()
-    val pager = remember(key) { Pager(scope, load) }
+    val local = LocalOfflineLibrary.current
+    val pager = remember(key, local) { Pager(scope, load) }
     LaunchedEffect(pager) { pager.more() }
     DisposableEffect(pager) { onDispose { pager.cancel() } }
     return pager
@@ -205,7 +206,7 @@ internal fun TrackPage(
 
 @Composable
 fun TracksScreen(play: (List<Track>, Int) -> Unit) {
-    val api = LocalContainer.current.api
+    val api = catalogApi()
     var input by rememberSaveable { mutableStateOf("") }
     var query by rememberSaveable { mutableStateOf("") }
     var sort by rememberSaveable { mutableStateOf("Title") }
@@ -227,7 +228,7 @@ fun TracksScreen(play: (List<Track>, Int) -> Unit) {
 
 @Composable
 fun FavoritesScreen(play: (List<Track>, Int) -> Unit) {
-    val api = LocalContainer.current.api
+    val api = catalogApi()
     TrackPage(
         "favorites",
         stringResource(R.string.nav_favorites),
@@ -239,7 +240,7 @@ fun FavoritesScreen(play: (List<Track>, Int) -> Unit) {
 
 @Composable
 fun RecentScreen(play: (List<Track>, Int) -> Unit) {
-    val api = LocalContainer.current.api
+    val api = catalogApi()
     TrackPage(
         "recent",
         stringResource(R.string.nav_recently_played),
@@ -252,7 +253,8 @@ fun RecentScreen(play: (List<Track>, Int) -> Unit) {
 @Composable
 fun AlbumsScreen(nav: NavController) {
     val container = LocalContainer.current
-    val pager = rememberPager("albums") { container.api.albums(it, CARD_PAGE_SIZE) }
+    val api = catalogApi()
+    val pager = rememberPager("albums") { api.albums(it, CARD_PAGE_SIZE) }
     val total = pager.total
 
     val header: @Composable () -> Unit = {
@@ -274,7 +276,9 @@ fun AlbumsScreen(nav: NavController) {
 @Composable
 fun ArtistsScreen(nav: NavController) {
     val container = LocalContainer.current
-    val pager = rememberPager("artists") { container.api.artists(it, CARD_PAGE_SIZE) }
+    val api = catalogApi()
+    val artworkRevision = if (LocalOfflineLibrary.current) LocalArtworkRevision.current else 0L
+    val pager = rememberPager("artists:$artworkRevision") { api.artists(it, CARD_PAGE_SIZE) }
     val total = pager.total
     PagedGrid(pager, stringResource(R.string.artists_empty), header = {
         item(span = { GridItemSpan(maxLineSpan) }) { PageTitle(stringResource(R.string.nav_artists), total?.let { pluralStringResource(R.plurals.count_artists, it, it) }, inset = false) }
@@ -289,9 +293,10 @@ fun ArtistsScreen(nav: NavController) {
 @Composable
 fun GenresScreen(nav: NavController) {
     val container = LocalContainer.current
+    val api = catalogApi()
     Load(
         "genres",
-        { container.api.genres() },
+        { api.genres() },
         isEmpty = { it.isEmpty() },
         empty = { Column { PageTitle(stringResource(R.string.nav_genres)); Empty(stringResource(R.string.genres_empty)) } },
     ) { genres ->
@@ -329,12 +334,13 @@ fun GenreRow(genre: Genre, onClick: () -> Unit) {
 fun PlaylistsScreen(nav: NavController) {
     val palette = LocalPalette.current
     val container = LocalContainer.current
+    val api = catalogApi()
     var publicTab by rememberSaveable { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
 
     if (creating) {
         PlaylistDialog(stringResource(R.string.playlist_new), onDismiss = { creating = false }) { changes ->
-            val created = container.api.createPlaylist(changes)
+            val created = api.createPlaylist(changes)
             withContext(Dispatchers.Main) {
                 creating = false
                 nav.navigate(PlaylistRoute(created.id))
@@ -347,7 +353,7 @@ fun PlaylistsScreen(nav: NavController) {
         Tabs(
             Modifier.padding(vertical = 4.dp),
             trailing = {
-                if (!publicTab) {
+                if (!publicTab && !LocalOfflineLibrary.current) {
                     Chip(stringResource(R.string.playlist_create_short), active = false, Modifier.padding(start = 12.dp, bottom = 6.dp), icon = Lucide.Plus) { creating = true }
                 }
             },
@@ -358,13 +364,13 @@ fun PlaylistsScreen(nav: NavController) {
         }
         Load(
             if (publicTab) "playlists:public" else "playlists:mine",
-            { if (publicTab) container.api.publicPlaylists() else container.api.playlists() },
+            { if (publicTab) api.publicPlaylists() else api.playlists() },
             isEmpty = { it.isEmpty() },
             empty = {
                 if (publicTab) Empty(stringResource(R.string.playlists_public_empty_title))
                 else Column {
                     Empty(stringResource(R.string.playlists_empty_title), stringResource(R.string.playlists_empty_hint))
-                    androidx.compose.material3.TextButton(onClick = { creating = true }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                    if (!LocalOfflineLibrary.current) androidx.compose.material3.TextButton(onClick = { creating = true }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
                         Text(stringResource(R.string.playlist_create_short), color = palette.primary)
                     }
                 }

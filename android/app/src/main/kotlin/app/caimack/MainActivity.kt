@@ -33,6 +33,8 @@ import app.caimack.ui.LoginScreen
 class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
+        (application as CaimackApp).container.refreshDownloadArtwork()
+        (application as CaimackApp).container.refreshLibraryConnection()
         (application as CaimackApp).container.updates.check()
     }
 

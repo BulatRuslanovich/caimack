@@ -24,16 +24,24 @@ class ArtworkProvider : ContentProvider() {
 
     override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
         val context = context ?: throw FileNotFoundException(uri.toString())
+        if (mode != "r") throw FileNotFoundException("Artwork is read-only")
         if (uri.path == "/placeholder") return placeholder(uri)
         val path = uri.path?.let { ARTWORK.find(it)?.value } ?: throw FileNotFoundException(uri.toString())
+        val container = (context.applicationContext as CaimackApp).container
+        runBlocking { withTimeoutOrNull(SESSION_WAIT_MS) { container.session.state.first { it !is SessionState.Restoring } } }
+        container.downloadedCatalog.asset(path)?.let { local ->
+            return ParcelFileDescriptor.open(File(java.net.URI(local)), ParcelFileDescriptor.MODE_READ_ONLY)
+        }
         val size = uri.getQueryParameter(SIZE)?.takeIf { it in SIZES }
         val folder = File(context.cacheDir, "artwork")
-        val file = File(folder, "${path.replace('/', '-')}.${size ?: "full"}")
+        val owner = (container.session.state.value as? SessionState.SignedIn)?.user?.id.orEmpty()
+        val key = java.security.MessageDigest.getInstance("SHA-256")
+            .digest("${container.server.url.value}|$owner|$path|$size".toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        val file = File(folder, key)
         if (file.canonicalFile.parentFile != folder.canonicalFile) throw FileNotFoundException(uri.toString())
 
         if (!file.exists()) {
-            val container = (context.applicationContext as CaimackApp).container
-            runBlocking { withTimeoutOrNull(SESSION_WAIT_MS) { container.session.state.first { it !is SessionState.Restoring } } }
             val url = container.server.resolve(path)?.newBuilder()?.apply { size?.let { addQueryParameter(SIZE, it) } }?.build()
                 ?: throw FileNotFoundException(path)
             container.http.newCall(Request.Builder().url(url).build()).execute().use { response ->

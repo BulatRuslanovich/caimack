@@ -110,6 +110,7 @@ private fun FolderDestination(label: String, selected: Boolean, onClick: () -> U
 
 @Composable
 internal fun LibraryFolderMenu(folder: LibraryFolder, folders: List<LibraryFolder>) {
+    if (LocalOfflineLibrary.current) return
     var expanded by remember { mutableStateOf(false) }
     var action by remember { mutableStateOf<String?>(null) }
     Box {

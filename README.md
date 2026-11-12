@@ -88,6 +88,10 @@ The home screen above brings together personal radio, a daily mix and new additi
 The web app is a PWA with its own mobile layout. There is also a native Android client with
 background playback, offline downloads and Android Auto.
 
+Android retains artwork and previously browsed metadata for individual downloads.
+See [individual Android downloads](docs/android-downloads.md) for offline browsing
+and session behavior.
+
 The normal player can also control another signed-in web or Android device.
 Choose an output from the player's device button; playback controls, the queue
 and progress follow that device. See [playback devices](docs/playback-connect.md).

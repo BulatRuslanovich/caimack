@@ -20,6 +20,7 @@
     <string name="handoff_dismiss">Hide</string>
     <string name="downloads_title">Downloads</string>
     <string name="downloads_add">Download</string>
+    <string name="downloads_available">Available offline</string>
     <string name="downloads_remove">Remove download</string>
     <string name="downloads_remove_all">Remove all</string>
     <string name="downloads_empty_title">Nothing downloaded</string>
