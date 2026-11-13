@@ -181,3 +181,73 @@ async fn external_tag_edits_keep_the_encoded_audio_identity(db: PgPool) -> anyho
     std::fs::remove_dir_all(directory)?;
     Ok(())
 }
+
+#[sqlx::test(migrations = "../../../db/migrations")]
+async fn snapshot_preserves_rich_lyrics_and_provider_attribution(db: PgPool) -> anyhow::Result<()> {
+    let (user, _, tracks) = fixture(&db).await?;
+    let directory = std::env::temp_dir().join(format!("caimack-rich-sync-{}", Uuid::now_v7()));
+    let storage = app::storage::Storage::open(&directory)?;
+    let lines = json!([{"at":1000,"text":"Hello","words":[{"at":1000,"end":2000,"text":"Hello"}]}]);
+    sqlx::query("INSERT INTO track_lyrics(track_id,plain,synced,source,provider,source_format,attribution,original_lyrics,updated_at)
+        VALUES($1,'Hello',$2,2,'Test provider','ttml',$3,'original rich text',now())")
+        .bind(tracks[0]).bind(&lines).bind(json!({"url":"https://example.test/lyrics"})).execute(&db).await?;
+    let snapshot = app::sync::snapshot(&db, &storage, user).await?;
+    let lyric = &snapshot["lyrics"][tracks[0].to_string()];
+    assert_eq!(lyric["lines"], lines);
+    assert_eq!(lyric["provider"], "Test provider");
+    assert_eq!(lyric["source"], "Provider");
+    assert_eq!(lyric["syncType"], "syllable");
+    assert_eq!(lyric["attribution"]["url"], "https://example.test/lyrics");
+    std::fs::remove_dir_all(directory)?;
+    Ok(())
+}
+
+#[sqlx::test(migrations = "../../../db/migrations")]
+async fn metadata_only_exports_preserve_provider_lyrics(db: PgPool) -> anyhow::Result<()> {
+    let (_, _, tracks) = fixture(&db).await?;
+    sqlx::query("INSERT INTO track_lyrics(track_id,plain,synced,source,updated_at) VALUES($1,'Words','[]',2,now())")
+        .bind(tracks[0])
+        .execute(&db)
+        .await?;
+    sqlx::query("UPDATE tracks SET media_cache_hash=content_hash,content_hash='tag-export' WHERE id=$1")
+        .bind(tracks[0])
+        .execute(&db)
+        .await?;
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM track_lyrics WHERE track_id=$1")
+        .bind(tracks[0])
+        .fetch_one(&db)
+        .await?;
+    assert_eq!(count, 1, "embedding artwork must not delete provider lyrics");
+    sqlx::query("UPDATE tracks SET media_cache_hash=NULL,content_hash='replacement' WHERE id=$1")
+        .bind(tracks[0])
+        .execute(&db)
+        .await?;
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM track_lyrics WHERE track_id=$1")
+        .bind(tracks[0])
+        .fetch_one(&db)
+        .await?;
+    assert_eq!(count, 0, "replacing the audio must invalidate provider lyrics");
+    Ok(())
+}
+
+#[sqlx::test(migrations = "../../../db/migrations")]
+async fn duration_edits_restart_provider_lookup_after_audio_identity_migration(db: PgPool) -> anyhow::Result<()> {
+    let (_, _, tracks) = fixture(&db).await?;
+    sqlx::query(
+        "UPDATE enrichment_jobs SET last_outcome='not_found',next_attempt_at=now()+interval '7 days' WHERE track_id=$1",
+    )
+    .bind(tracks[0])
+    .execute(&db)
+    .await?;
+    sqlx::query("UPDATE tracks SET duration_seconds=duration_seconds+1 WHERE id=$1")
+        .bind(tracks[0])
+        .execute(&db)
+        .await?;
+    let outcomes: Vec<Option<String>> =
+        sqlx::query_scalar("SELECT last_outcome FROM enrichment_jobs WHERE track_id=$1")
+            .bind(tracks[0])
+            .fetch_all(&db)
+            .await?;
+    assert_eq!(outcomes, vec![None, None]);
+    Ok(())
+}

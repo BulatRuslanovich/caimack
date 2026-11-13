@@ -206,7 +206,7 @@ fn prepare(storage: &Storage, track: &Track, id: Uuid) -> anyhow::Result<(Job, P
             new_hash = storage::hash_file(&staged_path)?.1;
             let saved = backup(storage, &track.file_path, id, files.len())?;
             fs::set_permissions(&staged_path, fs::metadata(&audio)?.permissions())?;
-            File::open(&staged_path)?.sync_all()?;
+            OpenOptions::new().write(true).open(&staged_path)?.sync_all()?;
             files.push(Change {
                 target: track.file_path.clone(),
                 staged: Some(staged),

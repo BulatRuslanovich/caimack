@@ -96,10 +96,7 @@ async fn seed(db: &PgPool, storage: &Storage, audio: &Path) -> anyhow::Result<(U
         "INSERT INTO track_lyrics(track_id,plain,synced,source,updated_at) VALUES($1,'First\nNext',$2,2,now())",
     )
     .bind(id)
-    .bind(sqlx::types::Json(vec![
-        LyricLine::new(1234, "First".into()),
-        LyricLine::new(2345, "Next".into()),
-    ]))
+    .bind(sqlx::types::Json(vec![LyricLine::new(1234, "First".into()), LyricLine::new(2345, "Next".into())]))
     .execute(db)
     .await?;
     sqlx::query("INSERT INTO track_embeddings(track_id,vector,dimension,model_id,strategy,source_hash,succeeded,analyzed_at) VALUES($1,ARRAY[1.0]::real[],1,'model','strategy',$2,true,'2020-01-01T00:00Z')")

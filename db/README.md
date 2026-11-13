@@ -68,3 +68,8 @@ Composite foreign keys restrict destinations to the same user. The folder API
 serializes tree edits per account to prevent cycles, including concurrent moves.
 Deleting a folder lifts its contents to its parent without unsaving or deleting
 music. Verify with `cargo test -p app --features integration-tests --test library_folders`.
+
+Migration 0011 reconciles rich-lyrics invalidation with the stable audio identity
+used by metadata export. Tag-only exports retain lyrics and provider backoff;
+changes to the recording, title, artist, album or duration invalidate matches and
+restart enrichment. Existing upstream migrations remain unchanged.

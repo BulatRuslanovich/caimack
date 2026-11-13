@@ -21,6 +21,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import mockwebserver3.Dispatcher
 import mockwebserver3.MockResponse
@@ -128,7 +129,7 @@ class SessionTest {
             .hostOnlyDomain(web.url("/").host).path("/")
             .expiresAt(System.currentTimeMillis() + 60_000).build()
         PersistentCookieJar(preferences, scope).saveFromResponse(web.url("/"), listOf(cookie))
-        preferences.data.first { it[stringPreferencesKey("cookies")] != null }
+        withTimeout(5_000) { preferences.data.first { it[stringPreferencesKey("cookies")] != null } }
     }
 
     private fun session(offlineUser: () -> User? = { null }): Session {

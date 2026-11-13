@@ -16,6 +16,27 @@ class DownloadedCatalogTest {
     private fun read(path: String, data: JsonObject) = OfflineCatalog.read(path,
         "http://downloads/api/$path".toHttpUrl(), buildJsonObject {}, data)!!.value
 
+    @Test fun `private playlist metadata survives restart without crossing account or server boundaries`() {
+        val directory = java.nio.file.Files.createTempDirectory("downloaded-account").toFile()
+        var identity: String? = "server-one|alice"
+        val song = track("local")
+        fun catalog() = DownloadedCatalog(directory, json, { "http://downloads/" }, { listOf(song) }, { null }, { identity })
+        try {
+            val first = catalog()
+            first.remember(PlaylistDetail("private", "Alice private", ownerId = "alice", tracks = listOf(song)))
+            assertTrue(first.availableCollection("playlist", "private"))
+            val restored = catalog()
+            assertEquals("Alice private", read("playlists/private", restored.localSnapshot()).jsonObject["name"]?.jsonPrimitive?.content)
+            for (other in listOf("server-one|bob", "server-two|alice", null)) {
+                identity = other
+                assertFalse(restored.availableCollection("playlist", "private"))
+                assertTrue(restored.localSnapshot().getValue("playlists").jsonArray.isEmpty())
+            }
+            identity = "server-one|alice"
+            assertTrue(restored.availableCollection("playlist", "private"))
+        } finally { directory.deleteRecursively() }
+    }
+
     @Test fun `downloaded artist discography contains only local albums and their tracks in order`() {
         val data = DownloadedCatalog.snapshot(json, listOf(track("second", number = 2), track("first"), track("third", "other")), emptyList())
         val artist = json.decodeFromJsonElement<ArtistDetail>(read("artists/artist", data))

@@ -159,10 +159,11 @@ class AppContainer(context: Context) {
 
     val downloads by lazy { Downloads(context.applicationContext, http, server, json) { !syncStore.active } }
 
-    val downloadedCatalog by lazy { app.caimack.playback.DownloadedCatalog(context.applicationContext, json,
+    val downloadedCatalog by lazy { app.caimack.playback.DownloadedCatalog(File(context.filesDir, "downloaded-catalog"), json,
         { server.url.value?.toString() },
         { downloads.tracks() + syncStore.tracks() },
-        { if (syncStore.active) app.caimack.sync.OfflineCatalog.view(syncStore.snapshot ?: kotlinx.serialization.json.buildJsonObject {}, syncStore.edits()) else null }) }
+        { if (syncStore.active) app.caimack.sync.OfflineCatalog.view(syncStore.snapshot ?: kotlinx.serialization.json.buildJsonObject {}, syncStore.edits()) else null },
+        { (session.state.value as? SessionState.SignedIn)?.let { "${server.url.value}|${it.user.id}" } }) }
 
     val player = PlayerConnection(context.applicationContext, media, tracks, radio, signals)
     val connect by lazy { ConnectPlayback(context.applicationContext, this) }

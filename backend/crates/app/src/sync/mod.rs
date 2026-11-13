@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use serde::Serialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use sqlx::{PgPool, Row};
+use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::catalog::{albums, artists, tracks};
@@ -79,14 +79,9 @@ pub async fn snapshot(db: &PgPool, storage: &Storage, user: Uuid) -> AppResult<V
     )
     .fetch_all(&mut *tx)
     .await?;
-    let lyrics_rows = sqlx::query("SELECT track_id,plain,synced FROM track_lyrics").fetch_all(&mut *tx).await?;
     let mut lyrics = BTreeMap::<Uuid, Value>::new();
-    for row in lyrics_rows {
-        lyrics.insert(
-            row.try_get("track_id")?,
-            json!({"plain": row.try_get::<String,_>("plain")?,
-            "lines": row.try_get::<Value,_>("synced")?}),
-        );
+    for lyric in crate::catalog::lyrics::all(&mut tx).await? {
+        lyrics.insert(lyric.track_id, serde_json::to_value(lyric).map_err(crate::AppError::internal)?);
     }
     let waveform_rows: Vec<(Uuid, Vec<u8>)> =
         sqlx::query_as("SELECT track_id,waveform FROM track_cues WHERE succeeded AND waveform IS NOT NULL")

@@ -161,7 +161,7 @@ fun App(user: User) {
         downloaded.filterValues { it.done }.keys + container.syncStore.tracks().map { it.id }
     }
     val artworkRevision by container.downloadedCatalog.revision.collectAsStateWithLifecycle()
-    val resolveArtwork = remember(container) { container.downloadedCatalog::cachedUrl }
+    val resolveArtwork = remember(container, user.id) { container.downloadedCatalog::cachedUrl }
     val appUpdate by container.updates.state.collectAsStateWithLifecycle()
     var updateDetails by rememberSaveable { mutableStateOf(false) }
     val play: (List<Track>, Int) -> Unit = { tracks, index ->

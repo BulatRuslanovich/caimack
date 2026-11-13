@@ -91,6 +91,15 @@ and after reconnecting. Images are kept in private app storage independently of
 the evictable image cache and appear on open screens as soon as they are saved.
 Unavailable artwork does not prevent audio downloads.
 
+Downloaded playlist/artist metadata and artwork are isolated by server and account.
+Legacy server-only metadata is not reused across accounts. On launch/resume,
+artwork older than one hour is conditionally revalidated with its ETag when one
+is available. Changed images receive a new local URI so image loaders see the
+replacement; failed requests keep the last complete offline copy.
+
+Snapshots retain the same cleaned lyrics, word intervals, provider attribution
+and synchronization type as the online lyrics API.
+
 ## Recommendations and changes made offline
 
 The server prepares the daily, new and top mixes and a general radio station of
