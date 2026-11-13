@@ -83,7 +83,11 @@ export const queries = {
       staleTime: 60_000,
       refetchInterval: (query) => {
         const lyrics = query.state.data;
-        if (lyrics?.source === "Manual" || lyrics?.lines.some((line) => line.words?.length))
+        if (
+          lyrics?.source === "Manual" ||
+          (lyrics?.lines.length &&
+            lyrics.lines.every((line) => !line.text.trim() || line.words?.length))
+        )
           return false;
         return 15_000;
       },

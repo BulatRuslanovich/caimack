@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Bulat Ruslanovich
 
 use super::matching::{candidate, key};
-use super::{BODY_LIMIT, Candidate, LookupResult, LyricsProviders, LyricsQuery};
+use super::{BODY_LIMIT, Candidate, LookupResult, LyricsProviders, LyricsQuery, SourceSchedule};
 use crate::catalog::lyrics::pattern;
 use anyhow::{Context, ensure};
 use base64::Engine;
@@ -106,10 +106,13 @@ impl LyricsProviders {
         let slot = {
             let mut hosts = self.cooldowns.lock().await;
             let now = Instant::now();
-            let next = hosts.entry(host.clone()).or_insert(now);
-            ensure!(*next <= now + Duration::from_secs(2), "Lyrics provider cooling down");
-            let slot = (*next).max(now);
-            *next = slot + Duration::from_millis(300);
+            if hosts.get(url).is_some_and(|schedule| schedule.retired) {
+                return Ok(None);
+            }
+            let schedule = hosts.entry(host.clone()).or_insert(SourceSchedule { next: now, retired: false });
+            ensure!(schedule.next <= now + Duration::from_secs(2), "Lyrics provider cooling down");
+            let slot = schedule.next.max(now);
+            schedule.next = slot + Duration::from_millis(300);
             slot
         };
         sleep_until(slot).await;
@@ -124,6 +127,10 @@ impl LyricsProviders {
         }
         let response = request.send().await?;
         let status = response.status();
+        if status == reqwest::StatusCode::GONE {
+            self.cooldowns.lock().await.insert(url.to_owned(), SourceSchedule { next: Instant::now(), retired: true });
+            return Ok(None);
+        }
         if status == reqwest::StatusCode::NOT_FOUND {
             return Ok(None);
         }
@@ -143,7 +150,7 @@ impl LyricsProviders {
                 })
                 .unwrap_or(Duration::from_secs(if status.as_u16() == 429 { 60 } else { 300 }))
                 .min(Duration::from_secs(3600));
-            self.cooldowns.lock().await.insert(host, Instant::now() + delay);
+            self.cooldowns.lock().await.insert(host, SourceSchedule { next: Instant::now() + delay, retired: false });
         }
         let bytes = crate::integrations::read_limited(response.error_for_status()?, BODY_LIMIT).await?;
         Ok(Some(String::from_utf8(bytes).context("Non UTF-8 lyrics response")?))

@@ -382,7 +382,7 @@ private fun LyricsPanel(track: Track, positionMs: Long, playing: Boolean) {
             delay(15_000)
             val key = "lyrics:${track.id}"
             val current = Remote.cache[key] as? Lyrics
-            if (current?.source == "Manual" || current?.lines?.any { it.words.isNotEmpty() } == true) break
+            if (current?.source == "Manual" || (current?.lines?.isNotEmpty() == true && current.lines.all { it.text.isBlank() || it.words.isNotEmpty() })) break
             try {
                 val response = container.api.lyrics(track.id)
                 if (response.isSuccessful) Remote.update(key, response.body() ?: Lyrics())

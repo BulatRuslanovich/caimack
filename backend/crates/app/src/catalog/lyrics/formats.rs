@@ -20,6 +20,7 @@ fn timestamp(c: &regex::Captures<'_>) -> i32 {
 }
 
 pub(super) fn parse(raw: &str, format: &str, duration: i32) -> anyhow::Result<ParsedLyrics> {
+    ensure!((0..=MAX_TIME).contains(&duration), "Invalid lyrics duration");
     ensure!(raw.len() <= MAX_LENGTH && !raw.contains('\0'), "Invalid or oversized lyrics");
     let mut lines = match format.to_ascii_lowercase().as_str() {
         "ttml" => ttml(raw)?,
@@ -30,7 +31,7 @@ pub(super) fn parse(raw: &str, format: &str, duration: i32) -> anyhow::Result<Pa
     };
     lines.sort_by_key(|line| line.at);
     ensure!(lines.len() <= 5000, "Too many lyric lines");
-    let limit = if duration > 0 { (duration + 2000.max(duration / 100)).min(MAX_TIME) } else { MAX_TIME };
+    let limit = if duration > 0 { duration.saturating_add(2000.max(duration / 100)).min(MAX_TIME) } else { MAX_TIME };
     let mut count = 0;
     for line in &lines {
         let end = line.end.unwrap_or(line.at);
@@ -82,9 +83,9 @@ fn lrc(raw: &str, duration: i32) -> anyhow::Result<Vec<LyricLine>> {
                 if text.is_empty() {
                     continue;
                 }
-                let at = timestamp(marker) - offset;
+                let at = (timestamp(marker) - offset).max(0);
                 // Enhanced LRC supplies starts; the next marker closes the fragment.
-                let end = markers.get(i + 1).map_or(line_end, timestamp) - offset;
+                let end = (markers.get(i + 1).map_or(line_end, timestamp) - offset).max(0);
                 ensure!(at >= line.at && end >= at, "Out of order word timing");
                 line.words.push(LyricWord { at, end, text: text.to_owned() });
             }
@@ -102,7 +103,11 @@ fn xml(raw: &str) -> anyhow::Result<roxmltree::Document<'_>> {
         !raw.to_ascii_uppercase().contains("<!DOCTYPE") && !raw.to_ascii_uppercase().contains("<!ENTITY"),
         "DTD is forbidden"
     );
-    roxmltree::Document::parse(raw).context("Invalid lyrics XML")
+    roxmltree::Document::parse_with_options(
+        raw,
+        roxmltree::ParsingOptions { nodes_limit: 200_000, ..Default::default() },
+    )
+    .context("Invalid lyrics XML")
 }
 
 fn clock(raw: &str, frame_rate: f64, tick_rate: f64) -> Option<i32> {
@@ -247,6 +252,7 @@ fn numeric(raw: &str, yrc: bool) -> anyhow::Result<Vec<LyricLine>> {
         raw
     };
     let headers: Vec<_> = HEADER.captures_iter(raw).collect();
+    ensure!(headers.len() <= 5000, "Too many numeric lyric lines");
     let mut lines = Vec::new();
     for (i, header) in headers.iter().enumerate() {
         let whole = header.get(0).context("Missing numeric header")?;
@@ -255,6 +261,7 @@ fn numeric(raw: &str, yrc: bool) -> anyhow::Result<Vec<LyricLine>> {
         let at = header[1].parse::<i32>()?;
         let end = at.checked_add(header[2].parse::<i32>()?).context("Numeric lyric overflow")?;
         let markers: Vec<_> = NUMERIC_WORD.captures_iter(content).collect();
+        ensure!(markers.len() <= 50000, "Too many lyric fragments");
         let mut line = LyricLine::new(at, String::new());
         line.end = Some(end);
         let mut position = 0;
@@ -286,6 +293,35 @@ fn numeric(raw: &str, yrc: bool) -> anyhow::Result<Vec<LyricLine>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn yrc_credits_are_removed_without_changing_word_intervals() {
+        let parsed=super::super::parse_format("[0,1000](0,1000,0) 作词 : Name\n[1000,1000](1000,1000,0) 作曲 : Name\n[10000,2000](10000,500,0)Actual (10700,800,0)vocals","yrc",15000).unwrap();
+        assert_eq!(parsed.lines.len(), 1);
+        assert_eq!(parsed.lines[0].words[0].at, 10000);
+        assert_eq!(parsed.lines[0].words[1].end, 11500);
+        assert_eq!(parsed.plain, "Actual vocals");
+    }
+
+    #[test]
+    fn plain_lyrics_can_contain_mixed_numeric_credit_headers() {
+        let parsed = super::super::parse_format(
+            "[0,1000](0,1000,0) 作词 : Name\n[1000,1000](1000,1000,0) 作曲 : Name\n[00:10.00]Actual vocals",
+            "plain",
+            15000,
+        )
+        .unwrap();
+        assert_eq!(parsed.plain, "Actual vocals");
+        assert_eq!(parsed.lines[0].at, 10000);
+    }
+
+    #[test]
+    fn ttml_credits_are_removed_from_both_plain_text_and_timed_lines() {
+        let parsed=super::super::parse_format("<tt><body><p begin='0s' end='1s'><span begin='0s' end='1s'>作词：Name</span></p><p begin='10s' end='12s'><span begin='0s' end='1s'>Actual vocals</span></p></body></tt>","ttml",15000).unwrap();
+        assert_eq!(parsed.plain, "Actual vocals");
+        assert_eq!(parsed.lines.len(), 1);
+        assert_eq!(parsed.lines[0].words[0].at, 10000);
+    }
     #[test]
     fn ttml_preserves_syllables_background_and_unicode() {
         let p = parse(r#"<tt xmlns:ttm="http://www.w3.org/ns/ttml#metadata"><body><div><p begin="1s" end="3s"><span begin="0s" end="0.5s">При</span><span begin="0.5s" end="1s">вет </span><span ttm:role="x-bg" begin="1s" end="2s"><span begin="0s" end="1s">эй</span></span><span ttm:role="x-translation">Hello</span></p></div></body></tt>"#, "ttml", 5000).unwrap();
@@ -316,5 +352,13 @@ mod tests {
         ] {
             assert!(parse(raw, fmt, 5000).is_err(), "{raw}");
         }
+    }
+
+    #[test]
+    fn overflowing_durations_are_rejected_and_negative_offset_results_are_clamped() {
+        assert!(parse("[00:01]Hello", "lrc", i32::MAX).is_err());
+        let parsed = parse("[offset:500]\n[00:00]<00:00>Hello <00:01>world<00:02>", "lrc", 5000).unwrap();
+        assert_eq!(parsed.lines[0].words[0].at, 0);
+        assert_eq!(parsed.lines[0].words[0].end, 500);
     }
 }

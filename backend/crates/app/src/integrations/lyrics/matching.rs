@@ -62,7 +62,9 @@ pub(super) fn candidate(
     if same && known && difference > 15.0_f64.max(wanted * 0.05) {
         return None;
     }
-    let parsed = parse_format(raw, format, if known { (duration * 1000.0).round() as i32 } else { 0 }).ok()?;
+    let parsed = parse_format(raw, format, if known { (duration * 1000.0).round() as i32 } else { 0 })
+        .ok()?
+        .clean_for_track(&query.title, &query.artist);
     if parsed.is_empty() {
         return None;
     }

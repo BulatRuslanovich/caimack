@@ -13,6 +13,7 @@ use uuid::Uuid;
 use super::tracks;
 use crate::AppResult;
 
+mod cleanup;
 mod formats;
 
 pub const MAX_LENGTH: usize = 2 * 1024 * 1024;
@@ -91,6 +92,31 @@ pub struct ParsedLyrics {
 }
 
 impl ParsedLyrics {
+    pub fn clean(mut self) -> Self {
+        let from_lines = !self.lines.is_empty()
+            && self.plain == self.lines.iter().map(|line| line.text.as_str()).collect::<Vec<_>>().join("\n");
+        self.lines.retain(|line| !cleanup::is_credit(&line.text));
+        for line in &mut self.lines {
+            if line.words.is_empty() {
+                line.text = cleanup::text(&line.text);
+            }
+        }
+        self.plain = if from_lines {
+            self.lines.iter().map(|line| line.text.as_str()).collect::<Vec<_>>().join("\n")
+        } else {
+            cleanup::plain(&self.plain)
+        };
+        self
+    }
+
+    pub fn clean_for_track(mut self, title: &str, artist: &str) -> Self {
+        self = self.clean();
+        self.lines.retain(|line| !cleanup::is_title(&line.text, title, artist));
+        self.plain =
+            self.plain.lines().filter(|row| !cleanup::is_title(row, title, artist)).collect::<Vec<_>>().join("\n");
+        self
+    }
+
     pub fn is_empty(&self) -> bool {
         self.plain.is_empty() && self.lines.is_empty()
     }
@@ -115,6 +141,8 @@ pub fn parse(raw: Option<&str>) -> ParsedLyrics {
         return ParsedLyrics::default();
     };
 
+    let sanitized = if TTML.is_match(raw) { std::borrow::Cow::Borrowed(raw) } else { cleanup::source(raw) };
+    let raw = sanitized.as_ref();
     if let Some(format) = rich_format(raw) {
         return parse_format(raw, format, 0).unwrap_or_default();
     }
@@ -159,7 +187,16 @@ pub fn parse(raw: Option<&str>) -> ParsedLyrics {
 }
 
 pub fn parse_format(raw: &str, format: &str, duration_ms: i32) -> anyhow::Result<ParsedLyrics> {
-    formats::parse(raw, format, duration_ms)
+    let sanitized = if TTML.is_match(raw) { std::borrow::Cow::Borrowed(raw) } else { cleanup::source(raw) };
+    let raw = sanitized.as_ref();
+    let format = if matches!(format, "plain" | "text" | "txt" | "lrc" | "enhanced_lrc" | "richsync") {
+        rich_format(raw).unwrap_or_else(|| {
+            if matches!(format, "plain" | "text" | "txt") && TIMESTAMP.is_match(raw) { "lrc" } else { format }
+        })
+    } else {
+        format
+    };
+    formats::parse(raw, format, duration_ms).map(ParsedLyrics::clean)
 }
 
 pub fn from_timed_lines(lines: Vec<LyricLine>) -> ParsedLyrics {
@@ -183,7 +220,7 @@ fn build(plain: &str, mut timed: Vec<LyricLine>) -> ParsedLyrics {
 
     timed.sort_by_key(|line| line.at);
     timed.dedup();
-    ParsedLyrics { plain: text.to_owned(), lines: timed }
+    ParsedLyrics { plain: text.to_owned(), lines: timed }.clean()
 }
 
 fn append_line(plain: &mut String, content: &str) {
@@ -218,32 +255,48 @@ pub async fn get(db: &PgPool, track_id: Uuid) -> AppResult<Option<LyricsDto>> {
         source_format: Option<String>,
         attribution: serde_json::Value,
         original_lyrics: Option<String>,
+        track_title: String,
+        track_artist: String,
     }
     let row = sqlx::query_as::<_, Row>(
-        "SELECT track_id,plain,synced,source,provider,source_format,attribution,original_lyrics FROM track_lyrics WHERE track_id=$1",
+        "SELECT l.track_id,l.plain,l.synced,l.source,l.provider,l.source_format,l.attribution,l.original_lyrics,
+                t.title AS track_title,ar.name AS track_artist
+         FROM track_lyrics l JOIN tracks t ON t.id=l.track_id JOIN artists ar ON ar.id=t.artist_id WHERE l.track_id=$1",
     )
     .bind(track_id)
     .fetch_optional(db)
     .await?;
 
-    Ok(row.map(|row| {
-        let sync_type = if row.synced.iter().any(|line| !line.words.is_empty()) {
+    Ok(row.and_then(|row| {
+        let parsed =
+            ParsedLyrics { plain: row.plain, lines: row.synced.0 }.clean_for_track(&row.track_title, &row.track_artist);
+        if parsed.is_empty() {
+            return None;
+        }
+        let sync_type = if parsed.lines.iter().any(|line| !line.words.is_empty()) {
             if row.source_format.as_deref() == Some("ttml") { "syllable" } else { "word" }
-        } else if row.synced.is_empty() {
+        } else if parsed.lines.is_empty() {
             "plain"
         } else {
             "line"
         };
-        LyricsDto {
+        Some(LyricsDto {
             track_id: row.track_id,
-            plain: row.plain,
-            lines: row.synced.0,
+            plain: parsed.plain,
+            lines: parsed.lines,
             source: LyricsSource::from_db(row.source),
             provider: row.provider,
             sync_type,
             attribution: row.attribution,
-            original_lyrics: row.original_lyrics,
-        }
+            original_lyrics: if sync_type == "plain"
+                && row.source == LyricsSource::Provider as i32
+                && !matches!(row.source_format.as_deref(), Some("plain" | "text" | "txt"))
+            {
+                None
+            } else {
+                row.original_lyrics
+            },
+        })
     }))
 }
 
@@ -338,5 +391,35 @@ mod tests {
     fn old_json_remains_readable() {
         let line: LyricLine = serde_json::from_str(r#"{"at":1200,"text":"Hello"}"#).unwrap();
         assert!(line.words.is_empty());
+    }
+
+    #[test]
+    fn numeric_credit_headers_do_not_hide_following_lrc_vocals() {
+        let parsed = parse(Some(
+            "[0,1000](0,1000,0) 作词 : $uicideboy$\n[1000,1000](1000,1000,0) 作曲 : $uicideboy$\n[00:10.00]Actual vocal line",
+        ));
+        assert_eq!(parsed.plain, "Actual vocal line");
+        assert_eq!(parsed.lines.len(), 1);
+        assert_eq!(parsed.lines[0].at, 10000);
+    }
+
+    #[test]
+    fn cached_credit_lines_are_hidden_without_moving_the_remaining_intervals() {
+        let parsed = ParsedLyrics {
+            plain: "[0,1000](0,1000,0) 作词 : Name\nActual vocal line".into(),
+            lines: vec![line(0, "作曲：Name"), line(10000, "Actual vocal line")],
+        }
+        .clean();
+        assert_eq!(parsed.plain, "Actual vocal line");
+        assert_eq!(parsed.lines, vec![line(10000, "Actual vocal line")]);
+    }
+
+    #[test]
+    fn lrc_metadata_title_and_author_credits_are_hidden_but_offset_is_applied() {
+        let parsed = parse(Some(
+            "[ti:Adventure Of A Lifetime]\n[ar:Marcell]\n[al:This Is Not Jazz]\n[by:]\n[offset:500]\n[00:00.00]Adventure Of A Lifetime - Marcell\n[00:07.11]Lyrics by：Name\n[00:14.22]Composed by：Name\n[00:20.00]Actual vocals",
+        ));
+        assert_eq!(parsed.plain, "Actual vocals");
+        assert_eq!(parsed.lines, vec![line(19500, "Actual vocals")]);
     }
 }

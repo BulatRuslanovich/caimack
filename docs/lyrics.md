@@ -8,7 +8,9 @@ audio transcription, or invented word timing is involved.
 
 Each source has a 12-second lookup budget, HTTP requests time out after five
 seconds, response bodies are capped at 2 MiB, and shared host schedules respect
-rate limits and `Retry-After`. LRCLIB retains its existing shared request spacing
+rate limits and `Retry-After`. Endpoints returning HTTP 410 are treated as retired
+until process restart, rather
+than failing every subsequent lookup. LRCLIB retains its shared request spacing
 and exponential backoff. A failed source does not discard another source's hit.
 If no hit exists and a source failed, the durable job retries rather than treating
 the failure as a definitive absence of lyrics.
@@ -35,6 +37,13 @@ romanization spans are excluded from the original vocal text. TTML clock and
 relative offset expressions, frame/tick rates, enhanced LRC offsets, QRC, and YRC
 are parsed and validated. Plain LRC never acquires synthetic word intervals.
 
+Provider credit rows (such as `作词`, `作曲`, `Lyrics by`, and `Composed by`) and
+matching title/artist headers are removed from displayed lyrics. Credit envelopes
+are filtered before format detection because an LRC response can begin with YRC
+credits. LRC metadata stays available during parsing so offsets remain correct.
+Existing cached responses receive the same display cleanup without changing vocal
+intervals; original provider payloads remain available for provenance.
+
 Migration `0003_rich_lyrics.sql` adds provenance, original source text, match
 metadata, and a generated quality column. Network work finishes before the short
 database transaction. The transaction rechecks recording identity, and a
@@ -53,7 +62,8 @@ animation. The editor keeps the original rich source text when available.
 ## Provider configuration and attribution
 
 `LRCLIB_BASE_URL` continues to configure LRCLIB. Optional
-`BETTER_LYRICS_API_KEY` supplies the Better Lyrics `X-API-Key` header. The public
+`BETTER_LYRICS_API_KEY` supplies the Better Lyrics `X-API-Key` header.
+Docker Compose forwards the same setting from the root `.env` file. The public
 TTML endpoint may only serve cached requests without a key. Better Lyrics TTML
 must contain explicit song/artist identity metadata; an ambiguous response is
 discarded even if the API returns HTTP 200.

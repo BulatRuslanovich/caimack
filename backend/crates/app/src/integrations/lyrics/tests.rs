@@ -115,6 +115,14 @@ async fn provider_rate_limit_blocks_cloned_clients_without_repeating_requests() 
 }
 
 #[tokio::test]
+async fn a_retired_provider_is_a_miss_and_is_not_requested_again() {
+    let (client, server) = server(vec![(410, json!({"error":"Gone"}))]).await;
+    assert!(client.fetch(Provider::Ovh, &query()).await.unwrap().best.is_none());
+    assert!(client.clone().fetch(Provider::Ovh, &query()).await.unwrap().best.is_none());
+    assert_eq!(server.await.unwrap().len(), 1);
+}
+
+#[tokio::test]
 async fn better_lyrics_requires_identity_from_ttml() {
     let (client, server) =
         server(vec![(200, json!({"ttml":"<tt><body><p begin='1s' end='2s'>Wrong</p></body></tt>"}))]).await;
@@ -208,4 +216,38 @@ async fn live_lookup_smoke() -> anyhow::Result<()> {
         candidate.parsed.lines.iter().map(|l| l.words.len()).sum::<usize>()
     );
     Ok(())
+}
+
+#[tokio::test]
+#[ignore = "diagnoses real external lyrics providers"]
+async fn live_provider_diagnostics() {
+    let providers = LyricsProviders::new(Lrclib::new("https://lrclib.net"), None);
+    let q = LyricsQuery {
+        title: "Never Gonna Give You Up".into(),
+        artist: "Rick Astley".into(),
+        album: Some("Whenever You Need Somebody".into()),
+        duration_seconds: 213,
+    };
+    let mut tasks = futures_util::stream::FuturesUnordered::new();
+    for provider in Provider::ALL {
+        let providers = &providers;
+        let q = &q;
+        tasks.push(async move {
+            match tokio::time::timeout(Duration::from_secs(12), providers.fetch(provider, q)).await {
+                Ok(Ok(result)) => match result.best {
+                    Some(c) => println!(
+                        "{provider:?}: quality={} format={} duration_difference={} words={}",
+                        c.parsed.quality(),
+                        c.format,
+                        c.duration_difference,
+                        c.parsed.lines.iter().map(|l| l.words.len()).sum::<usize>()
+                    ),
+                    None => println!("{provider:?}: no matching text"),
+                },
+                Ok(Err(e)) => println!("{provider:?}: error {e:#}"),
+                Err(_) => println!("{provider:?}: timed out"),
+            }
+        });
+    }
+    while tasks.next().await.is_some() {}
 }

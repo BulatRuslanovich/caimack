@@ -38,9 +38,14 @@ impl Candidate {
 pub struct LyricsProviders {
     lrclib: Lrclib,
     http: reqwest::Client,
-    cooldowns: Arc<Mutex<HashMap<String, Instant>>>,
+    cooldowns: Arc<Mutex<HashMap<String, SourceSchedule>>>,
     better_key: Option<String>,
     endpoints: Arc<providers::Endpoints>,
+}
+
+struct SourceSchedule {
+    next: Instant,
+    retired: bool,
 }
 
 pub struct LookupResult {
