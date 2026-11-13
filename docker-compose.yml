@@ -84,6 +84,9 @@ services:
         condition: service_completed_successfully
     environment:
       HF_HOME: /models
+      MERT_IDLE_TIMEOUT_SECONDS: ${MERT_IDLE_TIMEOUT_SECONDS:-300}
+      MERT_LOAD_TIMEOUT_SECONDS: ${MERT_LOAD_TIMEOUT_SECONDS:-1800}
+      MERT_INFERENCE_TIMEOUT_SECONDS: ${MERT_INFERENCE_TIMEOUT_SECONDS:-90}
     deploy:
       resources:
         reservations:
@@ -106,7 +109,7 @@ services:
         ]
       interval: 30s
       timeout: 5s
-      start_period: 30m
+      start_period: 10s
       retries: 3
     networks: [internal]
 

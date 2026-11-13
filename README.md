@@ -143,11 +143,12 @@ after your usual Compose files to enable the module. The API advertises this
 capability; clients hide recommendation controls when it is disabled.
 
 When enabled, track similarity uses **MERT-Large v1 (330M)** on an NVIDIA (CUDA) or supported AMD (ROCm) GPU. The `mert` container
-downloads the pinned, ready-to-use weights (about 1.26 GB) from Hugging Face once
+downloads the pinned, ready-to-use weights (about 1.26 GB) from Hugging Face on the first embedding request
 and keeps them in `storage/models/mert`. No training or model export runs on the server.
 The library and playback are available while the model loads. Existing CLAP vectors
 are automatically replaced in the background; recommendations and the map use only
-compatible MERT vectors.
+compatible MERT vectors. The GPU worker starts on demand and releases its model
+and GPU context after five idle minutes (`MERT_IDLE_TIMEOUT_SECONDS`, default `300`).
 
 See [optional module deployment and cache reuse](docs/mert.md).
 

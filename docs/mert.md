@@ -88,7 +88,7 @@ before returning to the ordinary configuration.
 MERT-Large v1 (330M) uses official ready-made weights from
 [`m-a-p/MERT-v1-330M`](https://huggingface.co/m-a-p/MERT-v1-330M), pinned to revision
 `5240c2708a5acaee1007f43fb9735c7dcd0b78c9`. No training or export happens on the
-server. The first enabled start downloads about 1.26 GB into `MERT_CACHE_PATH`
+server. The first embedding request downloads about 1.26 GB into `MERT_CACHE_PATH`
 (default `./storage/models/mert`); subsequent starts reuse the cache. To reuse
 the earlier benchmark download, set this path to
 `./storage/experiments/mert/huggingface` in `.env`.
@@ -106,6 +106,48 @@ the local GPU, producing normalized 1024-dimensional vectors. Old models and
 strategies are reanalysed automatically. The recommendation index accepts only
 matching model, strategy, dimension and audio hash. Model loading and transient
 GPU outages do not block ordinary library browsing or playback.
+
+### On-demand GPU lifecycle
+
+The HTTP service starts without loading PyTorch or creating a GPU context. The
+first valid `POST /embed` starts a single GPU subprocess and returns `503` with
+`Retry-After: 5` while it loads. The backend retains the pending work in the
+database and retries on its next analysis pass (normally every 30 seconds).
+It continues CPU audio analysis while MERT is loading or unavailable and preserves
+existing embeddings until a replacement succeeds. Existing recommendations use
+saved vectors and do not wake the GPU worker.
+
+Inference runs one request at a time. Concurrent requests receive `503` with
+`Retry-After: 1` while busy; PCM requests are not queued in memory. After five
+minutes without inference, the subprocess terminates, releasing its GPU context
+and model memory. The next embedding request wakes a new process using the cached
+weights. An active inference is never stopped by the idle timer.
+
+Configure the service in the deployment `.env`:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `MERT_IDLE_TIMEOUT_SECONDS` | `300` | Idle period before releasing the GPU; `0` disables idle shutdown. Loading still starts on demand. |
+| `MERT_LOAD_TIMEOUT_SECONDS` | `1800` | Maximum model startup time, including the first weight download. |
+| `MERT_INFERENCE_TIMEOUT_SECONDS` | `90` | Maximum wait for an inference result; keep below the API's 120-second HTTP timeout. |
+
+Apply changes by recreating `mert` with your deployment's Compose file list.
+Keep a nonzero idle timeout above the backend's 30-second polling interval, so
+the next analysis pass can use a newly loaded worker before it goes to sleep.
+For a standalone Python service, these environment variables or corresponding
+`--idle-timeout-seconds`, `--load-timeout-seconds` and
+`--inference-timeout-seconds` options work as well. `--download-only` still
+eagerly loads and validates the model, then exits.
+
+`GET /health` returns HTTP 200 with model identity and `state`:
+`sleeping`, `loading`, `ready`, `busy` or `error`. This checks the HTTP service;
+it never starts the GPU worker or resets the idle timer. `error` also includes
+`retryAfterSeconds`. Once that delay expires, the state returns to `sleeping`
+without starting a worker. Failed loads, crashes and inference timeouts stop the GPU
+worker and apply a retry delay of 30, 60, 120, 240, then at most 300 seconds.
+Recovery starts only when an embedding request arrives after the delay. A
+successful inference resets the backoff. Service logs record process startup,
+load and inference durations, failures and transitions to sleep.
 
 The CUDA and ROCm GPU images are published alongside the API and web images only on `v*` release
 tags. Default deployments do not pull or start those images. Model weights are

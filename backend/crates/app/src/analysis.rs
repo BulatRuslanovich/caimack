@@ -56,9 +56,8 @@ async fn run_pass(
     index: &EmbeddingIndex,
     cancel: &CancellationToken,
 ) -> anyhow::Result<usize> {
-    if let Some(embedder) = embedder {
-        embedder.ready().await?;
-    }
+    let mut embedder = embedder;
+    let mut checked_service = false;
     let mut analysed = 0;
     loop {
         let retry_before = Utc::now() - RETRY_FAILED_AFTER;
@@ -91,13 +90,32 @@ async fn run_pass(
             return Ok(analysed);
         }
 
+        if !checked_service && batch.iter().any(|track| track.embed) {
+            checked_service = true;
+            if let Some(client) = embedder
+                && let Err(error) = client.ready().await
+            {
+                tracing::warn!("MERT unavailable; continuing CPU analysis: {error:#}");
+                embedder = None;
+                // Reselect CPU work so an embedding-only backlog cannot hide it.
+                continue;
+            }
+        }
+
         for track in batch {
             if cancel.is_cancelled() {
                 return Ok(analysed);
             }
+            if track.embed && embedder.is_none() {
+                // These tracks are reconsidered by the CPU-only query below.
+                continue;
+            }
             let started = Instant::now();
             let outcome =
                 analyze(storage, embedder, &track.file_path, f64::from(track.duration_seconds), track.embed).await?;
+            if outcome.embedding_unavailable {
+                embedder = None;
+            }
             match save(db, track.id, &track.content_hash, &outcome).await {
                 Err(sqlx::Error::Database(error)) if error.is_foreign_key_violation() => {
                     tracing::debug!("Track {} was deleted during analysis", track.id);
@@ -117,6 +135,7 @@ async fn run_pass(
                 match &outcome.vector {
                     Some(Ok(_)) => "succeeded",
                     Some(Err(_)) => "failed",
+                    None if outcome.embedding_unavailable => "deferred",
                     None => "kept",
                 }
             );
@@ -136,11 +155,19 @@ struct Outcome {
     fingerprint: Option<Vec<u32>>,
 
     vector: Option<Result<Vec<f32>, &'static str>>,
+    embedding_unavailable: bool,
 }
 
 impl Outcome {
     fn failed(embed: bool, code: &'static str) -> Self {
-        Self { cues: None, loudness: None, key: None, fingerprint: None, vector: embed.then_some(Err(code)) }
+        Self {
+            cues: None,
+            loudness: None,
+            key: None,
+            fingerprint: None,
+            vector: embed.then_some(Err(code)),
+            embedding_unavailable: false,
+        }
     }
 }
 
@@ -166,14 +193,23 @@ async fn analyze(
 
     match work {
         Ok(Ok(analysis)) => {
+            let mut embedding_unavailable = false;
             let vector = if !embed {
                 None
             } else if analysis.windows.is_empty() {
                 Some(Err("no_audio_fragments"))
             } else {
-                // Service outages must be retried next pass, not stored as a
-                // per-track failure that suppresses analysis for seven days.
-                Some(Ok(embedder.context("MERT is disabled")?.embed(&analysis.windows).await?))
+                match embedder.context("MERT is disabled")?.embed(&analysis.windows).await {
+                    Ok(vector) => Some(Ok(vector)),
+                    Err(error) => {
+                        // Keep CPU results and the previous embedding. A cold
+                        // start or outage must not trigger the seven-day delay
+                        // for permanent per-track failures, or abort CPU work.
+                        tracing::warn!("MERT deferred for {file_path}: {error:#}");
+                        embedding_unavailable = true;
+                        None
+                    }
+                }
             };
             Ok(Outcome {
                 cues: analysis.cues,
@@ -181,6 +217,7 @@ async fn analyze(
                 key: analysis.key,
                 fingerprint: analysis.fingerprint,
                 vector,
+                embedding_unavailable,
             })
         }
         Ok(Err(error)) => {
@@ -299,6 +336,117 @@ mod tests {
     }
 
     #[cfg(feature = "integration-tests")]
+    async fn insert_track(db: &PgPool, file: &str, created_at: chrono::DateTime<Utc>) -> anyhow::Result<Uuid> {
+        let artist = Uuid::now_v7();
+        let track = Uuid::now_v7();
+        sqlx::query("INSERT INTO artists(id,name,normalized_name,created_at) VALUES ($1,$2,$2,now())")
+            .bind(artist)
+            .bind(artist.to_string())
+            .execute(db)
+            .await?;
+        sqlx::query("INSERT INTO tracks(id,title,normalized_title,artist_id,duration_seconds,file_path,original_file_name,mime_type,file_size,content_hash,created_at) VALUES ($1,'CPU','cpu',$2,1,$3,$3,'audio/flac',1,$3,$4)")
+            .bind(track).bind(artist).bind(file).bind(created_at).execute(db).await?;
+        Ok(track)
+    }
+
+    #[cfg(feature = "integration-tests")]
+    #[sqlx::test(migrations = "../../../db/migrations")]
+    async fn loading_model_does_not_starve_cpu_work_behind_embedding_backlog(db: PgPool) -> anyhow::Result<()> {
+        use crate::mert::tests::{health, server};
+
+        let root = std::env::temp_dir().join(format!("caimack-loading-{}", Uuid::now_v7()));
+        let storage = Storage::open(&root)?;
+        let now = Utc::now();
+        let pending_cpu = insert_track(&db, "missing-cpu.flac", now - chrono::Duration::days(1)).await?;
+        // The first batch contains only tracks that already have CPU results.
+        // They must not prevent the older track from getting CPU analysis.
+        for position in 0..=BATCH {
+            let file = format!("missing-{position}.flac");
+            let track = insert_track(&db, &file, now + chrono::Duration::seconds(position)).await?;
+            sqlx::query("INSERT INTO track_cues(track_id,source_hash,version,succeeded,analyzed_at) VALUES ($1,$2,$3,true,now())")
+                .bind(track).bind(&file).bind(cues::VERSION).execute(&db).await?;
+        }
+        let (client, task) = server(vec![(200, health("loading"))]).await;
+        let index = EmbeddingIndex::default();
+        let cancel = CancellationToken::new();
+        assert_eq!(run_pass(&db, &storage, Some(&client), &index, &cancel).await?, 1);
+        assert_eq!(task.await?, ["GET /health HTTP/1.1"]);
+        let succeeded: bool = sqlx::query_scalar("SELECT succeeded FROM track_cues WHERE track_id=$1")
+            .bind(pending_cpu)
+            .fetch_one(&db)
+            .await?;
+        assert!(!succeeded, "the missing file should receive a CPU analysis result");
+        let embeddings: i64 = sqlx::query_scalar("SELECT count(*) FROM track_embeddings").fetch_one(&db).await?;
+        assert_eq!(embeddings, 0, "loading must not be saved as a per-track failure");
+        std::fs::remove_dir_all(root)?;
+        Ok(())
+    }
+
+    #[cfg(feature = "integration-tests")]
+    #[sqlx::test(migrations = "../../../db/migrations")]
+    async fn cold_start_keeps_cpu_results_and_old_embedding_then_retries_next_pass(db: PgPool) -> anyhow::Result<()> {
+        use crate::mert::tests::{health, server};
+        use serde_json::json;
+
+        let root = std::env::temp_dir().join(format!("caimack-cold-{}", Uuid::now_v7()));
+        let storage = Storage::open(&root)?;
+        let output = tokio::process::Command::new("ffmpeg")
+            .args(["-nostdin", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=24000:duration=6"])
+            .arg(root.join("music/pending.flac"))
+            .output()
+            .await?;
+        anyhow::ensure!(output.status.success(), "ffmpeg fixture failed: {:?}", output.stderr);
+        let now = Utc::now();
+        let track = insert_track(&db, "music/pending.flac", now).await?;
+        let other = insert_track(&db, "missing-other.flac", now - chrono::Duration::seconds(1)).await?;
+        sqlx::query("INSERT INTO track_embeddings(track_id,vector,dimension,model_id,strategy,source_hash,succeeded,analyzed_at) VALUES ($1,$2,512,'previous-model','previous-strategy','music/pending.flac',true,now())")
+            .bind(track).bind(vec![0.0_f32; 512]).execute(&db).await?;
+        let mut embedding = health("ready");
+        let mut vector = vec![0.0_f32; mert::DIMENSION];
+        vector[0] = 1.0;
+        embedding["vector"] = json!(vector);
+        let (client, task) = server(vec![
+            (200, health("sleeping")),
+            (503, json!({"error": "MERT is loading"})),
+            (200, health("ready")),
+            (200, embedding),
+        ])
+        .await;
+        let index = EmbeddingIndex::default();
+        let cancel = CancellationToken::new();
+        assert_eq!(run_pass(&db, &storage, Some(&client), &index, &cancel).await?, 2);
+        let model: String = sqlx::query_scalar("SELECT model_id FROM track_embeddings WHERE track_id=$1")
+            .bind(track)
+            .fetch_one(&db)
+            .await?;
+        assert_eq!(model, "previous-model", "cold start must preserve the previous embedding");
+        let analysed: i64 = sqlx::query_scalar("SELECT count(*) FROM track_cues WHERE track_id IN ($1,$2)")
+            .bind(track)
+            .bind(other)
+            .fetch_one(&db)
+            .await?;
+        assert_eq!(analysed, 2, "both CPU results should be saved despite the cold start");
+        let fingerprints: i64 = sqlx::query_scalar("SELECT count(*) FROM track_fingerprints WHERE track_id=$1")
+            .bind(track)
+            .fetch_one(&db)
+            .await?;
+        assert_eq!(fingerprints, 1, "successful CPU analysis must survive the deferred embedding");
+        assert_eq!(run_pass(&db, &storage, Some(&client), &index, &cancel).await?, 2);
+        let model: String = sqlx::query_scalar("SELECT model_id FROM track_embeddings WHERE track_id=$1")
+            .bind(track)
+            .fetch_one(&db)
+            .await?;
+        assert_eq!(model, mert::MODEL_ID);
+        assert_eq!(
+            task.await?,
+            ["GET /health HTTP/1.1", "POST /embed HTTP/1.1", "GET /health HTTP/1.1", "POST /embed HTTP/1.1",]
+        );
+        assert_eq!(run_pass(&db, &storage, Some(&client), &index, &cancel).await?, 0);
+        std::fs::remove_dir_all(root)?;
+        Ok(())
+    }
+
+    #[cfg(feature = "integration-tests")]
     #[sqlx::test(migrations = "../../../db/migrations")]
     async fn disabled_module_never_requests_or_replaces_embeddings(db: PgPool) -> anyhow::Result<()> {
         let root = std::env::temp_dir().join(format!("caimack-cpu-{}", Uuid::now_v7()));
@@ -356,13 +504,24 @@ mod tests {
         }
         assert!(crate::recommendations::index::load(&db).await?.is_empty());
         let client = MertClient::new(&ModelConfig::from_env()?)?;
-        let count =
-            run_pass(&db, &storage, Some(&client), &EmbeddingIndex::default(), &CancellationToken::new()).await?;
-        assert_eq!(count, 3);
+        let index = EmbeddingIndex::default();
+        let cancel = CancellationToken::new();
+        // A sleeping service needs a cold start and another analysis pass.
+        let snapshot = tokio::time::timeout(Duration::from_secs(32 * 60), async {
+            loop {
+                run_pass(&db, &storage, Some(&client), &index, &cancel).await?;
+                let snapshot = crate::recommendations::index::load(&db).await?;
+                if snapshot.len() == 3 {
+                    return Ok::<_, anyhow::Error>(snapshot);
+                }
+                tokio::time::sleep(POLL).await;
+            }
+        })
+        .await
+        .context("MERT did not finish loading and embedding the GPU fixtures")??;
         let results: Vec<(bool, Option<String>)> =
             sqlx::query_as("SELECT succeeded,error FROM track_embeddings").fetch_all(&db).await?;
         assert!(results.iter().all(|(succeeded, _)| *succeeded), "{results:?}");
-        let snapshot = crate::recommendations::index::load(&db).await?;
         assert_eq!(snapshot.len(), 3);
         assert_eq!(snapshot.dimension(), mert::DIMENSION);
         let listener = reco::taste::Listener {
