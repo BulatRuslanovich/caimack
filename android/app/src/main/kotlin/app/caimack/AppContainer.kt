@@ -20,6 +20,7 @@ import app.caimack.api.CaimackApi
 import app.caimack.api.Media
 import app.caimack.api.PlaybackSignal
 import app.caimack.api.RadioRequest
+import app.caimack.api.RadioBatch
 import app.caimack.api.Track
 import app.caimack.api.UserSettings
 import app.caimack.playback.Downloads
@@ -40,10 +41,25 @@ import app.caimack.session.SessionAuthenticator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import app.caimack.sync.SyncStore
+import app.caimack.sync.SyncAction
+import app.caimack.sync.OfflineCatalog
+import app.caimack.sync.LibrarySync
+import app.caimack.sync.SyncScheduler
+import app.caimack.session.SessionState
+import java.io.IOException
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
@@ -76,11 +92,21 @@ class AppContainer(context: Context) {
 
     val server = Server(preferences) { appearance.language.ifEmpty { Locale.getDefault().toLanguageTag() } }
 
+    val syncStore = SyncStore(context.applicationContext,json,server)
+    private val offlineCatalog = OfflineCatalog(syncStore) { SyncScheduler.schedule(context,soon=true) }
+    val sync by lazy { LibrarySync(context.applicationContext,syncStore,server) { http } }
+
     private val cookies = PersistentCookieJar(preferences, scope)
+
+    val libraryCache by lazy { app.caimack.playback.LibraryCache(File(context.filesDir, "library-cache"),
+        { (session.state.value as? SessionState.SignedIn)?.let { "${server.url.value}|${it.user.id}" } },
+        { downloadedCatalog.localSnapshot() }, json) }
 
     val http: OkHttpClient = OkHttpClient.Builder()
         .cookieJar(cookies)
         .addInterceptor(server.interceptor)
+        .addInterceptor(offlineCatalog.interceptor)
+        .addInterceptor { libraryCache.interceptor.intercept(it) }
         .authenticator(SessionAuthenticator(server, { http }) { session.expire() })
         .build()
 
@@ -91,9 +117,9 @@ class AppContainer(context: Context) {
         .build()
         .create(CaimackApi::class.java)
 
-    val session = Session(api, server, cookies, json) { deviceName }
+    val session = Session(api, server, cookies, json, { deviceName }, syncStore::offlineUser, syncStore::login, syncStore::logout)
 
-    val media = Media(server)
+    val media = Media(server) { path -> syncStore.asset(path) ?: downloadedCatalog.asset(path) }
 
     val settings = MutableStateFlow(UserSettings())
     val playbackDelivery = MutableStateFlow<app.caimack.playback.PlaybackDelivery?>(null)
@@ -123,18 +149,70 @@ class AppContainer(context: Context) {
 
     val listeningSession: String = UUID.randomUUID().toString()
 
-    val signals = Signals(api, scope, listeningSession)
+    val signals = Signals(api, scope, listeningSession) { kind,payload,occurredAt ->
+        val saved = syncStore.enqueue(SyncAction(kind=kind,occurredAt=occurredAt,payload=payload))
+        if(saved) SyncScheduler.schedule(context,soon=true)
+        saved
+    }
 
     val favorites = Favorites(api, scope, signals)
 
-    val downloads by lazy { Downloads(context.applicationContext, http, server, json) }
+    val downloads by lazy { Downloads(context.applicationContext, http, server, json) { !syncStore.active } }
+
+    val downloadedCatalog by lazy { app.caimack.playback.DownloadedCatalog(context.applicationContext, json,
+        { server.url.value?.toString() },
+        { downloads.tracks() + syncStore.tracks() },
+        { if (syncStore.active) app.caimack.sync.OfflineCatalog.view(syncStore.snapshot ?: kotlinx.serialization.json.buildJsonObject {}, syncStore.edits()) else null }) }
 
     val player = PlayerConnection(context.applicationContext, media, tracks, radio, signals)
     val connect by lazy { ConnectPlayback(context.applicationContext, this) }
 
+    private val artworkRefresh = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
+    fun refreshDownloadArtwork() { artworkRefresh.trySend(Unit) }
+    private val connectionProbe = kotlinx.coroutines.sync.Mutex()
+    fun refreshLibraryConnection() {
+        scope.launch {
+            if (session.state.value !is SessionState.SignedIn || !connectionProbe.tryLock()) return@launch
+            try { withTimeoutOrNull(5_000) { runCatching { api.me() } } }
+            finally { connectionProbe.unlock() }
+        }
+    }
+
+    fun locallyAvailable(id: String): Boolean = downloads.state.value[id]?.done == true || syncStore.audio(id) != null
+    fun playable(tracks: List<Track>): List<Track> = if (libraryCache.offline.value) tracks.filter { locallyAvailable(it.id) } else tracks
+
+
     init {
+        scope.launch {
+            for (request in artworkRefresh) {
+                if (session.state.value !is SessionState.SignedIn) continue
+                val songs = kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    downloads.state.value.values.mapNotNull { it.track }
+                }
+                downloadedCatalog.cacheTrackArtwork(songs, http)
+            }
+        }
+        scope.launch {
+            session.state.first { it is SessionState.SignedIn }
+            val state = kotlinx.coroutines.withContext(Dispatchers.Main) { downloads.state }
+            state.map { entries -> entries.values.mapNotNull { it.track }.toSet() }
+                .distinctUntilChanged().collect { refreshDownloadArtwork() }
+        }
         player.remoteRoute = { command -> connect.route(command) }
         player.remoteSelected = { connect.isRemote }
+        scope.launch {
+            session.state.collect { state ->
+                syncStore.session((state as? SessionState.SignedIn)?.user)
+                if (state is SessionState.SignedIn) refreshDownloadArtwork()
+                if(syncStore.active) {
+                    syncStore.snapshot?.get("tracks")?.let { rows ->
+                        json.decodeFromJsonElement<List<Track>>(rows).forEach { tracks[it.id]=it }
+                    }
+                    recommendationsEnabled.value=syncStore.snapshot?.get("recommendationsEnabled")?.jsonPrimitive?.booleanOrNull ?: false
+                    SyncScheduler.schedule(context,soon=true)
+                }
+            }
+        }
     }
 
     val queue = AtomicFile(File(context.filesDir, "queue.json"))
@@ -143,11 +221,27 @@ class AppContainer(context: Context) {
         withTimeoutOrNull(SIGNALS_FLUSH_WAIT_MS) { signals.send() }
     }
 
-    suspend fun radio(request: RadioRequest) = run {
-        refreshCapabilities()
-        check(recommendationsEnabled.value) { "Recommendations module is disabled" }
-        flushSignals()
-        api.radio(request.copy(sessionId = listeningSession))
+    suspend fun radio(request: RadioRequest): RadioBatch {
+        if(syncStore.active && request.seedTrackId==null && syncStore.snapshot?.containsKey("radio")==true) return offlineRadio(request)
+        if(syncStore.active && !sync.network.available()) return offlineRadio(request)
+        return try {
+            kotlinx.coroutines.withTimeout(8_000) {
+                refreshCapabilities()
+                check(recommendationsEnabled.value) { "Recommendations module is disabled" }
+                flushSignals()
+                api.radio(request.copy(sessionId = listeningSession)).also { syncStore.offlineQueue=false }
+            }
+        } catch(error: IOException) { if(syncStore.active) offlineRadio(request) else throw error }
+          catch(error: kotlinx.coroutines.TimeoutCancellationException) { if(syncStore.active) offlineRadio(request) else throw error }
+          catch(error: retrofit2.HttpException) { if(syncStore.active && (error.code()>=500 || error.code()==401)) offlineRadio(request) else throw error }
+    }
+
+    private fun offlineRadio(request: RadioRequest): RadioBatch {
+        check(request.seedTrackId==null) { "Only general radio is synchronized for offline playback" }
+        val value = syncStore.snapshot?.get("radio") ?: throw IOException("Radio has not been synchronized yet")
+        syncStore.offlineQueue=true
+        val batch = json.decodeFromJsonElement<RadioBatch>(value)
+        return batch.copy(tracks=batch.tracks.filter { syncStore.audio(it.track.id)!=null && it.track.id !in request.exclude }.take(100),seedTrackId=null)
     }
 
     fun shelfShown(source: String) =

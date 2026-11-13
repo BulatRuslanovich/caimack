@@ -39,6 +39,7 @@ tokio-util.workspace = true
 tracing.workspace = true
 uuid.workspace = true
 walkdir.workspace = true
+same-file.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

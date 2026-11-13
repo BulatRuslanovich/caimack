@@ -45,7 +45,7 @@ object Background {
         val jobs = app.getSystemService(JobScheduler::class.java)
         val prefs = (app as CaimackApp).container.playbackPrefs
 
-        if (prefs.autoDownloads.value) {
+        if (prefs.autoDownloads.value && !app.container.syncStore.enabled) {
             jobs.schedule(
                 JobInfo.Builder(AUTO_DOWNLOAD_JOB, ComponentName(app, AutoDownloadJob::class.java))
                     .setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED)
@@ -102,7 +102,7 @@ class AutoDownloadJob : ContainerJob() {
     override suspend fun run() {
         val container = (application as CaimackApp).container
         val prefs = container.playbackPrefs
-        if (!prefs.autoDownloads.value) return
+        if (!prefs.autoDownloads.value || container.syncStore.enabled) return
 
         val settings = runCatching { container.api.settings() }.getOrDefault(container.settings.value)
         val daily = runCatching { container.api.homeMix("daily").tracks }.getOrDefault(emptyList())

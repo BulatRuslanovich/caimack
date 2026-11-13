@@ -44,6 +44,7 @@ class Downloads(
     private val http: OkHttpClient,
     private val server: Server,
     private val json: Json,
+    private val canDownload: () -> Boolean,
 ) {
     private val database = StandaloneDatabaseProvider(context)
     private val cache = SimpleCache(File(context.filesDir, "downloads"), NoOpCacheEvictor(), database)
@@ -67,7 +68,7 @@ class Downloads(
 
     val playback: CacheDataSource.Factory = CacheDataSource.Factory()
         .setCache(cache)
-        .setUpstreamDataSourceFactory(upstream)
+        .setUpstreamDataSourceFactory(androidx.media3.datasource.DefaultDataSource.Factory(context,upstream))
         .setCacheWriteDataSinkFactory(null)
 
     init {
@@ -84,18 +85,27 @@ class Downloads(
 
     suspend fun add(tracks: List<Track>, settings: UserSettings) {
         for (track in missing(tracks)) {
-            DownloadService.sendAddDownload(context, OfflineService::class.java, request(track, settings), false)
+            val request = request(track, settings)
+            if (!canDownload()) return
+            DownloadService.sendAddDownload(context, OfflineService::class.java, request, false)
         }
     }
 
     suspend fun addInBackground(tracks: List<Track>, settings: UserSettings): List<String> {
+        if (!canDownload()) return emptyList()
         withContext(Dispatchers.Main) { manager.resumeDownloads() }
-        val fresh = missing(tracks)
-        for (track in fresh) {
+        val added = mutableListOf<String>()
+        for (track in missing(tracks)) {
             val request = request(track, settings)
-            withContext(Dispatchers.Main) { manager.addDownload(request) }
+            withContext(Dispatchers.Main) {
+                if (canDownload()) {
+                    manager.addDownload(request)
+                    added += track.id
+                }
+            }
+            if (!canDownload()) break
         }
-        return fresh.map { it.id }
+        return added
     }
 
     fun removeInBackground(trackIds: Collection<String>) = trackIds.forEach { manager.removeDownload(it) }
@@ -115,7 +125,8 @@ class Downloads(
     }
 
     private fun missing(tracks: List<Track>) =
-        tracks.filter { current.value[it.id]?.download?.state.let { state -> state == null || state == Download.STATE_FAILED } }
+        if (!canDownload()) emptyList()
+        else tracks.filter { current.value[it.id]?.download?.state.let { state -> state == null || state == Download.STATE_FAILED } }
 
     private suspend fun request(track: Track, settings: UserSettings): DownloadRequest {
         val (uri, mime) = sourceOf(track, settings)

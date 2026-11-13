@@ -104,7 +104,7 @@ export function LibraryChips() {
     strip.current.scrollLeft += offset - (strip.current.clientWidth - active.offsetWidth) / 2;
   }, [pathname]);
 
-  if (!inLibrary(pathname)) return null;
+  if (pathname === "/library" || !inLibrary(pathname)) return null;
 
   return (
     <nav
@@ -146,7 +146,7 @@ export function MobileNav() {
       }}
     >
       {mobileNav.map(({ href, labelKey, icon: Icon }) => {
-        const active = href === "/playlists" ? inLibrary(pathname) : isActivePath(pathname, href);
+        const active = href === "/library" ? inLibrary(pathname) : isActivePath(pathname, href);
 
         return (
           <Link

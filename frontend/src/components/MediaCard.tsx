@@ -19,6 +19,7 @@ import { useT } from "@/contexts/I18nContext";
 import { AlbumCover, ArtistCover, PlaylistCover } from "./Cover";
 import { ListMusicIcon } from "lucide-react";
 import { BufferingRing } from "./PlaybackIndicators";
+import { LibraryItemMenu } from "./LibrarySaveButton";
 import { PlayBadge } from "./PlayBadge";
 
 export function Card<T extends string>({
@@ -33,6 +34,7 @@ export function Card<T extends string>({
   bare = false,
   current = false,
   action,
+  menu,
   toneSrc,
 }: {
   href?: Route<T>;
@@ -46,6 +48,7 @@ export function Card<T extends string>({
   bare?: boolean;
   current?: boolean;
   action?: ReactNode;
+  menu?: ReactNode;
   toneSrc?: string | null | (string | null)[];
 }) {
   const tone = useTone<HTMLElement>(toneSrc);
@@ -62,11 +65,17 @@ export function Card<T extends string>({
       </div>
       <span
         title={title}
-        className={cn("line-clamp-2 text-sm leading-snug font-medium", current && "text-primary")}
+        className={cn(
+          "line-clamp-2 text-sm leading-snug font-medium",
+          current && "text-primary",
+          menu && "pr-10",
+        )}
       >
         {title}
       </span>
-      <span className="library-secondary line-clamp-2 text-sm leading-snug">{subtitle}</span>
+      <span className={cn("library-secondary line-clamp-2 text-sm leading-snug", menu && "pr-10")}>
+        {subtitle}
+      </span>
     </>
   );
 
@@ -89,6 +98,7 @@ export function Card<T extends string>({
           {body}
         </Link>
 
+        {menu && <div className="absolute right-0 bottom-0">{menu}</div>}
         {action && (
           <div className="card-art-overlay pointer-events-none absolute inset-x-0 top-0 aspect-square">
             {action}
@@ -124,15 +134,18 @@ export function AlbumCard({ album }: { album: Album }) {
       href={`/albums/${album.id}`}
       prefetch={prefetch}
       title={album.title}
+      menu={<LibraryItemMenu kind="album" id={album.id} title={album.title} />}
       subtitle={album.year ? `${album.artistName}, ${album.year}` : album.artistName}
       cover={<AlbumCover album={album} />}
       toneSrc={coverUrl({ albumId: album.id, hasCover: album.hasCover, variant: "thumb" })}
       action={
-        <CardPlayButton
-          name={album.title}
-          playing={playing}
-          load={async () => (await client.fetchQuery(queries.album(album.id))).tracks}
-        />
+        <>
+          <CardPlayButton
+            name={album.title}
+            playing={playing}
+            load={async () => (await client.fetchQuery(queries.album(album.id))).tracks}
+          />
+        </>
       }
     />
   );
@@ -155,6 +168,7 @@ export function ArtistCard({ artist, bare = false }: { artist: Artist; bare?: bo
         (artist.albumCount > 0 ? `, ${t("count.albums", { count: artist.albumCount })}` : "")
       }
       cover={<ArtistCover artist={artist} />}
+      menu={<LibraryItemMenu kind="artist" id={artist.id} title={artist.name} />}
       toneSrc={artistImageUrl({ artistId: artist.id, hasImage: artist.hasImage, variant: "thumb" })}
     />
   );
@@ -177,6 +191,7 @@ export function PlaylistCard({ playlist, showOwner }: { playlist: Playlist; show
       href={`/playlists/${playlist.id}`}
       prefetch={prefetch}
       title={playlist.name}
+      menu={<LibraryItemMenu kind="playlist" id={playlist.id} title={playlist.name} />}
       subtitle={t("count.tracks", { count: playlist.trackCount }) + tail}
       cover={<PlaylistCover playlist={playlist} fallback={<ListMusicIcon size={34} />} />}
       toneSrc={playlistCoverUrl({
@@ -186,11 +201,13 @@ export function PlaylistCard({ playlist, showOwner }: { playlist: Playlist; show
         variant: "thumb",
       })}
       action={
-        <CardPlayButton
-          name={playlist.name}
-          playing={false}
-          load={async () => (await client.fetchQuery(queries.playlist(playlist.id))).tracks}
-        />
+        <>
+          <CardPlayButton
+            name={playlist.name}
+            playing={false}
+            load={async () => (await client.fetchQuery(queries.playlist(playlist.id))).tracks}
+          />
+        </>
       }
     />
   );

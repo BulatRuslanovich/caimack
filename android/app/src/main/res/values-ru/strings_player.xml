@@ -21,6 +21,7 @@
     <string name="downloads_title">Загрузки</string>
     <string name="downloads_add">Скачать</string>
     <string name="downloads_remove">Удалить загрузку</string>
+    <string name="downloads_available">Доступен офлайн</string>
     <string name="downloads_remove_all">Удалить все</string>
     <string name="downloads_empty_title">Ничего не скачано</string>
     <string name="downloads_size">%1$s на телефоне</string>
