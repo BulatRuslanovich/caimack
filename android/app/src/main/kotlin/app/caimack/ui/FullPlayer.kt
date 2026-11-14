@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -74,6 +75,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -213,7 +215,7 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
                         Spacer(Modifier.weight(1f))
                         Text(clock(duration), style = Type.tiny, color = palette.muted)
                     }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().testTag("full-player-transport"), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         IconAction(Lucide.Shuffle, stringResource(R.string.player_shuffle), tint = if (state.shuffle) palette.primary else palette.muted) { player.toggleShuffle() }
                         IconAction(Lucide.SkipBack, stringResource(R.string.player_previous), size = 26) { player.previous() }
                         Box(contentAlignment = Alignment.Center) {
@@ -228,7 +230,8 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
                                     modifier = Modifier.size(28.dp),
                                 )
                             }
-                            BufferingRing(state.buffering, Modifier.size(78.dp))
+                            // A visual overlay must not enlarge the 68 dp button's layout slot.
+                            BufferingRing(state.buffering, Modifier.matchParentSize().requiredSize(78.dp).testTag("full-player-buffering"))
                         }
                         IconAction(Lucide.SkipForward, stringResource(R.string.player_next), size = 26) { player.next() }
                         IconAction(

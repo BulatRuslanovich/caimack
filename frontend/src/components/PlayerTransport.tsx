@@ -7,17 +7,9 @@ import { cn } from "@/lib/cn";
 import type { TranslationKey } from "@/lib/i18n";
 import { usePlayerActions, usePlayerState, type RepeatMode } from "@/contexts/PlayerContext";
 import { useT } from "@/contexts/I18nContext";
-import { BufferingRing } from "./PlaybackIndicators";
+import { PlayPauseButton } from "./PlayPauseButton";
 import { Button } from "./ui/button";
-import {
-  PauseIcon,
-  PlayIcon,
-  Repeat1Icon,
-  RepeatIcon,
-  ShuffleIcon,
-  SkipBackIcon,
-  SkipForwardIcon,
-} from "lucide-react";
+import { Repeat1Icon, RepeatIcon, ShuffleIcon, SkipBackIcon, SkipForwardIcon } from "lucide-react";
 
 const REPEAT_MODES: Record<RepeatMode, TranslationKey> = {
   off: "player.repeatOff",
@@ -35,6 +27,9 @@ export function PlayerTransport({ size = "bar" }: { size?: "bar" | "full" }) {
 
   return (
     <div
+      onKeyDown={(event) => {
+        if (event.key === " " || event.key === "Enter") event.stopPropagation();
+      }}
       className={cn(
         "player-transport flex items-center",
         large ? "justify-center gap-4 max-[420px]:gap-1.5" : "gap-1.5",
@@ -63,17 +58,7 @@ export function PlayerTransport({ size = "bar" }: { size?: "bar" | "full" }) {
         <SkipBackIcon size={large ? 34 : 28} />
       </Button>
 
-      <Button
-        variant="play"
-        size={large ? "play-lg" : "play"}
-        className="transport-main relative"
-        onClick={toggle}
-        aria-label={isPlaying ? t("action.pause") : t("action.play")}
-        aria-busy={buffering}
-      >
-        {isPlaying ? <PauseIcon size={large ? 34 : 28} /> : <PlayIcon size={large ? 34 : 28} />}
-        {buffering && <BufferingRing />}
-      </Button>
+      <PlayPauseButton playing={isPlaying} buffering={buffering} onToggle={toggle} size={size} />
 
       <Button
         variant="ghost"
@@ -92,6 +77,7 @@ export function PlayerTransport({ size = "bar" }: { size?: "bar" | "full" }) {
         className={cn(!large && "text-faint", repeat !== "off" && "text-primary")}
         onClick={cycleRepeat}
         aria-label={repeatLabel}
+        aria-pressed={repeat !== "off"}
         title={repeatLabel}
       >
         {repeat === "one" ? (
