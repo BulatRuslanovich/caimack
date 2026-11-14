@@ -14,6 +14,7 @@ import java.security.MessageDigest
 import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 
@@ -79,6 +80,16 @@ data class SyncStatus(
  * folder; no cache eviction policy can remove it.
  */
 class SyncStore(private val context: Context, val json: Json, private val server: Server) {
+    val catalogRevision = MutableStateFlow(0L)
+    private var tracksRevision = -1L
+    private var cachedTracks = emptyList<app.caimack.api.Track>()
+    private var sourceRevision = 0L
+    private var decodedRevision = -1L
+    private var decodedTracks = emptyList<app.caimack.api.Track>()
+    private fun catalogChanged(metadata: Boolean = false) {
+        if (metadata) sourceRevision++
+        catalogRevision.update { it + 1 }
+    }
     private val prefs = context.getSharedPreferences("library-sync", Context.MODE_PRIVATE)
     val directory = File(context.filesDir, "library-sync").apply { mkdirs() }
     private val snapshotFile = AtomicFile(File(directory, "snapshot.json"))
@@ -146,7 +157,9 @@ class SyncStore(private val context: Context, val json: Json, private val server
         }
 
     fun session(user: User?) {
+        if (signedIn == user?.id) return
         signedIn = user?.id
+        catalogChanged()
     }
 
     fun offlineUser(): User? {
@@ -162,11 +175,13 @@ class SyncStore(private val context: Context, val json: Json, private val server
     fun logout() {
         signedIn = null
         prefs.edit().putBoolean("signedOut", true).commit()
+        catalogChanged()
     }
 
     fun login(user: User) {
         signedIn = user.id
         prefs.edit().putBoolean("signedOut", false).commit()
+        catalogChanged()
     }
 
     @Synchronized
@@ -209,6 +224,7 @@ class SyncStore(private val context: Context, val json: Json, private val server
             .putBoolean("signedOut", false)
             .commit()
         signedIn = user.id
+        catalogChanged(metadata = true)
         status.value =
             status.value.copy(
                 folder = folder,
@@ -226,6 +242,7 @@ class SyncStore(private val context: Context, val json: Json, private val server
         )
             throw IOException(context.getString(app.caimack.R.string.sync_choose_folder))
         prefs.edit().putBoolean("enabled", value).commit()
+        catalogChanged()
         status.value = status.value.copy(enabled = value, message = null)
     }
 
@@ -238,6 +255,7 @@ class SyncStore(private val context: Context, val json: Json, private val server
             json.encodeToString(updated),
         ) // persist before acknowledging optimistic UI
         actions = updated
+        catalogChanged(metadata = true)
         status.value = status.value.copy(pending = actions.size)
         return true
     }
@@ -280,6 +298,7 @@ class SyncStore(private val context: Context, val json: Json, private val server
         val updated = actions.filter { it.id !in accepted }
         write(actionsFile, json.encodeToString(updated))
         actions = updated
+        catalogChanged(metadata = true)
         status.value = status.value.copy(pending = actions.size, rejected = rejected.size)
     }
 
@@ -312,14 +331,17 @@ class SyncStore(private val context: Context, val json: Json, private val server
         snapshot = value
         confirmedFile.delete()
         confirmed = emptyList()
+        catalogChanged(metadata = true)
         status.value = status.value.copy(total = tracks.size)
     }
 
     @Synchronized
     fun updateIndex(transform: (FileIndex) -> FileIndex) {
-        val next = transform(index)
+        val before = index
+        val next = transform(before)
         write(indexFile, json.encodeToString(next))
         index = next
+        if (next.files != before.files) catalogChanged()
         status.value = status.value.copy(completed = index.files.size)
     }
 
@@ -331,18 +353,23 @@ class SyncStore(private val context: Context, val json: Json, private val server
 
     fun audio(id: String): Uri? = if (active) index.files[id]?.uri?.let(Uri::parse) else null
 
-    fun tracks(): List<app.caimack.api.Track> =
-        if (!active) emptyList()
-        else
-            snapshot
-                ?.let {
-                    json
-                        .decodeFromJsonElement<List<app.caimack.api.Track>>(
-                            OfflineCatalog.view(it, edits()).getValue("tracks")
-                        )
-                        .filter { track -> track.id in index.files }
-                }
-                .orEmpty()
+    @Synchronized fun tracks(): List<app.caimack.api.Track> {
+        if (!active) return emptyList()
+        val revision = catalogRevision.value
+        if (tracksRevision != revision) {
+            if (decodedRevision != sourceRevision) {
+                decodedTracks = snapshot?.let {
+                    json.decodeFromJsonElement<List<app.caimack.api.Track>>(
+                        OfflineCatalog.view(it, edits()).getValue("tracks")
+                    )
+                }.orEmpty()
+                decodedRevision = sourceRevision
+            }
+            cachedTracks = decodedTracks.filter { track -> track.id in index.files }
+            tracksRevision = revision
+        }
+        return cachedTracks
+    }
 
     fun asset(path: String): String? {
         if (!active) return null

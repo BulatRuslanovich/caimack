@@ -7,5 +7,4 @@
     <string name="connect_reconnecting">Восстанавливаем соединение…</string>
     <string name="connect_find_devices">Откройте Caimack на другом устройстве и войдите в тот же аккаунт. Оно появится здесь.</string>
     <string name="connect_failed">Не удалось управлять устройством воспроизведения. Проверьте соединение или выберите другое устройство.</string>
-    <string name="connect_volume">Громкость воспроизведения</string>
 </resources>

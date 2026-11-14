@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="player_now_playing">Now playing</string>
     <string name="player_open_full">Open the full player</string>
     <string name="player_close_full">Close the full player</string>
     <string name="player_previous">Previous track</string>
@@ -14,10 +13,6 @@
     <string name="lyrics_none">No lyrics for this track.</string>
     <string name="player_playing_elsewhere">Paused — playback moved to another device.</string>
     <string name="player_playing_on">Paused — now playing on %1$s.</string>
-    <string name="handoff_playing_on">Playing on %1$s</string>
-    <string name="handoff_paused_on">Paused on %1$s · %2$s</string>
-    <string name="handoff_continue_here">Continue here</string>
-    <string name="handoff_dismiss">Hide</string>
     <string name="downloads_title">Downloads</string>
     <string name="downloads_add">Download</string>
     <string name="downloads_remove">Remove download</string>
@@ -39,7 +34,6 @@
     <string name="menu_unlike">Remove from favourites</string>
     <string name="menu_add_to_playlist">Add to playlist</string>
     <string name="menu_added_to_playlist">Added to “%1$s”.</string>
-    <string name="menu_no_playlists">No playlists yet</string>
     <string name="menu_go_to_album">Go to album</string>
     <string name="menu_go_to_artist">Go to artist</string>
     <string name="menu_more">More actions</string>
@@ -47,7 +41,6 @@
     <string name="radio_failed">Could not start the radio.</string>
     <string name="radio_tile_starting">Picking…</string>
     <string name="radio_tile_failed">Didn\'t start</string>
-    <string name="player_buffering">Loading…</string>
     <string name="player_skipped_unplayable">“%1$s” can’t be played — skipping to the next track.</string>
     <string name="queue_up_next">Up next</string>
     <string name="queue_radio_from">Radio from “%1$s”</string>

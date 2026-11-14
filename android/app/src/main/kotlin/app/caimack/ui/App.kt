@@ -155,11 +155,9 @@ fun App(user: User) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     val playback by container.player.state.collectAsStateWithLifecycle()
     val offlineLibrary by container.libraryCache.offline.collectAsStateWithLifecycle()
-    val downloaded by container.downloads.state.collectAsStateWithLifecycle()
-    val synchronized by container.syncStore.status.collectAsStateWithLifecycle()
-    val availableTracks = remember(downloaded, synchronized, user.id) {
-        downloaded.filterValues { it.done }.keys + container.syncStore.tracks().map { it.id }
-    }
+    val catalog by container.localLibrary.collectAsStateWithLifecycle()
+    val localLibrary = catalog.takeIf { it.account == container.accountKey } ?: app.caimack.playback.LocalLibrary()
+    val availableTracks = localLibrary.trackIds
     val artworkRevision by container.downloadedCatalog.revision.collectAsStateWithLifecycle()
     val resolveArtwork = remember(container, user.id) { container.downloadedCatalog::cachedUrl }
     val appUpdate by container.updates.state.collectAsStateWithLifecycle()
@@ -204,6 +202,7 @@ fun App(user: User) {
         LocalNavigate provides navigate,
         LocalOfflineLibrary provides offlineLibrary,
         LocalAvailableTracks provides availableTracks,
+        LocalAvailableCollections provides localLibrary.collections,
         LocalNowPlayingTone provides nowPlayingTone,
         LocalToneEnabled provides toneEnabled,
         LocalSnackbar provides snackbar,

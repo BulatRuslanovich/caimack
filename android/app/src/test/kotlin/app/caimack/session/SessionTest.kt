@@ -17,7 +17,8 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -59,7 +60,7 @@ class SessionTest {
     @After
     fun stop() {
         if (!webClosed) web.close()
-        scope.cancel()
+        runBlocking { scope.coroutineContext.job.cancelAndJoin() }
         directory.deleteRecursively()
     }
 

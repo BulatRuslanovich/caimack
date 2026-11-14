@@ -12,6 +12,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextEquals
@@ -51,7 +52,8 @@ class NavigationTest {
                         }
                         composable<LibraryRoute> {
                             Column {
-                                LibraryShortcuts({ nav.openSection(FavoritesRoute) }, { nav.openSection(DownloadsRoute) })
+                                LibraryEntry(stringResource(R.string.downloads_title), null, Lucide.Download) { nav.navigate(DownloadsRoute) }
+                                LibraryEntry(stringResource(R.string.nav_favorites), null, Lucide.Heart) { nav.navigate(FavoritesRoute) }
                                 Text("library-screen", Modifier.testTag("library"))
                             }
                         }

@@ -26,11 +26,12 @@ class ArtworkProvider : ContentProvider() {
         val context = context ?: throw FileNotFoundException(uri.toString())
         if (mode != "r") throw FileNotFoundException("Artwork is read-only")
         if (uri.path == "/placeholder") return placeholder(uri)
-        if (uri.pathSegments.firstOrNull() == "synced") {
+        val local = uri.pathSegments.firstOrNull()
+        if (local == "synced" || local == "downloaded") {
             val name = uri.pathSegments.getOrNull(1)
-                ?.takeIf { uri.pathSegments.size == 2 && it.startsWith("asset-") }
+                ?.takeIf { uri.pathSegments.size == 2 && validLocalName(local, it) }
                 ?: throw FileNotFoundException(uri.toString())
-            val folder = File(context.filesDir, "library-sync").canonicalFile
+            val folder = File(context.filesDir, localFolder(local)).canonicalFile
             val file = File(folder, name).canonicalFile
             if (file.parentFile != folder || file.name != name) throw FileNotFoundException(uri.toString())
             return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
@@ -111,16 +112,24 @@ class ArtworkProvider : ContentProvider() {
                 .build()
         } ?: url?.let(Uri::parse)?.takeIf { it.scheme == "file" }?.path?.let { path ->
             val file = File(path)
-            // SyncStore.asset returns private files. Expose only synchronized assets through
-            // our provider so System UI and media browsers can read them without file:// access.
-            file.takeIf { it.parentFile?.name == "library-sync" && it.name.startsWith("asset-") }?.let {
+            val endpoint = when {
+                file.parentFile?.name == "library-sync" -> "synced"
+                file.parentFile?.name == "artwork" && file.parentFile?.parentFile?.name == "downloaded-catalog" -> "downloaded"
+                else -> null
+            }
+            endpoint?.takeIf { validLocalName(it, file.name) }?.let {
                 Uri.Builder().scheme("content").authority(AUTHORITY)
-                    .appendPath("synced").appendPath(it.name).build()
+                    .appendPath(it).appendPath(file.name).build()
             }
         } ?: fallbackName?.let { name ->
             Uri.Builder().scheme("content").authority(AUTHORITY).path("/placeholder")
                 .appendQueryParameter("name", name).build()
         }
+
+        private fun localFolder(endpoint: String) = if (endpoint == "synced") "library-sync" else "downloaded-catalog/artwork"
+        private fun validLocalName(endpoint: String, name: String) = if (endpoint == "synced")
+            name.startsWith("asset-") && '/' !in name && '\\' !in name && ".." !in name
+            else name.matches(Regex("[a-f0-9]{64}-[a-f0-9]{64}"))
 
         private val ARTWORK = Regex("api/(albums|tracks|playlists|artists)/[0-9a-fA-F-]+/(cover|image)$")
     }

@@ -9,6 +9,8 @@ import app.caimack.api.*
 import app.caimack.sync.OfflineCatalog
 import kotlinx.serialization.json.*
 import okhttp3.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 
 /** A read-only projection of completed downloads, independent of the server. */
 class DownloadedCatalog(private val directory: File, private val json: Json, private val address: () -> String?,
@@ -16,6 +18,9 @@ class DownloadedCatalog(private val directory: File, private val json: Json, pri
     private val identity: () -> String?) {
     private val artwork = DownloadedArtwork(File(directory, "artwork"))
     val revision = artwork.revision
+    val catalogRevision = MutableStateFlow(0L)
+    private var metadataFor: String? = null
+    private var cachedMetadata: JsonObject = buildJsonObject {}
 
     fun asset(path: String): String? {
         val server = address() ?: return null
@@ -46,9 +51,14 @@ class DownloadedCatalog(private val directory: File, private val json: Json, pri
     private fun metadataFile(key: String) = File(directory, "metadata-" + MessageDigest.getInstance("SHA-256")
         .digest(key.toByteArray()).joinToString("") { "%02x".format(it) } + ".json")
 
-    private fun metadata(key: String): JsonObject = runCatching {
-        json.parseToJsonElement(metadataFile(key).readText()).jsonObject
-    }.getOrDefault(buildJsonObject {})
+    @Synchronized private fun metadata(key: String): JsonObject {
+        if (metadataFor != key) {
+            cachedMetadata = runCatching { json.parseToJsonElement(metadataFile(key).readText()).jsonObject }
+                .getOrDefault(buildJsonObject {})
+            metadataFor = key
+        }
+        return cachedMetadata
+    }
 
     private fun write(key: String, data: JsonObject) {
         directory.mkdirs()
@@ -56,6 +66,9 @@ class DownloadedCatalog(private val directory: File, private val json: Json, pri
         try {
             temporary.outputStream().use { it.write(data.toString().toByteArray()); it.fd.sync() }
             Files.move(temporary.toPath(), metadataFile(key).toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            metadataFor = key
+            cachedMetadata = data
+            catalogRevision.update { it + 1 }
         } finally { temporary.delete() }
     }
 
@@ -81,19 +94,8 @@ class DownloadedCatalog(private val directory: File, private val json: Json, pri
     private fun playlists(key: String? = identity()): List<PlaylistDetail> = key?.let { metadata(it)["playlists"] }
         ?.let { runCatching { json.decodeFromJsonElement<List<PlaylistDetail>>(it) }.getOrNull() }.orEmpty()
 
-    fun availableCollection(kind: String, id: String): Boolean {
-        val available = tracks()
-        return when (kind) {
-            "album" -> available.any { it.albumId == id }
-            "artist" -> available.any { it.artistId == id || it.artists.orEmpty().any { artist -> artist.id == id } }
-            "playlist" -> {
-                val ids = available.map { it.id }.toSet()
-                playlists().firstOrNull { it.id == id }?.tracks?.any { it.id in ids } == true ||
-                    (synchronized()?.get("playlistTracks")?.jsonObject?.get(id) as? JsonArray).orEmpty().any { it.jsonPrimitive.content in ids }
-            }
-            else -> false
-        }
-    }
+    fun availableCollections(available: List<Track>): Set<Pair<String, String>> =
+        collectionAvailability(available, playlists(), synchronized()?.get("playlistTracks") as? JsonObject)
 
     fun localSnapshot(): JsonObject {
         val account = identity()

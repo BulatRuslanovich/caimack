@@ -10,7 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -38,36 +38,50 @@ internal fun TimedLyricText(
     modifier: Modifier = Modifier,
 ) {
     var layout by remember(line) { mutableStateOf<TextLayoutResult?>(null) }
+    val measured = layout
+    val geometry = remember(line, measured) {
+        // Geometry belongs to the text layout, not the playback clock or recomposition.
+        var offset = 0
+        if (measured == null) emptyList() else line.words.map { word ->
+            val stop = (offset + word.text.length).coerceAtMost(line.text.length)
+            val boxes = (offset until stop).map { character ->
+                val box = measured.getBoundingBox(character)
+                box to (measured.getBidiRunDirection(character) == ResolvedTextDirection.Rtl)
+            }.distinctBy { it.first }
+            offset = stop
+            WordGeometry(word, boxes, boxes.sumOf { it.first.width.toDouble() }.toFloat(),
+                Path().apply { boxes.forEach { addRect(it.first) } })
+        }
+    }
     // Read the frame clock in drawing, keeping the rest of the lyrics out of recomposition.
     Text(
         line.text.ifBlank { "♪" },
         style = style,
         color = upcoming,
         onTextLayout = { layout = it },
-        modifier = modifier.drawWithContent {
-            drawContent()
-            val measured = layout ?: return@drawWithContent
-            if (line.words.isEmpty()) return@drawWithContent
+        modifier = modifier.drawWithCache {
             val path = Path()
-            var offset = 0
-            for (word in line.words) {
-                val stop = (offset + word.text.length).coerceAtMost(line.text.length)
-                val progress = lyricWordProgress(word, positionMs())
-                // Glyph boxes retain normal wrapping, whitespace, ligatures and syllable joins.
-                val boxes = (offset until stop).map { it to measured.getBoundingBox(it) }.distinctBy { it.second }
-                var remaining = boxes.sumOf { it.second.width.toDouble() }.toFloat() * progress
-                boxes.forEach { (character, box) ->
-                    val width = remaining.coerceIn(0f, box.width.coerceAtLeast(0f))
-                    if (width > 0f) {
-                        val rtl = measured.getBidiRunDirection(character) == ResolvedTextDirection.Rtl
-                        path.addRect(if (rtl) Rect(box.right - width, box.top, box.right, box.bottom)
+            onDrawWithContent {
+                drawContent()
+                if (measured == null || geometry.isEmpty()) return@onDrawWithContent
+                val position = positionMs()
+                path.reset()
+                for (word in geometry) {
+                    val progress = lyricWordProgress(word.word, position)
+                    if (progress == 0f) continue
+                    if (progress == 1f) { path.addPath(word.full); continue }
+                    var remaining = word.width * progress
+                    for ((box, rtl) in word.boxes) {
+                        val width = remaining.coerceIn(0f, box.width.coerceAtLeast(0f))
+                        if (width > 0f) path.addRect(if (rtl) Rect(box.right - width, box.top, box.right, box.bottom)
                             else Rect(box.left, box.top, box.left + width, box.bottom))
+                        remaining -= box.width
                     }
-                    remaining -= box.width
                 }
-                offset = stop
+                clipPath(path) { drawText(measured, color = foreground) }
             }
-            clipPath(path) { drawText(measured, color = foreground) }
         },
     )
 }
+
+private class WordGeometry(val word: LyricWord, val boxes: List<Pair<Rect, Boolean>>, val width: Float, val full: Path)

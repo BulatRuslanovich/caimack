@@ -35,9 +35,18 @@ class ArtworkProviderTest {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
 
     @Test
-    fun syncedArtworkReachesPlatformMediaSession() = runBlocking {
+    fun syncedArtworkReachesPlatformMediaSession() = artworkReachesPlatformMediaSession(downloaded = false)
+
+    @Test
+    fun downloadedArtworkReachesPlatformMediaSession() = artworkReachesPlatformMediaSession(downloaded = true)
+
+    private fun artworkReachesPlatformMediaSession(downloaded: Boolean) = runBlocking {
         val container = (context.applicationContext as CaimackApp).container
-        val file = File(container.syncStore.directory, "asset-artwork-test-${UUID.randomUUID()}")
+        val folder = if (downloaded) File(context.filesDir, "downloaded-catalog/artwork").apply { mkdirs() }
+            else container.syncStore.directory
+        val name = if (downloaded) "a".repeat(64) + "-" + UUID.randomUUID().toString().replace("-", "").repeat(2)
+            else "asset-artwork-test-${UUID.randomUUID()}"
+        val file = File(folder, name)
         val original = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.MAGENTA) }
         file.outputStream().use { original.compress(Bitmap.CompressFormat.PNG, 100, it) }
         original.recycle()
@@ -50,7 +59,7 @@ class ArtworkProviderTest {
             val item = track.toMediaItem(media)
             val uri = checkNotNull(item.mediaMetadata.artworkUri)
             assertEquals("content", uri.scheme)
-            assertEquals("synced", uri.pathSegments.first())
+            assertEquals(if (downloaded) "downloaded" else "synced", uri.pathSegments.first())
             context.contentResolver.openInputStream(uri).use {
                 val bitmap = checkNotNull(BitmapFactory.decodeStream(it))
                 assertEquals(Color.MAGENTA, bitmap.getPixel(0, 0))
@@ -103,5 +112,11 @@ class ArtworkProviderTest {
         val uri = checkNotNull(ArtworkProvider.uriFor(null, "Album"))
         assertThrows(FileNotFoundException::class.java) { context.contentResolver.openFileDescriptor(uri, "w")?.close() }
         assertEquals("/placeholder", ArtworkProvider.uriFor(File(context.filesDir, "queue.json").toURI().toString(), "Album")?.path)
+        val downloaded = base.buildUpon().path("/downloaded").build()
+        for (name in listOf("metadata.json", "a".repeat(64) + "-" + "b".repeat(64) + "/../metadata.json")) {
+            assertThrows(FileNotFoundException::class.java) {
+                context.contentResolver.openFileDescriptor(downloaded.buildUpon().appendPath(name).build(), "r")?.close()
+            }
+        }
     }
 }

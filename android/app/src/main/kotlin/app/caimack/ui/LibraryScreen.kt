@@ -207,9 +207,8 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
 @Composable
 private fun LibraryItemView(item: LibraryItem, library: List<LibraryItem>, folders: List<LibraryFolder>, nav: NavController, grid: Boolean, modifier: Modifier = Modifier) {
     val local = LocalOfflineLibrary.current
-    val availableTracks = LocalAvailableTracks.current
     val container = LocalContainer.current
-    val hasAudio = remember(item.kind, item.id, availableTracks) { container.downloadedCatalog.availableCollection(item.kind, item.id) }
+    val hasAudio = (item.kind to item.id) in LocalAvailableCollections.current
     val availability = Modifier.alpha(if (local && !hasAudio) 0.45f else 1f)
     val media = container.media
     val url = when (item.kind) {

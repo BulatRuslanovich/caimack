@@ -54,13 +54,9 @@
     <string name="settings_help_coverTone">Добавляет в интерфейс цвета обложки текущего трека.</string>
     <string name="settings_help_quality">Предпочитаемое качество. При медленном соединении оригинал может временно смениться на AAC. Фактическое качество видно в плеере; скачанные треки играют с устройства.</string>
     <string name="settings_help_smartTransitions">Подбирает переход между треками с учётом их звучания.</string>
-    <string name="settings_help_leanBack">Автоматически открывает экран прослушивания при бездействии.</string>
-    <string name="settings_help_yandexMusic">Включает поиск и импорт музыки из Яндекс Музыки.</string>
     <string name="settings_help_colorway">Меняет палитру фона, поверхностей и акцентных элементов.</string>
     <string name="settings_help_theme">Светлый, тёмный режим или автоматический выбор по системе.</string>
-    <string name="settings_help_crossfade">Плавно смешивает конец трека с началом следующего.</string>
     <string name="settings_help_language">Меняет язык интерфейса.</string>
-    <string name="settings_help_visualizer">Показывает анимацию, реагирующую на музыку.</string>
     <string name="settings_help_normalizeVolume">Уменьшает разницу громкости между треками.</string>
     <string name="settings_help_equalizer">Десять полос от 31 Гц до 16 кГц. Перетаскивайте точки для настройки звука. График можно прокручивать вбок.</string>
     <string name="settings_library_density">Плотность библиотеки</string>

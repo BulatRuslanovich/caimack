@@ -455,7 +455,14 @@ internal fun LyricsPanel(track: Track, positionMs: Long, playing: Boolean) {
             itemsIndexed(lyrics.lines) { index, line ->
                 TimedLyricText(
                     line = line,
-                    positionMs = { if (playing) framePosition.value else positionMs },
+                    positionMs = {
+                        when {
+                            index < active -> Long.MAX_VALUE
+                            index > active -> Long.MIN_VALUE
+                            playing -> framePosition.value
+                            else -> positionMs
+                        }
+                    },
                     style = Type.section.copy(fontSize = Type.section.fontSize * 1.15f),
                     foreground = Color.White,
                     upcoming = when {

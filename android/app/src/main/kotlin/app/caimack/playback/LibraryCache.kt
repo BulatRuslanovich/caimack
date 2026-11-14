@@ -7,6 +7,8 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.json.*
 import okhttp3.*
@@ -15,33 +17,110 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 
 /** Account-bound metadata cache. Audio availability is checked separately. */
 class LibraryCache(private val directory: File, private val identity: () -> String?,
-    private val local: () -> JsonObject, private val json: Json) {
+    private val local: () -> JsonObject, private val json: Json,
+    private val limits: LibraryCacheLimits = LibraryCacheLimits(),
+    private val clock: () -> Long = { System.nanoTime() / 1_000_000 }) {
     val offline = MutableStateFlow(true)
     private var loadedFor: String? = null
-    private var responses = linkedMapOf<String, JsonElement>()
+    private data class Entry(val value: JsonElement, val bytes: Long)
+    private val responses = linkedMapOf<String, Entry>()
+    private var lastWrite = 0L
+    private var lastAccountUse = 0L
+    private val probing = AtomicBoolean()
+    private val retryAt = AtomicLong(clock() + limits.retryAfterMs)
 
-    private fun file(key: String) = File(directory, MessageDigest.getInstance("SHA-256")
-        .digest(key.toByteArray()).joinToString("") { "%02x".format(it) } + ".json")
+    private fun hash(key: String) = MessageDigest.getInstance("SHA-256")
+        .digest(key.toByteArray()).joinToString("") { "%02x".format(it) }
+    private fun folder(key: String) = File(directory, hash(key))
+    private fun file(key: String, path: String) = File(folder(key), hash(path) + ".json")
 
     @Synchronized private fun stored(key: String): Map<String, JsonElement> {
         if (loadedFor != key) {
-            responses = runCatching { json.parseToJsonElement(file(key).readText()).jsonObject.toMap() }
-                .getOrDefault(emptyMap()).toMap(linkedMapOf())
+            responses.clear()
             loadedFor = key
+            val folder = folder(key)
+            folder.mkdirs()
+            lastWrite = 0L
+            folder.listFiles()?.filter { it.extension == "json" }?.sortedBy { it.lastModified() }?.forEach { file ->
+                lastWrite = maxOf(lastWrite, file.lastModified())
+                if (file.length() > limits.maxEntryBytes) { file.delete(); return@forEach }
+                val entry = runCatching { json.parseToJsonElement(file.readText()).jsonObject }.getOrNull()
+                val path = entry?.get("path")?.jsonPrimitive?.contentOrNull
+                val value = entry?.get("value")
+                if (path != null && value != null && file.name == hash(path) + ".json")
+                    responses[path] = Entry(value, file.length())
+                else file.delete()
+            }
+            trim(key)
+            // Migrate the previous single-file cache once; subsequent writes touch one response.
+            val legacy = File(directory, hash(key) + ".json")
+            if (legacy.isFile) {
+                val old = runCatching { json.parseToJsonElement(legacy.readText()).jsonObject }.getOrNull()
+                old?.forEach { (path, value) -> if (path !in responses) save(key, path, value) }
+                legacy.delete()
+            }
+            touch(key)
+            pruneAccounts(key)
         }
-        return responses.toMap()
+        return responses.mapValues { it.value.value }
     }
 
     @Synchronized private fun remember(key: String, path: String, value: JsonElement) {
         stored(key)
-        responses.remove(path)
-        responses[path] = value
-        directory.mkdirs()
-        val temporary = File.createTempFile("library-", ".part", directory)
+        save(key, path, value)
+        touch(key)
+    }
+
+    private fun touch(key: String) {
+        lastAccountUse = maxOf(System.currentTimeMillis(), lastAccountUse + 1)
+        folder(key).setLastModified(lastAccountUse)
+    }
+
+    private fun save(key: String, path: String, value: JsonElement) {
+        val data = buildJsonObject { put("path", path); put("value", value) }.toString().toByteArray()
+        if (data.size > limits.maxEntryBytes || data.size > limits.maxBytes) return
+        val folder = folder(key).apply { mkdirs() }
+        val temporary = File.createTempFile("response-", ".part", folder)
         try {
-            temporary.writeText(JsonObject(responses).toString())
-            Files.move(temporary.toPath(), file(key).toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            temporary.writeBytes(data)
+            Files.move(temporary.toPath(), file(key, path).toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            lastWrite = maxOf(System.currentTimeMillis(), lastWrite + 1)
+            file(key, path).setLastModified(lastWrite)
         } finally { temporary.delete() }
+        responses.remove(path)
+        responses[path] = Entry(value, data.size.toLong())
+        trim(key)
+    }
+
+    private fun pruneAccounts(key: String) {
+        val active = hash(key)
+        val accounts = directory.listFiles().orEmpty().filter {
+            it.name.removeSuffix(".json").matches(Regex("[a-f0-9]{64}"))
+        }.groupBy { it.name.removeSuffix(".json") }
+        val others = accounts.filterKeys { it != active }.values.sortedByDescending { group -> group.maxOf { it.lastModified() } }
+        var retained = 1
+        others.forEach { group ->
+            val bytes = group.sumOf { item ->
+                if (item.isFile) item.length() else item.listFiles().orEmpty().sumOf { it.length() }
+            }
+            if (retained >= limits.maxAccounts || bytes > limits.maxBytes) group.forEach { it.deleteRecursively() }
+            else retained++
+        }
+    }
+
+    private fun trim(key: String) {
+        var bytes = responses.values.sumOf { it.bytes }
+        while (responses.size > limits.maxEntries || bytes > limits.maxBytes) {
+            val oldest = responses.entries.first()
+            bytes -= oldest.value.bytes
+            file(key, oldest.key).delete()
+            responses.remove(oldest.key)
+        }
+    }
+
+    private fun disconnected() {
+        retryAt.set(clock() + limits.retryAfterMs)
+        offline.value = true
     }
 
     val interceptor = Interceptor { chain ->
@@ -50,30 +129,41 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
         val key = identity()
         val readable = request.method == "GET" && cacheable(path) && key != null
         fun fallback(): Response? {
-            if (!readable) return null
-            val data = merge(local(), stored(key!!))
+            if (!readable || identity() != key) return null
+            val data = merge(local(), stored(key))
             val result = OfflineCatalog.read(path, request.url, buildJsonObject {}, data) ?: return null
             return Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(result.code)
                 .message("Offline library").body(result.value.toString().toResponseBody("application/json".toMediaType())).build()
         }
-        if (offline.value && readable) fallback()?.let { return@Interceptor it }
+        var probe = false
+        if (offline.value && readable) {
+            fallback()?.let { cached ->
+                if (clock() < retryAt.get() || !probing.compareAndSet(false, true)) return@Interceptor cached
+                probe = true
+                cached.close()
+            }
+        }
         try {
-            val response = chain.proceed(request)
+            val network = if (probe) chain.withConnectTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
+                .withReadTimeout(3, java.util.concurrent.TimeUnit.SECONDS) else chain
+            val response = network.proceed(request)
             if (response.code >= 500 && readable) {
-                offline.value = true
+                disconnected()
                 fallback()?.let { response.close(); return@Interceptor it }
             }
             if (response.isSuccessful) {
                 if (readable) {
                     val value = runCatching { json.parseToJsonElement(response.peekBody(16L * 1024 * 1024).string()) }.getOrNull()
-                    if (value != null) runCatching { remember(key!!, request.url.encodedPath + "?" + request.url.encodedQuery.orEmpty(), value) }
+                    if (value != null) runCatching { remember(key, request.url.encodedPath + "?" + request.url.encodedQuery.orEmpty(), value) }
                 }
                 if (path == "auth/me" || path == "auth/login" || readable) offline.value = false
             }
             response
         } catch (error: IOException) {
-            if (readable || path == "auth/me") offline.value = true
+            if (readable || path == "auth/me") disconnected()
             fallback() ?: throw error
+        } finally {
+            if (probe) probing.set(false)
         }
     }
 
@@ -157,5 +247,18 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
                 "libraryFolders" to folders, "recent" to recent,
             )), emptyList())
         }
+    }
+}
+
+data class LibraryCacheLimits(
+    val maxEntries: Int = 128,
+    val maxBytes: Long = 16L * 1024 * 1024,
+    val maxEntryBytes: Long = 4L * 1024 * 1024,
+    val maxAccounts: Int = 4,
+    val retryAfterMs: Long = 5_000,
+) {
+    init {
+        require(maxEntries > 0 && maxBytes > 0 && maxEntryBytes > 0 && retryAfterMs >= 0)
+        require(maxAccounts > 0)
     }
 }

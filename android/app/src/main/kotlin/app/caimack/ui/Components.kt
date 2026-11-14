@@ -57,6 +57,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 val LocalContainer = staticCompositionLocalOf<AppContainer> { error("No container") }
 val LocalOfflineLibrary = staticCompositionLocalOf { false }
 val LocalAvailableTracks = staticCompositionLocalOf<Set<String>> { emptySet() }
+val LocalAvailableCollections = staticCompositionLocalOf<Set<Pair<String, String>>> { emptySet() }
 @Composable
 internal fun catalogApi() = LocalContainer.current.api
 

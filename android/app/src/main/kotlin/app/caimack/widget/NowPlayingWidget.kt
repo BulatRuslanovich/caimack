@@ -105,14 +105,25 @@ class NowPlayingWidget : AppWidgetProvider() {
             if (manager.getAppWidgetIds(component).isEmpty()) return
 
             val container = (app as CaimackApp).container
-            container.scope.launch {
-                val stored = preferences(app)
+            val stored = Snapshot(preferences(app).all)
+            latestUpdate.submit(container.scope) {
                 val cover = stored.getString(COVER, null)?.let { url ->
                     val request = ImageRequest.Builder(app).data(url).size(240).allowHardware(false).build()
-                    (SingletonImageLoader.get(app).execute(request) as? SuccessResult)?.image?.toBitmap()
+                    try { (SingletonImageLoader.get(app).execute(request) as? SuccessResult)?.image?.toBitmap() }
+                    catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+                    catch (_: Exception) { null }
                 }
-                manager.updateAppWidget(component, views(app, Look.of(app), stored, cover))
+                val result = views(app, Look.of(app), stored, cover)
+                val publish: () -> Unit = { manager.updateAppWidget(component, result) }
+                publish
             }
+        }
+
+        private val latestUpdate = LatestWidgetUpdate()
+        private class Snapshot(private val values: Map<String, *>) {
+            fun getString(key: String, default: String?): String? = values[key] as? String ?: default
+            fun getBoolean(key: String, default: Boolean) = values[key] as? Boolean ?: default
+            fun getLong(key: String, default: Long) = values[key] as? Long ?: default
         }
 
         private fun preferences(context: Context) = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
@@ -120,7 +131,7 @@ class NowPlayingWidget : AppWidgetProvider() {
         private fun fraction(position: Long, duration: Long) =
             if (duration <= 0) 0 else (position * PROGRESS_MAX / duration).toInt().coerceIn(0, PROGRESS_MAX)
 
-        private fun views(app: Context, look: Look, stored: android.content.SharedPreferences, cover: Bitmap?): RemoteViews {
+        private fun views(app: Context, look: Look, stored: Snapshot, cover: Bitmap?): RemoteViews {
             val context = Appearance.localized(app)
             val title = stored.getString(TITLE, null)
             val idle = title == null

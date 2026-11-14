@@ -70,12 +70,6 @@ interface CaimackApi {
     @PUT("api/playback/state")
     suspend fun reportPlayback(@Body report: PlaybackStateReport): Response<Unit>
 
-    @GET("api/playback/now")
-    suspend fun playingElsewhere(@Query("deviceId") deviceId: String): Response<PlayingElsewhere>
-
-    @POST("api/playback/handoff")
-    suspend fun handoff(@Body request: HandoffRequest): PlaybackHandoff
-
     @POST("api/recommendations/radio")
     suspend fun radio(@Body request: RadioRequest): RadioBatch
 
@@ -149,9 +143,6 @@ interface CaimackApi {
 
     @DELETE("api/playlists/{id}/cover")
     suspend fun deletePlaylistCover(@Path("id") id: String): Response<Unit>
-
-    @GET("api/library/map")
-    suspend fun libraryMap(): LibraryMap
 
     @POST("api/tracks/lookup")
     suspend fun lookupTracks(@Body request: TrackLookup): List<Track>

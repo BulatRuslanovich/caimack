@@ -402,7 +402,6 @@ class VisualReviewTest {
         }
         compose.activityRule.scenario.recreate()
         compose.onNode(hasText(label(R.string.nav_library)) and hasClickAction()).performClick()
-        compose.onNodeWithText(label(R.string.nav_map)).assertDoesNotExist()
         compose.onNodeWithText(label(R.string.nav_tracks)).assertIsDisplayed()
         compose.onNodeWithText(label(R.string.downloads_title)).assertIsDisplayed()
         capture("android-library-overview", seedPlayback = false)

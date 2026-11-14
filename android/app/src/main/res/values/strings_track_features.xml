@@ -21,9 +21,6 @@
     <string name="track_info_lyrics">Lyrics</string>
     <string name="track_info_lyrics_present">Available</string>
     <string name="track_info_lyrics_missing">Not available</string>
-    <string name="map_layer_route">Playback route</string>
-    <string name="map_layer_covers">Cover art</string>
-    <string name="map_layer_motion">Animation</string>
     <string name="settings_player_effects">Player animations and effects</string>
     <string name="settings_help_player_effects">Animate the record, glow and player transitions. Respects system motion settings.</string>
 </resources>

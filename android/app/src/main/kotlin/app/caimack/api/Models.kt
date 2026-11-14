@@ -270,30 +270,6 @@ data class PlaybackStateReport(
 )
 
 @Serializable
-data class PlayingElsewhere(
-    val deviceId: String,
-    val deviceName: String,
-    val track: Track,
-    val positionSeconds: Double,
-    val isPlaying: Boolean,
-    val reportedAt: String,
-)
-
-@Serializable
-data class HandoffRequest(val deviceId: String)
-
-@Serializable
-data class PlaybackHandoff(
-    val deviceId: String,
-    val deviceName: String,
-    val tracks: List<Track>,
-    val index: Int,
-    val positionSeconds: Double,
-    val shuffle: Boolean,
-    val repeat: String,
-)
-
-@Serializable
 data class RecapTrack(val track: Track, val plays: Int)
 
 @Serializable
@@ -319,25 +295,6 @@ data class Recap(
     val soundOfMonth: Track? = null,
     val newArtists: Int? = null,
     val newArtistPicks: List<Artist> = emptyList(),
-)
-
-@Serializable
-data class MapPoint(
-    val id: String,
-    val x: Float,
-    val y: Float,
-    val title: String,
-    val artist: String,
-    val albumId: String? = null,
-    val hasCover: Boolean = false,
-    val genre: String? = null,
-    val plays: Int = 0,
-)
-
-@Serializable
-data class LibraryMap(
-    val points: List<MapPoint> = emptyList(),
-    val totalTracks: Int = 0,
 )
 
 @Serializable

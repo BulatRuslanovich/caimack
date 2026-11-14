@@ -24,16 +24,16 @@ class DownloadedCatalogTest {
         try {
             val first = catalog()
             first.remember(PlaylistDetail("private", "Alice private", ownerId = "alice", tracks = listOf(song)))
-            assertTrue(first.availableCollection("playlist", "private"))
+            assertTrue(("playlist" to "private") in first.availableCollections(listOf(song)))
             val restored = catalog()
             assertEquals("Alice private", read("playlists/private", restored.localSnapshot()).jsonObject["name"]?.jsonPrimitive?.content)
             for (other in listOf("server-one|bob", "server-two|alice", null)) {
                 identity = other
-                assertFalse(restored.availableCollection("playlist", "private"))
+                assertFalse(("playlist" to "private") in restored.availableCollections(listOf(song)))
                 assertTrue(restored.localSnapshot().getValue("playlists").jsonArray.isEmpty())
             }
             identity = "server-one|alice"
-            assertTrue(restored.availableCollection("playlist", "private"))
+            assertTrue(("playlist" to "private") in restored.availableCollections(listOf(song)))
         } finally { directory.deleteRecursively() }
     }
 

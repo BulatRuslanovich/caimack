@@ -44,6 +44,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -156,7 +160,9 @@ class AppContainer(context: Context) {
         saved
     }
 
-    val favorites = Favorites(api, scope, signals)
+    val favorites = Favorites(api, scope, signals) {
+        (session.state.value as? SessionState.SignedIn)?.let { "${server.url.value}|${it.user.id}" }
+    }
 
     val downloads by lazy { Downloads(context.applicationContext, http, server, json) { !syncStore.active } }
 
@@ -165,6 +171,29 @@ class AppContainer(context: Context) {
         { downloads.tracks() + syncStore.tracks() },
         { if (syncStore.active) app.caimack.sync.OfflineCatalog.view(syncStore.snapshot ?: kotlinx.serialization.json.buildJsonObject {}, syncStore.edits()) else null },
         { (session.state.value as? SessionState.SignedIn)?.let { "${server.url.value}|${it.user.id}" } }) }
+
+    val accountKey: String?
+        get() = (session.state.value as? SessionState.SignedIn)?.let { "${server.url.value}|${it.user.id}" }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val localLibrary by lazy {
+        val completed = downloads.state.map { entries ->
+            entries.values.filter { it.done }.mapNotNull { it.track }.sortedBy { it.id }
+        }.distinctUntilChanged()
+        val account = combine(session.state, server.url) { _, _ -> accountKey }.distinctUntilChanged()
+        combine(completed, syncStore.catalogRevision, downloadedCatalog.catalogRevision, account) { songs, _, _, owner ->
+            songs to owner
+        }.mapLatest { (songs, owner) ->
+            // This flow runs on the container's IO scope, never during composition.
+            if (owner == null || owner != accountKey) return@mapLatest app.caimack.playback.LocalLibrary()
+            syncStore.session((session.state.value as? SessionState.SignedIn)?.user)
+            val synced = syncStore.tracks()
+            val all = (songs + synced).distinctBy { it.id }
+            val result = app.caimack.playback.LocalLibrary(owner, all.mapTo(hashSetOf()) { it.id }, synced,
+                downloadedCatalog.availableCollections(all))
+            if (owner == accountKey) result else app.caimack.playback.LocalLibrary()
+        }.stateIn(scope, SharingStarted.Eagerly, app.caimack.playback.LocalLibrary())
+    }
 
     val player = PlayerConnection(context.applicationContext, media, tracks, radio, signals)
     val connect by lazy { ConnectPlayback(context.applicationContext, this) }
@@ -204,6 +233,7 @@ class AppContainer(context: Context) {
         player.remoteSelected = { connect.isRemote }
         scope.launch {
             session.state.collect { state ->
+                favorites.refreshAccount()
                 syncStore.session((state as? SessionState.SignedIn)?.user)
                 if (state is SessionState.SignedIn) refreshDownloadArtwork()
                 if(syncStore.active) {

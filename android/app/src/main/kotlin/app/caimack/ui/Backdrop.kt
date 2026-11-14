@@ -20,7 +20,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.BlurredEdgeTreatment
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Color
@@ -100,28 +99,14 @@ fun ArtBackdrop(
 
             Canvas(Modifier.fillMaxSize()) {
                 val background = palette.background
-                when (mode) {
-                    BackdropMode.Stage -> drawRect(
-                        Brush.verticalGradient(
-                            0f to background.copy(alpha = 0.58f),
-                            0.6f to background.copy(alpha = 0.72f),
-                            1f to background.copy(alpha = 0.9f),
-                        ),
-                    )
-                    BackdropMode.Header -> {
-                        drawRect(
-                            Brush.linearGradient(
-                                0f to background.copy(alpha = 0.2f),
-                                0.5f to background.copy(alpha = 0.58f),
-                                0.92f to background,
-                                start = Offset.Zero,
-                                end = Offset(size.width * 0.36f, size.height),
-                            ),
-                        )
-                    }
-                }
+                drawRect(
+                    Brush.verticalGradient(
+                        0f to background.copy(alpha = 0.58f),
+                        0.6f to background.copy(alpha = 0.72f),
+                        1f to background.copy(alpha = 0.9f),
+                    ),
+                )
                 drawRect(ShaderBrush(ImageShader(grain, TileMode.Repeated, TileMode.Repeated)), alpha = (if (palette.dark) GRAIN_DARK else GRAIN_LIGHT) * grainStrength)
-                if (mode == BackdropMode.Header) drawRect(Brush.verticalGradient(0.45f to background.copy(alpha = 0f), 1f to background))
             }
         }
     }
