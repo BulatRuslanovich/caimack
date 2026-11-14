@@ -9,7 +9,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
@@ -20,8 +23,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.style.TextOverflow
@@ -48,7 +51,7 @@ internal val libraryMutation = Mutex()
 fun LibraryScreen(nav: NavController) {
     val api = LocalContainer.current.api
     Column(Modifier.fillMaxSize()) {
-        LibraryEntry(stringResource(R.string.downloads_title), null, Lucide.Download) {
+        LibraryEntry(stringResource(R.string.downloads_title), pluralStringResource(R.plurals.count_tracks, LocalAvailableTracks.current.size, LocalAvailableTracks.current.size), Lucide.Download) {
             nav.navigate(DownloadsRoute)
         }
         Box(Modifier.weight(1f)) {
@@ -64,6 +67,12 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
     val api = catalogApi()
     val palette = LocalPalette.current
     var filter by rememberSaveable { mutableStateOf("all") }
+    var search by rememberSaveable { mutableStateOf("") }
+    var favoriteCount by remember(local) { mutableStateOf<Int?>(null) }
+    LaunchedEffect(local) {
+        try { favoriteCount = api.favorites(1, 1).total }
+        catch (error: Exception) { if (error is CancellationException) throw error }
+    }
     var alphabetical by rememberSaveable { mutableStateOf(false) }
     var grid by rememberSaveable { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
@@ -75,7 +84,8 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
     BackHandler(currentFolder != null) { selectedFolder = currentFolder?.parentId }
     var catalog by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val showFavorites = folderId == null && (filter == "all" || filter == "playlist")
+    val query = search.trim()
+    val showFavorites = folderId == null && (filter == "all" || filter == "playlist") && stringResource(R.string.nav_favorites).contains(query, ignoreCase = true)
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         if (!local) scope.launch {
             libraryMutation.withLock {
@@ -144,6 +154,9 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
                 )
             }
         }
+        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+            SearchInput(search, { search = it }, stringResource(R.string.collection_search))
+        }
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = { alphabetical = !alphabetical }, modifier = Modifier.weight(1f)) { Text(stringResource(if (alphabetical) R.string.collection_name else R.string.collection_recent), maxLines = 1, overflow = TextOverflow.Ellipsis) }
             Box {
@@ -161,36 +174,31 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
             IconButton(onClick = { grid = !grid }) { Icon(if (grid) Lucide.List else Lucide.LayoutGrid, stringResource(if (grid) R.string.collection_list else R.string.collection_grid)) }
         }
         Load(SAVED_LIBRARY, { api.savedLibrary() }) { library ->
-            val shown = library.filter { it.folderId == folderId && (filter == "all" || it.kind == filter) }
+            val shown = library.filter { (query.isNotEmpty() || it.folderId == folderId) && (filter == "all" || it.kind == filter) && "${it.title} ${it.subtitle}".contains(query, ignoreCase = true) }
                 .let { if (alphabetical) it.sortedBy { item -> item.title.lowercase() } else it.sortedByDescending { item -> Instant.parse(item.savedAt) } }
-            val shownFolders = folders.filter { it.parentId == folderId }.let { if (alphabetical) it.sortedBy { folder -> folder.name.lowercase() } else it.sortedByDescending { folder -> folder.createdAt } }
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(bottom = 24.dp)) {
-                if (showFavorites) {
-                    item { LibraryEntry(stringResource(R.string.nav_favorites), stringResource(R.string.playlists_kind), Lucide.Heart) { nav.navigate(FavoritesRoute) } }
+            val shownFolders = folders.filter { if (query.isEmpty()) it.parentId == folderId else it.name.contains(query, ignoreCase = true) }
+                .let { if (alphabetical) it.sortedBy { folder -> folder.name.lowercase() } else it.sortedByDescending { folder -> folder.createdAt } }
+            val density = LocalLibraryDensity.current
+            LazyVerticalGrid(
+                columns = if (grid) GridCells.Adaptive(density.cardWidth) else GridCells.Fixed(1),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = playerContentPadding(start = if (grid) 16.dp else 0.dp, end = if (grid) 16.dp else 0.dp, bottom = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(if (grid) density.gap else 0.dp),
+                verticalArrangement = Arrangement.spacedBy(if (grid) 20.dp else 0.dp),
+            ) {
+                if (showFavorites) item(key = "favorites") {
+                    LibraryEntry(stringResource(R.string.nav_favorites), stringResource(R.string.playlists_kind), Lucide.Heart,
+                        grid = grid, details = favoriteCount?.let { pluralStringResource(R.plurals.count_tracks, it, it) },
+                    ) { nav.navigate(FavoritesRoute) }
                 }
-                if (grid) {
-                    items(shownFolders.chunked(2), key = { "folder:" + it.first().id }) { row ->
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            row.forEach { folder -> LibraryFolderView(folder, folders, library.count { it.folderId == folder.id } + folders.count { it.parentId == folder.id }, true, Modifier.weight(1f)) { selectedFolder = folder.id } }
-                            if (row.size == 1) Spacer(Modifier.weight(1f))
-                        }
-                    }
-                    items(shown.chunked(2), key = { it.first().let { item -> "${item.kind}:${item.id}" } }) { row ->
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            row.forEach { item -> LibraryItemView(item, library, folders, nav, true, Modifier.weight(1f)) }
-                            if (row.size == 1) Spacer(Modifier.weight(1f))
-                        }
-                    }
-                } else {
-                    items(shownFolders, key = { "folder:" + it.id }) { folder -> LibraryFolderView(folder, folders, library.count { it.folderId == folder.id } + folders.count { it.parentId == folder.id }, false) { selectedFolder = folder.id } }
-                    items(shown, key = { "${it.kind}:${it.id}" }) { item -> LibraryItemView(item, library, folders, nav, false) }
+                items(shownFolders, key = { "folder:" + it.id }) { folder ->
+                    LibraryFolderView(folder, folders, library.count { it.folderId == folder.id } + folders.count { it.parentId == folder.id }, grid) { selectedFolder = folder.id }
                 }
-                if (shown.isEmpty() && shownFolders.isEmpty()) item {
-                    if (showFavorites)
-                        Text(stringResource(R.string.collection_hint), style = Type.small, color = LocalPalette.current.muted, modifier = Modifier.padding(24.dp))
-                    else Empty(stringResource(R.string.collection_empty), stringResource(if (currentFolder != null) R.string.folders_empty_hint else R.string.collection_hint))
+                items(shown, key = { "${it.kind}:${it.id}" }) { item -> LibraryItemView(item, library, folders, nav, grid) }
+                if (shown.isEmpty() && shownFolders.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
+                    if (showFavorites) Text(stringResource(R.string.collection_hint), style = Type.small, color = LocalPalette.current.muted, modifier = Modifier.padding(24.dp))
+                    else Empty(stringResource(if (query.isNotEmpty()) R.string.collection_no_results else R.string.collection_empty), stringResource(if (currentFolder != null) R.string.folders_empty_hint else R.string.collection_hint))
                 }
-
             }
         }
     }
@@ -211,23 +219,17 @@ private fun LibraryItemView(item: LibraryItem, library: List<LibraryItem>, folde
     }
     val kind = stringResource(when (item.kind) { "album" -> R.string.albums_kind; "artist" -> R.string.artists_kind; else -> R.string.playlists_kind })
     val open = { when (item.kind) { "album" -> nav.navigate(AlbumRoute(item.id)); "artist" -> nav.navigate(ArtistRoute(item.id)); else -> nav.navigate(PlaylistRoute(item.id)) } }
-    val text: @Composable () -> Unit = {
-        Text(item.title, style = Type.body, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(listOf(kind, item.subtitle).filter { it.isNotBlank() }.joinToString(" · "), style = Type.small, color = LocalPalette.current.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-    if (grid) Column(modifier.then(availability), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Cover(url, item.title, Modifier.fillMaxWidth().aspectRatio(1f).clickable(onClick = open), round = item.kind == "artist")
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f).clickable(onClick = open)) { text() }
-            if (!local) LibraryItemMenu(item, library, folders)
-        }
-    } else Row(modifier.then(availability).fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(Modifier.weight(1f).clickable(onClick = open), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Cover(url, item.title, Modifier.size(64.dp), round = item.kind == "artist")
-            Column(Modifier.weight(1f)) { text() }
-        }
-        if (!local) LibraryItemMenu(item, library, folders)
-    }
+    val details = listOfNotNull(
+        item.trackCount?.let { pluralStringResource(R.plurals.count_tracks, it, it) },
+        item.albumCount?.takeIf { item.kind == "artist" }?.let { pluralStringResource(R.plurals.count_albums, it, it) },
+        item.durationSeconds?.takeIf { item.kind != "artist" && it > 0 }?.let { durationOf(it) },
+    ).joinToString(" · ")
+    Card(item.title, listOfNotNull(kind, item.subtitle.takeIf { it.isNotBlank() }, item.year?.toString()).joinToString(" · "), open,
+        modifier = modifier.then(availability), round = item.kind == "artist", toneUrl = url,
+        list = !grid, details = details,
+        menu = if (local) null else { { LibraryItemMenu(item, library, folders) } },
+    ) { Cover(url, item.title, it, round = item.kind == "artist") }
+
 }
 
 @Composable
@@ -310,21 +312,11 @@ private fun LibraryToggle(kind: String, id: String, library: List<LibraryItem>, 
 }
 
 @Composable
-internal fun LibraryEntry(title: String, hint: String?, icon: ImageVector, onClick: () -> Unit) {
+internal fun LibraryEntry(title: String, hint: String?, icon: ImageVector, grid: Boolean = false, details: String? = null, onClick: () -> Unit) {
     val palette = LocalPalette.current
-    Row(
-        Modifier.padding(horizontal = 16.dp, vertical = 3.dp).fillMaxWidth()
-            .clip(Radius.row).clickable(role = Role.Button, onClick = onClick)
-            .heightIn(min = 64.dp).padding(vertical = 10.dp, horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Box(Modifier.size(44.dp).clip(Radius.cover).background(palette.card), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = palette.primary, modifier = Modifier.size(22.dp))
+    Card(title, hint.orEmpty(), onClick, list = !grid, details = details) { modifier ->
+        Box(modifier.clip(Radius.cover).background(palette.primarySoft), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = palette.primary, modifier = Modifier.size(if (grid) 34.dp else 24.dp))
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(title, style = Type.body)
-            hint?.let { Text(it, style = Type.small, color = palette.muted) }
-        }
-        Icon(Lucide.ChevronRight, null, tint = palette.muted, modifier = Modifier.size(18.dp))
     }
 }

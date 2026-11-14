@@ -11,6 +11,56 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 #[sqlx::test(migrations = "../../../db/migrations")]
+async fn saved_cards_include_live_catalog_metadata(db: PgPool) -> anyhow::Result<()> {
+    let user = common::user(&db, "listener", false).await?;
+    let artist = Uuid::now_v7();
+    let guest = Uuid::now_v7();
+    let album = Uuid::now_v7();
+    let track = Uuid::now_v7();
+    sqlx::query("INSERT INTO artists(id,name,normalized_name,created_at) VALUES ($1,'Artist','artist',now()), ($2,'Guest','guest',now())")
+        .bind(artist).bind(guest).execute(&db).await?;
+    sqlx::query("INSERT INTO albums(id,title,normalized_title,artist_id,year,cover_path,created_at) VALUES ($1,'Album','album',$2,2024,'cover.jpg',now())")
+        .bind(album).bind(artist).execute(&db).await?;
+    sqlx::query("INSERT INTO tracks(id,title,normalized_title,artist_id,album_id,duration_seconds,file_path,original_file_name,mime_type,file_size,content_hash,created_at) VALUES ($1,'Song','song',$2,$3,185,'song.flac','song.flac','audio/flac',100,'hash',now())")
+        .bind(track).bind(artist).bind(album).execute(&db).await?;
+    sqlx::query("INSERT INTO track_artists(track_id,artist_id,position) VALUES ($1,$2,0),($1,$3,1)")
+        .bind(track)
+        .bind(artist)
+        .bind(guest)
+        .execute(&db)
+        .await?;
+    let playlist =
+        playlists::create(&db, user, PlaylistRequest { name: "Mix".into(), description: None, is_public: false })
+            .await?;
+    sqlx::query("INSERT INTO playlist_tracks(id,playlist_id,track_id,position) VALUES ($1,$2,$3,0)")
+        .bind(Uuid::now_v7())
+        .bind(playlist.id)
+        .bind(track)
+        .execute(&db)
+        .await?;
+    let mut conn = db.acquire().await?;
+    for (kind, id) in [(Kind::Album, album), (Kind::Artist, artist), (Kind::Artist, guest)] {
+        collection::save(&mut conn, user, kind, id, Utc::now()).await?;
+    }
+    let items = serde_json::to_value(collection::list(&db, user).await?)?;
+    let find = |id: Uuid| items.as_array().unwrap().iter().find(|item| item["id"] == id.to_string()).unwrap();
+    assert_eq!(find(album)["trackCount"], 1);
+    assert_eq!(find(album)["durationSeconds"], 185);
+    assert_eq!(find(album)["year"], 2024);
+    assert_eq!(find(artist)["albumCount"], 1);
+    assert_eq!(find(guest)["trackCount"], 1, "Guest credits count in the same way as the artist catalog");
+    assert_eq!(find(playlist.id)["trackCount"], 1);
+    assert_eq!(find(playlist.id)["durationSeconds"], 185);
+    assert_eq!(find(playlist.id)["coverTrackId"], track.to_string());
+    sqlx::query("DELETE FROM playlist_tracks WHERE playlist_id=$1").bind(playlist.id).execute(&db).await?;
+    let updated = serde_json::to_value(collection::list(&db, user).await?)?;
+    let empty = updated.as_array().unwrap().iter().find(|item| item["id"] == playlist.id.to_string()).unwrap();
+    assert_eq!(empty["trackCount"], 0);
+    assert_eq!(empty["durationSeconds"], 0);
+    Ok(())
+}
+
+#[sqlx::test(migrations = "../../../db/migrations")]
 async fn saves_are_personal_idempotent_independent_and_cascade(db: PgPool) -> anyhow::Result<()> {
     let alice = common::user(&db, "alice", false).await?;
     let bob = common::user(&db, "bob", false).await?;

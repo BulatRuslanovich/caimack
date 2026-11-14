@@ -9,6 +9,22 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class OfflineCatalogTest {
+    @Test
+    fun savedCardsUseCatalogMetadataAndPreserveUnloadedPlaylistTotals() {
+        val data = Json.parseToJsonElement("""{
+            "tracks":[],"albums":[{"id":"a","title":"Album","artistName":"Artist","year":2024,"trackCount":10,"durationSeconds":1800}],
+            "artists":[{"id":"ar","name":"Artist","trackCount":25,"albumCount":3}],
+            "playlists":[{"id":"p","name":"Mix","trackCount":12,"durationSeconds":720}],
+            "savedLibrary":[{"kind":"album","id":"a"},{"kind":"artist","id":"ar"},{"kind":"playlist","id":"p"}]
+        }""").jsonObject
+        val items = OfflineCatalog.view(data, emptyList()).objects("savedLibrary").associateBy { it.string("id") }
+        assertEquals(10, items.getValue("a")["trackCount"]?.jsonPrimitive?.int)
+        assertEquals(2024, items.getValue("a")["year"]?.jsonPrimitive?.int)
+        assertEquals(3, items.getValue("ar")["albumCount"]?.jsonPrimitive?.int)
+        assertEquals(12, items.getValue("p")["trackCount"]?.jsonPrimitive?.int)
+        assertEquals(720, items.getValue("p")["durationSeconds"]?.jsonPrimitive?.int)
+    }
+
     private val snapshot =
         Json.parseToJsonElement(
                 """{
@@ -88,6 +104,15 @@ class OfflineCatalogTest {
         assertEquals("Renamed", OfflineCatalog.view(renamed, listOf(save)).objects("savedLibrary").single().string("title"))
         val remove = action("library", "album", """{"kind":"album","value":false}""")
         assertTrue(OfflineCatalog.view(snapshot, listOf(save, remove)).objects("savedLibrary").isEmpty())
+    }
+
+    @Test
+    fun pendingPlaylistEditsUpdateSavedTotals() {
+        val data = snapshot.with("savedLibrary" to Json.parseToJsonElement("""[{"kind":"playlist","id":"p","trackCount":2,"durationSeconds":36}]"""))
+        val view = OfflineCatalog.view(data, listOf(action("playlistRemove", "p", """{"trackIds":["a"]}""")))
+        val saved = view.objects("savedLibrary").single()
+        assertEquals(1, saved["trackCount"]?.jsonPrimitive?.int)
+        assertEquals(24, saved["durationSeconds"]?.jsonPrimitive?.int)
     }
 
     @Test

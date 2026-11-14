@@ -229,6 +229,9 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
             }
             val byId = tracks.associateBy { it.string("id") }
             playlists = playlists.map { playlist ->
+                // A saved shortcut may never have loaded its track membership.
+                // Missing membership is not an empty playlist.
+                if (membership[playlist.string("id")] == null) return@map playlist
                 val members =
                     (membership[playlist.string("id")] as? JsonArray).orEmpty().mapNotNull {
                         byId[it.jsonPrimitive.content]
@@ -241,15 +244,28 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
                         ),
                 )
             }
+            val editedPlaylists = actions.filter { it.kind in setOf("playlistCreate", "playlistAdd", "playlistRemove", "playlistOrder") }.mapNotNull { it.entityId }.toSet()
             savedLibrary = savedLibrary.mapNotNull { saved ->
                 val kind = saved.string("kind")
                 val source = (if (kind == "playlist") playlists else snapshot.objects(kind + "s"))
                     .find { it.string("id") == saved.string("id") } ?: return@mapNotNull null
+                // Downloaded subsets describe availability; saved summaries describe the full collection.
+                // Pending playlist edits supply newly calculated totals instead.
+                fun metadata(key: String): JsonElement {
+                    val summary = saved[key]?.takeUnless { it is JsonNull }
+                    val catalog = source[key]?.takeUnless { it is JsonNull }
+                    return if (kind == "playlist" && saved.string("id") in editedPlaylists) catalog ?: summary ?: JsonNull
+                    else summary ?: catalog ?: JsonNull
+                }
                 saved.with(
                     "title" to (source[if (kind == "album") "title" else "name"] ?: JsonPrimitive("")),
                     "subtitle" to (source[when (kind) { "album" -> "artistName"; "playlist" -> "ownerName"; else -> "" }] ?: JsonPrimitive("")),
                     "hasImage" to (source[if (kind == "artist") "hasImage" else "hasCover"] ?: JsonPrimitive(false)),
                     "coverTrackId" to (source["coverTrackId"] ?: JsonNull),
+                    "trackCount" to metadata("trackCount"),
+                    "albumCount" to metadata("albumCount"),
+                    "durationSeconds" to metadata("durationSeconds"),
+                    "year" to metadata("year"),
                 )
             }
             return snapshot.with(

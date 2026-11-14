@@ -132,24 +132,12 @@ internal fun LibraryFolderMenu(folder: LibraryFolder, folders: List<LibraryFolde
 @Composable
 internal fun LibraryFolderView(folder: LibraryFolder, folders: List<LibraryFolder>, count: Int, grid: Boolean, modifier: Modifier = Modifier, onOpen: () -> Unit) {
     val palette = LocalPalette.current
-    val title: @Composable () -> Unit = {
-        Text(folder.name, style = Type.body, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(stringResource(R.string.folders_items, count), style = Type.small, color = palette.muted)
-    }
-    val cover: @Composable (Modifier) -> Unit = { size -> Box(size.clip(Radius.cover).background(palette.raised), contentAlignment = Alignment.Center) {
-        Icon(Lucide.Folder, null, tint = palette.primary, modifier = Modifier.size(32.dp))
-    } }
-    if (grid) Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        cover(Modifier.fillMaxWidth().aspectRatio(1f).clickable(onClick = onOpen))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f).clickable(onClick = onOpen)) { title() }
-            LibraryFolderMenu(folder, folders)
+    Card(folder.name, stringResource(R.string.folders_items, count), onOpen,
+        modifier = modifier, list = !grid,
+        menu = if (LocalOfflineLibrary.current) null else { { LibraryFolderMenu(folder, folders) } },
+    ) { size ->
+        Box(size.clip(Radius.cover).background(palette.raised), contentAlignment = Alignment.Center) {
+            Icon(Lucide.Folder, null, tint = palette.primary, modifier = Modifier.size(32.dp))
         }
-    } else Row(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.weight(1f).clickable(onClick = onOpen), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            cover(Modifier.size(64.dp))
-            Column(Modifier.weight(1f)) { title() }
-        }
-        LibraryFolderMenu(folder, folders)
     }
 }

@@ -14,11 +14,29 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LibraryCacheTest {
+    @Test fun `saved shortcut metadata survives offline without visiting details`() {
+        val saved = Json.parseToJsonElement("""[{"kind":"playlist","id":"remote-mix","title":"Saved mix","subtitle":"Owner","hasImage":true,"trackCount":12,"durationSeconds":720,"savedAt":"2026-01-01T00:00:00Z"}]""")
+        val data = LibraryCache.merge(local(), mapOf("/api/me/library?" to saved))
+        val item = data.getValue("savedLibrary").jsonArray.single().jsonObject
+        assertEquals("Saved mix", item["title"]?.jsonPrimitive?.content)
+        assertEquals(12, item["trackCount"]?.jsonPrimitive?.int)
+        assertEquals(720, item["durationSeconds"]?.jsonPrimitive?.int)
+    }
+
     private val json = Json { ignoreUnknownKeys = true }
     private val downloaded = Track("downloaded", "Downloaded", "artist", "Artist", albumId = "album", albumTitle = "Album", durationSeconds = 60)
     private val remote = downloaded.copy(id = "remote", title = "Unavailable")
     private fun local() = DownloadedCatalog.snapshot(json, listOf(downloaded), emptyList())
     private val album get() = AlbumDetail("album", "Album", "artist", "Artist", tracks = listOf(downloaded, remote))
+
+    @Test fun `partial downloads do not reduce saved collection totals`() {
+        val saved = Json.parseToJsonElement("""[{"kind":"album","id":"album","title":"Album","trackCount":12,"durationSeconds":2400,"savedAt":"2026-01-01T00:00:00Z"}]""")
+        val data = LibraryCache.merge(local(), mapOf("/api/me/library?" to saved))
+        val item = data.getValue("savedLibrary").jsonArray.single().jsonObject
+        assertEquals(12, item["trackCount"]?.jsonPrimitive?.int)
+        assertEquals(2400, item["durationSeconds"]?.jsonPrimitive?.int)
+        assertEquals(1, data.getValue("tracks").jsonArray.size)
+    }
 
     @Test fun `offline album retains undownloaded tracks and saved folders`() {
         val data = LibraryCache.merge(local(), mapOf(

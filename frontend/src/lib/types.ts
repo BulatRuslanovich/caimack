@@ -541,6 +541,10 @@ export interface LibraryItem {
   coverTrackId: string | null;
   savedAt: string;
   folderId: string | null;
+  trackCount?: number;
+  albumCount?: number;
+  durationSeconds?: number;
+  year?: number | null;
 }
 
 export interface LibraryFolder {

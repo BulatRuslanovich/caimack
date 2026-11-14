@@ -351,6 +351,8 @@ data class LibraryItem(
     val kind: String, val id: String, val title: String, val subtitle: String = "",
     val hasImage: Boolean = false, val coverTrackId: String? = null, val savedAt: String,
     val folderId: String? = null,
+    val trackCount: Int? = null, val albumCount: Int? = null,
+    val durationSeconds: Int? = null, val year: Int? = null,
 )
 
 @Serializable

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 "use client";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import {
@@ -30,16 +30,19 @@ import type { LibraryKind } from "@/lib/types";
 import { useT } from "@/contexts/I18nContext";
 import { useInvalidate } from "@/lib/useInvalidate";
 import { Query } from "@/components/Query";
-import { Cover } from "@/components/Cover";
-import { LibraryItemMenu } from "@/components/LibrarySaveButton";
+import { Card, SavedLibraryCard } from "@/components/MediaCard";
+import { CardGrid, PageHeader } from "@/components/PageHeader";
+import { PageToolbar, SortSelect } from "@/components/PageToolbar";
+import { ToggleGroup, ToggleGroupButton } from "@/components/ui/toggle-group";
+import { EmptyState } from "@/components/EmptyState";
 import { PlaylistDialog } from "@/components/PlaylistDialog";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/cn";
 
 export default function LibraryPage() {
   const t = useT();
   const invalidate = useInvalidate();
   const result = useQuery({ ...queries.savedLibrary(), refetchInterval: 30_000 });
+  const favoriteResult = useQuery(queries.favorites({ page: 1, pageSize: 1 }));
   const folderResult = useQuery({ ...queries.libraryFolders(), refetchInterval: 30_000 });
   const folders = folderResult.data ?? [];
   const router = useRouter();
@@ -70,7 +73,7 @@ export default function LibraryPage() {
   };
   const [filter, setFilter] = useState<LibraryKind | "all">("all");
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState("recent");
+  const [sort, setSort] = useState<"recent" | "name">("recent");
   const [grid, setGrid] = useState(false);
   const [creating, setCreating] = useState(false);
   const filters = [
@@ -79,11 +82,6 @@ export default function LibraryPage() {
     ["album", t("nav.albums")],
     ["artist", t("nav.artists")],
   ] as const;
-  const kinds = {
-    album: t("albums.kind"),
-    artist: t("artists.kind"),
-    playlist: t("playlists.kind"),
-  };
   const q = search.trim().toLocaleLowerCase();
   const favorites =
     folderId === null &&
@@ -91,29 +89,35 @@ export default function LibraryPage() {
     t("nav.favorites").toLocaleLowerCase().includes(q);
   return (
     <section className="space-y-5">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="font-display text-2xl">{currentFolder?.name ?? t("nav.mediaLibrary")}</h1>
-        <div className="flex items-center gap-2">
-          {currentFolder && <LibraryFolderMenu folder={currentFolder} />}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" disabled={!folderResult.data} aria-label={t("action.create")}>
-                <PlusIcon size={20} />
-                {t("action.create")}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem onSelect={() => setCreating(true)}>
-                {t("playlists.new")}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setCreatingFolder(true)}>
-                <FolderIcon size={16} />
-                {t("folders.new")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+      <PageHeader
+        title={currentFolder?.name ?? t("nav.mediaLibrary")}
+        actions={
+          <div className="flex items-center gap-2">
+            {currentFolder && <LibraryFolderMenu folder={currentFolder} />}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  disabled={!folderResult.data}
+                  aria-label={t("action.create")}
+                >
+                  <PlusIcon size={20} />
+                  {t("action.create")}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onSelect={() => setCreating(true)}>
+                  {t("playlists.new")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setCreatingFolder(true)}>
+                  <FolderIcon size={16} />
+                  {t("folders.new")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        }
+      />
       {currentFolder && (
         <nav className="flex flex-wrap items-center gap-1 text-sm" aria-label={t("folders.path")}>
           <Button
@@ -141,40 +145,20 @@ export default function LibraryPage() {
           ))}
         </nav>
       )}
-      <div className="flex gap-2 overflow-x-auto pb-1" aria-label={t("nav.mediaLibrary")}>
+      <ToggleGroup aria-label={t("nav.mediaLibrary")}>
         {filters.map(([value, label]) => (
-          <Button
-            key={value}
-            variant={filter === value ? "primary" : "secondary"}
-            className={cn(
-              "rounded-full",
-              filter === value && "bg-primary text-primary-foreground hover:bg-primary/90",
-            )}
-            aria-pressed={filter === value}
-            onClick={() => setFilter(value)}
-          >
+          <ToggleGroupButton key={value} active={filter === value} onClick={() => setFilter(value)}>
             {label}
-          </Button>
+          </ToggleGroupButton>
         ))}
-      </div>
-      <div className="flex flex-wrap items-center gap-3">
-        <input
-          type="search"
-          className="min-w-40 flex-1 rounded-md border border-border bg-background px-3 py-2"
-          aria-label={t("collection.search")}
-          placeholder={t("collection.search")}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <select
-          aria-label={t("collection.sort")}
-          className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+      </ToggleGroup>
+      <PageToolbar search={search} onSearch={setSearch} placeholder={t("collection.search")}>
+        <SortSelect
           value={sort}
-          onChange={(e) => setSort(e.target.value)}
-        >
-          <option value="recent">{t("collection.recent")}</option>
-          <option value="name">{t("collection.name")}</option>
-        </select>
+          onChange={setSort}
+          label={t("collection.sort")}
+          options={{ recent: "collection.recent", name: "collection.name" }}
+        />
         <Button
           variant="ghost"
           size="icon"
@@ -183,7 +167,7 @@ export default function LibraryPage() {
         >
           {grid ? <ListIcon /> : <Grid2X2Icon />}
         </Button>
-      </div>
+      </PageToolbar>
       <Query result={folderResult}>
         {() => (
           <Query result={result}>
@@ -211,40 +195,28 @@ export default function LibraryPage() {
                 );
               return (
                 <>
-                  <div
-                    className={
-                      grid ? "grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5" : "space-y-1"
-                    }
-                  >
+                  <LibraryLayout grid={grid}>
                     {favorites && (
-                      <Link
+                      <Card
+                        layout={grid ? "grid" : "list"}
                         href="/favorites"
-                        className={cn(
-                          "flex gap-3 rounded-md p-2 hover:bg-raised hover:no-underline",
-                          grid ? "flex-col" : "items-center",
-                        )}
-                      >
-                        <div
-                          className={cn(
-                            "grid shrink-0 place-items-center rounded-md bg-gradient-to-br from-violet-700 to-indigo-300 text-white",
-                            grid ? "aspect-square w-full" : "size-16",
-                          )}
-                        >
-                          <HeartIcon size={28} />
-                        </div>
-                        <div>
-                          <p className="font-medium">{t("nav.favorites")}</p>
-                          <p className="text-sm text-muted-foreground">{t("playlists.kind")}</p>
-                        </div>
-                      </Link>
+                        title={t("nav.favorites")}
+                        subtitle={t("playlists.kind")}
+                        details={
+                          favoriteResult.data
+                            ? t("count.tracks", { count: favoriteResult.data.total })
+                            : undefined
+                        }
+                        cover={
+                          <div className="grid size-full place-items-center bg-primary-soft text-primary">
+                            <HeartIcon size={32} />
+                          </div>
+                        }
+                      />
                     )}
                     {shownFolders.map((folder) => (
                       <div
                         key={folder.id}
-                        className={cn(
-                          "relative flex gap-2 rounded-md p-2 hover:bg-raised",
-                          grid ? "flex-col" : "items-center",
-                        )}
                         draggable={!organize.isPending}
                         onDragStart={(e) =>
                           e.dataTransfer.setData(
@@ -255,36 +227,22 @@ export default function LibraryPage() {
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={(e) => drop(e, folder.id)}
                       >
-                        <button
-                          type="button"
-                          className={cn(
-                            "flex min-w-0 flex-1 gap-3 text-left",
-                            grid ? "flex-col" : "items-center",
-                          )}
+                        <Card
+                          layout={grid ? "grid" : "list"}
                           onClick={() => openFolder(folder.id)}
-                        >
-                          <div
-                            className={cn(
-                              "grid shrink-0 place-items-center rounded-md bg-raised text-primary",
-                              grid ? "aspect-square w-full" : "size-16",
-                            )}
-                          >
-                            <FolderIcon size={32} />
-                          </div>
-                          <div className={cn("min-w-0", grid && "pr-10")}>
-                            <p className="truncate font-medium">{folder.name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {t("folders.items", {
-                                count:
-                                  items.filter((item) => item.folderId === folder.id).length +
-                                  folders.filter((child) => child.parentId === folder.id).length,
-                              })}
-                            </p>
-                          </div>
-                        </button>
-                        <div className={grid ? "absolute bottom-2 right-2" : ""}>
-                          <LibraryFolderMenu folder={folder} />
-                        </div>
+                          title={folder.name}
+                          subtitle={t("folders.items", {
+                            count:
+                              items.filter((item) => item.folderId === folder.id).length +
+                              folders.filter((child) => child.parentId === folder.id).length,
+                          })}
+                          cover={
+                            <div className="grid size-full place-items-center bg-raised text-primary">
+                              <FolderIcon size={32} />
+                            </div>
+                          }
+                          menu={<LibraryFolderMenu folder={folder} />}
+                        />
                       </div>
                     ))}
                     {shown.map((item) => (
@@ -297,50 +255,16 @@ export default function LibraryPage() {
                             JSON.stringify({ id: item.id, kind: item.kind }),
                           )
                         }
-                        className={cn(
-                          "relative flex gap-2 rounded-md p-2 hover:bg-raised",
-                          grid ? "flex-col" : "items-center",
-                        )}
                       >
-                        <Link
-                          href={`/${item.kind}s/${item.id}`}
-                          className={cn(
-                            "flex min-w-0 flex-1 gap-3 hover:no-underline",
-                            grid ? "flex-col" : "items-center",
-                          )}
-                        >
-                          <div className={grid ? "aspect-square w-full" : "size-16 shrink-0"}>
-                            <Cover
-                              name={item.title}
-                              hasCover={item.hasImage}
-                              rounded={item.kind === "artist"}
-                              albumId={item.kind === "album" ? item.id : undefined}
-                              artistId={item.kind === "artist" ? item.id : undefined}
-                              playlistId={item.kind === "playlist" ? item.id : undefined}
-                              coverTrackId={item.coverTrackId}
-                            />
-                          </div>
-                          <div className={cn("min-w-0", grid && "pr-10")}>
-                            <p className="truncate font-medium">{item.title}</p>
-                            <p className="truncate text-sm text-muted-foreground">
-                              {kinds[item.kind]}
-                              {item.subtitle && ` · ${item.subtitle}`}
-                            </p>
-                          </div>
-                        </Link>
-                        <div className={grid ? "absolute bottom-2 right-2" : ""}>
-                          <LibraryItemMenu kind={item.kind} id={item.id} title={item.title} />
-                        </div>
+                        <SavedLibraryCard item={item} layout={grid ? "grid" : "list"} />
                       </div>
                     ))}
-                  </div>
+                  </LibraryLayout>
                   {shown.length === 0 && shownFolders.length === 0 && !favorites && (
-                    <div className="py-8 text-center">
-                      <p>{t(q ? "collection.noResults" : "collection.empty")}</p>
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        {t(currentFolder ? "folders.emptyHint" : "collection.hint")}
-                      </p>
-                    </div>
+                    <EmptyState
+                      title={t(q ? "collection.noResults" : "collection.empty")}
+                      description={t(currentFolder ? "folders.emptyHint" : "collection.hint")}
+                    />
                   )}
                 </>
               );
@@ -382,4 +306,8 @@ export default function LibraryPage() {
       )}
     </section>
   );
+}
+
+function LibraryLayout({ grid, children }: { grid: boolean; children: ReactNode }) {
+  return grid ? <CardGrid>{children}</CardGrid> : <div className="space-y-1">{children}</div>;
 }

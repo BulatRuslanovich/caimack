@@ -94,34 +94,46 @@ fun Card(
     modifier: Modifier = Modifier,
     round: Boolean = false,
     toneUrl: String? = null,
+    list: Boolean = false,
+    details: String? = null,
+    menu: (@Composable () -> Unit)? = null,
     cover: @Composable (Modifier) -> Unit,
 ) {
     val palette = LocalPalette.current
     val shape = if (round) CircleShape else Radius.cover
-    Column(modifier.clickable(onClick = onClick)) {
-        cover(
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .shadow(6.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.16f), spotColor = Color.Black.copy(alpha = 0.18f)),
-        )
-        Text(
-            title,
-            style = Type.small.copy(fontWeight = FontWeight.Medium),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = if (round) TextAlign.Center else TextAlign.Start,
-            modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 3.dp),
-        )
-        Text(
-            subtitle,
-            style = Type.small,
-            color = palette.muted,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = if (round) TextAlign.Center else TextAlign.Start,
-            modifier = Modifier.fillMaxWidth(),
-        )
+    val text: @Composable (Modifier) -> Unit = { textModifier ->
+        Column(textModifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(title, style = if (list) Type.body else Type.small.copy(fontWeight = FontWeight.Medium),
+                maxLines = 2, overflow = TextOverflow.Ellipsis,
+                textAlign = if (round && !list) TextAlign.Center else TextAlign.Start,
+                modifier = Modifier.fillMaxWidth())
+            Text(subtitle, style = Type.small, color = palette.muted,
+                maxLines = 2, overflow = TextOverflow.Ellipsis,
+                textAlign = if (round && !list) TextAlign.Center else TextAlign.Start,
+                modifier = Modifier.fillMaxWidth())
+            if (!details.isNullOrBlank()) Text(details, style = Type.small, color = palette.muted,
+                maxLines = 2, overflow = TextOverflow.Ellipsis,
+                textAlign = if (round && !list) TextAlign.Center else TextAlign.Start,
+                modifier = Modifier.fillMaxWidth())
+        }
+    }
+    if (list) {
+        val density = LocalLibraryDensity.current
+        Row(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = density.rowPadding), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f).clip(Radius.row).clickable(onClick = onClick).padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                cover(Modifier.size(maxOf(48.dp, density.coverSize)))
+                text(Modifier.weight(1f))
+            }
+            menu?.invoke()
+        }
+    } else Column(modifier) {
+        cover(Modifier.fillMaxWidth().aspectRatio(1f).clickable(onClick = onClick)
+            .shadow(6.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.16f), spotColor = Color.Black.copy(alpha = 0.18f)))
+        Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.Top) {
+            text(Modifier.weight(1f).clickable(onClick = onClick))
+            menu?.invoke()
+        }
     }
 }
 @Composable
