@@ -14,6 +14,8 @@ internal enum class SettingKey(val section: Int, vararg val terms: Int) {
     Downloads(R.string.settings_downloads, R.string.settings_auto_downloads, R.string.downloads_title),
     Reminder(R.string.nav_account, R.string.settings_recap_reminder),
     Tile(R.string.settings_playback, R.string.settings_tile),
+    TouchHaptics(R.string.settings_playback, R.string.settings_touch_haptics, R.string.settings_touch_haptics_hint),
+    MusicHaptics(R.string.settings_playback, R.string.settings_music_haptics, R.string.settings_music_haptics_hint),
     Equalizer(R.string.settings_equalizer, R.string.settings_equalizer, R.string.settings_help_equalizer, R.string.settings_equalizer_flat, R.string.settings_equalizer_bass, R.string.settings_equalizer_vocal, R.string.settings_equalizer_treble),
     Theme(R.string.settings_appearance, R.string.settings_theme, R.string.settings_help_theme, R.string.settings_theme_system, R.string.settings_theme_dark, R.string.settings_theme_light),
     Palette(R.string.settings_appearance, R.string.settings_colorway, R.string.settings_help_colorway, R.string.settings_colorway_coffee, R.string.settings_colorway_graphite, R.string.settings_colorway_midnight, R.string.settings_colorway_plum, R.string.settings_colorway_studio),

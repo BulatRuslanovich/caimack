@@ -3,7 +3,7 @@
 
 package app.caimack.ui
 
-import android.view.HapticFeedbackConstants
+import app.caimack.haptics.PlayerHaptic
 import androidx.compose.foundation.Canvas
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.Animatable
@@ -49,7 +49,6 @@ import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -89,11 +88,11 @@ fun Deck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Modifier = Modi
 
 @Composable
 private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Modifier) {
+    val haptic = rememberPlayerHaptics()
     val track = state.current ?: return
     val player = LocalContainer.current.player
     val motion = playerMotionEnabled()
     val latestMotion by rememberUpdatedState(motion)
-    val view = LocalView.current
     val scope = rememberCoroutineScope()
     val latest by rememberUpdatedState(state)
     val swipe = remember { Animatable(0f) }
@@ -102,7 +101,6 @@ private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Mo
     var twist by remember(track.id) { mutableFloatStateOf(0f) }
     val layout = remember { DeckLayout() }
 
-    val tick = { view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK) }
 
     Box(
         modifier
@@ -122,6 +120,7 @@ private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Mo
 
                         down.consume()
                         scratching = true
+                        haptic(PlayerHaptic.Button)
                         player.pause()
                         val length = latest.durationMs.takeIf { it > 0 } ?: (track.durationSeconds * 1000L)
                         var target = player.position.toFloat()
@@ -145,13 +144,16 @@ private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Mo
                             groove += abs(degrees)
                             if (groove >= GROOVE_DEGREES) {
                                 groove %= GROOVE_DEGREES
-                                tick()
+                                haptic(PlayerHaptic.Tick)
                             }
+                            val oldTarget = target
                             target = (target + degrees / 360f * SCRATCH_MS_PER_TURN).coerceIn(0f, length.toFloat())
+                            if (target != oldTarget && (target == 0f || target == length.toFloat())) haptic(PlayerHaptic.Boundary)
                             onScrub(target.toLong())
                         }
 
                         player.seekTo(target.toLong())
+                        haptic(PlayerHaptic.Confirm)
                         player.resume()
                         scratching = false
                         onScrub(null)
@@ -171,6 +173,7 @@ private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Mo
 
                     swiping = true
                     var armed = committing(dragged)
+                    if (armed) haptic(PlayerHaptic.SwipeArmed)
                     scope.launch { swipe.snapTo(shown(dragged)) }
 
                     val released = horizontalDrag(start.id) { change ->
@@ -179,7 +182,7 @@ private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Mo
                         velocity.addPosition(change.uptimeMillis, change.position)
                         if (committing(dragged) != armed) {
                             armed = !armed
-                            tick()
+                            haptic(if (armed) PlayerHaptic.SwipeArmed else PlayerHaptic.SwipeCancelled)
                         }
                         scope.launch { swipe.snapTo(shown(dragged)) }
                     }
@@ -192,6 +195,7 @@ private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Mo
 
                     scope.launch {
                         if (commit) {
+                            haptic(PlayerHaptic.Skip)
                             if (latestMotion) swipe.animateTo(if (toNext) -step else step, tween(220)) else swipe.snapTo(if (toNext) -step else step)
                             player.skipTo(index)
                             // Keep the incoming sleeve in place until the player acknowledges

@@ -214,6 +214,7 @@ fun SettingsScreen(category: SettingsCategory? = null) {
                         }
                     }
 
+                    HapticsSettings(SettingKey.TouchHaptics in visible, SettingKey.MusicHaptics in visible)
                     if (SettingKey.Tile in visible) {
                         var added by rememberSaveable { mutableStateOf(false) }
                         val context = LocalContext.current
@@ -608,7 +609,7 @@ private fun EqualizerCurve(gains: List<Int>, frequencies: List<String>, decibels
 }
 
 @Composable
-private fun SettingLabel(text: String, hint: String, style: androidx.compose.ui.text.TextStyle, modifier: Modifier = Modifier) {
+internal fun SettingLabel(text: String, hint: String, style: androidx.compose.ui.text.TextStyle = Type.body, modifier: Modifier = Modifier) {
     val palette = LocalPalette.current
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(text, style = style)

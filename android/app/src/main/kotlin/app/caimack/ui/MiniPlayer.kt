@@ -66,6 +66,7 @@ internal fun rememberPosition(state: PlayerState): Long {
 internal fun clock(ms: Long) = durationOf((ms / 1000).toInt())
 @Composable
 fun MiniPlayer(state: PlayerState, onOpen: () -> Unit) {
+    val haptic = rememberPlayerHaptics()
     val motion = playerMotionEnabled()
     val palette = LocalPalette.current
     val container = LocalContainer.current
@@ -96,7 +97,8 @@ fun MiniPlayer(state: PlayerState, onOpen: () -> Unit) {
                     onDragStart = { total = Offset.Zero },
                     onDragEnd = {
                         if (abs(total.x) > abs(total.y)) {
-                            if (total.x <= -skipPx) player.next() else if (total.x >= skipPx) player.previous()
+                            if (total.x <= -skipPx) { haptic(app.caimack.haptics.PlayerHaptic.Skip); player.next() }
+                            else if (total.x >= skipPx) { haptic(app.caimack.haptics.PlayerHaptic.Skip); player.previous() }
                         } else if (-total.y > openPx) {
                             onOpen()
                         }
@@ -141,10 +143,10 @@ fun MiniPlayer(state: PlayerState, onOpen: () -> Unit) {
                     Box(Modifier.size(40.dp).clip(CircleShape).background(palette.action))
                     IconAction(if (state.playing) Lucide.Pause else Lucide.Play,
                         stringResource(if (state.playing) R.string.action_pause else R.string.action_play),
-                        tint = palette.onAction, size = 20) { player.toggle() }
+                        tint = palette.onAction, size = 20) { haptic(app.caimack.haptics.PlayerHaptic.Button); player.toggle() }
                     BufferingRing(state.buffering, Modifier.size(40.dp))
                 }
-                IconAction(Lucide.SkipForward, stringResource(R.string.player_next), size = 20) { player.next() }
+                IconAction(Lucide.SkipForward, stringResource(R.string.player_next), size = 20) { haptic(app.caimack.haptics.PlayerHaptic.Skip); player.next() }
             }
         }
         Box(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 3.dp)

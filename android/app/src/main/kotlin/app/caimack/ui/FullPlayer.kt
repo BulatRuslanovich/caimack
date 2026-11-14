@@ -90,6 +90,8 @@ import app.caimack.api.Lyrics
 import app.caimack.api.Track
 import app.caimack.playback.PlayerState
 import app.caimack.playback.QueueSnapshot
+import app.caimack.haptics.PlayerHaptic
+import app.caimack.haptics.SeekHaptics
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -108,6 +110,7 @@ fun FullPlayer(state: PlayerState, onClose: () -> Unit) {
 
 @Composable
 private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
+    val haptic = rememberPlayerHaptics()
     val palette = LocalPalette.current
     val container = LocalContainer.current
     val player = container.player
@@ -214,7 +217,7 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
                             if (liked) Lucide.HeartFilled else Lucide.Heart,
                             stringResource(if (liked) R.string.menu_unlike else R.string.menu_like),
                             tint = if (liked) palette.primary else palette.muted,
-                        ) { container.favorites.toggle(track) }
+                        ) { haptic(PlayerHaptic.Favorite); container.favorites.toggle(track) }
                         IconAction(Lucide.EllipsisVertical, stringResource(R.string.menu_more), tint = palette.muted) { actions = true }
                     }
                     Spacer(Modifier.height(8.dp))
@@ -225,11 +228,11 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
                         Text(clock(duration), style = Type.tiny, color = palette.muted)
                     }
                     Row(Modifier.fillMaxWidth().testTag("full-player-transport"), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        IconAction(Lucide.Shuffle, stringResource(R.string.player_shuffle), tint = if (state.shuffle) palette.primary else palette.muted) { player.toggleShuffle() }
-                        IconAction(Lucide.SkipBack, stringResource(R.string.player_previous), size = 26) { player.previous() }
+                        IconAction(Lucide.Shuffle, stringResource(R.string.player_shuffle), tint = if (state.shuffle) palette.primary else palette.muted) { haptic(PlayerHaptic.Button); player.toggleShuffle() }
+                        IconAction(Lucide.SkipBack, stringResource(R.string.player_previous), size = 26) { haptic(PlayerHaptic.Skip); player.previous() }
                         Box(contentAlignment = Alignment.Center) {
                             Box(
-                                Modifier.size(68.dp).clip(CircleShape).background(palette.action).clickable { player.toggle() },
+                                Modifier.size(68.dp).clip(CircleShape).background(palette.action).clickable { haptic(PlayerHaptic.Button); player.toggle() },
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Icon(
@@ -242,12 +245,12 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
                             // A visual overlay must not enlarge the 68 dp button's layout slot.
                             BufferingRing(state.buffering, Modifier.matchParentSize().requiredSize(78.dp).testTag("full-player-buffering"))
                         }
-                        IconAction(Lucide.SkipForward, stringResource(R.string.player_next), size = 26) { player.next() }
+                        IconAction(Lucide.SkipForward, stringResource(R.string.player_next), size = 26) { haptic(PlayerHaptic.Skip); player.next() }
                         IconAction(
                             if (state.repeat == Player.REPEAT_MODE_ONE) Lucide.Repeat1 else Lucide.Repeat,
                             stringResource(R.string.player_repeat),
                             tint = if (state.repeat == Player.REPEAT_MODE_OFF) palette.muted else palette.primary,
-                        ) { player.cycleRepeat() }
+                        ) { haptic(PlayerHaptic.Button); player.cycleRepeat() }
                     }
                 }
             }
@@ -277,6 +280,8 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
 }
 @Composable
 private fun Seekbar(positionMs: Long, durationMs: Long, peaks: List<Int>?, onSeek: (Long) -> Unit) {
+    val haptic = rememberPlayerHaptics()
+    val seekFeedback = remember(durationMs) { SeekHaptics(durationMs) }
     val palette = LocalPalette.current
     var dragging by remember { mutableStateOf<Float?>(null) }
     val progress = dragging ?: (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
@@ -287,17 +292,24 @@ private fun Seekbar(positionMs: Long, durationMs: Long, peaks: List<Int>?, onSee
             .height(48.dp)
             .systemGestureExclusion()
             .pointerInput(durationMs) {
-                detectTapGestures { onSeek((it.x / size.width * durationMs).toLong()) }
+                detectTapGestures { haptic(PlayerHaptic.Button); onSeek((it.x / size.width * durationMs).toLong()) }
             }
             .pointerInput(durationMs) {
                 detectHorizontalDragGestures(
-                    onDragStart = { dragging = (it.x / size.width).coerceIn(0f, 1f) },
+                    onDragStart = {
+                        dragging = (it.x / size.width).coerceIn(0f, 1f)
+                        seekFeedback.start((dragging!! * durationMs).toLong())
+                    },
                     onDragEnd = {
                         dragging?.let { onSeek((it * durationMs).toLong()) }
+                        haptic(PlayerHaptic.Confirm)
                         dragging = null
                     },
                     onDragCancel = { dragging = null },
-                ) { change, _ -> dragging = (change.position.x / size.width).coerceIn(0f, 1f) }
+                ) { change, _ ->
+                    dragging = (change.position.x / size.width).coerceIn(0f, 1f)
+                    seekFeedback.move((dragging!! * durationMs).toLong())?.let(haptic)
+                }
             },
         contentAlignment = Alignment.CenterStart,
     ) {

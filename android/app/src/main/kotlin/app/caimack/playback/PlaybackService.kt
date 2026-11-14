@@ -94,6 +94,8 @@ class PlaybackService : MediaLibraryService() {
     private var leveling: Job? = null
     private var qualityChanges: Job? = null
     private var equalizer: DynamicsProcessing? = null
+    private var musicHaptics: app.caimack.haptics.AudioHaptics? = null
+    private var hapticPreferences: Job? = null
     private var normalization = 1f
     private var sleepLevel = 1f
     private var networkRecovery: Job? = null
@@ -106,6 +108,7 @@ class PlaybackService : MediaLibraryService() {
     override fun onCreate() {
         super.onCreate()
         val container = (application as CaimackApp).container
+        musicHaptics = app.caimack.haptics.AudioHaptics(app.caimack.haptics.AndroidAudioHapticFactory, container.haptics::reportMusicStatus)
         val data = OkHttpDataSource.Factory(container.http)
 
         val player = ExoPlayer.Builder(this)
@@ -125,7 +128,8 @@ class PlaybackService : MediaLibraryService() {
                 ),
             )
             .setAudioAttributes(
-                AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(),
+                AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .setHapticChannelsMuted(!container.haptics.musicEnabled.value).build(),
                 true,
             )
             .setHandleAudioBecomingNoisy(true)
@@ -214,6 +218,7 @@ class PlaybackService : MediaLibraryService() {
                 equalizer?.release()
                 equalizer = null
                 shapeSound(audioSessionId, container.equalizer.state.value)
+                musicHaptics?.update(audioSessionId, container.haptics.musicEnabled.value, player.isPlaying)
             }
 
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
@@ -269,6 +274,7 @@ class PlaybackService : MediaLibraryService() {
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                musicHaptics?.update(player.audioSessionId, container.haptics.musicEnabled.value, isPlaying)
                 ticks.removeCallbacks(tick)
                 NowPlayingWidget.show(this@PlaybackService, player.currentMediaItem?.mediaId?.let { container.tracks[it] }, isPlaying, player.currentPosition, player.duration)
                 if (isPlaying) {
@@ -386,6 +392,14 @@ class PlaybackService : MediaLibraryService() {
             }
         }
         tone = container.scope.launch(Dispatchers.Main) { container.equalizer.state.collect { shapeSound(player.audioSessionId, it) } }
+        hapticPreferences = container.scope.launch(Dispatchers.Main) {
+            container.haptics.musicEnabled.collect { requested ->
+                // Disable the old effect before changing AudioTrack attributes/session.
+                musicHaptics?.update(player.audioSessionId, false, false)
+                player.setAudioAttributes(player.audioAttributes.buildUpon().setHapticChannelsMuted(!requested).build(), true)
+                musicHaptics?.update(player.audioSessionId, requested, player.isPlaying)
+            }
+        }
         sleep = container.scope.launch(Dispatchers.Main) { container.sleepTimer.state.collectLatest { fallAsleep(container, player, it) } }
         leveling = container.scope.launch(Dispatchers.Main) { container.playbackPrefs.normalizeVolume.collect { normalize(container, player) } }
         qualityChanges = container.scope.launch(Dispatchers.Main) {
@@ -419,6 +433,9 @@ class PlaybackService : MediaLibraryService() {
         radioRequest?.cancel()
         heart?.cancel()
         tone?.cancel()
+        hapticPreferences?.cancel()
+        musicHaptics?.close()
+        musicHaptics = null
         sleep?.cancel()
         leveling?.cancel()
         qualityChanges?.cancel()

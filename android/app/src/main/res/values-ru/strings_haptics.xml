@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_touch_haptics">Тактильность плеера</string>
+    <string name="settings_touch_haptics_hint">Отклик кнопок, перемотки и жестов пластинки. Учитывает системную настройку вибрации при касании.</string>
+    <string name="settings_touch_haptics_unavailable">В устройстве нет вибромотора.</string>
+    <string name="settings_haptics_preview">Проверить отклик</string>
+    <string name="settings_music_haptics">Вибрация музыки · Эксперимент</string>
+    <string name="settings_music_haptics_hint">Ощущайте музыку через вибрацию телефона. Работает только со звуком на этом устройстве.</string>
+    <string name="settings_music_haptics_unavailable">Этот телефон не поддерживает вибрацию от аудиосигнала.</string>
+    <string name="settings_music_haptics_ready">Включена. Начнёт работать при воспроизведении музыки на этом телефоне.</string>
+    <string name="settings_music_haptics_active">Работает вместе с музыкой на этом телефоне.</string>
+    <string name="settings_music_haptics_failed">Не удалось запустить вибрацию музыки. Выключите режим и попробуйте снова.</string>
+</resources>

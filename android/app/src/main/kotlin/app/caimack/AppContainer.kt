@@ -125,6 +125,7 @@ class AppContainer(context: Context) {
     val playbackDelivery = MutableStateFlow<app.caimack.playback.PlaybackDelivery?>(null)
 
     val appearance = Appearance(context)
+    val haptics = app.caimack.haptics.HapticsPreferences(context)
 
     val equalizer = EqualizerSettings(context)
 
