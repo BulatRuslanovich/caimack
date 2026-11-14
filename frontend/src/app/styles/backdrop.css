@@ -51,6 +51,29 @@
   );
 }
 
+/* The observed player has one hue and a shallow vertical lightness ramp. */
+.art-backdrop[data-mode="player"] .art-backdrop-palette {
+  background: linear-gradient(180deg, var(--art-color), var(--art-bottom));
+}
+
+/* The player is a dark stage even when the surrounding library uses light mode. */
+[data-player-fullscreen] {
+  --background: #171819;
+  --foreground: #f5f5f5;
+  --muted-foreground: #d6d6d6;
+  --faint-foreground: #bcbcbc;
+  color: var(--foreground);
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] [data-player-fullscreen] {
+  --action: #eee6d7;
+  --action-hover: #fff9ef;
+  --action-foreground: #201e1a;
+  --primary: #e5c787;
+  --primary-foreground: #201e1a;
+}
+
 .record-transition {
   --art-slide-distance: 100vw;
   position: relative;

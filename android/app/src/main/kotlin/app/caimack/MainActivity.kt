@@ -31,9 +31,13 @@ import app.caimack.ui.LocalContainer
 import app.caimack.ui.LoginScreen
 
 class MainActivity : ComponentActivity() {
+    private val localNetworkPermission = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
+
     override fun onResume() {
         super.onResume()
         (application as CaimackApp).container.updates.check()
+        (application as CaimackApp).container.refreshDownloadArtwork()
+        (application as CaimackApp).container.refreshLibraryConnection()
     }
 
     override fun attachBaseContext(newBase: Context) = super.attachBaseContext(Appearance.localized(newBase))
@@ -42,6 +46,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         volumeControlStream = AudioManager.STREAM_MUSIC
         enableEdgeToEdge()
+        if(android.os.Build.VERSION.SDK_INT>=37 && androidx.core.content.ContextCompat.checkSelfPermission(this,"android.permission.ACCESS_LOCAL_NETWORK") != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            localNetworkPermission.launch("android.permission.ACCESS_LOCAL_NETWORK")
+        }
 
         val container = (application as CaimackApp).container
         if (savedInstanceState == null) {

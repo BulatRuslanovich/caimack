@@ -17,6 +17,30 @@ function deferred<T>() {
 }
 
 describe("cover tone cache", () => {
+  it("isolates player results by URL when a slow old cover finishes last", async () => {
+    const old = deferred<CoverTones>(),
+      current = deferred<CoverTones>();
+    const cache = createCoverToneCache((url) => (url === "old" ? old.promise : current.promise));
+    const a = cache.load("old", "player"),
+      b = cache.load("current", "player");
+    current.resolve({ player: backdrop });
+    await b;
+    old.resolve({ player: { hue: 20, chroma: 0.2, lightness: 0.6 } });
+    await a;
+    expect(cache.get("current", "player")).toBe(backdrop);
+    expect(cache.get("current", "backdrop")).toBeUndefined();
+  });
+
+  it("settles failed player covers to a cached neutral result", async () => {
+    const sample = vi.fn(async () => {
+      throw new Error("CORS / decode / timeout");
+    });
+    const cache = createCoverToneCache(sample);
+    await cache.load("broken", "player");
+    await cache.load("broken", "player");
+    expect(cache.get("broken", "player")).toBeNull();
+    expect(sample).toHaveBeenCalledTimes(1);
+  });
   it("deduplicates in-flight sampling and keeps stable cached snapshots", async () => {
     const loading = deferred<CoverTones>();
     const sample = vi.fn(() => loading.promise);

@@ -345,3 +345,21 @@ data class TrackLookup(val ids: List<String>)
 
 @kotlinx.serialization.Serializable
 data class ServerCapabilities(val recommendationsEnabled: Boolean = false)
+
+@Serializable
+data class LibraryItem(
+    val kind: String, val id: String, val title: String, val subtitle: String = "",
+    val hasImage: Boolean = false, val coverTrackId: String? = null, val savedAt: String,
+    val folderId: String? = null,
+    val trackCount: Int? = null, val albumCount: Int? = null,
+    val durationSeconds: Int? = null, val year: Int? = null,
+)
+
+@Serializable
+data class LibraryFolder(val id: String, val name: String, val parentId: String? = null, val createdAt: String)
+
+@Serializable
+data class LibraryChange(
+    val operation: String, val id: String, val name: String? = null,
+    val folderId: String? = null, val kind: String? = null,
+)

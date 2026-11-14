@@ -68,6 +68,8 @@ pub struct ScanStatusDto {
     pub checked: u64,
     pub added: u64,
     pub moved: u64,
+    pub renamed: u64,
+    pub exported: u64,
     pub updated: u64,
     pub skipped: u64,
     pub failed: u64,
@@ -121,11 +123,31 @@ pub struct LibraryScanner {
     uploads: Uploads,
     progress: Arc<Mutex<Progress>>,
     wake: Arc<Notify>,
+    rename_files: bool,
+    export_metadata: bool,
 }
 
 impl LibraryScanner {
     pub fn new(db: PgPool, storage: Storage, uploads: Uploads) -> Self {
-        Self { db, storage, uploads, progress: Arc::default(), wake: Arc::new(Notify::new()) }
+        Self {
+            db,
+            storage,
+            uploads,
+            progress: Arc::default(),
+            wake: Arc::new(Notify::new()),
+            rename_files: false,
+            export_metadata: false,
+        }
+    }
+
+    pub fn with_file_renaming(mut self, enabled: bool) -> Self {
+        self.rename_files = enabled;
+        self
+    }
+
+    pub fn with_metadata_export(mut self, enabled: bool) -> Self {
+        self.export_metadata = enabled;
+        self
     }
 
     pub fn status(&self, lang: Lang) -> ScanStatusDto {
@@ -152,18 +174,24 @@ impl LibraryScanner {
 
     pub fn spawn(self, interval: Option<Duration>, cancel: CancellationToken) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
-            let mut wait = STARTUP_DELAY;
+            let mut next_scan = tokio::time::Instant::now() + STARTUP_DELAY;
             let mut first = true;
             loop {
                 tokio::select! {
                     () = cancel.cancelled() => return,
+                    () = tokio::time::sleep(Duration::from_secs(30)), if (self.rename_files || self.export_metadata) && !first => {
+                        self.maintain(&cancel).await;
+                        continue;
+                    }
                     () = self.wake.notified() => {}
-                    () = tokio::time::sleep(wait), if first || interval.is_some() => {}
+                    () = tokio::time::sleep_until(next_scan), if first || interval.is_some() => {}
                 }
                 first = false;
-                wait = interval.unwrap_or(wait);
+                next_scan = tokio::time::Instant::now() + interval.unwrap_or(STARTUP_DELAY);
                 if let Some(root) = self.storage.library_root() {
                     self.scan(&root, &cancel).await;
+                } else if self.rename_files || self.export_metadata {
+                    self.maintain(&cancel).await;
                 }
             }
         })
@@ -179,6 +207,8 @@ impl LibraryScanner {
         if let Err(error) = self.run(root, cancel).await {
             tracing::error!("Scanning the music folder failed: {error:#}");
             self.problem(String::new(), message("The music folder could not be scanned."));
+        } else if self.rename_files || self.export_metadata {
+            self.maintain(cancel).await;
         }
         let status = self.status(Lang::En);
         tracing::info!(
@@ -200,6 +230,15 @@ impl LibraryScanner {
     }
 
     async fn run(&self, root: &Path, cancel: &CancellationToken) -> anyhow::Result<()> {
+        let Some(_lock) = crate::file_names::lock(&self.storage)? else {
+            return Ok(());
+        };
+        let exported = crate::metadata_export::recover(&self.db, &self.storage).await?;
+        self.update(|p| p.status.exported += exported.exported);
+        anyhow::ensure!(exported.problems.is_empty(), "Pending metadata exports must be recovered before scanning");
+        let recovered = crate::file_names::recover(&self.db, &self.storage).await?;
+        self.update(|p| p.status.renamed += recovered.renamed);
+        anyhow::ensure!(recovered.problems.is_empty(), "Pending file renames must be recovered before scanning");
         sqlx::query!(
             "UPDATE library_files SET status = $1 WHERE status = $2 AND track_id IS NULL",
             Status::Removed as i16,
@@ -326,24 +365,80 @@ impl LibraryScanner {
         Ok(())
     }
 
+    async fn maintain(&self, cancel: &CancellationToken) {
+        if self.rename_files {
+            self.rename(cancel).await;
+        }
+        if self.export_metadata {
+            match crate::metadata_export::run(&self.db, &self.storage, cancel).await {
+                Ok(report) => {
+                    self.update(|p| p.status.exported += report.exported);
+                    for path in report.problems {
+                        self.failed(
+                            &path,
+                            message(
+                                "Artwork and lyrics could not be exported. Check write permissions and the server log.",
+                            ),
+                        );
+                    }
+                }
+                Err(error) => {
+                    tracing::error!("Metadata export failed: {error:#}");
+                    self.problem(
+                        String::new(),
+                        message(
+                            "Artwork and lyrics could not be exported. Check write permissions and the server log.",
+                        ),
+                    );
+                }
+            }
+        }
+    }
+
+    async fn rename(&self, cancel: &CancellationToken) {
+        match crate::file_names::run(&self.db, &self.storage, cancel).await {
+            Ok(report) => {
+                self.update(|p| p.status.renamed += report.renamed);
+                for path in report.problems {
+                    self.failed(
+                        &path,
+                        message("The file could not be renamed. Check folder write permissions and the server log."),
+                    );
+                }
+            }
+            Err(error) => {
+                tracing::error!("File renaming failed: {error:#}");
+                self.problem(
+                    String::new(),
+                    message("The file could not be renamed. Check folder write permissions and the server log."),
+                );
+            }
+        }
+    }
+
     async fn changed(&self, root: &Path, file: &DiskFile, track: Uuid, previous: Option<&str>) -> anyhow::Result<()> {
         let Some((size, hash)) = self.hash(root, file).await else { return Ok(()) };
         if previous == Some(hash.as_str()) {
             return self.remember(file, Some(&hash), Some(track), Status::Linked, None).await;
         }
 
-        let updated = sqlx::query!(
-            "UPDATE tracks SET content_hash = $2, file_size = $3 WHERE id = $1 AND file_path = $4",
-            track,
-            hash,
-            size,
-            library_path(&file.path)
+        let old_cache: Option<String> =
+            sqlx::query_scalar("SELECT COALESCE(media_cache_hash,content_hash) FROM tracks WHERE id=$1")
+                .bind(track)
+                .fetch_optional(&self.db)
+                .await?;
+        let updated = sqlx::query(
+            "UPDATE tracks SET content_hash=$2,file_size=$3,media_cache_hash=NULL WHERE id=$1 AND file_path=$4",
         )
+        .bind(track)
+        .bind(&hash)
+        .bind(size)
+        .bind(library_path(&file.path))
         .execute(&self.db)
         .await;
         match updated {
             Ok(_) => {
-                if let Some(old) = previous {
+                if let Some(old) = old_cache.as_deref().or(previous) {
                     self.storage.delete_transcodes(old);
                 }
                 self.uploads.hashes.forget(track);

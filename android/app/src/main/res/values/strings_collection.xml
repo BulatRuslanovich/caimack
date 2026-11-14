@@ -1,0 +1,25 @@
+<resources>
+    <string name="collection_add">Save to library</string>
+    <string name="collection_remove">Remove from library</string>
+    <string name="collection_recent">Recently added</string>
+    <string name="collection_name">By name</string>
+    <string name="collection_grid">Grid view</string>
+    <string name="collection_list">List view</string>
+    <string name="collection_empty">Nothing here yet</string>
+    <string name="collection_hint">Save albums, artists and playlists using the + button.</string>
+    <string name="collection_catalog">Browse catalog</string>
+    <string name="collection_failed">Could not update your library. Try again.</string>
+    <string name="collection_clear_filter">Clear filter selection</string>
+    <string name="folders_new">New folder</string>
+    <string name="folders_name">Folder name</string>
+    <string name="folders_rename">Rename folder</string>
+    <string name="folders_move">Move to folder</string>
+    <string name="folders_delete">Delete folder</string>
+    <string name="folders_delete_hint">Contents will move up one level. Your saved music will stay in your library.</string>
+    <string name="folders_items">Items: %1$d</string>
+    <string name="folders_empty_hint">Create a subfolder or use Move to folder to bring saved music here.</string>
+    <string name="folders_up">Up one level</string>
+    <string name="folders_create">Create</string>
+    <string name="collection_search">Search your library</string>
+    <string name="collection_no_results">No matching items</string>
+</resources>

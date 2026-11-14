@@ -1,0 +1,25 @@
+<resources>
+    <string name="collection_add">Добавить в медиатеку</string>
+    <string name="collection_remove">Убрать из медиатеки</string>
+    <string name="collection_recent">Недавно добавленные</string>
+    <string name="collection_name">По названию</string>
+    <string name="collection_grid">Сетка</string>
+    <string name="collection_list">Список</string>
+    <string name="collection_empty">Здесь пока пусто</string>
+    <string name="collection_hint">Сохраняйте альбомы, исполнителей и плейлисты кнопкой +.</string>
+    <string name="collection_catalog">Весь каталог</string>
+    <string name="collection_failed">Не удалось изменить медиатеку. Попробуйте ещё раз.</string>
+    <string name="collection_clear_filter">Сбросить фильтр</string>
+    <string name="folders_new">Новая папка</string>
+    <string name="folders_name">Название папки</string>
+    <string name="folders_rename">Переименовать папку</string>
+    <string name="folders_move">Переместить в папку</string>
+    <string name="folders_delete">Удалить папку</string>
+    <string name="folders_delete_hint">Содержимое папки переместится на уровень выше. Сохранённая музыка останется в медиатеке.</string>
+    <string name="folders_items">Элементов: %1$d</string>
+    <string name="folders_empty_hint">Создайте вложенную папку или перенесите сюда музыку через меню «Переместить в папку».</string>
+    <string name="folders_up">На уровень выше</string>
+    <string name="folders_create">Создать</string>
+    <string name="collection_search">Поиск в медиатеке</string>
+    <string name="collection_no_results">Ничего не найдено</string>
+</resources>

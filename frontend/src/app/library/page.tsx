@@ -1,0 +1,313 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+"use client";
+import { useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
+import {
+  Grid2X2Icon,
+  ListIcon,
+  PlusIcon,
+  HeartIcon,
+  FolderIcon,
+  ChevronRightIcon,
+} from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { api } from "@/lib/api";
+import { folderTrail, canMoveFolder } from "@/lib/libraryFolders";
+import {
+  LibraryFolderEditor,
+  LibraryFolderMenu,
+  useOrganizeLibrary,
+} from "@/components/LibraryOrganization";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { queries } from "@/lib/queries";
+import type { LibraryKind } from "@/lib/types";
+import { useT } from "@/contexts/I18nContext";
+import { useInvalidate } from "@/lib/useInvalidate";
+import { Query } from "@/components/Query";
+import { Card, SavedLibraryCard } from "@/components/MediaCard";
+import { CardGrid, PageHeader } from "@/components/PageHeader";
+import { PageToolbar, SortSelect } from "@/components/PageToolbar";
+import { ToggleGroup, ToggleGroupButton } from "@/components/ui/toggle-group";
+import { EmptyState } from "@/components/EmptyState";
+import { PlaylistDialog } from "@/components/PlaylistDialog";
+import { Button } from "@/components/ui/button";
+
+export default function LibraryPage() {
+  const t = useT();
+  const invalidate = useInvalidate();
+  const result = useQuery({ ...queries.savedLibrary(), refetchInterval: 30_000 });
+  const favoriteResult = useQuery(queries.favorites({ page: 1, pageSize: 1 }));
+  const folderResult = useQuery({ ...queries.libraryFolders(), refetchInterval: 30_000 });
+  const folders = folderResult.data ?? [];
+  const router = useRouter();
+  const requestedFolder = useSearchParams().get("folder");
+  const currentFolder = folders.find((folder) => folder.id === requestedFolder) ?? null;
+  const folderId = currentFolder?.id ?? null;
+  const organize = useOrganizeLibrary();
+  const [creatingFolder, setCreatingFolder] = useState(false);
+  const openFolder = (id: string | null) => router.push(id ? `/library?folder=${id}` : "/library");
+  const drop = (event: React.DragEvent, destination: string | null) => {
+    event.preventDefault();
+    try {
+      const target = JSON.parse(event.dataTransfer.getData("application/x-caimack-library"));
+      if (typeof target.id !== "string") return;
+      if (target.kind === "folder") {
+        if (canMoveFolder(folders, target.id, destination))
+          organize.mutate({ operation: "moveFolder", id: target.id, folderId: destination });
+      } else if (["album", "artist", "playlist"].includes(target.kind))
+        organize.mutate({
+          operation: "moveItem",
+          id: target.id,
+          kind: target.kind,
+          folderId: destination,
+        });
+    } catch {
+      /* Ignore unrelated dragged content. */
+    }
+  };
+  const [filter, setFilter] = useState<LibraryKind | "all">("all");
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<"recent" | "name">("recent");
+  const [grid, setGrid] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const filters = [
+    ["all", t("collection.all")],
+    ["playlist", t("nav.playlists")],
+    ["album", t("nav.albums")],
+    ["artist", t("nav.artists")],
+  ] as const;
+  const q = search.trim().toLocaleLowerCase();
+  const favorites =
+    folderId === null &&
+    (filter === "all" || filter === "playlist") &&
+    t("nav.favorites").toLocaleLowerCase().includes(q);
+  return (
+    <section className="space-y-5">
+      <PageHeader
+        title={currentFolder?.name ?? t("nav.mediaLibrary")}
+        actions={
+          <div className="flex items-center gap-2">
+            {currentFolder && <LibraryFolderMenu folder={currentFolder} />}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  disabled={!folderResult.data}
+                  aria-label={t("action.create")}
+                >
+                  <PlusIcon size={20} />
+                  {t("action.create")}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onSelect={() => setCreating(true)}>
+                  {t("playlists.new")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setCreatingFolder(true)}>
+                  <FolderIcon size={16} />
+                  {t("folders.new")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        }
+      />
+      {currentFolder && (
+        <nav className="flex flex-wrap items-center gap-1 text-sm" aria-label={t("folders.path")}>
+          <Button
+            variant="text"
+            size="sm"
+            onClick={() => openFolder(null)}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => drop(e, null)}
+          >
+            {t("nav.mediaLibrary")}
+          </Button>
+          {folderTrail(folders, folderId).map((folder) => (
+            <span key={folder.id} className="inline-flex items-center">
+              <ChevronRightIcon size={14} />
+              <Button
+                variant="text"
+                size="sm"
+                onClick={() => openFolder(folder.id)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => drop(e, folder.id)}
+              >
+                {folder.name}
+              </Button>
+            </span>
+          ))}
+        </nav>
+      )}
+      <ToggleGroup aria-label={t("nav.mediaLibrary")}>
+        {filters.map(([value, label]) => (
+          <ToggleGroupButton key={value} active={filter === value} onClick={() => setFilter(value)}>
+            {label}
+          </ToggleGroupButton>
+        ))}
+      </ToggleGroup>
+      <PageToolbar search={search} onSearch={setSearch} placeholder={t("collection.search")}>
+        <SortSelect
+          value={sort}
+          onChange={setSort}
+          label={t("collection.sort")}
+          options={{ recent: "collection.recent", name: "collection.name" }}
+        />
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={t(grid ? "collection.list" : "collection.grid")}
+          onClick={() => setGrid(!grid)}
+        >
+          {grid ? <ListIcon /> : <Grid2X2Icon />}
+        </Button>
+      </PageToolbar>
+      <Query result={folderResult}>
+        {() => (
+          <Query result={result}>
+            {(items) => {
+              const shown = items
+                .filter(
+                  (item) =>
+                    (q ? true : (item.folderId ?? null) === folderId) &&
+                    (filter === "all" || item.kind === filter) &&
+                    `${item.title} ${item.subtitle}`.toLocaleLowerCase().includes(q),
+                )
+                .sort((a, b) =>
+                  sort === "name"
+                    ? a.title.localeCompare(b.title)
+                    : Date.parse(b.savedAt) - Date.parse(a.savedAt),
+                );
+              const shownFolders = folders
+                .filter((folder) =>
+                  q ? folder.name.toLocaleLowerCase().includes(q) : folder.parentId === folderId,
+                )
+                .sort((a, b) =>
+                  sort === "name"
+                    ? a.name.localeCompare(b.name)
+                    : Date.parse(b.createdAt) - Date.parse(a.createdAt),
+                );
+              return (
+                <>
+                  <LibraryLayout grid={grid}>
+                    {favorites && (
+                      <Card
+                        layout={grid ? "grid" : "list"}
+                        href="/favorites"
+                        title={t("nav.favorites")}
+                        subtitle={t("playlists.kind")}
+                        details={
+                          favoriteResult.data
+                            ? t("count.tracks", { count: favoriteResult.data.total })
+                            : undefined
+                        }
+                        cover={
+                          <div className="grid size-full place-items-center bg-primary-soft text-primary">
+                            <HeartIcon size={32} />
+                          </div>
+                        }
+                      />
+                    )}
+                    {shownFolders.map((folder) => (
+                      <div
+                        key={folder.id}
+                        draggable={!organize.isPending}
+                        onDragStart={(e) =>
+                          e.dataTransfer.setData(
+                            "application/x-caimack-library",
+                            JSON.stringify({ id: folder.id, kind: "folder" }),
+                          )
+                        }
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => drop(e, folder.id)}
+                      >
+                        <Card
+                          layout={grid ? "grid" : "list"}
+                          onClick={() => openFolder(folder.id)}
+                          title={folder.name}
+                          subtitle={t("folders.items", {
+                            count:
+                              items.filter((item) => item.folderId === folder.id).length +
+                              folders.filter((child) => child.parentId === folder.id).length,
+                          })}
+                          cover={
+                            <div className="grid size-full place-items-center bg-raised text-primary">
+                              <FolderIcon size={32} />
+                            </div>
+                          }
+                          menu={<LibraryFolderMenu folder={folder} />}
+                        />
+                      </div>
+                    ))}
+                    {shown.map((item) => (
+                      <div
+                        key={`${item.kind}:${item.id}`}
+                        draggable={!organize.isPending}
+                        onDragStart={(e) =>
+                          e.dataTransfer.setData(
+                            "application/x-caimack-library",
+                            JSON.stringify({ id: item.id, kind: item.kind }),
+                          )
+                        }
+                      >
+                        <SavedLibraryCard item={item} layout={grid ? "grid" : "list"} />
+                      </div>
+                    ))}
+                  </LibraryLayout>
+                  {shown.length === 0 && shownFolders.length === 0 && !favorites && (
+                    <EmptyState
+                      title={t(q ? "collection.noResults" : "collection.empty")}
+                      description={t(currentFolder ? "folders.emptyHint" : "collection.hint")}
+                    />
+                  )}
+                </>
+              );
+            }}
+          </Query>
+        )}
+      </Query>
+      <nav aria-label={t("collection.catalog")} className="border-t border-border pt-4">
+        <p className="mb-3 text-sm text-muted-foreground">{t("collection.catalog")}</p>
+        <div className="flex flex-wrap gap-4">
+          <Link href="/tracks">{t("nav.tracks")}</Link>
+          <Link href="/albums">{t("nav.albums")}</Link>
+          <Link href="/artists">{t("nav.artists")}</Link>
+          <Link href="/playlists">{t("nav.playlists")}</Link>
+          <Link href="/genres">{t("nav.genres")}</Link>
+          <Link href="/recently-played">{t("nav.recentlyPlayed")}</Link>
+        </div>
+      </nav>
+      {creating && (
+        <PlaylistDialog
+          onClose={() => setCreating(false)}
+          onSaved={() => invalidate("playlists")}
+          afterCreate={
+            folderId
+              ? async (id) => {
+                  await api.organizeLibrary({
+                    operation: "moveItem",
+                    kind: "playlist",
+                    id,
+                    folderId,
+                  });
+                }
+              : undefined
+          }
+        />
+      )}
+      {creatingFolder && (
+        <LibraryFolderEditor parentId={folderId} onClose={() => setCreatingFolder(false)} />
+      )}
+    </section>
+  );
+}
+
+function LibraryLayout({ grid, children }: { grid: boolean; children: ReactNode }) {
+  return grid ? <CardGrid>{children}</CardGrid> : <div className="space-y-1">{children}</div>;
+}

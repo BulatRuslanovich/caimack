@@ -36,6 +36,9 @@ class Session(
     private val cookies: PersistentCookieJar,
     private val json: Json,
     private val deviceName: () -> String,
+    private val offlineUser: () -> User? = { null },
+    private val onLogin: (User) -> Unit = {},
+    private val onLogout: () -> Unit = {},
 ) {
     private val current = MutableStateFlow<SessionState>(SessionState.Restoring)
 
@@ -47,6 +50,12 @@ class Session(
 
         val hinted = cookies.value(HINT_COOKIE)?.let { hint ->
             runCatching { json.decodeFromString<User>(String(Base64.getUrlDecoder().decode(hint))) }.getOrNull()
+        } ?: offlineUser()
+
+        // Restore the local UI before checking the server, including accounts
+        // with individual downloads but no full library synchronization.
+        if (server.url.value != null && hinted != null) {
+            current.value = SessionState.SignedIn(hinted)
         }
 
         current.value = when {
@@ -56,7 +65,7 @@ class Session(
             } catch (_: IOException) {
                 SessionState.SignedIn(hinted)
             } catch (failure: HttpException) {
-                if (failure.code() == UNAUTHORIZED) SessionState.SignedOut(expired = true) else SessionState.SignedIn(hinted)
+                if (failure.code() == UNAUTHORIZED) offlineUser()?.let { SessionState.SignedIn(it) } ?: SessionState.SignedOut(expired = true) else SessionState.SignedIn(hinted)
             }
         }
     }
@@ -66,7 +75,9 @@ class Session(
         cookies.clear()
 
         return try {
-            current.value = SessionState.SignedIn(api.login(LoginRequest(username.trim(), password, deviceName(), longLived = true)))
+            val user = api.login(LoginRequest(username.trim(), password, deviceName(), longLived = true))
+            onLogin(user)
+            current.value = SessionState.SignedIn(user)
             null
         } catch (_: IOException) {
             LoginFailure.Unreachable
@@ -77,6 +88,7 @@ class Session(
     }
 
     suspend fun logout() {
+        onLogout()
         try {
             api.logout()
         } catch (_: IOException) {
@@ -87,6 +99,7 @@ class Session(
     }
 
     fun expire() {
+        offlineUser()?.let { current.value = SessionState.SignedIn(it); return }
         cookies.clear()
         current.value = SessionState.SignedOut(expired = true)
     }

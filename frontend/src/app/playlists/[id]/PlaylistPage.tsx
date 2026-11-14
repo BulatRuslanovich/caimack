@@ -3,6 +3,7 @@
 
 "use client";
 
+import { LibrarySaveButton } from "@/components/LibrarySaveButton";
 import dynamic from "next/dynamic";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
@@ -119,6 +120,7 @@ export function PlaylistPage() {
               actions={
                 <>
                   <PlayAllButton tracks={detail.tracks} name={detail.name} />
+                  <LibrarySaveButton kind="playlist" id={id} />
                   {isOwner && (
                     <>
                       <Button onClick={() => setEditing(true)}>

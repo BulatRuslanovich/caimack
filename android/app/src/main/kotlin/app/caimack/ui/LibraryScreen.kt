@@ -1,54 +1,322 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 package app.caimack.ui
 
+import androidx.compose.animation.core.Spring
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import app.caimack.R
+import app.caimack.api.LibraryItem
+import app.caimack.api.LibraryFolder
+import app.caimack.api.LibraryChange
+import java.time.Instant
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+internal const val SAVED_LIBRARY = "saved-library"
+internal val libraryMutation = Mutex()
 
 @Composable
 fun LibraryScreen(nav: NavController) {
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(bottom = 24.dp)) {
-        item { PageTitle(stringResource(R.string.nav_library), stringResource(R.string.library_intro)) }
-        item { LibraryShortcuts({ nav.navigate(FavoritesRoute) }, { nav.navigate(DownloadsRoute) }) }
-        item { LibraryEntry(stringResource(R.string.nav_tracks), stringResource(R.string.library_tracks_hint), Lucide.AudioLines) { nav.navigate(TracksRoute) } }
-        item { LibraryEntry(stringResource(R.string.nav_albums), stringResource(R.string.library_albums_hint), Lucide.Disc3) { nav.navigate(AlbumsRoute) } }
-        item { LibraryEntry(stringResource(R.string.nav_artists), stringResource(R.string.library_artists_hint), Lucide.UsersRound) { nav.navigate(ArtistsRoute) } }
-        item { LibraryEntry(stringResource(R.string.nav_playlists), stringResource(R.string.library_playlists_hint), Lucide.ListMusic) { nav.navigate(PlaylistsRoute) } }
-        item { LibraryEntry(stringResource(R.string.nav_recently_played), null, Lucide.History) { nav.navigate(RecentRoute) } }
-        item { LibraryEntry(stringResource(R.string.nav_genres), null, Lucide.Tags) { nav.navigate(GenresRoute) } }
+    val api = LocalContainer.current.api
+    Column(Modifier.fillMaxSize()) {
+        LibraryEntry(stringResource(R.string.downloads_title), pluralStringResource(R.plurals.count_tracks, LocalAvailableTracks.current.size, LocalAvailableTracks.current.size), Lucide.Download) {
+            nav.navigate(DownloadsRoute)
+        }
+        Box(Modifier.weight(1f)) {
+            Load(LIBRARY_FOLDERS, { api.libraryFolders() }) { folders -> LibraryBrowser(nav, folders) }
+        }
     }
 }
 
 @Composable
-internal fun LibraryEntry(title: String, hint: String?, icon: ImageVector, onClick: () -> Unit) {
+internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
+    val container = LocalContainer.current
+    val local = LocalOfflineLibrary.current
+    val api = catalogApi()
     val palette = LocalPalette.current
-    Row(
-        Modifier.padding(horizontal = 16.dp, vertical = 3.dp).fillMaxWidth()
-            .clip(Radius.row).clickable(role = Role.Button, onClick = onClick)
-            .heightIn(min = 64.dp).padding(vertical = 10.dp, horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Box(Modifier.size(44.dp).clip(Radius.cover).background(palette.card), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = palette.primary, modifier = Modifier.size(22.dp))
+    var filter by rememberSaveable { mutableStateOf("all") }
+    var search by rememberSaveable { mutableStateOf("") }
+    var favoriteCount by remember(local) { mutableStateOf<Int?>(null) }
+    LaunchedEffect(local) {
+        try { favoriteCount = api.favorites(1, 1).total }
+        catch (error: Exception) { if (error is CancellationException) throw error }
+    }
+    var alphabetical by rememberSaveable { mutableStateOf(false) }
+    var grid by rememberSaveable { mutableStateOf(false) }
+    var creating by remember { mutableStateOf(false) }
+    var createMenu by remember { mutableStateOf(false) }
+    var creatingFolder by remember { mutableStateOf(false) }
+    var selectedFolder by rememberSaveable { mutableStateOf<String?>(null) }
+    val currentFolder = folders.find { it.id == selectedFolder }
+    val folderId = currentFolder?.id
+    BackHandler(currentFolder != null) { selectedFolder = currentFolder?.parentId }
+    var catalog by rememberSaveable { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val query = search.trim()
+    val showFavorites = folderId == null && (filter == "all" || filter == "playlist") && stringResource(R.string.nav_favorites).contains(query, ignoreCase = true)
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        if (!local) scope.launch {
+            libraryMutation.withLock {
+                try {
+                    refreshLibrary(container.api)
+                } catch (error: Exception) {
+                    if (error is CancellationException) throw error
+                    // Load retains cached content and exposes retry on the initial failure.
+                }
+            }
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(title, style = Type.body)
-            hint?.let { Text(it, style = Type.small, color = palette.muted) }
+    }
+    if (creating) PlaylistDialog(stringResource(R.string.playlist_new), onDismiss = { creating = false }) { changes ->
+        val created = container.api.createPlaylist(changes)
+        if (folderId != null) container.api.organizeLibrary(LibraryChange("moveItem", created.id, kind = "playlist", folderId = folderId))
+        Remote.cache.remove("playlists:mine")
+        Remote.cache.remove(SAVED_LIBRARY)
+        withContext(Dispatchers.Main) {
+            creating = false
+            nav.navigate(PlaylistRoute(created.id))
         }
-        Icon(Lucide.ChevronRight, null, tint = palette.muted, modifier = Modifier.size(18.dp))
+    }
+    if (creatingFolder) LibraryFolderEditor(parentId = folderId) { creatingFolder = false }
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (currentFolder != null) IconButton(onClick = { selectedFolder = currentFolder.parentId }) { Icon(Lucide.ArrowLeft, stringResource(R.string.folders_up)) }
+            Text(currentFolder?.name ?: stringResource(R.string.nav_library), style = Type.title, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (currentFolder != null) LibraryFolderMenu(currentFolder, folders)
+            if (!local) Box {
+                IconButton(onClick = { createMenu = true }) { Icon(Lucide.Plus, stringResource(R.string.folders_create)) }
+                DropdownMenu(createMenu, onDismissRequest = { createMenu = false }) {
+                    DropdownMenuItem(text = { Text(stringResource(R.string.playlist_new)) }, onClick = { createMenu = false; creating = true })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.folders_new)) }, leadingIcon = { Icon(Lucide.Folder, null) }, onClick = { createMenu = false; creatingFolder = true })
+                }
+            }
+        }
+        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (filter != "all") item(key = "clear") {
+                IconButton(
+                    onClick = { filter = "all" },
+                    modifier = Modifier.animateItem(
+                        fadeInSpec = tween(220),
+                        placementSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
+                        fadeOutSpec = tween(140),
+                    ),
+                ) {
+                    Icon(Lucide.X, stringResource(R.string.collection_clear_filter), tint = palette.muted)
+                }
+            }
+            items(listOf("playlist" to R.string.nav_playlists, "album" to R.string.nav_albums, "artist" to R.string.nav_artists).filter { filter == "all" || it.first == filter }, key = { it.first }) { (kind, label) ->
+                FilterChip(
+                    modifier = Modifier.animateItem(
+                        fadeInSpec = tween(220),
+                        placementSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
+                        fadeOutSpec = tween(140),
+                    ),
+                    selected = filter == kind,
+                    onClick = { filter = if (filter == kind) "all" else kind },
+                    label = { Text(stringResource(label)) },
+                    shape = CircleShape,
+                    border = null,
+                    colors = FilterChipDefaults.filterChipColors(
+                        containerColor = palette.raised, labelColor = palette.foreground,
+                        selectedContainerColor = palette.primary, selectedLabelColor = palette.onPrimary,
+                    ),
+                )
+            }
+        }
+        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+            SearchInput(search, { search = it }, stringResource(R.string.collection_search))
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = { alphabetical = !alphabetical }, modifier = Modifier.weight(1f)) { Text(stringResource(if (alphabetical) R.string.collection_name else R.string.collection_recent), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            Box {
+                IconButton(onClick = { catalog = true }) { Icon(Lucide.LibraryBig, stringResource(R.string.collection_catalog)) }
+                DropdownMenu(expanded = catalog, onDismissRequest = { catalog = false }) {
+                    listOf(
+                        R.string.nav_tracks to TracksRoute, R.string.nav_albums to AlbumsRoute,
+                        R.string.nav_artists to ArtistsRoute, R.string.nav_playlists to PlaylistsRoute,
+                        R.string.nav_genres to GenresRoute, R.string.nav_recently_played to RecentRoute,
+                    ).forEach { (label, route) ->
+                        DropdownMenuItem(text = { Text(stringResource(label)) }, onClick = { catalog = false; nav.navigate(route) })
+                    }
+                }
+            }
+            IconButton(onClick = { grid = !grid }) { Icon(if (grid) Lucide.List else Lucide.LayoutGrid, stringResource(if (grid) R.string.collection_list else R.string.collection_grid)) }
+        }
+        Load(SAVED_LIBRARY, { api.savedLibrary() }) { library ->
+            val shown = library.filter { (query.isNotEmpty() || it.folderId == folderId) && (filter == "all" || it.kind == filter) && "${it.title} ${it.subtitle}".contains(query, ignoreCase = true) }
+                .let { if (alphabetical) it.sortedBy { item -> item.title.lowercase() } else it.sortedByDescending { item -> Instant.parse(item.savedAt) } }
+            val shownFolders = folders.filter { if (query.isEmpty()) it.parentId == folderId else it.name.contains(query, ignoreCase = true) }
+                .let { if (alphabetical) it.sortedBy { folder -> folder.name.lowercase() } else it.sortedByDescending { folder -> folder.createdAt } }
+            val density = LocalLibraryDensity.current
+            LazyVerticalGrid(
+                columns = if (grid) GridCells.Adaptive(density.cardWidth) else GridCells.Fixed(1),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = playerContentPadding(start = if (grid) 16.dp else 0.dp, end = if (grid) 16.dp else 0.dp, bottom = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(if (grid) density.gap else 0.dp),
+                verticalArrangement = Arrangement.spacedBy(if (grid) 20.dp else 0.dp),
+            ) {
+                if (showFavorites) item(key = "favorites") {
+                    LibraryEntry(stringResource(R.string.nav_favorites), stringResource(R.string.playlists_kind), Lucide.Heart,
+                        grid = grid, details = favoriteCount?.let { pluralStringResource(R.plurals.count_tracks, it, it) },
+                    ) { nav.navigate(FavoritesRoute) }
+                }
+                items(shownFolders, key = { "folder:" + it.id }) { folder ->
+                    LibraryFolderView(folder, folders, library.count { it.folderId == folder.id } + folders.count { it.parentId == folder.id }, grid) { selectedFolder = folder.id }
+                }
+                items(shown, key = { "${it.kind}:${it.id}" }) { item -> LibraryItemView(item, library, folders, nav, grid) }
+                if (shown.isEmpty() && shownFolders.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
+                    if (showFavorites) Text(stringResource(R.string.collection_hint), style = Type.small, color = LocalPalette.current.muted, modifier = Modifier.padding(24.dp))
+                    else Empty(stringResource(if (query.isNotEmpty()) R.string.collection_no_results else R.string.collection_empty), stringResource(if (currentFolder != null) R.string.folders_empty_hint else R.string.collection_hint))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LibraryItemView(item: LibraryItem, library: List<LibraryItem>, folders: List<LibraryFolder>, nav: NavController, grid: Boolean, modifier: Modifier = Modifier) {
+    val local = LocalOfflineLibrary.current
+    val availableTracks = LocalAvailableTracks.current
+    val container = LocalContainer.current
+    val hasAudio = remember(item.kind, item.id, availableTracks) { container.downloadedCatalog.availableCollection(item.kind, item.id) }
+    val availability = Modifier.alpha(if (local && !hasAudio) 0.45f else 1f)
+    val media = container.media
+    val url = when (item.kind) {
+        "album" -> media.cover(item.id, null, item.hasImage, small = true)
+        "artist" -> media.artistImage(item.id, item.hasImage, small = true)
+        else -> media.playlistCover(item.id, item.hasImage, item.coverTrackId, true)
+    }
+    val kind = stringResource(when (item.kind) { "album" -> R.string.albums_kind; "artist" -> R.string.artists_kind; else -> R.string.playlists_kind })
+    val open = { when (item.kind) { "album" -> nav.navigate(AlbumRoute(item.id)); "artist" -> nav.navigate(ArtistRoute(item.id)); else -> nav.navigate(PlaylistRoute(item.id)) } }
+    val details = listOfNotNull(
+        item.trackCount?.let { pluralStringResource(R.plurals.count_tracks, it, it) },
+        item.albumCount?.takeIf { item.kind == "artist" }?.let { pluralStringResource(R.plurals.count_albums, it, it) },
+        item.durationSeconds?.takeIf { item.kind != "artist" && it > 0 }?.let { durationOf(it) },
+    ).joinToString(" · ")
+    Card(item.title, listOfNotNull(kind, item.subtitle.takeIf { it.isNotBlank() }, item.year?.toString()).joinToString(" · "), open,
+        modifier = modifier.then(availability), round = item.kind == "artist", toneUrl = url,
+        list = !grid, details = details,
+        menu = if (local) null else { { LibraryItemMenu(item, library, folders) } },
+    ) { Cover(url, item.title, it, round = item.kind == "artist") }
+
+}
+
+@Composable
+private fun LibraryItemMenu(item: LibraryItem, library: List<LibraryItem>, folders: List<LibraryFolder>) {
+    var expanded by remember(item.id) { mutableStateOf(false) }
+    var moving by remember(item.id) { mutableStateOf(false) }
+    if (moving) LibraryMoveDialog(item.id, item.kind, item.folderId, folders) { moving = false }
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(Lucide.EllipsisVertical, stringResource(R.string.menu_more), tint = LocalPalette.current.muted)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(text = { Text(stringResource(R.string.folders_move)) }, leadingIcon = { Icon(Lucide.Folder, null) }, onClick = { expanded = false; moving = true })
+            LibraryToggle(item.kind, item.id, library, menu = true, onChanged = { expanded = false })
+        }
+    }
+}
+
+@Composable
+internal fun LibrarySaveButton(kind: String, id: String) {
+    if (LocalOfflineLibrary.current) return
+    val api = LocalContainer.current.api
+    @Suppress("UNCHECKED_CAST")
+    var library by remember { mutableStateOf(Remote.cache[SAVED_LIBRARY] as? List<LibraryItem>) }
+    var failed by remember { mutableStateOf(false) }
+    var attempt by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        Remote.updates.collect { (key, value) ->
+            if (key == SAVED_LIBRARY) {
+                @Suppress("UNCHECKED_CAST")
+                library = value as List<LibraryItem>
+            }
+        }
+    }
+    LaunchedEffect(attempt) {
+        failed = false
+        try {
+            libraryMutation.withLock { Remote.update(SAVED_LIBRARY, api.savedLibrary()) }
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            failed = true
+        }
+    }
+    val loaded = library
+    if (loaded != null) LibraryToggle(kind, id, loaded)
+    else IconButton(onClick = { attempt++ }, enabled = failed) {
+        Icon(Lucide.CirclePlus, stringResource(if (failed) R.string.action_try_again else R.string.collection_add), tint = LocalPalette.current.faint)
+    }
+}
+
+@Composable
+private fun LibraryToggle(kind: String, id: String, library: List<LibraryItem>, modifier: Modifier = Modifier, menu: Boolean = false, onChanged: () -> Unit = {}) {
+    val container = LocalContainer.current
+    val scope = rememberCoroutineScope()
+    val snackbar = LocalSnackbar.current
+    var pending by remember(kind, id) { mutableStateOf(false) }
+    val saved = library.any { it.kind == kind && it.id == id }
+    val failure = stringResource(R.string.collection_failed)
+    val label = stringResource(if (saved) R.string.collection_remove else R.string.collection_add)
+    val toggle = {
+        scope.launch {
+            pending = true
+            try {
+                libraryMutation.withLock {
+                    if (saved) container.api.removeLibraryItem(kind, id) else container.api.saveLibraryItem(kind, id)
+                    Remote.update(SAVED_LIBRARY, container.api.savedLibrary())
+                    onChanged()
+                }
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                snackbar.showSnackbar(failure)
+            } finally { pending = false }
+        }
+        Unit
+    }
+    val icon: @Composable () -> Unit = { LibrarySaveIcon(saved, label) }
+    if (menu) DropdownMenuItem(
+        text = { Text(label) }, leadingIcon = icon, enabled = !pending, onClick = toggle,
+    ) else IconButton(onClick = toggle, enabled = !pending, modifier = modifier.semantics { selected = saved }) { icon() }
+}
+
+@Composable
+internal fun LibraryEntry(title: String, hint: String?, icon: ImageVector, grid: Boolean = false, details: String? = null, onClick: () -> Unit) {
+    val palette = LocalPalette.current
+    Card(title, hint.orEmpty(), onClick, list = !grid, details = details) { modifier ->
+        Box(modifier.clip(Radius.cover).background(palette.primarySoft), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = palette.primary, modifier = Modifier.size(if (grid) 34.dp else 24.dp))
+        }
     }
 }

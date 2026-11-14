@@ -244,60 +244,71 @@ pub struct LyricsDto {
     pub original_lyrics: Option<String>,
 }
 
-pub async fn get(db: &PgPool, track_id: Uuid) -> AppResult<Option<LyricsDto>> {
-    #[derive(sqlx::FromRow)]
-    struct Row {
-        track_id: Uuid,
-        plain: String,
-        synced: Json<Vec<LyricLine>>,
-        source: i32,
-        provider: Option<String>,
-        source_format: Option<String>,
-        attribution: serde_json::Value,
-        original_lyrics: Option<String>,
-        track_title: String,
-        track_artist: String,
-    }
-    let row = sqlx::query_as::<_, Row>(
-        "SELECT l.track_id,l.plain,l.synced,l.source,l.provider,l.source_format,l.attribution,l.original_lyrics,
+#[derive(sqlx::FromRow)]
+struct StoredLyrics {
+    track_id: Uuid,
+    plain: String,
+    synced: Json<Vec<LyricLine>>,
+    source: i32,
+    provider: Option<String>,
+    source_format: Option<String>,
+    attribution: serde_json::Value,
+    original_lyrics: Option<String>,
+    track_title: String,
+    track_artist: String,
+}
+const SELECT_LYRICS: &str =
+    "SELECT l.track_id,l.plain,l.synced,l.source,l.provider,l.source_format,l.attribution,l.original_lyrics,
                 t.title AS track_title,ar.name AS track_artist
-         FROM track_lyrics l JOIN tracks t ON t.id=l.track_id JOIN artists ar ON ar.id=t.artist_id WHERE l.track_id=$1",
-    )
-    .bind(track_id)
-    .fetch_optional(db)
-    .await?;
+         FROM track_lyrics l JOIN tracks t ON t.id=l.track_id JOIN artists ar ON ar.id=t.artist_id";
 
-    Ok(row.and_then(|row| {
-        let parsed =
-            ParsedLyrics { plain: row.plain, lines: row.synced.0 }.clean_for_track(&row.track_title, &row.track_artist);
-        if parsed.is_empty() {
-            return None;
-        }
-        let sync_type = if parsed.lines.iter().any(|line| !line.words.is_empty()) {
-            if row.source_format.as_deref() == Some("ttml") { "syllable" } else { "word" }
-        } else if parsed.lines.is_empty() {
-            "plain"
+pub async fn get(db: &PgPool, track_id: Uuid) -> AppResult<Option<LyricsDto>> {
+    let mut query = sqlx::QueryBuilder::new(SELECT_LYRICS);
+    query.push(" WHERE l.track_id=").push_bind(track_id);
+    let row = query.build_query_as::<StoredLyrics>().fetch_optional(db).await?;
+
+    Ok(row.and_then(lyric_dto))
+}
+
+pub(crate) async fn all(db: &mut sqlx::PgConnection) -> AppResult<Vec<LyricsDto>> {
+    Ok(sqlx::query_as::<_, StoredLyrics>(SELECT_LYRICS)
+        .fetch_all(db)
+        .await?
+        .into_iter()
+        .filter_map(lyric_dto)
+        .collect())
+}
+
+fn lyric_dto(row: StoredLyrics) -> Option<LyricsDto> {
+    let parsed =
+        ParsedLyrics { plain: row.plain, lines: row.synced.0 }.clean_for_track(&row.track_title, &row.track_artist);
+    if parsed.is_empty() {
+        return None;
+    }
+    let sync_type = if parsed.lines.iter().any(|line| !line.words.is_empty()) {
+        if row.source_format.as_deref() == Some("ttml") { "syllable" } else { "word" }
+    } else if parsed.lines.is_empty() {
+        "plain"
+    } else {
+        "line"
+    };
+    Some(LyricsDto {
+        track_id: row.track_id,
+        plain: parsed.plain,
+        lines: parsed.lines,
+        source: LyricsSource::from_db(row.source),
+        provider: row.provider,
+        sync_type,
+        attribution: row.attribution,
+        original_lyrics: if sync_type == "plain"
+            && row.source == LyricsSource::Provider as i32
+            && !matches!(row.source_format.as_deref(), Some("plain" | "text" | "txt"))
+        {
+            None
         } else {
-            "line"
-        };
-        Some(LyricsDto {
-            track_id: row.track_id,
-            plain: parsed.plain,
-            lines: parsed.lines,
-            source: LyricsSource::from_db(row.source),
-            provider: row.provider,
-            sync_type,
-            attribution: row.attribution,
-            original_lyrics: if sync_type == "plain"
-                && row.source == LyricsSource::Provider as i32
-                && !matches!(row.source_format.as_deref(), Some("plain" | "text" | "txt"))
-            {
-                None
-            } else {
-                row.original_lyrics
-            },
-        })
-    }))
+            row.original_lyrics
+        },
+    })
 }
 
 /// Prioritize visible tracks while preserving provider failure/negative-cache backoff.

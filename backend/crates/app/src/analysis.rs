@@ -111,8 +111,27 @@ async fn run_pass(
                 continue;
             }
             let started = Instant::now();
+            // All audio workers acquire capacity before row locks, avoiding a
+            // semaphore/row-lock cycle with queued renames or metadata exports.
+            let permit = tokio::select! {
+                () = cancel.cancelled() => return Ok(analysed),
+                permit = crate::background::permit() => permit?,
+            };
+            // Batch paths can become stale while earlier tracks are being analysed.
+            // Hold a shared row lock while reading; the renamer takes FOR UPDATE.
+            let mut reading = db.begin().await?;
+            let source: Option<String> =
+                sqlx::query_scalar("SELECT file_path FROM tracks WHERE id=$1 AND content_hash=$2 FOR SHARE")
+                    .bind(track.id)
+                    .bind(&track.content_hash)
+                    .fetch_optional(&mut *reading)
+                    .await?;
+            let Some(source) = source else {
+                continue;
+            };
             let outcome =
-                analyze(storage, embedder, &track.file_path, f64::from(track.duration_seconds), track.embed).await?;
+                analyze(storage, embedder, &source, f64::from(track.duration_seconds), track.embed, permit).await?;
+            reading.rollback().await?;
             if outcome.embedding_unavailable {
                 embedder = None;
             }
@@ -177,13 +196,11 @@ async fn analyze(
     file_path: &str,
     duration: f64,
     embed: bool,
+    permit: tokio::sync::OwnedSemaphorePermit,
 ) -> anyhow::Result<Outcome> {
     let Some(source) = storage.existing(file_path) else {
         tracing::warn!("Track at {file_path} cannot be analysed: the file is missing from storage");
         return Ok(Outcome::failed(embed, "source_missing"));
-    };
-    let Ok(permit) = crate::background::permit().await else {
-        return Ok(Outcome::failed(embed, "worker_closed"));
     };
     let work = tokio::task::spawn_blocking(move || -> anyhow::Result<Analysis> {
         let _permit = permit;
@@ -244,6 +261,19 @@ async fn save(db: &PgPool, track: Uuid, content_hash: &str, outcome: &Outcome) -
     let cues = outcome.cues.as_ref();
     let mut tx = db.begin().await?;
 
+    // Only the current file or its stable audio identity can reuse this result.
+    // Historical export hashes can belong to audio replaced since that export.
+    let current: Option<String> = sqlx::query_scalar(
+        "SELECT content_hash FROM tracks WHERE id=$1 AND (content_hash=$2 OR media_cache_hash=$2) FOR UPDATE",
+    )
+    .bind(track)
+    .bind(content_hash)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let Some(current) = current else {
+        return Ok(());
+    };
+    let content_hash = current.as_str();
     let loudness = outcome.loudness.as_ref();
     sqlx::query!(
         "INSERT INTO track_cues (track_id, source_hash, version, succeeded, audio_start_seconds, audio_end_seconds,
@@ -443,6 +473,37 @@ mod tests {
         );
         assert_eq!(run_pass(&db, &storage, Some(&client), &index, &cancel).await?, 0);
         std::fs::remove_dir_all(root)?;
+        Ok(())
+    }
+
+    #[cfg(feature = "integration-tests")]
+    #[sqlx::test(migrations = "../../../db/migrations")]
+    async fn historical_exports_cannot_rebase_analysis_of_replaced_audio(db: PgPool) -> anyhow::Result<()> {
+        let artist = Uuid::now_v7();
+        let track = Uuid::now_v7();
+        sqlx::query("INSERT INTO artists(id,name,normalized_name,created_at) VALUES($1,'Artist','artist',now())")
+            .bind(artist)
+            .execute(&db)
+            .await?;
+        sqlx::query("INSERT INTO tracks(id,title,normalized_title,artist_id,duration_seconds,file_path,original_file_name,mime_type,file_size,content_hash,media_cache_hash,created_at) VALUES($1,'Song','song',$2,12,'music/song.mp3','song.mp3','audio/mpeg',1,'replacement-exported','replacement',now())")
+            .bind(track).bind(artist).execute(&db).await?;
+        sqlx::query("INSERT INTO file_metadata_exports(id,track_id,source_path,old_hash,new_hash,files,completed_at) VALUES($1,$2,'music/song.mp3','old-audio','old-exported','[]'::jsonb,now())")
+            .bind(Uuid::now_v7()).bind(track).execute(&db).await?;
+        save(&db, track, "old-audio", &Outcome::failed(false, "test")).await?;
+        save(&db, track, "old-exported", &Outcome::failed(false, "test")).await?;
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>("SELECT count(*) FROM track_cues WHERE track_id=$1")
+                .bind(track)
+                .fetch_one(&db)
+                .await?,
+            0
+        );
+        save(&db, track, "replacement", &Outcome::failed(false, "test")).await?;
+        let hash: String = sqlx::query_scalar("SELECT source_hash FROM track_cues WHERE track_id=$1")
+            .bind(track)
+            .fetch_one(&db)
+            .await?;
+        assert_eq!(hash, "replacement-exported");
         Ok(())
     }
 

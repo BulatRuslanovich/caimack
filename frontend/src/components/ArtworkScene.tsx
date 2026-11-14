@@ -22,7 +22,7 @@ export function ArtworkScene({
   children: ReactNode;
 }) {
   const src = trackCoverUrl(track, "thumb");
-  const tone = useCoverTone(src, "backdrop");
+  const tone = useCoverTone(src, "player");
   const scene = useArtworkTransition({
     key: `${track.id}:${src ?? ""}`,
     item: track,

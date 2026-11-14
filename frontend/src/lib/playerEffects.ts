@@ -25,7 +25,7 @@ export interface PlayerEffectsState {
   sensitivity: number;
 }
 const KEY = "music-streaming.player-effects";
-const DEFAULT: PlayerEffectsState = { effect: "glass", intensity: 65, sensitivity: 65 };
+const DEFAULT: PlayerEffectsState = { effect: "off", intensity: 65, sensitivity: 65 };
 let state = DEFAULT;
 let loaded = false;
 const listeners = new Set<() => void>();

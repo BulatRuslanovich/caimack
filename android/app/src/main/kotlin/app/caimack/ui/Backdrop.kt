@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
@@ -59,6 +60,14 @@ fun ArtBackdrop(
 ) {
     if (url == null) return
     val palette = LocalPalette.current
+    if (mode == BackdropMode.Header) {
+        val surface = rememberPlayerSurface(url)
+        val top by androidx.compose.animation.animateColorAsState(Color(surface.top), tween(600), label = "header-colour")
+        Canvas(modifier.clipToBounds()) {
+            drawRect(Brush.verticalGradient(0f to top, 0.62f to top.copy(alpha = 0.38f), 1f to Color.Transparent))
+        }
+        return
+    }
     val context = LocalPlatformContext.current
 
     key(url) {
