@@ -4,9 +4,10 @@
 package app.caimack.session
 
 import androidx.datastore.core.DataStore
+import androidx.datastore.core.okio.OkioStorage
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.PreferencesSerializer
 import app.caimack.api.CaimackApi
 import app.caimack.api.User
 import java.io.File
@@ -18,11 +19,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.job
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import mockwebserver3.Dispatcher
 import mockwebserver3.MockResponse
@@ -31,6 +31,8 @@ import mockwebserver3.RecordedRequest
 import okhttp3.Cookie
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okio.FileSystem
+import okio.Path.Companion.toPath
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -52,7 +54,14 @@ class SessionTest {
     fun start() = runBlocking {
         web.start()
         directory = Files.createTempDirectory("restore-session").toFile()
-        preferences = PreferenceDataStoreFactory.create(scope = scope) { File(directory, "session.preferences_pb") }
+        // JVM tests have a stubbed Android SDK level; use portable atomic file
+        // replacement instead of FileStorage's legacy Android rename fallback.
+        preferences = PreferenceDataStoreFactory.create(
+            storage = OkioStorage(FileSystem.SYSTEM, PreferencesSerializer) {
+                File(directory, "session.preferences_pb").absolutePath.toPath()
+            },
+            scope = scope,
+        )
         Server(preferences).remember(web.url("/").toString())
         Unit
     }
@@ -129,8 +138,11 @@ class SessionTest {
         val cookie = Cookie.Builder().name("ms_session").value(hint)
             .hostOnlyDomain(web.url("/").host).path("/")
             .expiresAt(System.currentTimeMillis() + 60_000).build()
-        PersistentCookieJar(preferences, scope).saveFromResponse(web.url("/"), listOf(cookie))
-        withTimeout(5_000) { preferences.data.first { it[stringPreferencesKey("cookies")] != null } }
+        // Keep persistence in this fixture's scope so restoration starts only
+        // after the cookie write finishes, without a wall-clock deadline.
+        coroutineScope {
+            PersistentCookieJar(preferences, this).saveFromResponse(web.url("/"), listOf(cookie))
+        }
     }
 
     private fun session(offlineUser: () -> User? = { null }): Session {
