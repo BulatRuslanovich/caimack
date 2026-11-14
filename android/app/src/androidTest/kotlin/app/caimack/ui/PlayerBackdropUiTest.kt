@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -68,7 +69,7 @@ class PlayerBackdropUiTest {
                 CompositionLocalProvider(LocalContainer provides container) {
                     val currentAccent = rememberPlayerCoverTone(url)
                     SideEffect { accent = currentAccent }
-                    PlayerBackdrop(url, 0, 1, Modifier.fillMaxSize())
+                    PlayerBackdropFill(rememberPlayerSurface(url), Modifier.fillMaxSize().testTag("player-backdrop"))
                 }
             }
         }

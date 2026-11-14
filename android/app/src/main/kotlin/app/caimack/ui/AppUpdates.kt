@@ -14,10 +14,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -79,62 +79,92 @@ internal fun UpdatesSettings() {
 internal fun UpdatesPanel(state: UpdateState, onCheck: () -> Unit, onDetails: () -> Unit) {
     val palette = LocalPalette.current
     Column(
-        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        androidx.compose.foundation.layout.Box(
+            Modifier.size(72.dp).background(palette.primarySoft, androidx.compose.foundation.shape.CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (state.checking) androidx.compose.material3.CircularProgressIndicator(Modifier.size(32.dp), color = palette.primary, strokeWidth = 2.dp)
+            else Icon(when {
+                state.failed -> Lucide.TriangleAlert
+                state.release != null -> Lucide.Download
+                state.checked && state.published -> Lucide.CircleCheck
+                else -> Lucide.Disc3
+            }, null, Modifier.size(32.dp), tint = palette.primary)
+        }
         Text(stringResource(R.string.settings_updates), style = Type.heading, color = palette.foreground)
         Text(stringResource(R.string.update_installed, BuildConfig.VERSION_NAME), style = Type.small, color = palette.muted)
         Text(
             when {
                 !state.enabled -> stringResource(R.string.update_disabled)
-                state.release != null -> stringResource(R.string.update_available, state.release.version)
                 state.checking -> stringResource(R.string.update_checking)
+                state.release != null -> stringResource(R.string.update_available, state.release.version)
                 state.failed -> stringResource(R.string.update_failed)
                 state.checked && !state.published -> stringResource(R.string.update_no_releases)
                 state.checked -> stringResource(R.string.update_current)
                 else -> stringResource(R.string.settings_updates_intro)
             }, style = Type.body, color = palette.foreground,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
         if (state.release != null) {
-            TextButton(onClick = onDetails) {
-                Text(stringResource(R.string.update_whats_new), color = palette.primary)
+            Column(Modifier.fillMaxWidth().background(palette.card, Radius.tile).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Caimack ${state.release.version}", style = Type.section, color = palette.foreground)
+                Text(state.release.notes.ifBlank { stringResource(R.string.update_notes_empty) }.lines().joinToString("\n") { it.trimStart('#', ' ').replace("**", "") }, style = Type.small, color = palette.muted,
+                    maxLines = 4, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                androidx.compose.material3.Button(onClick = onDetails, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                    Text(stringResource(R.string.update_whats_new))
+                }
             }
             if (state.failed) Text(stringResource(R.string.update_failed), style = Type.small, color = palette.muted)
         }
-        if (state.enabled) TextButton(onClick = onCheck, enabled = !state.checking) {
-            Text(stringResource(if (state.checking) R.string.update_checking else R.string.update_check),
-                color = if (state.checking) palette.muted else palette.primary)
+        if (state.enabled) androidx.compose.material3.OutlinedButton(onClick = onCheck, enabled = !state.checking,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp, vertical = 14.dp)) {
+            Text(stringResource(if (state.checking) R.string.update_checking else R.string.update_check), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         }
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 internal fun UpdateDetails(release: AppRelease, onDismiss: () -> Unit) {
     val palette = LocalPalette.current
     val context = LocalContext.current
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = palette.card,
-        titleContentColor = palette.foreground,
-        textContentColor = palette.foreground,
-        title = { Text("Caimack ${release.version}", style = Type.heading) },
-        text = {
-            Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    val download = stringResource(R.string.update_download)
+    val hint = stringResource(R.string.update_download_hint)
+    val later = stringResource(R.string.update_later)
+    val notes = release.notes.ifBlank { stringResource(R.string.update_notes_empty) }
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss, containerColor = palette.popover,
+        sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(
+            Modifier.fillMaxWidth().heightIn(max = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp * 0.85f)
+                .padding(horizontal = 24.dp).padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text("Caimack ${release.version}", style = Type.heading, color = palette.foreground)
+            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 SelectionContainer {
-                    Text(release.notes.ifBlank { stringResource(R.string.update_notes_empty) }, style = Type.body)
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        notes.lines().filter { it.isNotBlank() }.forEach { line ->
+                            val heading = line.startsWith("#")
+                            val text = line.trimStart('#', ' ').removePrefix("- ").removePrefix("* ").replace("**", "")
+                            Text((if (line.startsWith("- ") || line.startsWith("* ")) "• " else "") + text,
+                                style = if (heading) Type.section else Type.body, color = palette.foreground)
+                        }
+                    }
                 }
-                Text(stringResource(R.string.update_download_hint), style = Type.small, color = palette.muted)
             }
-        },
-        confirmButton = {
-            TextButton(onClick = { openUpdateLink(context, release.apkUrl) }) {
-                Text(stringResource(R.string.update_download), color = palette.primary)
+            Text(hint, style = Type.small, color = palette.muted)
+            androidx.compose.material3.Button(onClick = { openUpdateLink(context, release.apkUrl) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Icon(Lucide.Download, null, Modifier.size(20.dp))
+                androidx.compose.foundation.layout.Spacer(Modifier.size(8.dp))
+                Text(download)
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.update_later), color = palette.muted) }
-        },
-    )
+            TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text(later) }
+        }
+    }
 }
 
 private fun openUpdateLink(context: Context, url: String) {

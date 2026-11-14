@@ -76,6 +76,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -110,6 +112,7 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
     val container = LocalContainer.current
     val player = container.player
     val track = state.current ?: return
+    val scene = rememberPlayerScene(state)
     var panel by rememberSaveable { mutableStateOf(Panel.None) }
     var actions by remember { mutableStateOf(false) }
     var sleeping by remember { mutableStateOf(false) }
@@ -147,7 +150,7 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
 
     Surface(Modifier.fillMaxSize(), color = palette.background, contentColor = palette.foreground) {
         Box(Modifier.fillMaxSize()) {
-        PlayerBackdrop(trackCover(track), state.index, state.queue.size, Modifier.matchParentSize())
+        PlayerSceneBackground(scene, Modifier.matchParentSize())
         BoxWithConstraints(Modifier.safeDrawingPadding().padding(horizontal = 20.dp, vertical = 12.dp)) {
             val wide = maxWidth > maxHeight
 
@@ -170,7 +173,9 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
             val stage: @Composable (Modifier) -> Unit = { modifier ->
                 Box(modifier) {
                     when (panel) {
-                        Panel.None -> Deck(state, onScrub = { scrub = it }, modifier = Modifier.fillMaxSize())
+                        Panel.None -> PlayerSceneLayer(scene, Modifier.fillMaxSize().testTag("player-artwork-scene")) { frame ->
+                            Deck(frame.state, onScrub = { scrub = it }, modifier = Modifier.fillMaxSize())
+                        }
                         Panel.Lyrics -> LyricsPanel(track, position, state.playing)
                         Panel.Queue -> QueuePanel(state, undoable)
                     }
@@ -178,10 +183,14 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
             }
 
             val controls = @Composable {
+                val titleHeight = with(LocalDensity.current) { (Type.display.lineHeight * if (wide) 1 else 3).toDp() }
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(track.title, style = displayStyle(track.title), maxLines = if (wide) 1 else 3, overflow = TextOverflow.Ellipsis)
+                            // Keep the deck's available height independent of title wrapping/font choice.
+                            Box(Modifier.fillMaxWidth().height(titleHeight), contentAlignment = Alignment.BottomStart) {
+                                Text(track.title, style = displayStyle(track.title), maxLines = if (wide) 1 else 3, overflow = TextOverflow.Ellipsis)
+                            }
                             Text(artistsOf(track), style = Type.body, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             note?.let { RadioNoteLine(it) }
                             val delivery by container.playbackDelivery.collectAsStateWithLifecycle()
@@ -383,12 +392,12 @@ fun Record(
     }
 }
 @Composable
-private fun LyricsPanel(track: Track, positionMs: Long, playing: Boolean) {
+internal fun LyricsPanel(track: Track, positionMs: Long, playing: Boolean) {
     val palette = LocalPalette.current
     val container = LocalContainer.current
     val motion = playerMotionEnabled()
     val framePosition = produceState(positionMs, track.id, playing, motion) {
-        if (playing && motion) while (true) withFrameNanos { value = container.player.position }
+        if (playing) while (true) withFrameNanos { value = container.player.position }
         else value = positionMs
     }
     LaunchedEffect(track.id) {
@@ -419,24 +428,32 @@ private fun LyricsPanel(track: Track, positionMs: Long, playing: Boolean) {
             return@Load
         }
 
-        val active = lyrics.lines.indexOfLast { it.at <= positionMs }
+        val active by remember(lyrics.lines, framePosition, positionMs, playing) {
+            androidx.compose.runtime.derivedStateOf { lyrics.lines.indexOfLast { it.at <= if (playing) framePosition.value else positionMs } }
+        }
         val list = rememberLazyListState()
-        LaunchedEffect(active) { if (active >= 0) list.animateScrollToItem((active - 2).coerceAtLeast(0)) }
+        LaunchedEffect(active) {
+            if (active >= 0) {
+                val target = (active - 2).coerceAtLeast(0)
+                if (motion) list.animateScrollToItem(target) else list.scrollToItem(target)
+            }
+        }
 
-        LazyColumn(Modifier.fillMaxSize().fadeEdges(), state = list, contentPadding = PaddingValues(vertical = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        LazyColumn(Modifier.fillMaxSize().fadeEdges(24.dp), state = list, contentPadding = PaddingValues(vertical = 40.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             itemsIndexed(lyrics.lines) { index, line ->
                 TimedLyricText(
                     line = line,
-                    positionMs = { if (playing && motion) framePosition.value else positionMs },
+                    positionMs = { if (playing) framePosition.value else positionMs },
                     style = Type.section.copy(fontSize = Type.section.fontSize * 1.15f),
-                    foreground = palette.foreground,
+                    foreground = Color.White,
                     upcoming = when {
-                        line.words.isNotEmpty() -> palette.muted
-                        index == active -> palette.foreground
-                        index < active -> palette.faint
-                        else -> palette.muted
+                        index == active && line.words.isEmpty() -> Color.White
+                        index == active -> Color.White.copy(alpha = 0.72f)
+                        index < active -> Color.White.copy(alpha = 0.55f)
+                        else -> Color.White.copy(alpha = 0.65f)
                     },
-                    modifier = Modifier.clickable { container.player.seekTo(line.at) },
+                    modifier = Modifier.testTag("lyrics-line-$index").semantics { selected = index == active }
+                        .clickable { container.player.seekTo(line.at) },
                 )
             }
             item { LyricsCredit(lyrics) }
