@@ -33,11 +33,12 @@ import app.caimack.session.SessionState
 import app.caimack.ui.Appearance
 import app.caimack.ui.Colorway
 import app.caimack.ui.Palette
-import app.caimack.ui.TONE_SAMPLE_EDGE
 import app.caimack.ui.artistsOf
 import app.caimack.ui.color
 import app.caimack.ui.coverCrop
-import app.caimack.ui.coverTone
+import app.caimack.ui.playerBackdropTone
+import app.caimack.ui.PlayerBackdropSettings
+import app.caimack.ui.CoverTone
 import app.caimack.ui.coverPlaceholder
 import app.caimack.ui.drawVinyl
 import app.caimack.ui.paletteOf
@@ -126,9 +127,10 @@ class NowPlayingWidget : AppWidgetProvider() {
             val playing = stored.getBoolean(PLAYING, false)
             val liked = stored.getBoolean(LIKED, false)
             val tone = cover?.takeIf { look.coverTone }?.let { bitmap ->
-                val sample = Bitmap.createScaledBitmap(bitmap, TONE_SAMPLE_EDGE, TONE_SAMPLE_EDGE, true)
-                IntArray(TONE_SAMPLE_EDGE * TONE_SAMPLE_EDGE).also { sample.getPixels(it, 0, TONE_SAMPLE_EDGE, 0, 0, TONE_SAMPLE_EDGE, TONE_SAMPLE_EDGE) }
-                    .let(::coverTone)
+                val edge = PlayerBackdropSettings.sampleEdge
+                val sample = Bitmap.createScaledBitmap(bitmap, edge, edge, true)
+                IntArray(edge * edge).also { sample.getPixels(it, 0, edge, 0, 0, edge, edge) }
+                    .let(::playerBackdropTone)?.let { CoverTone(it.hue, it.chroma) }
             }
 
             return RemoteViews(context.packageName, R.layout.widget_now_playing).apply {

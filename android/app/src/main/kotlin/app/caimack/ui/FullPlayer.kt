@@ -44,6 +44,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -93,6 +94,16 @@ import kotlinx.coroutines.CancellationException
 private enum class Panel { None, Lyrics, Queue }
 @Composable
 fun FullPlayer(state: PlayerState, onClose: () -> Unit) {
+    CaimackTheme(dark = true, colorway = LocalColorway.current) {
+        val palette = LocalPalette.current.copy(foreground = Color(0xFFF5F5F5), muted = Color(0xFFD6D6D6), faint = Color(0xFFBCBCBC))
+        CompositionLocalProvider(LocalPalette provides palette) {
+            FullPlayerContent(state, onClose)
+        }
+    }
+}
+
+@Composable
+private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
     val palette = LocalPalette.current
     val container = LocalContainer.current
     val player = container.player
@@ -132,9 +143,9 @@ fun FullPlayer(state: PlayerState, onClose: () -> Unit) {
         onDispose { view.keepScreenOn = false }
     }
 
-    Surface(Modifier.fillMaxSize(), color = palette.background) {
+    Surface(Modifier.fillMaxSize(), color = palette.background, contentColor = palette.foreground) {
         Box(Modifier.fillMaxSize()) {
-        ArtBackdrop(trackCover(track), BackdropMode.Stage, Modifier.matchParentSize())
+        PlayerBackdrop(trackCover(track), state.index, state.queue.size, Modifier.matchParentSize())
         BoxWithConstraints(Modifier.safeDrawingPadding().padding(horizontal = 20.dp, vertical = 12.dp)) {
             val wide = maxWidth > maxHeight
 

@@ -2,7 +2,11 @@
 
 import type { BackdropTone, CoverTone } from "./coverTone";
 
-type Profiles = { accent: CoverTone | null; backdrop: BackdropTone | null };
+type Profiles = {
+  accent: CoverTone | null;
+  backdrop: BackdropTone | null;
+  player: BackdropTone | null;
+};
 export type CoverToneKind = keyof Profiles;
 export type CoverTones = Partial<Profiles>;
 
@@ -22,10 +26,9 @@ export function createCoverToneCache(
     if (get(url, kind) !== undefined) return Promise.resolve();
     const task = Promise.resolve()
       .then(() => sample(url, kind))
-      .catch((): CoverTones => (kind === "accent" ? { accent: null } : { backdrop: null }))
+      .catch((): CoverTones => ({ [kind]: null }))
       .then((tone) => {
-        const profile =
-          kind === "accent" ? { accent: tone.accent ?? null } : { backdrop: tone.backdrop ?? null };
+        const profile = { [kind]: tone[kind] ?? null };
         if (tones.size >= limit && !tones.has(url)) tones.delete(tones.keys().next().value!);
         tones.set(url, { ...tones.get(url), ...profile });
         listeners.forEach((listener) => listener());

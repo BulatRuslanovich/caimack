@@ -177,7 +177,7 @@ fun App(user: User) {
 
     val colorway = LocalColorway.current
     val toneEnabled by container.appearance.coverTone.collectAsStateWithLifecycle()
-    val tone = rememberCoverTone(playback.current?.takeIf { toneEnabled }?.let { trackCover(it) })
+    val tone = rememberPlayerCoverTone(playback.current?.takeIf { toneEnabled }?.let { trackCover(it) })
     val toneTarget = if (colorway == Colorway.Graphite && palette.dark) Color.Transparent else tone?.color(palette, colorway) ?: Color.Transparent
     val motion = playerMotionEnabled()
     val nowPlayingTone by animateColorAsState(toneTarget, tween(if (motion) 900 else 0), label = "tone")

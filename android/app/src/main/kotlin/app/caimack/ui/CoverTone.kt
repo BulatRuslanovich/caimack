@@ -44,7 +44,7 @@ private const val GREY_CHROMA = 0.02
 private const val NEUTRAL_CHROMA = 0.025
 private const val MAX_CHROMA = 0.3
 
-private fun linear(channel: Int): Double {
+private fun linear(channel: Double): Double {
     val c = channel / 255.0
     return if (c <= 0.04045) c / 12.92 else ((c + 0.055) / 1.055).pow(2.4)
 }
@@ -55,6 +55,10 @@ private fun gamma(channel: Double): Float {
 }
 
 fun oklab(r: Int, g: Int, b: Int): DoubleArray {
+    return oklab(r.toDouble(), g.toDouble(), b.toDouble())
+}
+
+fun oklab(r: Double, g: Double, b: Double): DoubleArray {
     val lr = linear(r)
     val lg = linear(g)
     val lb = linear(b)
