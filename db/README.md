@@ -24,6 +24,20 @@ so it works even when the backend's queries don't compile against the current da
 
 Add a new numbered migration for each change. Never modify an already deployed migration or rewrite its checksum. Migration 0002 adds durable enrichment jobs and catalog invalidation without changing the baseline.
 
+Migration 0003 preserves the upstream rich-lyrics schema. Fork features follow it
+with unique migration numbers; databases already using upstream migration 0003
+can upgrade without replacing that migration or its checksum.
+
+Migration 0004 adds filename metadata provenance and the durable `file_renames`
+journal for optional automatic music filenames. New queries use runtime SQL and
+are covered by `cargo test -p app --features integration-tests file_names` with
+the same local `DATABASE_URL` and `SQLX_OFFLINE=true` configuration below.
+
+Migration 0005 adds the metadata export journal, export state and a stable HLS
+cache hash for tag-only audio changes. Its recovery, audio preservation and lyric
+companion behavior are covered by `cargo test -p app --features integration-tests
+metadata_export`.
+
 Run migrations before starting the corresponding backend version. Regenerate SQLx metadata with `make sqlx` when changing compile-time checked queries. New enrichment queries are checked by PostgreSQL integration tests:
 
 ```bash
@@ -33,19 +47,38 @@ SQLX_OFFLINE=true DATABASE_URL=postgres://music:password@localhost:5432/postgres
 
 Use a disposable local PostgreSQL server and a role allowed to create databases. SQLx creates isolated test databases. Do not run these tests against production.
 
-## Personal library
+Migration 0006 keeps provider lookup progress across tag-only exports while
+restarting lookup after a real audio replacement or a title/artist edit.
 
-Migration 0008 adds account-scoped saved albums, artists and playlists, independently
-of track favourites and playlist ownership. Existing and newly created playlists
-are automatically saved to their owner's library. Removing a saved item does not
-delete it from the catalog.
+Migration 0009 adds account-scoped saved albums, artists and playlists with
+foreign-key cleanup. It backfills existing owned playlists; an insert trigger
+also saves playlists created by imports and offline synchronization. Saving an
+album or artist does not change track favourites. Run the updated backend's
+`caimack migrate` before starting it. Verify with
+`SQLX_OFFLINE=true cargo test -p app --features integration-tests --test saved_library`.
 
-Migration 0009 adds nested personal folders. Folder deletion moves saved items and
-child folders to the parent. Folder moves reject cycles and cross-account targets;
-organization changes are serialized per account inside a transaction.
+Authenticated collection routes: `GET /api/me/library` and
+`PUT` / `DELETE /api/me/library/{kind}/{id}`, where kind is `album`, `artist` or
+`playlist`. Writes are idempotent; saving again preserves the original save time.
+Private playlists are visible and saveable only by their owner. Unsave never
+deletes catalog content. The returned list is sorted by save time, newest first.
 
-These migration numbers are retained from the source branch. The sequence does
-not need to be contiguous.
+Migration 0010 adds `library_folders` and nullable `library_items.folder_id`.
+Composite foreign keys restrict destinations to the same user. The folder API
+serializes tree edits per account to prevent cycles, including concurrent moves.
+Deleting a folder lifts its contents to its parent without unsaving or deleting
+music. Verify with `cargo test -p app --features integration-tests --test library_folders`.
 
-The `saved_library` and `library_folders` integration tests cover account isolation,
-playlist visibility, idempotent saves, folder moves and preservation of contents.
+Migration 0011 reconciles rich-lyrics invalidation with the stable audio identity
+used by metadata export. Tag-only exports retain lyrics and provider backoff;
+changes to the recording, title, artist, album or duration invalidate matches and
+restart enrichment. Existing upstream migrations remain unchanged.
+
+The local fork previously shipped collections/folders as migrations 0008/0009.
+Use `caimack migrate` for its first upgrade: it recognizes the exact original
+checksums and atomically aligns those two ledger entries to 0009/0010 before
+applying upstream migrations. Saved items, folders, timestamps and checksums
+are preserved; unknown or edited histories are rejected. Fresh databases and
+databases already using upstream numbering follow the normal migration path.
+Do not use `cargo sqlx migrate run` directly for this legacy upgrade, or run the
+old binary against a database after upgrading it.

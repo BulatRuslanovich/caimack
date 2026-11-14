@@ -39,8 +39,8 @@ pub async fn page(
     Ok(Paged::new(query.build_query_as().fetch_all(db).await?, total, page))
 }
 
-pub async fn fetch_where(
-    db: &PgPool,
+pub async fn fetch_where<'e>(
+    db: impl sqlx::PgExecutor<'e>,
     filter: impl Fn(&mut QueryBuilder<Postgres>),
     order: &str,
     limit: i64,

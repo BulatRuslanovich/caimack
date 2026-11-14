@@ -12,6 +12,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.job
 import mockwebserver3.Dispatcher
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
@@ -34,6 +36,7 @@ class SessionAuthenticatorTest {
     private var refreshAnswer: () -> MockResponse = { freshSession() }
     private lateinit var client: OkHttpClient
     private lateinit var directory: File
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     @Before
     fun start() {
@@ -54,7 +57,6 @@ class SessionAuthenticatorTest {
         web.start()
 
         directory = Files.createTempDirectory("session").toFile()
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val preferences = PreferenceDataStoreFactory.create(scope = scope) { File(directory, "test.preferences_pb") }
         val server = Server(preferences)
         runBlocking { server.remember(web.url("/").toString()) }
@@ -69,6 +71,11 @@ class SessionAuthenticatorTest {
     @After
     fun stop() {
         web.close()
+        // DataStore must stop before its files are removed; otherwise a late cookie write
+        // escapes into the next test as an uncaught background exception.
+        runBlocking { scope.coroutineContext.job.cancelAndJoin() }
+        client.connectionPool.evictAll()
+        client.dispatcher.executorService.shutdown()
         directory.deleteRecursively()
     }
 

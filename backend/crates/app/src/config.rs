@@ -19,10 +19,13 @@ pub struct Config {
     pub storage_root: PathBuf,
     pub owner: OwnerConfig,
     pub lrclib_base_url: String,
+    pub better_lyrics_api_key: Option<String>,
     pub deezer_base_url: String,
     pub yandex_music: YandexMusicConfig,
     pub trusted_proxies: Vec<IpNet>,
     pub library_scan_interval: Option<Duration>,
+    pub rename_music_files: bool,
+    pub export_music_metadata: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -123,6 +126,8 @@ struct Env {
     owner_reset_password: bool,
     #[serde(default = "default_lrclib_base_url")]
     lrclib_base_url: String,
+    #[serde(default)]
+    better_lyrics_api_key: Option<String>,
     #[serde(default = "default_deezer_base_url")]
     deezer_base_url: String,
     #[serde(default = "default_yandex_base_url")]
@@ -134,6 +139,10 @@ struct Env {
     trusted_proxies: Option<String>,
     #[serde(default = "default_library_scan_interval_minutes")]
     library_scan_interval_minutes: u64,
+    #[serde(default)]
+    rename_music_files: bool,
+    #[serde(default)]
+    export_music_metadata: bool,
 }
 
 impl Config {
@@ -210,6 +219,8 @@ impl Config {
             app_env: env.app_env,
             listen_addr,
             recommendations_enabled: env.recommendations_enabled,
+            rename_music_files: env.rename_music_files,
+            export_music_metadata: env.export_music_metadata,
             database: DatabaseConfig { url: database_url, max_connections: env.database_max_connections },
             jwt: JwtConfig {
                 signing_key,
@@ -223,6 +234,7 @@ impl Config {
                 reset_password: env.owner_reset_password,
             },
             lrclib_base_url: env.lrclib_base_url,
+            better_lyrics_api_key: env.better_lyrics_api_key.filter(|key| !key.trim().is_empty()),
             deezer_base_url: env.deezer_base_url,
             yandex_music: YandexMusicConfig {
                 base_url: env.yandex_music_base_url,
@@ -329,6 +341,22 @@ mod tests {
     fn short_signing_key_is_rejected() {
         let result = env(&[("DATABASE_URL", "postgres://localhost/music"), ("JWT_SIGNING_KEY", "short")]);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn file_renaming_requires_explicit_opt_in() -> anyhow::Result<()> {
+        let required = [("DATABASE_URL", "postgres://localhost/music"), ("JWT_SIGNING_KEY", KEY)];
+        assert!(!env(&required)?.rename_music_files);
+        assert!(!env(&required)?.export_music_metadata);
+        let mut enabled = required.to_vec();
+        enabled.push(("RENAME_MUSIC_FILES", "true"));
+        assert!(env(&enabled)?.rename_music_files);
+        assert!(!env(&enabled)?.export_music_metadata);
+        enabled.pop();
+        enabled.push(("EXPORT_MUSIC_METADATA", "true"));
+        assert!(env(&enabled)?.export_music_metadata);
+        assert!(!env(&enabled)?.rename_music_files);
+        Ok(())
     }
 
     #[test]

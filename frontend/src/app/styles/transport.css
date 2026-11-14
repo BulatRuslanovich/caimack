@@ -1,0 +1,6 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+.player-transport button:focus-visible {
+  outline: 2px solid var(--foreground);
+  outline-offset: 4px;
+}

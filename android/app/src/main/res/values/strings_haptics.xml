@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_touch_haptics">Player haptics</string>
+    <string name="settings_touch_haptics_hint">Tactile feedback for playback buttons, seeking and record gestures. Follows your system touch feedback setting.</string>
+    <string name="settings_touch_haptics_unavailable">This device has no vibration motor.</string>
+    <string name="settings_haptics_preview">Try feedback</string>
+    <string name="settings_music_haptics">Music vibration · Experimental</string>
+    <string name="settings_music_haptics_hint">Feel the music through your phone. Only applies to audio playing on this device.</string>
+    <string name="settings_music_haptics_unavailable">Audio-driven vibration is not supported on this phone.</string>
+    <string name="settings_music_haptics_ready">Enabled. Starts when music plays on this phone.</string>
+    <string name="settings_music_haptics_active">Vibrating with music playing on this phone.</string>
+    <string name="settings_music_haptics_failed">Could not start music vibration. Turn it off and try again.</string>
+</resources>

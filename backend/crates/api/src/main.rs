@@ -106,7 +106,10 @@ async fn run() -> anyhow::Result<()> {
         db: db.clone(),
         storage: storage.clone(),
         deezer: Deezer::new(&config.deezer_base_url),
-        lrclib: Lrclib::new(&config.lrclib_base_url),
+        lyrics_providers: app::integrations::lyrics::LyricsProviders::new(
+            Lrclib::new(&config.lrclib_base_url),
+            config.better_lyrics_api_key.clone(),
+        ),
     };
     workers.extend(enrichment::spawn(enricher, enrichment_queue.clone(), enrichment_requests, background.clone()));
 
@@ -118,7 +121,9 @@ async fn run() -> anyhow::Result<()> {
         hashes: hashes.clone(),
         enrichment: enrichment_queue,
     };
-    let library = LibraryScanner::new(db.clone(), storage.clone(), uploads.clone());
+    let library = LibraryScanner::new(db.clone(), storage.clone(), uploads.clone())
+        .with_file_renaming(config.rename_music_files)
+        .with_metadata_export(config.export_music_metadata);
     workers.push(library.clone().spawn(config.library_scan_interval, background.clone()));
 
     let yandex_client = YandexClient::new(config.yandex_music.clone());

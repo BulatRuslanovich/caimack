@@ -180,7 +180,17 @@ async fn delete_track(
 }
 
 async fn get_lyrics(State(state): State<AppState>, RoutePath(id): RoutePath<Uuid>) -> ApiResult<Response> {
-    Ok(match lyrics::get(&state.db, id).await? {
+    let found = lyrics::get(&state.db, id).await?;
+    if found.as_ref().is_none_or(|lyrics| {
+        lyrics.source != lyrics::LyricsSource::Manual && !lyrics.lines.iter().any(|line| !line.words.is_empty())
+    }) && lyrics::prioritize(&state.db, id).await?
+    {
+        state
+            .uploads
+            .enrichment
+            .try_enqueue(app::integrations::enrichment::EnrichmentRequest { track: Some(id), artists: Vec::new() });
+    }
+    Ok(match found {
         Some(found) => Json(found).into_response(),
         None => StatusCode::NO_CONTENT.into_response(),
     })

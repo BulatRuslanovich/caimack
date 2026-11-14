@@ -94,7 +94,17 @@ export const queries = {
     queryOptions({
       queryKey: ["lyrics", trackId],
       queryFn: async () => (await api.lyrics(trackId)) ?? null,
-      staleTime: Infinity,
+      staleTime: 60_000,
+      refetchInterval: (query) => {
+        const lyrics = query.state.data;
+        if (
+          lyrics?.source === "Manual" ||
+          (lyrics?.lines.length &&
+            lyrics.lines.every((line) => !line.text.trim() || line.words?.length))
+        )
+          return false;
+        return 15_000;
+      },
     }),
 
   homeMix: (kind: HomeMixSlug) =>
@@ -288,7 +298,21 @@ export const invalidates = {
     ["duplicates"],
   ],
   playlists: [["savedLibrary"], ["playlists"], ["playlist"], ["homeFeed"]],
-  favorites: [["favorites"], ["tracks"], ["homeFeed"], ["homeMix"], ["libraryOverview"]],
+  favorites: [
+    ["favorites"],
+    ["tracks"],
+    ["album"],
+    ["artist"],
+    ["playlist"],
+    ["genreTracks"],
+    ["search"],
+    ["history"],
+    ["duplicates"],
+    ["recap"],
+    ["homeFeed"],
+    ["homeMix"],
+    ["libraryOverview"],
+  ],
   history: [["history"], ["homeFeed"], ["homeMix"]],
   recommendations: [["tasteRules"], ["homeFeed"], ["homeMix"]],
 } as const;

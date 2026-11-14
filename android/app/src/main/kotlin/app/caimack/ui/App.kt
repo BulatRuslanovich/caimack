@@ -148,8 +148,6 @@ internal fun NavController.openSection(route: Any) {
 fun App(user: User) {
     val palette = LocalPalette.current
     val container = LocalContainer.current
-    val address by container.server.url.collectAsStateWithLifecycle()
-    Remote.bind("$address|${user.id}")
     val nav = rememberNavController()
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
@@ -157,12 +155,11 @@ fun App(user: User) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     val playback by container.player.state.collectAsStateWithLifecycle()
     val offlineLibrary by container.libraryCache.offline.collectAsStateWithLifecycle()
-    val downloaded by container.downloads.state.collectAsStateWithLifecycle()
-    val availableTracks = remember(downloaded, address, user.id) {
-        downloaded.filterValues { it.done && container.downloads.visible(it) }.keys
-    }
+    val catalog by container.localLibrary.collectAsStateWithLifecycle()
+    val localLibrary = catalog.takeIf { it.account == container.accountKey } ?: app.caimack.playback.LocalLibrary()
+    val availableTracks = localLibrary.trackIds
     val artworkRevision by container.downloadedCatalog.revision.collectAsStateWithLifecycle()
-    val resolveArtwork = remember(container) { container.downloadedCatalog::cachedUrl }
+    val resolveArtwork = remember(container, user.id) { container.downloadedCatalog::cachedUrl }
     val appUpdate by container.updates.state.collectAsStateWithLifecycle()
     var updateDetails by rememberSaveable { mutableStateOf(false) }
     val play: (List<Track>, Int) -> Unit = { tracks, index ->
@@ -178,7 +175,7 @@ fun App(user: User) {
 
     val colorway = LocalColorway.current
     val toneEnabled by container.appearance.coverTone.collectAsStateWithLifecycle()
-    val tone = rememberCoverTone(playback.current?.takeIf { toneEnabled }?.let { trackCover(it) })
+    val tone = rememberPlayerCoverTone(playback.current?.takeIf { toneEnabled }?.let { trackCover(it) })
     val toneTarget = if (colorway == Colorway.Graphite && palette.dark) Color.Transparent else tone?.color(palette, colorway) ?: Color.Transparent
     val motion = playerMotionEnabled()
     val nowPlayingTone by animateColorAsState(toneTarget, tween(if (motion) 900 else 0), label = "tone")
@@ -205,6 +202,7 @@ fun App(user: User) {
         LocalNavigate provides navigate,
         LocalOfflineLibrary provides offlineLibrary,
         LocalAvailableTracks provides availableTracks,
+        LocalAvailableCollections provides localLibrary.collections,
         LocalNowPlayingTone provides nowPlayingTone,
         LocalToneEnabled provides toneEnabled,
         LocalSnackbar provides snackbar,

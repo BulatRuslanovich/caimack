@@ -149,6 +149,12 @@ fn russian(template: &str) -> Option<&'static str> {
         "The file is not a {0} file despite its name." => "Это не {0}, хотя так назван.",
         "The uploaded file could not be read back." => "Загруженный файл не читается.",
         "The file could not be processed." => "Файл не удалось обработать.",
+        "Artwork and lyrics could not be exported. Check write permissions and the server log." => {
+            "Не удалось сохранить обложку и текст рядом с музыкой. Проверьте права записи и журнал сервера."
+        }
+        "The file could not be renamed. Check folder write permissions and the server log." => {
+            "Не удалось переименовать файл. Проверьте права записи в папку и журнал сервера."
+        }
         "This file is already in the library." => "Этот файл уже есть в библиотеке.",
         "A lossless version of this track is already in the library." => "Этот трек уже есть в библиотеке в lossless.",
 

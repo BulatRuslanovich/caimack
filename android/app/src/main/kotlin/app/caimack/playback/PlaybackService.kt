@@ -94,6 +94,8 @@ class PlaybackService : MediaLibraryService() {
     private var leveling: Job? = null
     private var qualityChanges: Job? = null
     private var equalizer: DynamicsProcessing? = null
+    private var musicHaptics: app.caimack.haptics.AudioHaptics? = null
+    private var hapticPreferences: Job? = null
     private var normalization = 1f
     private var sleepLevel = 1f
     private var networkRecovery: Job? = null
@@ -106,6 +108,7 @@ class PlaybackService : MediaLibraryService() {
     override fun onCreate() {
         super.onCreate()
         val container = (application as CaimackApp).container
+        musicHaptics = app.caimack.haptics.AudioHaptics(app.caimack.haptics.AndroidAudioHapticFactory, container.haptics::reportMusicStatus)
         val data = OkHttpDataSource.Factory(container.http)
 
         val player = ExoPlayer.Builder(this)
@@ -114,7 +117,10 @@ class PlaybackService : MediaLibraryService() {
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build())
             .setMediaSourceFactory(
-                DefaultMediaSourceFactory(container.downloads.playback).setLoadErrorHandlingPolicy(
+                DefaultMediaSourceFactory(androidx.media3.datasource.ResolvingDataSource.Factory(container.downloads.playback) { spec ->
+                    val id = spec.key?.takeIf { it.startsWith("sync:") }?.removePrefix("sync:")
+                    id?.let { container.syncStore.audio(it) }?.let(spec::withUri) ?: spec
+                }).setLoadErrorHandlingPolicy(
                     object : DefaultLoadErrorHandlingPolicy(NETWORK_RETRIES) {
                         override fun getRetryDelayMsFor(info: LoadErrorHandlingPolicy.LoadErrorInfo): Long =
                             if (statusOf(info.exception) in 400..499) C.TIME_UNSET else super.getRetryDelayMsFor(info)
@@ -122,7 +128,8 @@ class PlaybackService : MediaLibraryService() {
                 ),
             )
             .setAudioAttributes(
-                AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(),
+                AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .setHapticChannelsMuted(!container.haptics.musicEnabled.value).build(),
                 true,
             )
             .setHandleAudioBecomingNoisy(true)
@@ -211,6 +218,7 @@ class PlaybackService : MediaLibraryService() {
                 equalizer?.release()
                 equalizer = null
                 shapeSound(audioSessionId, container.equalizer.state.value)
+                musicHaptics?.update(audioSessionId, container.haptics.musicEnabled.value, player.isPlaying)
             }
 
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
@@ -252,7 +260,7 @@ class PlaybackService : MediaLibraryService() {
                     return
                 }
                 val adaptive = item.localConfiguration?.mimeType == MimeTypes.APPLICATION_M3U8
-                val offline = container.downloads.completed(item.mediaId) != null
+                val offline = container.syncStore.audio(item.mediaId) != null || container.downloads.completed(item.mediaId) != null
                 container.playbackDelivery.value = PlaybackDelivery(
                     item.mediaId, adaptive,
                     player.audioFormat?.bitrate?.takeIf { it > 0 }?.div(1000),
@@ -266,6 +274,7 @@ class PlaybackService : MediaLibraryService() {
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                musicHaptics?.update(player.audioSessionId, container.haptics.musicEnabled.value, isPlaying)
                 ticks.removeCallbacks(tick)
                 NowPlayingWidget.show(this@PlaybackService, player.currentMediaItem?.mediaId?.let { container.tracks[it] }, isPlaying, player.currentPosition, player.duration)
                 if (isPlaying) {
@@ -383,6 +392,14 @@ class PlaybackService : MediaLibraryService() {
             }
         }
         tone = container.scope.launch(Dispatchers.Main) { container.equalizer.state.collect { shapeSound(player.audioSessionId, it) } }
+        hapticPreferences = container.scope.launch(Dispatchers.Main) {
+            container.haptics.musicEnabled.collect { requested ->
+                // Disable the old effect before changing AudioTrack attributes/session.
+                musicHaptics?.update(player.audioSessionId, false, false)
+                player.setAudioAttributes(player.audioAttributes.buildUpon().setHapticChannelsMuted(!requested).build(), true)
+                musicHaptics?.update(player.audioSessionId, requested, player.isPlaying)
+            }
+        }
         sleep = container.scope.launch(Dispatchers.Main) { container.sleepTimer.state.collectLatest { fallAsleep(container, player, it) } }
         leveling = container.scope.launch(Dispatchers.Main) { container.playbackPrefs.normalizeVolume.collect { normalize(container, player) } }
         qualityChanges = container.scope.launch(Dispatchers.Main) {
@@ -416,6 +433,9 @@ class PlaybackService : MediaLibraryService() {
         radioRequest?.cancel()
         heart?.cancel()
         tone?.cancel()
+        hapticPreferences?.cancel()
+        musicHaptics?.close()
+        musicHaptics = null
         sleep?.cancel()
         leveling?.cancel()
         qualityChanges?.cancel()
@@ -448,7 +468,7 @@ class PlaybackService : MediaLibraryService() {
         val item = player.currentMediaItem ?: return false
         if (container.settings.value.quality != ORIGINAL ||
             item.localConfiguration?.mimeType == MimeTypes.APPLICATION_M3U8 ||
-            container.downloads.completed(item.mediaId) != null || item.mediaId in fellBack) return false
+            container.syncStore.audio(item.mediaId) != null || container.downloads.completed(item.mediaId) != null || item.mediaId in fellBack) return false
         val master = container.server.resolve("api/tracks/${item.mediaId}/hls/master.m3u8")
             ?.newBuilder()?.addQueryParameter("maxQuality", NORMAL)?.build() ?: return false
         // Keep the original and its buffer until a compatible rendition actually exists.
@@ -470,6 +490,9 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private fun source(container: AppContainer, item: MediaItem): MediaItem {
+        container.syncStore.audio(item.mediaId)?.let { uri ->
+            return item.buildUpon().setUri(uri).setMimeType(null).setCustomCacheKey("sync:${item.mediaId}").setStreamKeys(emptyList()).build()
+        }
         container.downloads.completed(item.mediaId)?.request?.let { request ->
             return item.buildUpon()
                 .setUri(request.uri)
@@ -535,6 +558,7 @@ class PlaybackService : MediaLibraryService() {
 
     private fun continueWithRadio(container: AppContainer, player: ExoPlayer, refresh: Boolean = false) {
         if (container.connect.isRemote) return
+        if (container.syncStore.active && (container.syncStore.offlineQueue || !container.sync.network.available())) return
         if (!container.radio.autoplay.value || player.repeatMode != Player.REPEAT_MODE_OFF || player.mediaItemCount == 0) return
         val queued = idsOf(player)
         val shuffled = player.shuffleModeEnabled

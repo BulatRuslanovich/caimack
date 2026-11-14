@@ -57,21 +57,14 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 val LocalContainer = staticCompositionLocalOf<AppContainer> { error("No container") }
 val LocalOfflineLibrary = staticCompositionLocalOf { false }
 val LocalAvailableTracks = staticCompositionLocalOf<Set<String>> { emptySet() }
+val LocalAvailableCollections = staticCompositionLocalOf<Set<Pair<String, String>>> { emptySet() }
 @Composable
 internal fun catalogApi() = LocalContainer.current.api
 
 val LocalSnackbar = staticCompositionLocalOf<androidx.compose.material3.SnackbarHostState> { error("No snackbar host") }
 object Remote {
-    private var account: String? = null
     val cache = ConcurrentHashMap<String, Any>()
     val updates = MutableSharedFlow<Pair<String, Any>>(extraBufferCapacity = 16, onBufferOverflow = BufferOverflow.DROP_OLDEST)
-
-    fun bind(identity: String) {
-        if (account != identity) {
-            cache.clear()
-            account = identity
-        }
-    }
 
     fun update(key: String, value: Any) {
         cache[key] = value

@@ -5,11 +5,20 @@
 
 import { useCallback } from "react";
 import type { Track } from "@/lib/types";
-import { useNowPlaying, usePlayerActions } from "@/contexts/PlayerContext";
+import { useNowPlaying, usePlayerActions, usePlayerQueue } from "@/contexts/PlayerContext";
 
 export function usePlayback() {
   const { currentTrackId, isPlaying } = useNowPlaying();
+  const queue = usePlayerQueue();
   const player = usePlayerActions();
+
+  const setIsOnAir = useCallback(
+    (tracks: Track[]) =>
+      currentTrackId !== null &&
+      tracks.length === queue.length &&
+      tracks.every((track, index) => track.id === queue[index].id),
+    [currentTrackId, queue],
+  );
 
   const playTrack = useCallback(
     (track: Track, context?: Track[]) => {
@@ -27,28 +36,19 @@ export function usePlayback() {
     (tracks: Track[], startIndex = 0) => {
       if (tracks.length === 0) return;
 
-      const inQueue =
-        currentTrackId !== null && tracks.some((track) => track.id === currentTrackId);
-
-      if (inQueue) {
+      if (setIsOnAir(tracks)) {
         player.toggle();
         return;
       }
 
       player.playQueue(tracks, startIndex);
     },
-    [currentTrackId, player],
+    [setIsOnAir, player],
   );
 
   const soundingNow = useCallback(
     (trackId: string) => currentTrackId === trackId && isPlaying,
     [currentTrackId, isPlaying],
-  );
-
-  const setIsOnAir = useCallback(
-    (tracks: Track[]) =>
-      currentTrackId !== null && tracks.some((track) => track.id === currentTrackId),
-    [currentTrackId],
   );
 
   return { currentTrackId, isPlaying, playTrack, playSet, soundingNow, setIsOnAir };

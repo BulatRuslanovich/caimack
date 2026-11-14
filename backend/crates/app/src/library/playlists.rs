@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use crate::catalog::dto::TrackDto;
 use crate::catalog::tracks;
+use crate::ids::distinct;
 use crate::storage::Storage;
 use crate::{AppError, AppResult, json};
 
@@ -96,7 +97,10 @@ pub fn select() -> QueryBuilder<Postgres> {
     )
 }
 
-pub async fn fetch(db: &PgPool, mut query: QueryBuilder<Postgres>) -> AppResult<Vec<PlaylistDto>> {
+pub async fn fetch<'e>(
+    db: impl sqlx::PgExecutor<'e>,
+    mut query: QueryBuilder<Postgres>,
+) -> AppResult<Vec<PlaylistDto>> {
     Ok(query.build_query_as().fetch_all(db).await?)
 }
 
@@ -194,14 +198,34 @@ pub async fn update(db: &PgPool, user: Uuid, id: Uuid, request: PlaylistRequest)
 }
 
 pub async fn delete(db: &PgPool, storage: &Storage, user: Uuid, id: Uuid) -> AppResult<()> {
-    let deleted = sqlx::query!("DELETE FROM playlists WHERE id = $1 AND user_id = $2 RETURNING cover_path", id, user)
-        .fetch_optional(db)
-        .await?
-        .ok_or_else(|| AppError::not_found("Playlist not found."))?;
-    if let Some(cover) = deleted.cover_path {
-        storage.delete_cover(&cover);
-    }
+    let mut tx = db.begin().await?;
+    let deleted = delete_row(&mut tx, user, id).await?.ok_or_else(|| AppError::not_found("Playlist not found."))?;
+    tx.commit().await?;
+    deleted.cleanup(storage);
     Ok(())
+}
+
+pub(crate) struct DeletedPlaylist {
+    cover_path: Option<String>,
+}
+
+impl DeletedPlaylist {
+    pub(crate) fn cleanup(self, storage: &Storage) {
+        if let Some(cover) = self.cover_path {
+            storage.delete_cover(&cover);
+        }
+    }
+}
+
+pub(crate) async fn delete_row(
+    conn: &mut sqlx::PgConnection,
+    user: Uuid,
+    id: Uuid,
+) -> AppResult<Option<DeletedPlaylist>> {
+    let deleted = sqlx::query!("DELETE FROM playlists WHERE id = $1 AND user_id = $2 RETURNING cover_path", id, user)
+        .fetch_optional(conn)
+        .await?;
+    Ok(deleted.map(|row| DeletedPlaylist { cover_path: row.cover_path }))
 }
 
 async fn require_owned(conn: &mut sqlx::PgConnection, user: Uuid, id: Uuid) -> AppResult<()> {
@@ -230,18 +254,8 @@ async fn renumber(conn: &mut sqlx::PgConnection, id: Uuid) -> AppResult<()> {
     Ok(())
 }
 
-fn distinct(ids: &[Uuid]) -> Vec<Uuid> {
-    let mut wanted = Vec::with_capacity(ids.len());
-    for id in ids {
-        if !wanted.contains(id) {
-            wanted.push(*id);
-        }
-    }
-    wanted
-}
-
 pub async fn add_tracks(db: &PgPool, user: Uuid, id: Uuid, track_ids: &[Uuid]) -> AppResult<()> {
-    let wanted = distinct(track_ids);
+    let wanted = distinct(track_ids.iter().copied());
     let mut tx = db.begin().await?;
     require_owned(&mut tx, user, id).await?;
     if wanted.is_empty() {
@@ -293,7 +307,7 @@ pub async fn remove_track(db: &PgPool, user: Uuid, id: Uuid, track_id: Uuid) -> 
 }
 
 pub async fn reorder(db: &PgPool, user: Uuid, id: Uuid, track_ids: &[Uuid]) -> AppResult<()> {
-    let wanted = distinct(track_ids);
+    let wanted = distinct(track_ids.iter().copied());
     let mut tx = db.begin().await?;
     require_owned(&mut tx, user, id).await?;
 

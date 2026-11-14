@@ -40,7 +40,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "api"
-version = "1.0.9"
+version = "1.0.11"
 dependencies = [
  "anyhow",
  "app",
@@ -68,7 +68,7 @@ dependencies = [
 
 [[package]]
 name = "app"
-version = "1.0.9"
+version = "1.0.11"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
@@ -76,7 +76,9 @@ dependencies = [
  "chrono",
  "envy",
  "fs4",
+ "futures-util",
  "hmac 0.13.0",
+ "html-escape",
  "ipnet",
  "jsonwebtoken",
  "media",
@@ -85,6 +87,8 @@ dependencies = [
  "reco",
  "regex",
  "reqwest",
+ "roxmltree",
+ "same-file",
  "serde",
  "serde_json",
  "serde_with",
@@ -1253,6 +1257,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "html-escape"
+version = "0.2.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9356095b4b41197bba32173600e1582792cda618f65d12f68e2e77d273413c5"
+
+[[package]]
 name = "http"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1842,7 +1852,7 @@ dependencies = [
 
 [[package]]
 name = "media"
-version = "1.0.9"
+version = "1.0.11"
 dependencies = [
  "anyhow",
  "ebur128",
@@ -1854,6 +1864,7 @@ dependencies = [
  "symphonia",
  "thiserror",
  "tokio",
+ "tokio-util",
  "tracing",
  "uuid",
  "webp",
@@ -2379,7 +2390,7 @@ dependencies = [
 
 [[package]]
 name = "reco"
-version = "1.0.9"
+version = "1.0.11"
 dependencies = [
  "serde",
  "serde_json",
@@ -2510,6 +2521,15 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "roxmltree"
+version = "0.21.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9da7f59328b09405b181fee1018925fad50f157afb43c0c0f5c522c256dd5907"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]

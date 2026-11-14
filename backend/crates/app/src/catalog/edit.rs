@@ -207,6 +207,9 @@ pub async fn update_track(
 
     let mut leftovers = Leftovers::default();
     clean_up_orphans(&mut tx, touched, &mut leftovers).await?;
+    if request.title.is_some() || request.artist.is_some() {
+        sqlx::query("UPDATE tracks SET file_name_verified=true WHERE id=$1").bind(id).execute(&mut *tx).await?;
+    }
     tx.commit().await?;
     leftovers.remove(storage);
 
@@ -233,6 +236,14 @@ pub async fn delete_tracks(db: &PgPool, storage: &Storage, ids: &[Uuid]) -> AppR
 
     let mut tx = db.begin().await?;
     let touched = touched_by(&mut tx, &wanted).await?;
+    let cache_hashes: std::collections::HashMap<Uuid, String> = sqlx::query_as::<_, (Uuid, String)>(
+        "SELECT id,COALESCE(media_cache_hash,content_hash) FROM tracks WHERE id=ANY($1)",
+    )
+    .bind(&wanted)
+    .fetch_all(&mut *tx)
+    .await?
+    .into_iter()
+    .collect();
     let removed = sqlx::query!("DELETE FROM tracks WHERE id = ANY($1) RETURNING id, file_path, content_hash", &wanted)
         .fetch_all(&mut *tx)
         .await?;
@@ -242,7 +253,13 @@ pub async fn delete_tracks(db: &PgPool, storage: &Storage, ids: &[Uuid]) -> AppR
     tx.commit().await?;
 
     let found: Vec<Uuid> = removed.iter().map(|track| track.id).collect();
-    leftovers.tracks = removed.into_iter().map(|track| (track.file_path, track.content_hash)).collect();
+    leftovers.tracks = removed
+        .into_iter()
+        .map(|track| {
+            let hash = cache_hashes.get(&track.id).cloned().unwrap_or(track.content_hash);
+            (track.file_path, hash)
+        })
+        .collect();
     leftovers.remove(storage);
 
     if !found.is_empty() {

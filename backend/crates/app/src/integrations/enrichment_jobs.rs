@@ -64,7 +64,10 @@ pub(super) async fn finish(
     };
     sqlx::query(
         "UPDATE enrichment_jobs SET locked_until=NULL,lease=NULL,last_outcome=$4,last_error=$5,
-        next_attempt_at=now()+make_interval(secs=>$6::double precision),
+        next_attempt_at=now()+make_interval(secs=>CASE
+            WHEN $1='lyrics' AND $4 IN ('saved','skipped')
+                AND EXISTS (SELECT 1 FROM track_lyrics WHERE track_id=$2 AND quality>=200)
+            THEN 2592000::double precision ELSE $6::double precision END),
         attempts=CASE WHEN $4='failed' THEN attempts ELSE 0 END,priority=10,updated_at=now()
         WHERE kind=$1 AND entity_id=$2 AND lease=$3",
     )

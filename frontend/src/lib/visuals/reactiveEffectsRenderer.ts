@@ -4,14 +4,13 @@
 import { PLAYER_EFFECTS, type PlayerEffect } from "@/lib/playerEffects";
 import type { AudioMotionFrame } from "./audioMotion";
 import { MOTION_BANDS } from "./audioMotion";
-import { createEffectLayout, INK_FLOWS } from "./effectLayout";
+import { createEffectLayout } from "./effectLayout";
 import type { EffectPalette } from "./effectPalette";
-import { InkFlow } from "./inkFlow";
 import { materialLevels } from "./materialLevels";
 import { ribbonControls, RibbonWaves } from "./soundGeometry";
 
 import { createCanvasEffectsRenderer } from "./canvasEffectsRenderer";
-import { fragment, inkFragment, vertex } from "./effectShaders";
+import { fragment, vertex } from "./effectShaders";
 import { softBand } from "./softBand";
 
 export interface EffectFrame extends AudioMotionFrame {
@@ -91,7 +90,6 @@ export function createEffectsRenderer(
     "sparkEvents[0]",
     "ribbons[0]",
     "ribbonPhase[0]",
-    "inkHistory",
     "spectrum",
   ]);
   if (!main) return null;
@@ -102,11 +100,6 @@ export function createEffectsRenderer(
     new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]),
     gl.STATIC_DRAW,
   );
-  const blank = gl.createTexture()!;
-  gl.bindTexture(gl.TEXTURE_2D, blank);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
   const spectrumTexture = gl.createTexture()!;
   const spectrumPixels = new Uint8Array(MOTION_BANDS * 4);
   gl.bindTexture(gl.TEXTURE_2D, spectrumTexture);
@@ -131,112 +124,11 @@ export function createEffectsRenderer(
     gl.enableVertexAttribArray(p.position);
     gl.vertexAttribPointer(p.position, 2, gl.FLOAT, false, 0, 0);
   };
-  let simulation: ReturnType<typeof program> = null;
-  const inkFlow = new InkFlow(layout.ink);
   const ribbonWaves = new RibbonWaves();
-  let inkTick = 0;
-  let targets: { texture: WebGLTexture; framebuffer: WebGLFramebuffer }[] = [];
-  let inkWidth = 0,
-    inkHeight = 0,
-    read = 0;
-  const clearTargets = () => {
-    for (const target of targets) {
-      gl.deleteTexture(target.texture);
-      gl.deleteFramebuffer(target.framebuffer);
-    }
-    targets = [];
-  };
-  const drawInk = (frame: EffectFrame) => {
-    simulation ??= program(inkFragment, [
-      "history",
-      "texel",
-      "delta",
-      "tick",
-      "bass",
-      "mid",
-      "high",
-      "sources[0]",
-      "flows[0]",
-      "primary",
-      "secondary",
-      "accent",
-    ]);
-    if (!simulation) return;
-    const width = Math.max(1, Math.min(640, canvas.width)),
-      height = Math.max(1, Math.round((canvas.height * width) / canvas.width));
-    if (width !== inkWidth || height !== inkHeight || !targets.length) {
-      clearTargets();
-      inkWidth = width;
-      inkHeight = height;
-      read = 0;
-      const seed = new Uint8Array(width * height * 4);
-      for (let y = 0; y < height; y++)
-        for (let x = 0; x < width; x++) {
-          const at = (y * width + x) * 4;
-          let alpha = 0;
-          const colors = [0, 0, 0];
-          for (let i = 0; i < INK_FLOWS; i++) {
-            const dx = ((x / width - layout.ink[i * 4]) * width) / height,
-              dy = y / height - layout.ink[i * 4 + 1],
-              radius = layout.ink[i * 4 + 2] * 0.8;
-            const amount = Math.exp(-(dx * dx + dy * dy) / (radius * radius)) * 0.12;
-            alpha += amount;
-            for (let c = 0; c < 3; c++) colors[c] += frame.palette[i % 3][c] * amount;
-          }
-          seed[at] = colors[0];
-          seed[at + 1] = colors[1];
-          seed[at + 2] = colors[2];
-          seed[at + 3] = Math.min(255, alpha * 255);
-        }
-      for (let i = 0; i < 2; i++) {
-        const texture = gl.createTexture()!,
-          framebuffer = gl.createFramebuffer()!;
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, seed);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
-        targets.push({ texture, framebuffer });
-      }
-      canvas.dataset.inkHistory = "ready";
-    }
-    const flow = inkFlow.step(frame, frame.delta);
-    if (frame.delta > 0) {
-      const write = 1 - read;
-      gl.bindFramebuffer(gl.FRAMEBUFFER, targets[write].framebuffer);
-      gl.viewport(0, 0, width, height);
-      bind(simulation);
-      const u = simulation.uniforms;
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, targets[read].texture);
-      gl.uniform1i(u.history, 0);
-      gl.uniform2f(u.texel, 1 / width, 1 / height);
-      gl.uniform1f(u.delta, frame.delta);
-      inkTick += frame.delta;
-      gl.uniform1f(u.tick, inkTick);
-      ["bass", "mid", "high"].forEach((name, i) => gl.uniform1f(u[name], flow.motion[i]));
-      gl.uniform4fv(u["sources[0]"], flow.sources);
-      gl.uniform4fv(u["flows[0]"], flow.currents);
-      frame.palette.forEach((color, i) =>
-        gl.uniform3f(
-          u[["primary", "secondary", "accent"][i]],
-          color[0] / 255,
-          color[1] / 255,
-          color[2] / 255,
-        ),
-      );
-      gl.drawArrays(gl.TRIANGLES, 0, 6);
-      read = write;
-    }
-  };
   return {
     kind: "webgl",
     draw(frame) {
       if (gl.isContextLost()) return;
-      if (frame.effect === "ink") drawInk(frame);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.viewport(0, 0, canvas.width, canvas.height);
       bind(main);
@@ -274,14 +166,11 @@ export function createEffectsRenderer(
       );
       gl.uniform4fv(u["beatEvents[0]"], frame.beatEvents);
       gl.uniform4fv(u["sparkEvents[0]"], frame.sparkEvents);
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, targets[read]?.texture ?? blank);
-      gl.uniform1i(u.inkHistory, 0);
       for (let i = 0; i < MOTION_BANDS; i++) {
         spectrumPixels[i * 4 + 3] = Math.round(softBand(frame.spectrum, i) * 255);
         spectrumPixels[i * 4] = Math.round(softBand(frame.transients, i) * 255);
       }
-      gl.activeTexture(gl.TEXTURE1);
+      gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, spectrumTexture);
       gl.texSubImage2D(
         gl.TEXTURE_2D,
@@ -294,13 +183,10 @@ export function createEffectsRenderer(
         gl.UNSIGNED_BYTE,
         spectrumPixels,
       );
-      gl.uniform1i(u.spectrum, 1);
+      gl.uniform1i(u.spectrum, 0);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     },
     destroy() {
-      clearTargets();
-      if (simulation) gl.deleteProgram(simulation.handle);
-      gl.deleteTexture(blank);
       gl.deleteTexture(spectrumTexture);
       gl.deleteBuffer(buffer);
       gl.deleteProgram(main.handle);

@@ -83,27 +83,26 @@ pub async fn hls_master(
     if max_quality == AudioQuality::Original {
         return Err(AppError::validation("Original is not an HLS quality cap."));
     }
-    let track = sqlx::query!("SELECT content_hash, file_path, codec, bitrate_kbps FROM tracks WHERE id = $1", id)
-        .fetch_optional(db)
-        .await?
-        .ok_or_else(|| AppError::not_found("Track not found."))?;
+    let (cache_hash, file_path, codec, bitrate_kbps): (String, String, Option<String>, Option<i32>) = sqlx::query_as(
+        "SELECT COALESCE(media_cache_hash,content_hash),file_path,codec,bitrate_kbps FROM tracks WHERE id=$1",
+    )
+    .bind(id)
+    .fetch_optional(db)
+    .await?
+    .ok_or_else(|| AppError::not_found("Track not found."))?;
 
-    if !transcode::worthwhile(max_quality, track.codec.as_deref(), track.bitrate_kbps) {
-        return Ok(HlsMaster { playlist: None, etag: format!("\"{}-original\"", track.content_hash) });
+    if !transcode::worthwhile(max_quality, codec.as_deref(), bitrate_kbps) {
+        return Ok(HlsMaster { playlist: None, etag: format!("\"{cache_hash}-original\"") });
     }
 
     let ready: Vec<AudioQuality> = transcode::WARMUP_QUALITIES
         .into_iter()
-        .filter(|&quality| quality <= max_quality && storage.hls_variant_ready(&track.content_hash, quality))
+        .filter(|&quality| quality <= max_quality && storage.hls_variant_ready(&cache_hash, quality))
         .collect();
 
-    let request = |quality| TranscodeRequest {
-        content_hash: track.content_hash.clone(),
-        source: track.file_path.clone(),
-        quality,
-    };
+    let request = |quality| TranscodeRequest { content_hash: cache_hash.clone(), source: file_path.clone(), quality };
     for quality in [AudioQuality::Low, AudioQuality::Normal] {
-        if storage.hls_variant_ready(&track.content_hash, quality) {
+        if storage.hls_variant_ready(&cache_hash, quality) {
             continue;
         }
         if quality == AudioQuality::Low && ready.is_empty() {
@@ -114,7 +113,7 @@ pub async fn hls_master(
     }
 
     if ready.is_empty() {
-        return Ok(HlsMaster { playlist: None, etag: format!("\"{}-hls-preparing\"", track.content_hash) });
+        return Ok(HlsMaster { playlist: None, etag: format!("\"{cache_hash}-hls-preparing\"") });
     }
 
     let mut playlist = String::from("#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-INDEPENDENT-SEGMENTS\n");
@@ -127,7 +126,7 @@ pub async fn hls_master(
         ));
     }
     let version = ready.iter().map(|q| q.slug()).collect::<Vec<_>>().join("-");
-    Ok(HlsMaster { playlist: Some(playlist), etag: format!("\"{}-hls-{version}\"", track.content_hash) })
+    Ok(HlsMaster { playlist: Some(playlist), etag: format!("\"{cache_hash}-hls-{version}\"") })
 }
 
 #[derive(Clone)]
@@ -167,10 +166,12 @@ pub async fn hls_asset(
     let content_hash = match hashes.0.get(&id) {
         Some(hash) => hash,
         None => {
-            let hash = sqlx::query_scalar!("SELECT content_hash FROM tracks WHERE id = $1", id)
-                .fetch_optional(db)
-                .await?
-                .ok_or_else(|| AppError::not_found("Track not found."))?;
+            let hash: String =
+                sqlx::query_scalar("SELECT COALESCE(media_cache_hash,content_hash) FROM tracks WHERE id = $1")
+                    .bind(id)
+                    .fetch_optional(db)
+                    .await?
+                    .ok_or_else(|| AppError::not_found("Track not found."))?;
             hashes.0.insert(id, hash.clone());
             hash
         }

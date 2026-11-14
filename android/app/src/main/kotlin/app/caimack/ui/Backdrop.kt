@@ -20,9 +20,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.BlurredEdgeTreatment
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
@@ -59,6 +59,14 @@ fun ArtBackdrop(
 ) {
     if (url == null) return
     val palette = LocalPalette.current
+    if (mode == BackdropMode.Header) {
+        val surface = rememberPlayerSurface(url)
+        val top by androidx.compose.animation.animateColorAsState(Color(surface.top), tween(600), label = "header-colour")
+        Canvas(modifier.clipToBounds()) {
+            drawRect(Brush.verticalGradient(0f to top, 0.62f to top.copy(alpha = 0.38f), 1f to Color.Transparent))
+        }
+        return
+    }
     val context = LocalPlatformContext.current
 
     key(url) {
@@ -91,28 +99,14 @@ fun ArtBackdrop(
 
             Canvas(Modifier.fillMaxSize()) {
                 val background = palette.background
-                when (mode) {
-                    BackdropMode.Stage -> drawRect(
-                        Brush.verticalGradient(
-                            0f to background.copy(alpha = 0.58f),
-                            0.6f to background.copy(alpha = 0.72f),
-                            1f to background.copy(alpha = 0.9f),
-                        ),
-                    )
-                    BackdropMode.Header -> {
-                        drawRect(
-                            Brush.linearGradient(
-                                0f to background.copy(alpha = 0.2f),
-                                0.5f to background.copy(alpha = 0.58f),
-                                0.92f to background,
-                                start = Offset.Zero,
-                                end = Offset(size.width * 0.36f, size.height),
-                            ),
-                        )
-                    }
-                }
+                drawRect(
+                    Brush.verticalGradient(
+                        0f to background.copy(alpha = 0.58f),
+                        0.6f to background.copy(alpha = 0.72f),
+                        1f to background.copy(alpha = 0.9f),
+                    ),
+                )
                 drawRect(ShaderBrush(ImageShader(grain, TileMode.Repeated, TileMode.Repeated)), alpha = (if (palette.dark) GRAIN_DARK else GRAIN_LIGHT) * grainStrength)
-                if (mode == BackdropMode.Header) drawRect(Brush.verticalGradient(0.45f to background.copy(alpha = 0f), 1f to background))
             }
         }
     }

@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-version = "1.0.9"
+version = "1.0.11"
 edition = "2024"
 rust-version = "1.94"
 license = "AGPL-3.0-only"
@@ -34,6 +34,8 @@ moka = { version = "0.12.16", features = ["sync"] }
 rand = "0.10.3"
 realfft = "3.5.1"
 regex = "1.13.1"
+roxmltree = "0.21"
+html-escape = "0.2"
 rubato = "5.0.1"
 rusty-chromaprint = "0.3.0"
 reqwest = { version = "0.13.5", default-features = false, features = ["form", "json", "query", "rustls"] }
@@ -53,6 +55,7 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "chrono"] }
 uuid = { version = "1.29.0", features = ["v4", "v7", "serde"] }
 walkdir = "2.5.0"
+same-file = "1.0.6"
 webp = { version = "0.3.1", default-features = false }
 
 [workspace.lints.rust]

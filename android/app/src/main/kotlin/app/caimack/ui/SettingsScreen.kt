@@ -214,27 +214,11 @@ fun SettingsScreen(category: SettingsCategory? = null) {
                         }
                     }
 
+                    HapticsSettings(SettingKey.TouchHaptics in visible, SettingKey.MusicHaptics in visible)
                     if (SettingKey.Tile in visible) {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                stringResource(R.string.settings_tile),
-                                style = Type.body.copy(fontWeight = FontWeight.SemiBold),
-                                modifier = Modifier.weight(1f).padding(end = 12.dp),
-                            )
-                            var added by rememberSaveable { mutableStateOf(false) }
-                            val context = LocalContext.current
-                            Text(
-                                stringResource(if (added) R.string.settings_tile_added else R.string.settings_tile_add),
-                                style = Type.small.copy(fontWeight = FontWeight.Medium),
-                                color = if (added) palette.muted else palette.foreground,
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .border(1.dp, if (added) palette.border else palette.controlBorder, CircleShape)
-                                    .clickable(enabled = !added) { RadioTile.requestAdd(context) { added = it } }
-                                    .heightIn(min = 48.dp)
-                                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                            )
-                        }
+                        var added by rememberSaveable { mutableStateOf(false) }
+                        val context = LocalContext.current
+                        QuickSettingsTile(added) { RadioTile.requestAdd(context) { added = it } }
                     }
 
                 }
@@ -242,6 +226,7 @@ fun SettingsScreen(category: SettingsCategory? = null) {
 
             if (SettingKey.Downloads in visible) {
                 Panel(stringResource(R.string.settings_downloads)) {
+                    app.caimack.sync.SyncSettings()
                     if (SettingKey.Downloads in visible) {
                         val autoDownloads by container.playbackPrefs.autoDownloads.collectAsStateWithLifecycle()
                         Row(
@@ -435,18 +420,7 @@ fun SettingsScreen(category: SettingsCategory? = null) {
                     Text(stringResource(R.string.sign_out), color = palette.muted)
                 }
             }
-            Text(
-                text = "Caimack v${BuildConfig.VERSION_NAME}",
-                style = Type.tiny,
-                color = palette.muted,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
-            )
-            TextButton(
-                onClick = { sourceContext.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.SOURCE_URL))) },
-                modifier = Modifier.padding(horizontal = 8.dp),
-            ) {
-                Text(stringResource(R.string.settings_source_code) + " · AGPL-3.0", color = palette.muted)
-            }
+            SettingsAbout { sourceContext.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.SOURCE_URL))) }
         }
     }
 }
@@ -638,7 +612,7 @@ private fun EqualizerCurve(gains: List<Int>, frequencies: List<String>, decibels
 }
 
 @Composable
-private fun SettingLabel(text: String, hint: String, style: androidx.compose.ui.text.TextStyle, modifier: Modifier = Modifier) {
+internal fun SettingLabel(text: String, hint: String, style: androidx.compose.ui.text.TextStyle = Type.body, modifier: Modifier = Modifier) {
     val palette = LocalPalette.current
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(text, style = style)

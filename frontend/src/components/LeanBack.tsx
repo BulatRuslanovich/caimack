@@ -9,20 +9,21 @@ import { cn } from "@/lib/cn";
 import { formatArtists } from "@/lib/format";
 import { LEAN_BACK_IDLE_MS, leanBack, useLeanBack } from "@/lib/leanBack";
 import { activeLineAt } from "@/lib/lyrics";
-import { trackCoverUrl } from "@/lib/media";
 import { queries } from "@/lib/queries";
 import { useIdle } from "@/lib/useIdle";
 import type { Track } from "@/lib/types";
-import { usePlayerProgress, usePlayerState } from "@/contexts/PlayerContext";
+import { useArtworkDirection, usePlayerProgress, usePlayerState } from "@/contexts/PlayerContext";
 import { useI18n } from "@/contexts/I18nContext";
-import { ArtBackdrop } from "./ArtBackdrop";
+import { PlayerBackdrop } from "./ArtBackdrop";
+import { ArtworkScene } from "./ArtworkScene";
 import { PlayerEffectsBackdrop } from "./PlayerEffectsBackdrop";
-import { Record } from "./Record";
+import { RecordTransition } from "./RecordTransition";
 
 const WAKE_DISTANCE_PX = 12;
 
 export function LeanBack() {
   const { currentTrack, isPlaying } = usePlayerState();
+  const artworkDirection = useArtworkDirection();
   const { open, auto } = useLeanBack();
 
   const idle = useIdle(LEAN_BACK_IDLE_MS, auto && isPlaying && !open && currentTrack !== null);
@@ -33,7 +34,11 @@ export function LeanBack() {
 
   if (!open || !currentTrack) return null;
 
-  return <LeanBackScreen track={currentTrack} />;
+  return (
+    <ArtworkScene track={currentTrack} direction={artworkDirection}>
+      <LeanBackScreen track={currentTrack} />
+    </ArtworkScene>
+  );
 }
 
 function LeanBackScreen({ track }: { track: Track }) {
@@ -87,8 +92,8 @@ function LeanBackScreen({ track }: { track: Track }) {
 
   return (
     <div className="lean-back" role="presentation">
-      <ArtBackdrop mode="stage" src={trackCoverUrl(track, "thumb")} />
-      <PlayerEffectsBackdrop track={track} playing={isPlaying && !buffering} />
+      <PlayerBackdrop />
+      <PlayerEffectsBackdrop playing={isPlaying && !buffering} />
 
       <div className="lean-back-stage">
         <div className="lean-back-clock">
@@ -96,9 +101,7 @@ function LeanBackScreen({ track }: { track: Track }) {
           <span className="text-muted-foreground">{clock.date}</span>
         </div>
 
-        <Record
-          key={track.id}
-          track={track}
+        <RecordTransition
           out
           spinning={isPlaying && !buffering}
           sizes="min(56vh, 40vw)"

@@ -7,7 +7,7 @@ import { usePlayerClock } from "@/contexts/PlayerContext";
 import { rgbOf, rgba, type Rgb } from "@/lib/cssColor";
 import { audioAnalyser } from "@/lib/playback/equalizer";
 import { bandBins, bandLevel, beatPulse, follow, onset } from "@/lib/playback/spectrum";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 
 const BANDS = 32;
 
@@ -21,18 +21,20 @@ export function RecordAura({
   playing,
   bpm,
   offset,
+  frozen = false,
 }: {
   playing: boolean;
   bpm?: number | null;
   offset?: number;
+  frozen?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const getPosition = usePlayerClock();
-  const live = useRef({ playing, bpm, offset, getPosition });
+  const live = useRef({ playing, bpm, offset, frozen, getPosition });
   const wake = useRef<() => void>(() => {});
 
-  useEffect(() => {
-    live.current = { playing, bpm, offset, getPosition };
+  useLayoutEffect(() => {
+    live.current = { playing, bpm, offset, frozen, getPosition };
     wake.current();
   });
 
@@ -64,12 +66,17 @@ export function RecordAura({
     let frame = 0;
 
     const resize = () => {
+      if (live.current.frozen) return;
       const box = canvas.getBoundingClientRect();
       const ratio = Math.min(2, window.devicePixelRatio || 1);
       size = box.width;
-      canvas.width = Math.round(box.width * ratio);
-      canvas.height = Math.round(box.height * ratio);
-      context.setTransform(ratio, 0, 0, ratio, 0, 0);
+      const width = Math.round(box.width * ratio);
+      const height = Math.round(box.height * ratio);
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+        context.setTransform(ratio, 0, 0, ratio, 0, 0);
+      }
       schedule();
     };
 
@@ -202,6 +209,7 @@ export function RecordAura({
 
     const tick = (now: number) => {
       frame = 0;
+      if (live.current.frozen) return;
       if (motion.matches || document.visibilityState !== "visible" || size === 0) {
         context.clearRect(0, 0, size, size);
         if (size > 0) host?.style.removeProperty("--beat");
@@ -257,9 +265,9 @@ export function RecordAura({
       observer.disconnect();
       motion.removeEventListener("change", syncMotion);
       document.removeEventListener("visibilitychange", syncMotion);
-      host?.style.removeProperty("--beat");
+      if (!live.current.frozen) host?.style.removeProperty("--beat");
     };
   }, []);
 
-  return <canvas ref={canvasRef} className="record-aura" aria-hidden="true" />;
+  return <canvas ref={canvasRef} className="record-aura" data-frozen={frozen} aria-hidden="true" />;
 }

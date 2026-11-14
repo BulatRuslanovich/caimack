@@ -192,13 +192,31 @@ data class SearchResults(
 data class UserSettings(val quality: String = "Original")
 
 @Serializable
-data class LyricLine(val at: Long, val text: String)
+data class LyricLine(
+    val at: Long,
+    val text: String,
+    val end: Long? = null,
+    val words: List<LyricWord> = emptyList(),
+    val background: Boolean = false,
+)
+
+@Serializable
+data class LyricWord(val at: Long, val end: Long, val text: String)
+
+@Serializable
+data class LyricsAttribution(val url: String? = null, val submitter: String? = null, val submitterUrl: String? = null)
 
 @Serializable
 data class Waveform(val peaks: List<Int> = emptyList())
 
 @Serializable
-data class Lyrics(val plain: String = "", val lines: List<LyricLine> = emptyList())
+data class Lyrics(
+    val plain: String = "",
+    val lines: List<LyricLine> = emptyList(),
+    val source: String = "Embedded",
+    val provider: String? = null,
+    val attribution: LyricsAttribution? = null,
+)
 
 @Serializable
 data class PlaybackSignal(
@@ -252,30 +270,6 @@ data class PlaybackStateReport(
 )
 
 @Serializable
-data class PlayingElsewhere(
-    val deviceId: String,
-    val deviceName: String,
-    val track: Track,
-    val positionSeconds: Double,
-    val isPlaying: Boolean,
-    val reportedAt: String,
-)
-
-@Serializable
-data class HandoffRequest(val deviceId: String)
-
-@Serializable
-data class PlaybackHandoff(
-    val deviceId: String,
-    val deviceName: String,
-    val tracks: List<Track>,
-    val index: Int,
-    val positionSeconds: Double,
-    val shuffle: Boolean,
-    val repeat: String,
-)
-
-@Serializable
 data class RecapTrack(val track: Track, val plays: Int)
 
 @Serializable
@@ -304,25 +298,6 @@ data class Recap(
 )
 
 @Serializable
-data class MapPoint(
-    val id: String,
-    val x: Float,
-    val y: Float,
-    val title: String,
-    val artist: String,
-    val albumId: String? = null,
-    val hasCover: Boolean = false,
-    val genre: String? = null,
-    val plays: Int = 0,
-)
-
-@Serializable
-data class LibraryMap(
-    val points: List<MapPoint> = emptyList(),
-    val totalTracks: Int = 0,
-)
-
-@Serializable
 data class TrackLookup(val ids: List<String>)
 
 @kotlinx.serialization.Serializable
@@ -333,6 +308,8 @@ data class LibraryItem(
     val kind: String, val id: String, val title: String, val subtitle: String = "",
     val hasImage: Boolean = false, val coverTrackId: String? = null, val savedAt: String,
     val folderId: String? = null,
+    val trackCount: Int? = null, val albumCount: Int? = null,
+    val durationSeconds: Int? = null, val year: Int? = null,
 )
 
 @Serializable

@@ -4,6 +4,8 @@ run-name: Android ${{ inputs.release_tag || github.ref_name }}
 on:
   push:
     tags: ["v*"]
+  
+  # INFO: U can trigger workflow manually in github
   workflow_dispatch:
     inputs:
       release_tag:
@@ -16,6 +18,8 @@ permissions:
 
 concurrency:
   group: android-release-${{ inputs.release_tag || github.ref_name }}
+
+  # INFO: Not cancel workflow if tag is pushed again
   cancel-in-progress: false
 
 jobs:
@@ -24,6 +28,7 @@ jobs:
     timeout-minutes: 45
     env:
       RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+    
     steps:
       - name: Validate release tag
         run: |
@@ -31,9 +36,12 @@ jobs:
             echo "::error::Release tag must have the form v1.2.3."
             exit 1
           fi
+      
+      # INFO: Download the source code at the release tag
       - uses: actions/checkout@v7
         with:
           ref: refs/tags/${{ env.RELEASE_TAG }}
+      
       - name: Validate version and restore release signing key
         env:
           CAIMACK_KEYSTORE_BASE64: ${{ secrets.CAIMACK_KEYSTORE_BASE64 }}
@@ -44,36 +52,63 @@ jobs:
           python3 - <<'PY'
           import base64, binascii, json, os, re, subprocess
           from pathlib import Path
+
+          # INFO: Read the version from frontend/package.json
           version = json.loads(Path('frontend/package.json').read_text())['version']
+
+
           if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version) or os.environ['RELEASE_TAG'] != f'v{version}':
               raise SystemExit('Release tag must match frontend/package.json (for example v1.2.3).')
+            
+          # INFO: List of required secrets for signing the release APK
           required = ['CAIMACK_KEYSTORE_BASE64', 'CAIMACK_KEYSTORE_PASSWORD', 'CAIMACK_KEY_ALIAS', 'CAIMACK_KEY_PASSWORD']
+
           missing = [name for name in required if not os.environ.get(name)]
+
+
           if missing:
               raise SystemExit('Missing repository secrets: ' + ', '.join(missing))
+          
           try:
+              # INFO: Decode the base64-encoded release keystore
               key = base64.b64decode(''.join(os.environ['CAIMACK_KEYSTORE_BASE64'].split()), validate=True)
           except (ValueError, binascii.Error):
               raise SystemExit('CAIMACK_KEYSTORE_BASE64 is not valid base64.') from None
+            
           if not key:
               raise SystemExit('The release keystore is empty.')
+          
+          # INFO: Resolve the source commit for the release tag
           revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+
+
           if not re.fullmatch(r'[a-fA-F0-9]{40}', revision):
               raise SystemExit('Could not resolve the release source commit.')
+          
+          # INFO: Set private permissions for the keystore file
           os.umask(0o077)
+
+          # INFO: Save key to a temporary file
           target = Path(os.environ['RUNNER_TEMP']) / 'caimack-release.jks'
           target.write_bytes(key)
+
+          # INFO: Export environment variables for the next steps
           with open(os.environ['GITHUB_ENV'], 'a') as output:
               output.write(f'CAIMACK_KEYSTORE_FILE={target}\nAPK_NAME=caimack-v{version}-arm64.apk\nSOURCE_REVISION={revision}\n')
           PY
 
+      # INFO: Setup Java
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "25"
+      
+      # INFO: Setup Android SDK
       - uses: android-actions/setup-android@v4
         with:
           packages: "platform-tools platforms;android-37.0 build-tools;36.0.0"
+      
+      # INFO: Setup Gradle
       - uses: gradle/actions/setup-gradle@v6
         with:
           cache-provider: basic
@@ -86,21 +121,28 @@ jobs:
           CAIMACK_KEY_PASSWORD: ${{ secrets.CAIMACK_KEY_PASSWORD }}
           CAIMACK_SOURCE_URL: https://github.com/${{ github.repository }}/tree/${{ env.SOURCE_REVISION }}
           CAIMACK_UPDATE_REPOSITORY: ${{ github.repository }}
+        # INFO: Run unit tests
+        # --no-daemon: not to use the Gradle daemon
+        # --no-configuration-cache: not to use the Gradle configuration cache
         run: ./gradlew :app:testDebugUnitTest :app:assembleRelease --no-daemon --no-configuration-cache
 
       - name: Verify signature and prepare artifact
         run: |
+          # INFO: Verify the APK signature
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose android/app/build/outputs/apk/release/app-release.apk
+
           mkdir -p dist
           cp android/app/build/outputs/apk/release/app-release.apk "dist/$APK_NAME"
+      
+      # INFO: Upload the signed APK as an artifact
       - uses: actions/upload-artifact@v7
         with:
-          name: caimack-android-${{ env.RELEASE_TAG }}
+          name: caimack-android-${{ env.RELEASE_TAG }} 
           path: dist/*.apk
           if-no-files-found: error
           retention-days: 30
 
-      # Manual rebuilds may target a tag older than the publishing helper.
+      # INFO: Get actual script for release
       - name: Check out release publishing tools
         uses: actions/checkout@v7
         with:

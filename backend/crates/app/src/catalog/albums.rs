@@ -26,7 +26,7 @@ pub fn select() -> QueryBuilder<Postgres> {
     query
 }
 
-pub async fn fetch(db: &PgPool, mut query: QueryBuilder<Postgres>) -> AppResult<Vec<AlbumDto>> {
+pub async fn fetch<'e>(db: impl sqlx::PgExecutor<'e>, mut query: QueryBuilder<Postgres>) -> AppResult<Vec<AlbumDto>> {
     Ok(query.build_query_as().fetch_all(db).await?)
 }
 

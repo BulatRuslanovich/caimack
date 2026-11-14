@@ -40,17 +40,27 @@ fun DownloadsScreen(play: (List<Track>, Int) -> Unit) {
     val container = LocalContainer.current
     val context = LocalContext.current
     val offline by container.downloads.state.collectAsStateWithLifecycle()
-    val entries = offline.values.filter { it.track != null && container.downloads.visible(it) }.sortedBy { it.track!!.title.lowercase() }
+    val synchronized by container.syncStore.status.collectAsStateWithLifecycle()
+    val catalog by container.localLibrary.collectAsStateWithLifecycle()
+    val library = catalog.takeIf { it.account == container.accountKey }?.syncedTracks.orEmpty()
+    val libraryIds = library.map { it.id }.toSet()
+    val entries = offline.values.filter { it.track != null && it.track.id !in libraryIds && container.downloads.visible(it) }.sortedBy { it.track!!.title.lowercase() }
     val ready = entries.filter { it.done }.map { it.track!! }
     val pending = entries.count { !it.done }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(bottom = 24.dp)) {
         item { PageTitle(stringResource(R.string.downloads_title)) }
+        if(library.isNotEmpty()) {
+            item { Text(stringResource(R.string.sync_progress,synchronized.completed,synchronized.total),Modifier.padding(16.dp),style=Type.small) }
+            item { PlayActions(Modifier.padding(horizontal=16.dp,vertical=8.dp),onPlay={play(library,0)}) }
+            itemsIndexed(library,key={_,track -> "sync-${track.id}"}) { index,track -> TrackRow(track,{play(library,index)}) }
+        }
 
-        if (entries.isEmpty()) {
+        if (entries.isEmpty() && library.isEmpty()) {
             item { Empty(stringResource(R.string.downloads_empty_title), stringResource(R.string.downloads_empty_hint)) }
             return@LazyColumn
         }
+        if(entries.isEmpty()) return@LazyColumn
 
         item {
             Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {

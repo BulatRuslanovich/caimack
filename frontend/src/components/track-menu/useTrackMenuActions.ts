@@ -69,6 +69,7 @@ export function useTrackMenuActions({
     mutationFn: (playlist: Playlist) => api.addToPlaylist(playlist.id, [track.id]),
     onSuccess: (_, playlist) => {
       recordEvent({ type: "trackAddedToPlaylist", trackId: track.id, entityId: playlist.id });
+      invalidate("playlists");
       notify(t("menu.addedToPlaylist", { name: playlist.name }), "success");
       onOpenChange(false);
     },

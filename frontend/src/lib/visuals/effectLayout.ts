@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 export const GLASS_LENSES = 8;
-export const INK_FLOWS = 12;
 
 export function createEffectLayout(track: string) {
   let state = 2166136261;
@@ -40,18 +39,5 @@ export function createEffectLayout(track: string) {
       i * 4,
     );
   }
-  const ink = new Float32Array(INK_FLOWS * 4);
-  for (let i = 0; i < INK_FLOWS; i++) {
-    const frequency = i / (INK_FLOWS - 1);
-    ink.set(
-      [
-        ((i % 4) + 0.2 + random() * 0.6) / 4,
-        0.13 + ((Math.floor(i / 4) + 0.2 + random() * 0.6) / 3) * 0.74,
-        0.28 - frequency * 0.21,
-        random() < 0.5 ? -1 : 1,
-      ],
-      i * 4,
-    );
-  }
-  return { seed, lenses, optics, ink };
+  return { seed, lenses, optics };
 }

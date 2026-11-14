@@ -9,14 +9,14 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { queries } from "@/lib/queries";
-import type { Album, Artist, Playlist, Track } from "@/lib/types";
+import type { Album, Artist, LibraryItem, Playlist, Track } from "@/lib/types";
 import { usePlayback } from "@/lib/playback/usePlayback";
 import { useNowPlaying } from "@/contexts/PlayerContext";
 import { useFormat } from "@/lib/useFormat";
 import { artistImageUrl, coverUrl, playlistCoverUrl } from "@/lib/media";
 import { useTone } from "@/lib/useCoverTone";
 import { useT } from "@/contexts/I18nContext";
-import { AlbumCover, ArtistCover, PlaylistCover } from "./Cover";
+import { AlbumCover, ArtistCover, Cover, PlaylistCover } from "./Cover";
 import { ListMusicIcon } from "lucide-react";
 import { BufferingRing } from "./PlaybackIndicators";
 import { LibraryItemMenu } from "./LibrarySaveButton";
@@ -36,6 +36,8 @@ export function Card<T extends string>({
   action,
   menu,
   toneSrc,
+  layout = "grid",
+  details,
 }: {
   href?: Route<T>;
   onClick?: () => void;
@@ -50,44 +52,91 @@ export function Card<T extends string>({
   action?: ReactNode;
   menu?: ReactNode;
   toneSrc?: string | null | (string | null)[];
+  layout?: "grid" | "list";
+  details?: ReactNode;
 }) {
   const tone = useTone<HTMLElement>(toneSrc);
+  const list = layout === "list";
 
-  const body = (
+  const caption = (
     <>
-      <div
-        className={cn(
-          "card-art relative mb-3.5 aspect-square w-full overflow-hidden rounded-xs bg-accent",
-          round && "rounded-full",
-        )}
-      >
-        {cover}
-      </div>
       <span
         title={title}
         className={cn(
           "line-clamp-2 text-sm leading-snug font-medium",
           current && "text-primary",
-          menu && "pr-10",
+          !list && menu && "pr-10",
         )}
       >
         {title}
       </span>
-      <span className={cn("library-secondary line-clamp-2 text-sm leading-snug", menu && "pr-10")}>
+      <span
+        className={cn(
+          "library-secondary line-clamp-2 text-sm leading-snug",
+          !list && menu && "pr-10",
+        )}
+      >
         {subtitle}
       </span>
+      {details && (
+        <span
+          className={cn(
+            "library-tertiary line-clamp-2 text-xs leading-snug",
+            !list && menu && "pr-10",
+          )}
+        >
+          {details}
+        </span>
+      )}
+    </>
+  );
+  const body = (
+    <>
+      <div
+        className={cn(
+          "card-art relative overflow-hidden rounded-xs bg-accent",
+          list ? "size-14 shrink-0" : "mb-3.5 aspect-square w-full",
+          round && "rounded-full",
+        )}
+      >
+        {cover}
+      </div>
+      {list ? <span className="flex min-w-0 flex-1 flex-col gap-1">{caption}</span> : caption}
     </>
   );
 
   const shell = cn(
-    "flex min-w-0 flex-col gap-1 text-left hover:no-underline",
-    bare && "items-center text-center",
+    "flex min-w-0 text-left hover:no-underline",
+    list ? "items-center gap-3" : "flex-col gap-1",
+    bare && !list && "items-center text-center",
     active && "[&>div:first-child]:ring-2 [&>div:first-child]:ring-primary",
   );
 
-  if (href) {
+  if (!href && !menu && !action && !list) {
     return (
-      <div {...tone} data-round={round} className="media-card group relative flex min-w-0 flex-col">
+      <button
+        {...tone}
+        type="button"
+        data-round={round}
+        onClick={onClick}
+        aria-pressed={active || undefined}
+        className={cn("media-card group relative", shell)}
+      >
+        {body}
+      </button>
+    );
+  }
+
+  return (
+    <div
+      {...tone}
+      data-round={round}
+      className={cn(
+        "media-card group relative flex min-w-0",
+        list ? "items-center gap-2 rounded-md p-2 hover:bg-raised" : "flex-col",
+      )}
+    >
+      {href ? (
         <Link
           href={href}
           prefetch={false}
@@ -97,28 +146,75 @@ export function Card<T extends string>({
         >
           {body}
         </Link>
+      ) : (
+        <button
+          type="button"
+          onClick={onClick}
+          aria-pressed={active || undefined}
+          className={cn(shell, "flex-1")}
+        >
+          {body}
+        </button>
+      )}
 
-        {menu && <div className="absolute right-0 bottom-0">{menu}</div>}
-        {action && (
-          <div className="card-art-overlay pointer-events-none absolute inset-x-0 top-0 aspect-square">
-            {action}
-          </div>
-        )}
-      </div>
-    );
-  }
+      {menu && <div className={list ? "shrink-0" : "absolute right-0 bottom-0"}>{menu}</div>}
+      {action && !list && (
+        <div className="card-art-overlay pointer-events-none absolute inset-x-0 top-0 aspect-square">
+          {action}
+        </div>
+      )}
+    </div>
+  );
+}
 
+export function SavedLibraryCard({ item, layout }: { item: LibraryItem; layout: "grid" | "list" }) {
+  const t = useT();
+  const format = useFormat();
+  const client = useQueryClient();
+  const kind = t(
+    item.kind === "album"
+      ? "albums.kind"
+      : item.kind === "artist"
+        ? "artists.kind"
+        : "playlists.kind",
+  );
+  const duration = item.durationSeconds ?? 0;
+  const details = [
+    item.trackCount != null ? t("count.tracks", { count: item.trackCount }) : null,
+    item.kind === "artist" && item.albumCount != null
+      ? t("count.albums", { count: item.albumCount })
+      : null,
+    item.kind !== "artist" && duration > 0 ? format.totalDuration(duration) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const prefetch = () => {
+    if (item.kind === "album") void client.prefetchQuery(queries.album(item.id));
+    else if (item.kind === "artist") void client.prefetchQuery(queries.artist(item.id));
+    else void client.prefetchQuery(queries.playlist(item.id));
+  };
   return (
-    <button
-      {...tone}
-      type="button"
-      data-round={round}
-      onClick={onClick}
-      aria-pressed={active || undefined}
-      className={cn("media-card group relative", shell)}
-    >
-      {body}
-    </button>
+    <Card
+      layout={layout}
+      href={`/${item.kind}s/${item.id}`}
+      prefetch={prefetch}
+      title={item.title}
+      subtitle={[kind, item.subtitle, item.year].filter(Boolean).join(" · ")}
+      details={details}
+      round={item.kind === "artist"}
+      cover={
+        <Cover
+          name={item.title}
+          hasCover={item.hasImage}
+          rounded={item.kind === "artist"}
+          albumId={item.kind === "album" ? item.id : undefined}
+          artistId={item.kind === "artist" ? item.id : undefined}
+          playlistId={item.kind === "playlist" ? item.id : undefined}
+          coverTrackId={item.coverTrackId}
+        />
+      }
+      menu={<LibraryItemMenu kind={item.kind} id={item.id} title={item.title} />}
+    />
   );
 }
 

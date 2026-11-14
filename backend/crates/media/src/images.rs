@@ -64,6 +64,16 @@ pub fn square_webp_set(bytes: &[u8], edges: &[u32]) -> Result<Vec<Rendition>, Im
         .collect()
 }
 
+/// JPEG front art for portable audio tags (ID3 APIC / FLAC PICTURE).
+pub fn cover_jpeg(bytes: &[u8]) -> Result<Vec<u8>, ImageError> {
+    let image = decode(bytes)?.to_rgb8();
+    let mut result = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut result, 90)
+        .encode_image(&image)
+        .map_err(|_| ImageError::Unreadable)?;
+    Ok(result)
+}
+
 fn decode(bytes: &[u8]) -> Result<DynamicImage, ImageError> {
     let reader = ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(|_| ImageError::Unreadable)?;
     if !matches!(reader.format(), Some(ImageFormat::Jpeg | ImageFormat::Png | ImageFormat::WebP)) {

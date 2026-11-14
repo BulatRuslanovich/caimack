@@ -32,6 +32,7 @@ export function Record({
   spinning,
   scratchable = false,
   aura = false,
+  auraFrozen = false,
   axis = "x",
   sizes,
   transitionCover = false,
@@ -42,6 +43,7 @@ export function Record({
   spinning: boolean;
   scratchable?: boolean;
   aura?: boolean;
+  auraFrozen?: boolean;
   axis?: "x" | "y" | "responsive";
   sizes?: string;
   transitionCover?: boolean;
@@ -199,7 +201,12 @@ export function Record({
         onLostPointerCapture={endScratch}
       >
         {aura && visualizer && (
-          <RecordAura playing={spinning} bpm={track.cues?.bpm} offset={track.cues?.audioStart} />
+          <RecordAura
+            playing={spinning}
+            bpm={track.cues?.bpm}
+            offset={track.cues?.audioStart}
+            frozen={auraFrozen}
+          />
         )}
 
         <div ref={spinElement} className="record-spin">

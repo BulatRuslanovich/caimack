@@ -249,7 +249,7 @@ class LibraryTree(
                 .firstOrNull { it.key == parentId.removePrefix(PICK_SHELF) }?.tracks.orEmpty()
             parentId == FAVORITES -> container.api.favorites(1, LIMIT).items
             parentId == RECENT -> container.api.recentlyPlayed(1, LIMIT).items
-            parentId == DOWNLOADS -> container.downloads.tracks()
+            parentId == DOWNLOADS -> (container.syncStore.tracks()+container.downloads.tracks()).distinctBy { it.id }
             parentId.startsWith(PLAYLIST) -> container.api.playlist(parentId.removePrefix(PLAYLIST)).tracks
             parentId.startsWith(ALBUM) -> container.api.album(parentId.removePrefix(ALBUM)).tracks
             else -> emptyList()

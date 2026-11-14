@@ -20,4 +20,6 @@
     <string name="folders_empty_hint">Create a subfolder or use Move to folder to bring saved music here.</string>
     <string name="folders_up">Up one level</string>
     <string name="folders_create">Create</string>
+    <string name="collection_search">Search your library</string>
+    <string name="collection_no_results">No matching items</string>
 </resources>

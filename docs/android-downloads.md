@@ -23,7 +23,8 @@ once to retain its membership and ordering. A download's own metadata is enough
 to browse its album and credited artists, including collaborators.
 
 Catalog and folder editing require the server. Changes are never queued for
-later synchronization. A successful connection check restores normal requests
+later synchronization in individual-download mode. With full library sync
+enabled, supported offline edits use its durable action queue instead. A successful connection check restores normal requests
 and playback availability.
 
 ## Artwork and startup
@@ -32,7 +33,11 @@ Album covers and images of all credited artists are retained alongside download
 metadata in private app storage, separately from the evictable image cache.
 Missing images are retried on startup, resume and reconnection. They also remain
 available to the system media controls. Image failures do not block audio
-downloads. Updating a cover invalidates its retained image.
+downloads. Retained images are periodically revalidated while online. Images
+from the fork's older flat cache are imported automatically on first access,
+including when the server is unavailable.
+Editing artwork requests immediate revalidation and keeps the previous image
+available if the server cannot be reached.
 
 With a saved account, the interface opens immediately while the server validates
 the session. An unreachable server keeps access to individual downloads; a

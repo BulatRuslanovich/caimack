@@ -1,0 +1,16 @@
+<resources>
+    <string name="sync_title">Library synchronization</string>
+    <string name="sync_description">Keep the entire library, lyrics, artwork, vectors and server-prepared mixes on this phone. Original audio quality. Automatic sync over the local Wi-Fi or Ethernet network, including on battery.</string>
+    <string name="sync_enable">Synchronize this library</string>
+    <string name="sync_choose_folder">Choose music folder</string>
+    <string name="sync_progress">Available: %1$d / %2$d tracks</string>
+    <string name="sync_pending">Actions waiting to upload: %1$d</string>
+    <string name="sync_rejected">Server rejected %1$d changes. Your action log is retained.</string>
+    <string name="sync_last">Last completed sync: %1$s</string>
+    <string name="sync_now">Sync now / resume</string>
+    <string name="sync_pause">Pause</string>
+    <string name="sync_paused">Synchronization paused</string>
+    <string name="sync_sign_in_again">Sign in to the server again to resume synchronization. Your offline library is still available.</string>
+    <string name="sync_pending_before_change">Synchronize pending actions before changing the folder or account.</string>
+    <string name="sync_files_hint">Music and lyrics are ordinary files in a separate Caimack subfolder. Server deletions also remove synchronized copies. Turning sync off keeps the files. Offline radio contains up to 100 tracks and stops when the queue ends.</string>
+</resources>

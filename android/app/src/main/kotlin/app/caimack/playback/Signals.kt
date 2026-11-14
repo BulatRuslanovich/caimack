@@ -16,8 +16,13 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.jsonObject
 
-class Signals(private val api: CaimackApi, private val scope: CoroutineScope, private val sessionId: String) {
+class Signals(private val api: CaimackApi, private val scope: CoroutineScope, private val sessionId: String,
+    private val persist: (String,JsonObject,String) -> Boolean = { _,_,_ -> false }) {
     private val outbox = mutableListOf<PlaybackSignal>()
     private val sending = Mutex()
     private var timer: Job? = null
@@ -35,6 +40,10 @@ class Signals(private val api: CaimackApi, private val scope: CoroutineScope, pr
     }
 
     fun add(signal: PlaybackSignal) {
+        if(persist("signal",Json.encodeToJsonElement(signal).jsonObject,signal.occurredAt)) {
+            changes.tryEmit(signal)
+            return
+        }
         synchronized(outbox) { outbox += signal }
         changes.tryEmit(signal)
         timer = timer ?: scope.launch {
@@ -54,7 +63,9 @@ class Signals(private val api: CaimackApi, private val scope: CoroutineScope, pr
         if (recorded == trackId || listened < ListeningTracker.historyThreshold(durationSeconds)) return
 
         recorded = trackId
-        scope.launch { runCatching { api.recordPlay(HistoryEntryRequest(trackId, positionSeconds.toInt(), listened)) } }
+        val entry = HistoryEntryRequest(trackId, positionSeconds.toInt(), listened)
+        if(persist("history",Json.encodeToJsonElement(entry).jsonObject,Instant.now().toString())) return
+        scope.launch { runCatching { api.recordPlay(entry) } }
     }
 
     fun begin(trackId: String, durationSeconds: Int) {
@@ -68,10 +79,14 @@ class Signals(private val api: CaimackApi, private val scope: CoroutineScope, pr
 
     suspend fun send() {
         sending.withLock {
-            val batch = synchronized(outbox) { outbox.toList().also { outbox.clear() } }
-            if (batch.isEmpty()) return@withLock
-            runCatching { api.signals(SignalBatch(batch)) }
-                .onFailure { synchronized(outbox) { outbox.addAll(0, batch) } }
+            while(true) {
+                val batch = synchronized(outbox) { outbox.take(100).also { repeat(it.size) { outbox.removeAt(0) } } }
+                if (batch.isEmpty()) return@withLock
+                if(runCatching { api.signals(SignalBatch(batch)) }.isFailure) {
+                    synchronized(outbox) { outbox.addAll(0, batch) }
+                    return@withLock
+                }
+            }
         }
     }
 

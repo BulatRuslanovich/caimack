@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
+
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (c) 2026 Bulat Ruslanovich
+
 set -euo pipefail
 umask 077
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -313,7 +315,7 @@ apply() {
     # Weight downloads can take much longer than application startup.
     compose up -d
     compose up -d --no-deps --wait --wait-timeout 180 backend frontend postgres caddy
-    info 'MERT loads in the background. Follow progress with: ./caimack.sh logs mert -f'
+    info 'MERT wakes on the first embedding task and releases the GPU after idle time. Logs: ./caimack.sh logs mert -f'
   else compose up -d --wait --wait-timeout 180 "$@"; fi
 }
 acquire_images() {

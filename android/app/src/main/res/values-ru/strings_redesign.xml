@@ -1,9 +1,4 @@
 <resources>
-    <string name="library_intro">Ваша коллекция — всё под рукой</string>
-    <string name="library_tracks_hint">Поиск и сортировка музыки</string>
-    <string name="library_albums_hint">Обложки и любимые релизы</string>
-    <string name="library_artists_hint">Артисты и их альбомы</string>
-    <string name="library_playlists_hint">Ваши плейлисты и общие подборки</string>
     <string name="tracks_search">Поиск в этой коллекции</string>
     <string name="tracks_sort">Сортировка треков</string>
     <string name="sort_title">По названию</string>
@@ -24,7 +19,6 @@
     <string name="notifications_enable">Включить напоминания</string>
     <string name="downloads_empty_hint">Откройте меню трека или альбом, чтобы скачать музыку и слушать её без интернета.</string>
     <string name="playlists_empty_hint">Соберите любимые треки в свой первый плейлист.</string>
-    <string name="genres_browse_hint">Выберите направление или откройте все жанры.</string>
     <string name="genre_rock">Рок</string>
     <string name="genre_pop">Поп</string>
     <string name="genre_hiphop">Хип-хоп</string>

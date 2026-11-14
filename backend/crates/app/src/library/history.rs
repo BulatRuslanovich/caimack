@@ -99,18 +99,40 @@ pub async fn record(db: &PgPool, user: Uuid, request: RecordPlayRequest) -> AppR
 
     let now = Utc::now();
     let mut tx = db.begin().await?;
-    let refreshed = sqlx::query!(
-        "UPDATE listening_history SET played_at = $3, playback_position = $4
+    save(&mut tx, user, request.track_id, request.playback_position, now).await?;
+    tx.commit().await?;
+    tracing::debug!("Recorded play of track {} at {}s", request.track_id, request.playback_position);
+    Ok(())
+}
+
+pub(crate) async fn save(
+    conn: &mut sqlx::PgConnection,
+    user: Uuid,
+    track: Uuid,
+    position: i32,
+    at: DateTime<Utc>,
+) -> AppResult<()> {
+    // Use the sync lock so online reports and offline replays cannot both insert
+    // the first entry. An older replay must not move a newer entry backwards.
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 6))")
+        .bind(user.to_string())
+        .execute(&mut *conn)
+        .await?;
+    let refreshed = sqlx::query(
+        "UPDATE listening_history SET
+             playback_position = CASE WHEN played_at <= $3 THEN $4 ELSE playback_position END,
+             played_at = GREATEST(played_at, $3)
          WHERE id = (SELECT id FROM listening_history
-                     WHERE user_id = $1 AND track_id = $2 AND played_at >= $5
+                     WHERE user_id = $1 AND track_id = $2 AND played_at BETWEEN $5 AND $6
                      ORDER BY played_at DESC LIMIT 1)",
-        user,
-        request.track_id,
-        now,
-        request.playback_position,
-        now - DEDUPE_WINDOW
     )
-    .execute(&mut *tx)
+    .bind(user)
+    .bind(track)
+    .bind(at)
+    .bind(position)
+    .bind(at - DEDUPE_WINDOW)
+    .bind(at + DEDUPE_WINDOW)
+    .execute(&mut *conn)
     .await?;
 
     if refreshed.rows_affected() == 0 {
@@ -118,23 +140,26 @@ pub async fn record(db: &PgPool, user: Uuid, request: RecordPlayRequest) -> AppR
             "INSERT INTO listening_history (id, user_id, track_id, played_at, playback_position) VALUES ($1, $2, $3, $4, $5)",
             Uuid::now_v7(),
             user,
-            request.track_id,
-            now,
-            request.playback_position
+            track,
+            at,
+            position
         )
-        .execute(&mut *tx)
+        .execute(&mut *conn)
         .await?;
     }
 
-    let overflowing = oldest_beyond(&mut tx, user, RETENTION_ENTRIES + TRIM_SLACK).await?.is_some();
-    if overflowing && let Some(cutoff) = oldest_beyond(&mut tx, user, RETENTION_ENTRIES).await? {
-        sqlx::query!("DELETE FROM listening_history WHERE user_id = $1 AND played_at <= $2", user, cutoff)
-            .execute(&mut *tx)
-            .await?;
+    let overflowing = oldest_beyond(conn, user, RETENTION_ENTRIES + TRIM_SLACK).await?.is_some();
+    if overflowing {
+        sqlx::query(
+            "DELETE FROM listening_history WHERE id IN (
+            SELECT id FROM listening_history WHERE user_id=$1 ORDER BY played_at DESC,id DESC OFFSET $2)",
+        )
+        .bind(user)
+        .bind(RETENTION_ENTRIES)
+        .execute(&mut *conn)
+        .await?;
     }
 
-    tx.commit().await?;
-    tracing::debug!("Recorded play of track {} at {}s", request.track_id, request.playback_position);
     Ok(())
 }
 

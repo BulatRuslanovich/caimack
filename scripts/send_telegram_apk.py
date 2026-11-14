@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Deliver a release APK to the single Telegram group configured in CI secrets."""
+# Copyright (c) 2026 Bulat Ruslanovich
 
 import argparse
 import json
@@ -19,45 +20,51 @@ MAX_APK_BYTES = 50_000_000
 class DeliveryError(Exception):
     pass
 
-
+# INFO: Universal func for Telegram Bot API
 def api_request(token: str, method: str, body: bytes, content_type: str) -> dict:
     request = Request(
         f"https://api.telegram.org/bot{token}/{method}",
         data=body,
         headers={"Content-Type": content_type},
     )
+
     try:
         with urlopen(request, timeout=180) as response:
             result = json.load(response)
     except HTTPError as error:
         status = error.code
         error.close()
-        # HTTPError's default representation includes the bot token in the URL.
         raise DeliveryError(
             f"Telegram rejected {method} (HTTP {status}). Check bot membership and chat permissions."
         ) from None
+
     except (URLError, TimeoutError, OSError):
         raise DeliveryError(
             "Telegram connection failed. Delivery is not retried automatically to avoid duplicates."
         ) from None
+
     except (ValueError, UnicodeError):
         raise DeliveryError("Telegram returned an invalid JSON response.") from None
+    
     if (
         not isinstance(result, dict)
         or result.get("ok") is not True
         or not isinstance(result.get("result"), dict)
     ):
         raise DeliveryError(f"Telegram did not confirm {method}.")
+    
     return result["result"]
 
 
 def multipart(fields: dict[str, str], filename: str, apk: bytes) -> tuple[bytes, str]:
     boundary = "caimack-" + uuid4().hex
     parts = []
+
     for name, value in fields.items():
         parts.append(
             f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode()
         )
+
     parts.extend(
         [
             f'--{boundary}\r\nContent-Disposition: form-data; name="document"; filename="{filename}"\r\nContent-Type: application/vnd.android.package-archive\r\n\r\n'.encode(),
@@ -65,30 +72,38 @@ def multipart(fields: dict[str, str], filename: str, apk: bytes) -> tuple[bytes,
             f"\r\n--{boundary}--\r\n".encode(),
         ]
     )
+
     return b"".join(parts), f"multipart/form-data; boundary={boundary}"
 
 
 def deliver(apk: Path, tag: str, repository: str, revision: str) -> int:
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
+
     if not re.fullmatch(r"[0-9]+:[A-Za-z0-9_-]+", token):
         raise DeliveryError("Set the TELEGRAM_BOT_TOKEN repository secret.")
+
     if not re.fullmatch(r"-[0-9]+", chat_id):
         raise DeliveryError(
             "Set TELEGRAM_CHAT_ID to the numeric ID of the target group (a negative integer)."
         )
+
     if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", tag):
         raise DeliveryError("The release tag must have the form v1.2.3.")
+
     if not re.fullmatch(
         r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository
     ) or not re.fullmatch(r"[a-fA-F0-9]{40}", revision):
         raise DeliveryError("Invalid source repository or commit SHA.")
+
     if not apk.is_file() or apk.suffix.lower() != ".apk":
         raise DeliveryError("Release APK not found.")
+
     if not 0 < apk.stat().st_size <= MAX_APK_BYTES:
         raise DeliveryError(
             "APK exceeds Telegram's 50 MB upload limit. Download it from the Actions artifact instead."
         )
+
     try:
         with zipfile.ZipFile(apk) as package:
             if "AndroidManifest.xml" not in package.namelist():
@@ -96,10 +111,10 @@ def deliver(apk: Path, tag: str, repository: str, revision: str) -> int:
     except zipfile.BadZipFile:
         raise DeliveryError("The file is not an APK archive.") from None
 
-    # Validate the fixed destination before uploading; never fall back to another chat.
     chat = api_request(
         token, "getChat", json.dumps({"chat_id": chat_id}).encode(), "application/json"
     )
+    
     if str(chat.get("id")) != chat_id or chat.get("type") not in {
         "group",
         "supergroup",
@@ -134,7 +149,6 @@ def main() -> int:
     try:
         message = deliver(args.apk, args.tag, args.repository, args.revision)
     except (DeliveryError, OSError) as error:
-        # OSError may contain local file paths, but never emit a token-bearing URL.
         text = (
             str(error)
             if isinstance(error, DeliveryError)

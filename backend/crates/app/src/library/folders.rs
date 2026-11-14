@@ -63,8 +63,8 @@ async fn destination(db: &mut PgConnection, user: Uuid, folder: Option<Uuid>, mo
     Ok(())
 }
 
-/// Call inside a transaction. A per-account lock prevents simultaneous moves
-/// from forming a cycle or racing with deletion.
+/// Call inside a transaction. The same per-account lock as offline actions
+/// prevents simultaneous moves from forming a cycle or racing with deletion.
 pub async fn apply(db: &mut PgConnection, user: Uuid, change: &Change, at: DateTime<Utc>) -> AppResult<()> {
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 6))")
         .bind(user.to_string())

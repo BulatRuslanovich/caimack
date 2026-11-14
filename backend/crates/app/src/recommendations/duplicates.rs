@@ -77,12 +77,7 @@ impl Recommendations {
     }
 
     pub async fn dismiss_duplicates(&self, track_ids: &[Uuid]) -> AppResult<()> {
-        let mut ids: Vec<Uuid> = Vec::with_capacity(track_ids.len());
-        for id in track_ids {
-            if !ids.contains(id) {
-                ids.push(*id);
-            }
-        }
+        let ids = crate::ids::distinct(track_ids.iter().copied());
         if ids.len() < 2 {
             return Err(AppError::validation("Select at least two tracks."));
         }

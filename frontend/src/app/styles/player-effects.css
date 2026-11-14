@@ -41,8 +41,3 @@
     #253747
   );
 }
-.player-effect-preview[data-effect="ink"] {
-  background:
-    radial-gradient(ellipse at 25% 75%, #b77e9d 0, transparent 62%),
-    radial-gradient(ellipse at 75% 25%, #6ea0ac 0, transparent 70%), #192533;
-}

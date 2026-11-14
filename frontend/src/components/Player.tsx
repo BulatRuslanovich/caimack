@@ -16,14 +16,7 @@ import { SEEK_STEP } from "@/lib/shortcuts";
 import { useCoverLight } from "@/lib/useCoverTone";
 import { useToast } from "@/lib/useToast";
 import { useToggleFavorite } from "@/lib/useToggleFavorite";
-import {
-  HeartIcon,
-  ListVideoIcon,
-  Maximize2Icon,
-  PauseIcon,
-  PlayIcon,
-  SkipForwardIcon,
-} from "lucide-react";
+import { HeartIcon, ListVideoIcon, Maximize2Icon, SkipForwardIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
@@ -34,7 +27,7 @@ import {
   preloadFullPlayer,
 } from "./FullPlayerLoader";
 import { PlaybackDevices } from "./PlaybackDevices";
-import { BufferingRing } from "./PlaybackIndicators";
+import { PlayPauseButton } from "./PlayPauseButton";
 import { PlayerTransport } from "./PlayerTransport";
 import { PlayerVolume } from "./PlayerVolume";
 import { Record } from "./Record";
@@ -291,17 +284,12 @@ export function Player() {
             </Button>
 
             <div className="relative flex items-center gap-0.5 md:hidden">
-              <Button
-                variant="play"
-                size="icon"
-                className="transport-main relative"
-                onClick={actions.toggle}
-                aria-label={state.isPlaying ? t("action.pause") : t("action.play")}
-                aria-busy={state.buffering}
-              >
-                {state.isPlaying ? <PauseIcon size={24} /> : <PlayIcon size={24} />}
-                {state.buffering && <BufferingRing />}
-              </Button>
+              <PlayPauseButton
+                playing={state.isPlaying}
+                buffering={state.buffering}
+                onToggle={actions.toggle}
+                size="compact"
+              />
 
               <Button
                 variant="ghost"

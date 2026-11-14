@@ -6,11 +6,15 @@
 import { PlaybackDevices } from "./PlaybackDevices";
 
 import { useT } from "@/contexts/I18nContext";
-import { usePlayer, usePlayerClock, usePlayerState } from "@/contexts/PlayerContext";
+import {
+  useArtworkDirection,
+  usePlayer,
+  usePlayerClock,
+  usePlayerState,
+} from "@/contexts/PlayerContext";
 import { cn } from "@/lib/cn";
 import { displayTitleClass, formatArtists, formatDuration } from "@/lib/format";
 import { leanBack } from "@/lib/leanBack";
-import { trackCoverUrl } from "@/lib/media";
 import { planTransition } from "@/lib/playback/transitions";
 import { useConnect } from "@/lib/playback/useConnectPlayback";
 import { usePlaybackProgress } from "@/lib/playback/usePlaybackProgress";
@@ -32,12 +36,13 @@ import {
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { ArtBackdrop } from "./ArtBackdrop";
+import { PlayerBackdrop } from "./ArtBackdrop";
+import { ArtworkScene } from "./ArtworkScene";
 import { ArtistLinks } from "./ArtistLinks";
 import { PlayerEffectsBackdrop } from "./PlayerEffectsBackdrop";
 import { PlayerTransport } from "./PlayerTransport";
 import { PlayerVolume } from "./PlayerVolume";
-import { Record } from "./Record";
+import { RecordTransition } from "./RecordTransition";
 import { SleepTimerButton } from "./SleepTimerButton";
 import { StreamQuality } from "./StreamQuality";
 import { TrackMenu } from "./TrackMenu";
@@ -134,13 +139,23 @@ function ShareCardButton({ track }: { track: Track }) {
   );
 }
 
-export function FullScreenPlayer({
-  onClose,
-  onToggleFavorite,
-}: {
+interface FullScreenPlayerProps {
   onClose: () => void;
   onToggleFavorite: () => void;
-}) {
+}
+
+export function FullScreenPlayer(props: FullScreenPlayerProps) {
+  const { currentTrack } = usePlayerState();
+  const artworkDirection = useArtworkDirection();
+  if (!currentTrack) return null;
+  return (
+    <ArtworkScene track={currentTrack} direction={artworkDirection}>
+      <FullScreenPlayerContent {...props} />
+    </ArtworkScene>
+  );
+}
+
+function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayerProps) {
   const player = usePlayer();
   const tatarMafia = useTatarMafia();
   const connect = useConnect();
@@ -183,6 +198,7 @@ export function FullScreenPlayer({
         <DialogPrimitive.Content asChild aria-describedby={undefined}>
           <div
             data-player-fullscreen="true"
+            data-aura-host
             onTouchStart={(event) => {
               const atTop = (stage.current?.scrollTop ?? 0) === 0;
               swipeFrom.current = panel === "art" && atTop ? event.touches[0].clientY : null;
@@ -193,14 +209,14 @@ export function FullScreenPlayer({
               if (from !== null && event.changedTouches[0].clientY - from > SWIPE_CLOSE_PX)
                 onClose();
             }}
-            className="fixed inset-0 z-90 flex flex-col bg-background px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))]"
+            className="fixed inset-0 z-90 flex flex-col overflow-hidden bg-background px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))]"
           >
             <DialogPrimitive.Title className="sr-only">
               {t("player.nowPlaying")}
             </DialogPrimitive.Title>
 
-            <ArtBackdrop mode="stage" src={trackCoverUrl(track, "thumb")} />
-            <PlayerEffectsBackdrop track={track} playing={player.isPlaying && !player.buffering} />
+            <PlayerBackdrop />
+            <PlayerEffectsBackdrop playing={player.isPlaying && !player.buffering} />
 
             <header
               className={cn(
@@ -271,15 +287,15 @@ export function FullScreenPlayer({
 
             <div
               ref={stage}
-              className="relative z-1 flex min-h-0 flex-1 gap-[clamp(2rem,5vw,5rem)] max-lg:flex-col max-lg:overflow-x-hidden max-lg:overflow-y-auto"
+              className="relative z-1 flex min-h-0 flex-1 gap-[clamp(2rem,5vw,5rem)] max-lg:-mx-5 max-lg:flex-col max-lg:overflow-x-hidden max-lg:overflow-y-auto max-lg:px-5"
             >
               {panel === "art" && (
                 <div className="flex min-h-0 flex-[1.2] items-center justify-end pr-[min(40%,20vh)] max-lg:flex-[1_0_auto] max-lg:justify-center max-lg:pt-[calc(min(76vw,22rem)*0.22+1rem)] max-lg:pr-0">
-                  <Record
-                    track={track}
+                  <RecordTransition
                     out
                     spinning={player.isPlaying && !player.buffering}
                     scratchable
+                    aura
                     axis="responsive"
                     sizes="(max-width: 1023px) min(76vw, 22rem), min(48vh, 28rem)"
                     transitionCover

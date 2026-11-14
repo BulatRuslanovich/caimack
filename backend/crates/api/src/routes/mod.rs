@@ -10,6 +10,7 @@ mod library;
 mod media;
 mod playback;
 mod recommendations;
+mod sync;
 
 use std::sync::Arc;
 
@@ -37,6 +38,7 @@ pub fn router(state: AppState) -> Router {
         .merge(media::router())
         .merge(playback::router())
         .merge(connect::router())
+        .merge(sync::router())
         .merge(recommendations::router(state.config.recommendations_enabled))
         .route_layer(from_fn_with_state(state.clone(), crate::auth::require_user));
 

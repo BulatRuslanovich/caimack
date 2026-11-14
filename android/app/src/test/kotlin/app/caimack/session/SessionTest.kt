@@ -4,9 +4,10 @@
 package app.caimack.session
 
 import androidx.datastore.core.DataStore
+import androidx.datastore.core.okio.OkioStorage
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.PreferencesSerializer
 import app.caimack.api.CaimackApi
 import app.caimack.api.User
 import java.io.File
@@ -17,8 +18,9 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -29,6 +31,8 @@ import mockwebserver3.RecordedRequest
 import okhttp3.Cookie
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okio.FileSystem
+import okio.Path.Companion.toPath
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -50,10 +54,14 @@ class SessionTest {
     fun start() = runBlocking {
         web.start()
         directory = Files.createTempDirectory("restore-session").toFile()
-        preferences =
-            PreferenceDataStoreFactory.create(scope = scope) {
-                File(directory, "session.preferences_pb")
-            }
+        // JVM tests have a stubbed Android SDK level; use portable atomic file
+        // replacement instead of FileStorage's legacy Android rename fallback.
+        preferences = PreferenceDataStoreFactory.create(
+            storage = OkioStorage(FileSystem.SYSTEM, PreferencesSerializer) {
+                File(directory, "session.preferences_pb").absolutePath.toPath()
+            },
+            scope = scope,
+        )
         Server(preferences).remember(web.url("/").toString())
         Unit
     }
@@ -61,7 +69,7 @@ class SessionTest {
     @After
     fun stop() {
         if (!webClosed) web.close()
-        scope.cancel()
+        runBlocking { scope.coroutineContext.job.cancelAndJoin() }
         directory.deleteRecursively()
     }
 
@@ -71,14 +79,13 @@ class SessionTest {
         val requested = CountDownLatch(1)
         val respond = CountDownLatch(1)
         val freshUser = cachedUser.copy(username = "Updated name")
-        web.dispatcher =
-            object : Dispatcher() {
-                override fun dispatch(request: RecordedRequest): MockResponse {
-                    requested.countDown()
-                    check(respond.await(5, TimeUnit.SECONDS))
-                    return MockResponse.Builder().body(json.encodeToString(freshUser)).build()
-                }
+        web.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                requested.countDown()
+                check(respond.await(5, TimeUnit.SECONDS))
+                return MockResponse.Builder().body(json.encodeToString(freshUser)).build()
             }
+        }
         val session = session()
         val restoring = launch(Dispatchers.IO) { session.restore() }
         try {
@@ -118,21 +125,24 @@ class SessionTest {
         assertEquals(0, web.requestCount)
     }
 
+    @Test
+    fun `a synchronized account remains available when its server rejects the session`() = runBlocking {
+        web.enqueue(MockResponse.Builder().code(401).build())
+        val session = session(offlineUser = { cachedUser })
+        session.restore()
+        assertEquals(SessionState.SignedIn(cachedUser), session.state.value)
+    }
+
     private suspend fun rememberUser() {
-        val hint =
-            Base64.getUrlEncoder()
-                .withoutPadding()
-                .encodeToString(json.encodeToString(cachedUser).toByteArray())
-        val cookie =
-            Cookie.Builder()
-                .name("ms_session")
-                .value(hint)
-                .hostOnlyDomain(web.url("/").host)
-                .path("/")
-                .expiresAt(System.currentTimeMillis() + 60_000)
-                .build()
-        PersistentCookieJar(preferences, scope).saveFromResponse(web.url("/"), listOf(cookie))
-        preferences.data.first { it[stringPreferencesKey("cookies")] != null }
+        val hint = Base64.getUrlEncoder().withoutPadding().encodeToString(json.encodeToString(cachedUser).toByteArray())
+        val cookie = Cookie.Builder().name("ms_session").value(hint)
+            .hostOnlyDomain(web.url("/").host).path("/")
+            .expiresAt(System.currentTimeMillis() + 60_000).build()
+        // Keep persistence in this fixture's scope so restoration starts only
+        // after the cookie write finishes, without a wall-clock deadline.
+        coroutineScope {
+            PersistentCookieJar(preferences, this).saveFromResponse(web.url("/"), listOf(cookie))
+        }
     }
 
     @Test
@@ -160,18 +170,13 @@ class SessionTest {
         assertEquals(SessionState.SignedOut(expired = true), session.state.value)
     }
 
-    private fun session(): Session {
+    private fun session(offlineUser: () -> User? = { null }): Session {
         val server = Server(preferences)
         val cookies = PersistentCookieJar(preferences, scope)
-        val client =
-            OkHttpClient.Builder().cookieJar(cookies).addInterceptor(server.interceptor).build()
-        val api =
-            Retrofit.Builder()
-                .baseUrl(Server.PLACEHOLDER)
-                .client(client)
-                .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-                .build()
-                .create(CaimackApi::class.java)
-        return Session(api, server, cookies, json) { "Test phone" }
+        val client = OkHttpClient.Builder().cookieJar(cookies).addInterceptor(server.interceptor).build()
+        val api = Retrofit.Builder().baseUrl(Server.PLACEHOLDER).client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build().create(CaimackApi::class.java)
+        return Session(api, server, cookies, json, { "Test phone" }, offlineUser)
     }
 }

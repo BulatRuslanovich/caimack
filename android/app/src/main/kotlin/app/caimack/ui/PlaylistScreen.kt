@@ -73,9 +73,7 @@ fun PlaylistScreen(id: String, play: (List<Track>, Int) -> Unit, onDeleted: () -
     val local = LocalOfflineLibrary.current
     Load("playlist:$id", {
         api.playlist(id).also { playlist ->
-            if (!local && playlist.hasCover) container.scope.launch {
-                container.downloadedCatalog.cacheArtwork(listOf("api/playlists/${playlist.id}/cover"), container.http)
-            }
+            if (!local) kotlinx.coroutines.withContext(Dispatchers.IO) { container.downloadedCatalog.remember(playlist) }
         }
     }) { loaded ->
         PlaylistContent(loaded, play, onDeleted)
@@ -243,7 +241,9 @@ private fun PlaylistContent(loaded: PlaylistDetail, play: (List<Track>, Int) -> 
                 backdrop = cover(true),
             ) { Cover(cover(false), playlist.name, it) }
         }
-        item { Actions(playlist.tracks, play, onMore = if (owner) ({ editing = Editing.Manage }) else null, libraryAction = { LibrarySaveButton("playlist", playlist.id) }) }
+        item { Actions(playlist.tracks, play, onMore = if (owner) ({ editing = Editing.Manage }) else null, libraryAction = { LibrarySaveButton("playlist", playlist.id) }, beforeDownload = { container.downloadedCatalog.remember(playlist)
+            if (playlist.hasCover) container.scope.launch { container.downloadedCatalog.cacheArtwork(listOf("api/playlists/${playlist.id}/cover"), container.http) }
+        }) }
         if (playlist.tracks.isEmpty()) {
             item { Empty(stringResource(R.string.playlists_empty_playlist_title)) }
         } else {

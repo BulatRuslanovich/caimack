@@ -38,8 +38,48 @@ pub struct RadioBatchDto {
 
 impl Recommendations {
     pub async fn radio(&self, user: Uuid, request: RadioRequestDto) -> AppResult<RadioBatchDto> {
+        self.radio_batch(user, request, false).await
+    }
+
+    /// Preparing an offline station is not a listening impression. Only the
+    /// phone's actual playback events should influence the listener profile.
+    pub async fn offline_radio(&self, user: Uuid) -> AppResult<RadioBatchDto> {
+        let mut tracks = Vec::new();
+        let mut excluded = Vec::new();
+        // A station spans several ordinary radio batches. Artist diversity caps
+        // apply to a short batch, not to the entire day-long offline station.
+        for _ in 0..100 {
+            let remaining = 100 - tracks.len();
+            if remaining == 0 {
+                break;
+            }
+            let batch = self
+                .radio_batch(
+                    user,
+                    RadioRequestDto {
+                        limit: Some(i64::try_from(remaining.min(20)).unwrap_or(20)),
+                        exclude: Some(excluded.clone()),
+                        ..Default::default()
+                    },
+                    true,
+                )
+                .await?;
+            if batch.tracks.is_empty() {
+                break;
+            }
+            for track in batch.tracks {
+                if !excluded.contains(&track.track.id) {
+                    excluded.push(track.track.id);
+                    tracks.push(track);
+                }
+            }
+        }
+        Ok(RadioBatchDto { tracks, seed_track_id: None })
+    }
+
+    async fn radio_batch(&self, user: Uuid, request: RadioRequestDto, offline: bool) -> AppResult<RadioBatchDto> {
         let limit = request.limit.unwrap_or(DEFAULT_BATCH);
-        if !(1..=MAX_BATCH).contains(&limit) {
+        if !(1..=if offline { 100 } else { MAX_BATCH }).contains(&limit) {
             return Err(AppError::validation("Radio limit must be between 1 and {0}.").arg(MAX_BATCH));
         }
         let focus = match request.focus.as_deref() {
@@ -89,7 +129,7 @@ impl Recommendations {
                 features: pick.features,
             })
             .collect();
-        if let Err(error) = impressions::record(&self.db, user, source, &shown).await {
+        if !offline && let Err(error) = impressions::record(&self.db, user, source, &shown).await {
             tracing::error!("Recording radio impressions failed: {error}");
         }
 

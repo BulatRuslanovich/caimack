@@ -77,3 +77,32 @@ async fn simultaneous_moves_cannot_create_a_cycle(db: PgPool) -> anyhow::Result<
     assert_ne!(one.is_ok(), two.is_ok());
     Ok(())
 }
+
+#[sqlx::test(migrations = "../../../db/migrations")]
+async fn offline_folder_retries_do_not_recreate_deleted_folders(db: PgPool) -> anyhow::Result<()> {
+    use app::sync::actions::{Action, Batch, exchange};
+    let directory = std::env::temp_dir().join(format!("caimack-sync-test-{}", Uuid::now_v7()));
+    let storage = app::storage::Storage::open(&directory)?;
+    let user = common::user(&db, "offline", false).await?;
+    let server_id = sqlx::query_scalar("SELECT id FROM sync_identity").fetch_one(&db).await?;
+    let id = Uuid::new_v4();
+    let action_id = Uuid::new_v4();
+    let occurred_at = Utc::now();
+    let batch = || Batch {
+        server_id,
+        user_id: user,
+        actions: vec![Action {
+            id: action_id,
+            kind: "libraryOrganize".into(),
+            entity_id: None,
+            occurred_at,
+            payload: serde_json::json!({"operation":"create","id":id,"name":"Offline","folderId":null}),
+        }],
+    };
+    assert_eq!(exchange(&db, &storage, user, batch()).await?["results"][0]["status"], "applied");
+    apply(&db, user, Change::Delete { id }).await?;
+    assert_eq!(exchange(&db, &storage, user, batch()).await?["results"][0]["status"], "applied");
+    assert!(folders::list(&db, user).await?.is_empty());
+    std::fs::remove_dir_all(directory)?;
+    Ok(())
+}

@@ -20,4 +20,6 @@
     <string name="folders_empty_hint">Создайте вложенную папку или перенесите сюда музыку через меню «Переместить в папку».</string>
     <string name="folders_up">На уровень выше</string>
     <string name="folders_create">Создать</string>
+    <string name="collection_search">Поиск в медиатеке</string>
+    <string name="collection_no_results">Ничего не найдено</string>
 </resources>

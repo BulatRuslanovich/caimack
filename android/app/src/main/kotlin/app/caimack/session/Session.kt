@@ -38,6 +38,9 @@ class Session(
     private val cookies: PersistentCookieJar,
     private val json: Json,
     private val deviceName: () -> String,
+    private val offlineUser: () -> User? = { null },
+    private val onLogin: (User) -> Unit = {},
+    private val onLogout: () -> Unit = {},
 ) {
     private val current = MutableStateFlow<SessionState>(SessionState.Restoring)
     private var revision = 0L
@@ -57,7 +60,7 @@ class Session(
 
         val hinted = cookies.value(HINT_COOKIE)?.let { hint ->
             runCatching { json.decodeFromString<User>(String(Base64.getUrlDecoder().decode(hint))) }.getOrNull()
-        }
+        } ?: offlineUser()
 
         // Reach individual downloads immediately while validating the saved session.
         if (server.url.value != null && hinted != null) publish(version, SessionState.SignedIn(hinted))
@@ -69,7 +72,7 @@ class Session(
             } catch (_: IOException) {
                 SessionState.SignedIn(hinted)
             } catch (failure: HttpException) {
-                if (failure.code() == UNAUTHORIZED) SessionState.SignedOut(expired = true) else SessionState.SignedIn(hinted)
+                if (failure.code() == UNAUTHORIZED) offlineUser()?.let { SessionState.SignedIn(it) } ?: SessionState.SignedOut(expired = true) else SessionState.SignedIn(hinted)
             }
         }
         publish(version, restored)
@@ -81,7 +84,9 @@ class Session(
         cookies.clear()
 
         return try {
-            publish(version, SessionState.SignedIn(api.login(LoginRequest(username.trim(), password, deviceName(), longLived = true))))
+            val user = api.login(LoginRequest(username.trim(), password, deviceName(), longLived = true))
+            onLogin(user)
+            publish(version, SessionState.SignedIn(user))
             null
         } catch (denied: LocalHttpPolicy.Denied) {
             if (denied.disabled) LoginFailure.LocalHttpDisabled else LoginFailure.NonLocalHttp
@@ -95,6 +100,7 @@ class Session(
 
     suspend fun logout() {
         val version = nextRevision()
+        onLogout()
         try {
             api.logout()
         } catch (_: IOException) {
@@ -105,8 +111,9 @@ class Session(
     }
 
     fun expire() {
-        cookies.clear()
         val version = nextRevision()
+        offlineUser()?.let { publish(version, SessionState.SignedIn(it)); return }
+        cookies.clear()
         publish(version, SessionState.SignedOut(expired = true))
     }
 

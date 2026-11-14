@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="player_now_playing">Сейчас играет</string>
     <string name="player_open_full">Открыть плеер на весь экран</string>
     <string name="player_close_full">Закрыть полноэкранный плеер</string>
     <string name="player_previous">Предыдущий трек</string>
@@ -14,10 +13,6 @@
     <string name="lyrics_none">Для этого трека текста нет.</string>
     <string name="player_playing_elsewhere">Пауза — воспроизведение продолжено на другом устройстве.</string>
     <string name="player_playing_on">Пауза — теперь играет на %1$s.</string>
-    <string name="handoff_playing_on">Играет на %1$s</string>
-    <string name="handoff_paused_on">На паузе на %1$s · %2$s</string>
-    <string name="handoff_continue_here">Продолжить здесь</string>
-    <string name="handoff_dismiss">Скрыть</string>
     <string name="downloads_title">Загрузки</string>
     <string name="downloads_add">Скачать</string>
     <string name="downloads_available">Доступно без сети</string>
@@ -41,7 +36,6 @@
     <string name="menu_unlike">Убрать из избранного</string>
     <string name="menu_add_to_playlist">Добавить в плейлист</string>
     <string name="menu_added_to_playlist">Трек добавлен в плейлист «%1$s».</string>
-    <string name="menu_no_playlists">Плейлистов пока нет</string>
     <string name="menu_go_to_album">Перейти к альбому</string>
     <string name="menu_go_to_artist">Перейти к исполнителю</string>
     <string name="menu_more">Другие действия</string>
@@ -49,7 +43,6 @@
     <string name="radio_failed">Не удалось запустить радио.</string>
     <string name="radio_tile_starting">Подбираю…</string>
     <string name="radio_tile_failed">Не вышло</string>
-    <string name="player_buffering">Загрузка…</string>
     <string name="player_skipped_unplayable">«%1$s» не воспроизводится — переходим к следующему.</string>
     <string name="queue_up_next">Далее</string>
     <string name="queue_radio_from">Радио по «%1$s»</string>

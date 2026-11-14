@@ -88,11 +88,14 @@ The home screen above brings together personal radio, a daily mix and new additi
 The web app is a PWA with its own mobile layout. There is also a native Android client with
 background playback, offline downloads and Android Auto.
 
-Android retains artwork and previously browsed metadata for individual downloads.
-See [individual Android downloads](docs/android-downloads.md) for offline browsing
-and session behavior.
-HTTPS is the default; an optional [local HTTP setting](docs/android-local-http.md)
-is off by default and restricted to the selected local server.
+[Individual downloads](docs/android-downloads.md) retain catalog metadata and
+artwork for offline browsing. The fork also supports opt-in
+[HTTP connections to a local server](docs/android-local-http.md).
+
+Android also supports opt-in [full library synchronization](docs/android-library-sync.md)
+to a folder you choose: original music, lyrics, artwork, vectors and server-prepared
+mixes/radio remain available away from your local network. Offline listening and
+playlist edits are merged back when the phone returns.
 
 The normal player can also control another signed-in web or Android device.
 Choose an output from the player's device button; playback controls, the queue
@@ -149,13 +152,23 @@ after your usual Compose files to enable the module. The API advertises this
 capability; clients hide recommendation controls when it is disabled.
 
 When enabled, track similarity uses **MERT-Large v1 (330M)** on an NVIDIA (CUDA) or supported AMD (ROCm) GPU. The `mert` container
-downloads the pinned, ready-to-use weights (about 1.26 GB) from Hugging Face once
+downloads the pinned, ready-to-use weights (about 1.26 GB) from Hugging Face on the first embedding request
 and keeps them in `storage/models/mert`. No training or model export runs on the server.
 The library and playback are available while the model loads. Existing CLAP vectors
 are automatically replaced in the background; recommendations and the map use only
-compatible MERT vectors.
+compatible MERT vectors. The GPU worker starts on demand and releases its model
+and GPU context after five idle minutes (`MERT_IDLE_TIMEOUT_SECONDS`, default `300`).
 
 See [optional module deployment and cache reuse](docs/mert.md).
+
+File names are left unchanged by default. Optional catalog-based renaming uses
+`Artist - Title.ext`, keeps track IDs, history, favorites and existing MERT vectors,
+and moves same-name lyric/image companion files together. See
+[automatic file names](docs/file-names.md) for write access, collision handling and recovery.
+
+Optional [metadata export](docs/metadata-export.md) embeds catalog artwork into
+audio files and saves synchronized lyrics as adjacent `.lrc` files (or `.txt`
+for plain lyrics). Enable `EXPORT_MUSIC_METADATA=true` with folder write access.
 
 Listening behavior automatically scores recommendations; see [recommendation quality](docs/recommendations.md).
 
