@@ -188,6 +188,14 @@ class AppContainer(context: Context) {
     val accountKey: String?
         get() = (session.state.value as? SessionState.SignedIn)?.let { "${server.url.value}|${it.user.id}" }
 
+    val downloadedLyrics by lazy { app.caimack.playback.DownloadedLyrics(
+        File(context.filesDir, "downloaded-lyrics"), json, { accountKey },
+        { downloads.state.value.values.filter { downloads.visible(it) }.mapNotNull { it.track?.id }.toSet() },
+        api::lyrics,
+    ) }
+
+    suspend fun lyrics(id: String) = downloadedLyrics.load(id, offline = libraryCache.offline.value)
+
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val localLibrary by lazy {
         val completed = combine(downloads.state, server.url) { entries, _ ->
@@ -212,7 +220,11 @@ class AppContainer(context: Context) {
     val connect by lazy { ConnectPlayback(context.applicationContext, this) }
 
     private val artworkRefresh = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
-    fun refreshDownloadArtwork() { artworkRefresh.trySend(Unit) }
+    private val lyricsRefresh = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
+    fun refreshDownloadMetadata() {
+        artworkRefresh.trySend(Unit)
+        lyricsRefresh.trySend(Unit)
+    }
 
     fun setAllowLocalHttp(value: Boolean) {
         connectionPreferences.setAllowLocalHttp(value)
@@ -222,7 +234,7 @@ class AppContainer(context: Context) {
             libraryCache.offline.value = true
         } else if (value) {
             refreshLibraryConnection()
-            refreshDownloadArtwork()
+            refreshDownloadMetadata()
         }
     }
 
@@ -241,6 +253,15 @@ class AppContainer(context: Context) {
 
     init {
         scope.launch {
+            for (request in lyricsRefresh) {
+                if (session.state.value !is SessionState.SignedIn) continue
+                val ids = kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    downloads.state.value.values.filter { downloads.visible(it) }.mapNotNull { it.track?.id }
+                }
+                downloadedLyrics.refresh(ids)
+            }
+        }
+        scope.launch {
             for (request in artworkRefresh) {
                 if (session.state.value !is SessionState.SignedIn) continue
                 val songs = kotlinx.coroutines.withContext(Dispatchers.Main) {
@@ -252,8 +273,8 @@ class AppContainer(context: Context) {
         scope.launch {
             session.state.first { it is SessionState.SignedIn }
             val state = kotlinx.coroutines.withContext(Dispatchers.Main) { downloads.state }
-            state.map { entries -> entries.values.mapNotNull { it.track }.toSet() }
-                .distinctUntilChanged().collect { refreshDownloadArtwork() }
+            state.map { entries -> entries.values.mapNotNull { entry -> entry.track?.let { it to entry.done } }.toSet() }
+                .distinctUntilChanged().collect { refreshDownloadMetadata() }
         }
         player.remoteRoute = { command -> connect.route(command) }
         player.remoteSelected = { connect.isRemote }
@@ -262,7 +283,7 @@ class AppContainer(context: Context) {
                 favorites.refreshAccount()
                 syncStore.session((state as? SessionState.SignedIn)?.user)
                 if (state is SessionState.SignedIn) {
-                    refreshDownloadArtwork()
+                    refreshDownloadMetadata()
                     refreshLibraryConnection()
                 }
                 if(syncStore.active) {

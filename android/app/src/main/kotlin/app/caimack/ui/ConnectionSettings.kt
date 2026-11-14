@@ -44,7 +44,7 @@ internal fun LocalHttpSetting() {
             Toggle(enabled, change)
         }
         if (enabled && !granted) {
-            TextButton(onClick = { request { granted = true; container.refreshLibraryConnection(); container.refreshDownloadArtwork() } }) {
+            TextButton(onClick = { request { granted = true; container.refreshLibraryConnection(); container.refreshDownloadMetadata() } }) {
                 Text(stringResource(R.string.settings_local_network_permission))
             }
         }

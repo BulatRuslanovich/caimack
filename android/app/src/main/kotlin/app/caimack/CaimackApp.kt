@@ -22,7 +22,7 @@ class CaimackApp : Application(), SingletonImageLoader.Factory {
         getSystemService(android.net.ConnectivityManager::class.java).registerNetworkCallback(
             android.net.NetworkRequest.Builder().build(),
             object : android.net.ConnectivityManager.NetworkCallback() {
-                override fun onAvailable(network: android.net.Network) { container.refreshDownloadArtwork(); container.refreshLibraryConnection() }
+                override fun onAvailable(network: android.net.Network) { container.refreshDownloadMetadata(); container.refreshLibraryConnection() }
                 override fun onLost(network: android.net.Network) {
                     container.libraryCache.offline.value = true
                     container.refreshLibraryConnection()

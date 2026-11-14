@@ -39,6 +39,14 @@ including when the server is unavailable.
 Editing artwork requests immediate revalidation and keeps the previous image
 available if the server cannot be reached.
 
+Lyrics are fetched automatically for individual downloads, without opening the
+lyrics panel first, and retained in private storage for the current server and
+account. Plain text, line/word timestamps and provider credits survive app restarts.
+Previously downloaded tracks receive missing lyrics when the app next starts,
+resumes or reconnects to the server; their audio does not need to be downloaded
+again. Failed requests keep the last saved text. Lyrics must be available on the
+server at least once before they can be displayed offline.
+
 With a saved account, the interface opens immediately while the server validates
 the session. An unreachable server keeps access to individual downloads; a
 rejected session still requires sign-in. A late validation response cannot

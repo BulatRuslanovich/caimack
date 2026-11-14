@@ -419,8 +419,7 @@ internal fun LyricsPanel(track: Track, positionMs: Long, playing: Boolean) {
             val current = Remote.cache[key] as? Lyrics
             if (current?.source == "Manual" || (current?.lines?.isNotEmpty() == true && current.lines.all { it.text.isBlank() || it.words.isNotEmpty() })) break
             try {
-                val response = container.api.lyrics(track.id)
-                if (response.isSuccessful) Remote.update(key, response.body() ?: Lyrics())
+                Remote.update(key, container.lyrics(track.id))
             } catch (cancel: CancellationException) { throw cancel }
             catch (_: Exception) { /* Keep the last text while this source is unavailable. */ }
         }
@@ -428,7 +427,7 @@ internal fun LyricsPanel(track: Track, positionMs: Long, playing: Boolean) {
 
     Load(
         "lyrics:${track.id}",
-        { container.api.lyrics(track.id).body() ?: Lyrics() },
+        { container.lyrics(track.id) },
         isEmpty = { it.plain.isBlank() && it.lines.isEmpty() },
         empty = { Empty(stringResource(R.string.lyrics_none)) },
     ) { lyrics ->
