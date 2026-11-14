@@ -55,6 +55,7 @@ const PlayerProgressContext = createContext<PlayerProgress | null>(null);
 const PlayerClockContext = createContext<PlayerProgress["getPosition"] | null>(null);
 
 const PlayerNowPlayingContext = createContext<PlayerNowPlaying | null>(null);
+const PlayerQueueContext = createContext<Track[] | null>(null);
 const ArtworkDirectionContext = createContext<ArtworkDirection>("next");
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
@@ -691,7 +692,9 @@ function PlayerSessionProvider({
             <PlayerClockContext.Provider value={connected.progress.getPosition}>
               <PlayerProgressContext.Provider value={connected.progress}>
                 <ArtworkDirectionContext.Provider value={artwork.direction}>
-                  {children}
+                  <PlayerQueueContext.Provider value={connected.state.queue}>
+                    {children}
+                  </PlayerQueueContext.Provider>
                 </ArtworkDirectionContext.Provider>
               </PlayerProgressContext.Provider>
             </PlayerClockContext.Provider>
@@ -754,4 +757,8 @@ export function usePlayerClock(): PlayerProgress["getPosition"] {
 
 export function useNowPlaying(): PlayerNowPlaying {
   return useRequiredContext(PlayerNowPlayingContext, "useNowPlaying", "PlayerProvider");
+}
+
+export function usePlayerQueue(): Track[] {
+  return useRequiredContext(PlayerQueueContext, "usePlayerQueue", "PlayerProvider");
 }

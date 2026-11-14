@@ -63,16 +63,16 @@ export function PlaylistPage() {
   const reorder = useMutation({
     mutationFn: (trackIds: string[]) => api.reorderPlaylist(id, trackIds),
     onMutate: (trackIds) =>
-      client.setQueryData(key, (current) =>
-        current
-          ? {
-              ...current,
-              tracks: trackIds
-                .map((trackId) => current.tracks.find((track) => track.id === trackId))
-                .filter((track): track is NonNullable<typeof track> => Boolean(track)),
-            }
-          : current,
-      ),
+      client.setQueryData(key, (current) => {
+        if (!current) return current;
+        const tracksById = new Map(current.tracks.map((track) => [track.id, track]));
+        return {
+          ...current,
+          tracks: trackIds
+            .map((trackId) => tracksById.get(trackId))
+            .filter((track): track is NonNullable<typeof track> => Boolean(track)),
+        };
+      }),
     onError: () => client.invalidateQueries({ queryKey: key }),
   });
 

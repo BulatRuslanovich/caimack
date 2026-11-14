@@ -144,7 +144,12 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
       }
 
       const queued = new Set(latest.current.queue.map(fileKey));
-      const added = accepted.filter((file) => !queued.has(fileKey(file)));
+      const added = accepted.filter((file) => {
+        const key = fileKey(file);
+        if (queued.has(key)) return false;
+        queued.add(key);
+        return true;
+      });
 
       if (added.length > 0) {
         const known = latest.current.checks;
