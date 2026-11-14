@@ -55,3 +55,38 @@ async fn listening_to_almost_all_of_a_short_track_is_recorded(db: PgPool) -> any
     assert_eq!(count, 1);
     Ok(())
 }
+
+#[sqlx::test(migrations = "../../../db/migrations")]
+async fn batched_playback_events_preserve_validation_limits_and_normalized_fields(db: PgPool) -> anyhow::Result<()> {
+    use app::playback::signals::{self, RecordEventsRequest, RecordEventsResult};
+
+    let (user, track) = song(&db, 180).await?;
+    let reported: Vec<_> = (0..105)
+        .map(|position| {
+            serde_json::json!({
+                "type":"trackCompleted",
+                "trackId": if position == 99 { Uuid::now_v7() } else { track },
+                "positionSeconds":position,
+                "listenedSeconds":100_000,
+                "durationSeconds":-1,
+                "sessionId":Uuid::now_v7(),
+                "source":" radio "
+            })
+        })
+        .collect();
+    let request: RecordEventsRequest = serde_json::from_value(serde_json::json!({"events":reported}))?;
+    assert_eq!(signals::record(&db, user, request).await?, RecordEventsResult { accepted: 99, rejected: 6 });
+    let row: (i64, i32, i32, i64, i64, i64) = sqlx::query_as(
+        "SELECT count(*),min(position_seconds),max(position_seconds),sum(listened_seconds),
+            sum(duration_seconds),count(DISTINCT session_id)
+         FROM playback_events WHERE user_id=$1 AND track_id=$2 AND type=3 AND source='radio'",
+    )
+    .bind(user)
+    .bind(track)
+    .fetch_one(&db)
+    .await?;
+    assert_eq!(row, (99, 0, 98, 99 * 86_400, 0, 99));
+    let empty = serde_json::from_value(serde_json::json!({"events":[]}))?;
+    assert_eq!(signals::record(&db, user, empty).await?, RecordEventsResult { accepted: 0, rejected: 0 });
+    Ok(())
+}

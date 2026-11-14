@@ -189,10 +189,7 @@ async fn transcode(
             tokio::fs::create_dir_all(parent).await?;
         }
         let started = Instant::now();
-        let done = tokio::select! {
-            () = cancel.cancelled() => return Ok(()),
-            done = media::ffmpeg::transcode_to_hls(&source, &target, bitrate) => done?,
-        };
+        let done = media::ffmpeg::transcode_to_hls(&source, &target, bitrate, cancel).await?;
         reading.rollback().await?;
         if done {
             tracing::debug!(

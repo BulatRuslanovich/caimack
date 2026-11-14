@@ -11,6 +11,7 @@ pub mod db;
 pub mod error;
 mod file_names;
 pub mod i18n;
+mod ids;
 pub mod integrations;
 pub mod json;
 pub mod library;

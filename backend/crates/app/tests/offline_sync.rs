@@ -46,8 +46,79 @@ fn batch(user: Uuid, server: Uuid, actions: &[Action]) -> anyhow::Result<Batch> 
 }
 
 #[sqlx::test(migrations = "../../../db/migrations")]
+async fn offline_history_is_bounded_and_merges_out_of_order_plays(db: PgPool) -> anyhow::Result<()> {
+    let (user, server, tracks) = fixture(&db).await?;
+    let directory = std::env::temp_dir().join(format!("caimack-sync-actions-{}", Uuid::now_v7()));
+    let storage = app::storage::Storage::open(&directory)?;
+    let mut newer = action("history", None, json!({"trackId":tracks[0],"listenedSeconds":11,"playbackPosition":11}));
+    newer.occurred_at = Utc::now() - Duration::hours(2);
+    let mut older = action("history", None, json!({"trackId":tracks[0],"listenedSeconds":11,"playbackPosition":5}));
+    older.occurred_at = newer.occurred_at - Duration::minutes(10);
+    actions::exchange(&db, &storage, user, batch(user, server, &[newer, older])?).await?;
+    let positions: Vec<i32> = sqlx::query_scalar("SELECT playback_position FROM listening_history WHERE user_id=$1")
+        .bind(user)
+        .fetch_all(&db)
+        .await?;
+    assert_eq!(positions, vec![11], "an older offline event must not rewind a newer history entry");
+
+    sqlx::query(
+        "INSERT INTO listening_history(id,user_id,track_id,played_at,playback_position)
+        SELECT gen_random_uuid(),$1,$2,now()-interval '1 day',0 FROM generate_series(1,1100)",
+    )
+    .bind(user)
+    .bind(tracks[1])
+    .execute(&db)
+    .await?;
+    let latest = action("history", None, json!({"trackId":tracks[2],"listenedSeconds":11,"playbackPosition":11}));
+    actions::exchange(&db, &storage, user, batch(user, server, &[latest])?).await?;
+    let count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM listening_history WHERE user_id=$1").bind(user).fetch_one(&db).await?;
+    assert_eq!(count, 1000);
+    std::fs::remove_dir_all(directory)?;
+    Ok(())
+}
+
+#[sqlx::test(migrations = "../../../db/migrations")]
+async fn offline_playlist_deletion_removes_cover_renditions_and_can_be_retried(db: PgPool) -> anyhow::Result<()> {
+    let (user, server, _) = fixture(&db).await?;
+    let directory = std::env::temp_dir().join(format!("caimack-sync-delete-{}", Uuid::now_v7()));
+    let storage = app::storage::Storage::open(&directory)?;
+    let playlist = app::library::playlists::create(
+        &db,
+        user,
+        app::library::playlists::PlaylistRequest { name: "Covered".into(), description: None, is_public: false },
+    )
+    .await?;
+    let cover = format!("playlists/{}.webp", playlist.id.simple());
+    for size in [app::storage::CoverSize::Full, app::storage::CoverSize::Thumb, app::storage::CoverSize::Large] {
+        let path = app::storage::Storage::cover_variant(&cover, size);
+        std::fs::write(storage.resolve(&path)?, b"cover")?;
+    }
+    sqlx::query("UPDATE playlists SET cover_path=$2 WHERE id=$1").bind(playlist.id).bind(&cover).execute(&db).await?;
+    let edits = vec![action("playlistDelete", Some(playlist.id), json!({}))];
+    // A receipt failure rolls back the deletion and must leave its files intact.
+    sqlx::query("ALTER TABLE sync_receipts ADD CONSTRAINT reject_receipt CHECK (false) NOT VALID").execute(&db).await?;
+    assert!(actions::exchange(&db, &storage, user, batch(user, server, &edits)?).await.is_err());
+    assert_eq!(std::fs::read_dir(directory.join("playlists"))?.count(), 3);
+    assert!(
+        sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM playlists WHERE id=$1)")
+            .bind(playlist.id)
+            .fetch_one(&db)
+            .await?
+    );
+    sqlx::query("ALTER TABLE sync_receipts DROP CONSTRAINT reject_receipt").execute(&db).await?;
+    let first = actions::exchange(&db, &storage, user, batch(user, server, &edits)?).await?;
+    assert_eq!(actions::exchange(&db, &storage, user, batch(user, server, &edits)?).await?, first);
+    assert_eq!(std::fs::read_dir(directory.join("playlists"))?.count(), 0);
+    std::fs::remove_dir_all(directory)?;
+    Ok(())
+}
+
+#[sqlx::test(migrations = "../../../db/migrations")]
 async fn concurrent_retries_do_not_duplicate_events_or_change_offline_timestamps(db: PgPool) -> anyhow::Result<()> {
     let (user, server, tracks) = fixture(&db).await?;
+    let directory = std::env::temp_dir().join(format!("caimack-sync-actions-{}", Uuid::now_v7()));
+    let storage = app::storage::Storage::open(&directory)?;
     let events = vec![
         action(
             "signal",
@@ -57,8 +128,8 @@ async fn concurrent_retries_do_not_duplicate_events_or_change_offline_timestamps
         action("history", None, json!({"trackId":tracks[0],"listenedSeconds":11,"playbackPosition":11})),
     ];
     let (a, b) = tokio::join!(
-        actions::exchange(&db, user, batch(user, server, &events)?),
-        actions::exchange(&db, user, batch(user, server, &events)?)
+        actions::exchange(&db, &storage, user, batch(user, server, &events)?),
+        actions::exchange(&db, &storage, user, batch(user, server, &events)?)
     );
     assert_eq!(a?, b?);
     assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM playback_events").fetch_one(&db).await?, 1);
@@ -66,6 +137,7 @@ async fn concurrent_retries_do_not_duplicate_events_or_change_offline_timestamps
     let timestamp: chrono::DateTime<Utc> =
         sqlx::query_scalar("SELECT occurred_at FROM playback_events").fetch_one(&db).await?;
     assert!((timestamp - events[0].occurred_at).num_milliseconds().abs() < 1);
+    std::fs::remove_dir_all(directory)?;
     Ok(())
 }
 
@@ -74,12 +146,14 @@ async fn playlist_edits_merge_members_and_independent_fields_and_do_not_resurrec
     db: PgPool,
 ) -> anyhow::Result<()> {
     let (user, server, tracks) = fixture(&db).await?;
+    let directory = std::env::temp_dir().join(format!("caimack-sync-actions-{}", Uuid::now_v7()));
+    let storage = app::storage::Storage::open(&directory)?;
     let playlist = Uuid::now_v7();
     let create = vec![
         action("playlistCreate", Some(playlist), json!({"name":"First"})),
         action("playlistAdd", Some(playlist), json!({"trackIds":tracks})),
     ];
-    actions::exchange(&db, user, batch(user, server, &create)?).await?;
+    actions::exchange(&db, &storage, user, batch(user, server, &create)?).await?;
     sqlx::query("UPDATE playlists SET description='Edited on PC' WHERE id=$1").bind(playlist).execute(&db).await?;
     sqlx::query("DELETE FROM playlist_tracks WHERE playlist_id=$1 AND track_id=$2")
         .bind(playlist)
@@ -90,7 +164,7 @@ async fn playlist_edits_merge_members_and_independent_fields_and_do_not_resurrec
         action("playlistUpdate", Some(playlist), json!({"name":"Edited on phone"})),
         action("playlistOrder", Some(playlist), json!({"trackIds":[tracks[1],tracks[0]]})),
     ];
-    actions::exchange(&db, user, batch(user, server, &edits)?).await?;
+    actions::exchange(&db, &storage, user, batch(user, server, &edits)?).await?;
     let row: (String, String) =
         sqlx::query_as("SELECT name,description FROM playlists WHERE id=$1").bind(playlist).fetch_one(&db).await?;
     assert_eq!(row, ("Edited on phone".into(), "Edited on PC".into()));
@@ -100,6 +174,7 @@ async fn playlist_edits_merge_members_and_independent_fields_and_do_not_resurrec
             .fetch_all(&db)
             .await?;
     assert_eq!(members, vec![tracks[1], tracks[2]]);
+    std::fs::remove_dir_all(directory)?;
     Ok(())
 }
 
@@ -108,23 +183,26 @@ async fn a_rejected_edit_does_not_block_following_actions_and_receipts_bind_the_
     db: PgPool,
 ) -> anyhow::Result<()> {
     let (user, server, tracks) = fixture(&db).await?;
+    let directory = std::env::temp_dir().join(format!("caimack-sync-actions-{}", Uuid::now_v7()));
+    let storage = app::storage::Storage::open(&directory)?;
     let mut edits = vec![
         action("playlistUpdate", Some(Uuid::now_v7()), json!({"name":"Deleted elsewhere"})),
         action("favorite", Some(tracks[0]), json!({"value":true})),
     ];
-    let result = actions::exchange(&db, user, batch(user, server, &edits)?).await?;
+    let result = actions::exchange(&db, &storage, user, batch(user, server, &edits)?).await?;
     assert_eq!(result["results"][0]["status"], "rejected");
     assert_eq!(result["results"][1]["status"], "applied");
     assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM favorites").fetch_one(&db).await?, 1);
     edits[1].payload = json!({"value":false});
     assert!(matches!(
-        actions::exchange(&db, user, batch(user, server, &edits)?).await,
+        actions::exchange(&db, &storage, user, batch(user, server, &edits)?).await,
         Err(app::AppError::Conflict(_))
     ));
     assert!(matches!(
-        actions::exchange(&db, user, batch(user, Uuid::now_v7(), &[])?).await,
+        actions::exchange(&db, &storage, user, batch(user, Uuid::now_v7(), &[])?).await,
         Err(app::AppError::Conflict(_))
     ));
+    std::fs::remove_dir_all(directory)?;
     Ok(())
 }
 

@@ -127,6 +127,8 @@ async fn playlist_visibility_and_removal_do_not_change_ownership(db: PgPool) -> 
 #[sqlx::test(migrations = "../../../db/migrations")]
 async fn offline_library_actions_replay_once(db: PgPool) -> anyhow::Result<()> {
     use app::sync::actions::{Action, Batch, exchange};
+    let directory = std::env::temp_dir().join(format!("caimack-sync-test-{}", Uuid::now_v7()));
+    let storage = app::storage::Storage::open(&directory)?;
     let user = common::user(&db, "offline", false).await?;
     let artist = Uuid::now_v7();
     sqlx::query("INSERT INTO artists(id,name,normalized_name,created_at) VALUES ($1,'Artist','artist',now())")
@@ -147,10 +149,11 @@ async fn offline_library_actions_replay_once(db: PgPool) -> anyhow::Result<()> {
             payload: serde_json::json!({"kind":"artist","value":true}),
         }],
     };
-    assert_eq!(exchange(&db, user, batch()).await?["results"][0]["status"], "applied");
+    assert_eq!(exchange(&db, &storage, user, batch()).await?["results"][0]["status"], "applied");
     let mut conn = db.acquire().await?;
     collection::remove(&mut conn, user, Kind::Artist, artist).await?;
-    exchange(&db, user, batch()).await?;
+    exchange(&db, &storage, user, batch()).await?;
     assert!(collection::list(&db, user).await?.is_empty());
+    std::fs::remove_dir_all(directory)?;
     Ok(())
 }

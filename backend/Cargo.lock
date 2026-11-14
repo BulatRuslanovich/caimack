@@ -1864,6 +1864,7 @@ dependencies = [
  "symphonia",
  "thiserror",
  "tokio",
+ "tokio-util",
  "tracing",
  "uuid",
  "webp",

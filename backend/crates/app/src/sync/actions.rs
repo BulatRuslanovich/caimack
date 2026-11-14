@@ -7,7 +7,12 @@ use serde_json::{Value, json};
 use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
+use crate::library::{
+    history,
+    playlists::{self, DeletedPlaylist},
+};
 use crate::playback::signals::{EventType, PlaybackEventRequest, normalize_source};
+use crate::storage::Storage;
 use crate::{AppError, AppResult};
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -30,7 +35,7 @@ pub struct Batch {
 
 /// The effect and its receipt commit together. Retrying after a dropped HTTP
 /// response cannot duplicate listening history or resurrect a deleted playlist.
-pub async fn exchange(db: &PgPool, user: Uuid, batch: Batch) -> AppResult<Value> {
+pub async fn exchange(db: &PgPool, storage: &Storage, user: Uuid, batch: Batch) -> AppResult<Value> {
     if batch.actions.len() > 100 {
         return Err(AppError::validation("At most 100 sync actions are accepted per batch."));
     }
@@ -63,11 +68,11 @@ pub async fn exchange(db: &PgPool, user: Uuid, batch: Batch) -> AppResult<Value>
             continue;
         }
         sqlx::query("SAVEPOINT sync_action").execute(&mut *tx).await?;
-        let result = match apply(&mut tx, user, &action).await {
-            Ok(()) => json!({"id":action.id,"status":"applied"}),
+        let (result, deleted) = match apply(&mut tx, user, &action).await {
+            Ok(deleted) => (json!({"id":action.id,"status":"applied"}), deleted),
             Err(error) if error.status() < 500 => {
                 sqlx::query("ROLLBACK TO SAVEPOINT sync_action").execute(&mut *tx).await?;
-                json!({"id":action.id,"status":"rejected","message":error.to_string()})
+                (json!({"id":action.id,"status":"rejected","message":error.to_string()}), None)
             }
             Err(error) => return Err(error),
         };
@@ -79,6 +84,9 @@ pub async fn exchange(db: &PgPool, user: Uuid, batch: Batch) -> AppResult<Value>
             .execute(&mut *tx)
             .await?;
         tx.commit().await?;
+        if let Some(deleted) = deleted {
+            deleted.cleanup(storage);
+        }
         results.push(result);
     }
     Ok(json!({"results":results}))
@@ -114,7 +122,7 @@ async fn track_exists(db: &mut PgConnection, id: Uuid) -> AppResult<bool> {
     Ok(sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM tracks WHERE id=$1)").bind(id).fetch_one(db).await?)
 }
 
-async fn apply(db: &mut PgConnection, user: Uuid, action: &Action) -> AppResult<()> {
+async fn apply(db: &mut PgConnection, user: Uuid, action: &Action) -> AppResult<Option<DeletedPlaylist>> {
     let p = &action.payload;
     match action.kind.as_str() {
         "libraryOrganize" => {
@@ -127,7 +135,7 @@ async fn apply(db: &mut PgConnection, user: Uuid, action: &Action) -> AppResult<
             let track = if kind.about_track() {
                 let track = event.track_id.ok_or_else(invalid)?;
                 if !track_exists(db, track).await? {
-                    return Ok(());
+                    return Ok(None);
                 }
                 Some(track)
             } else {
@@ -154,20 +162,10 @@ async fn apply(db: &mut PgConnection, user: Uuid, action: &Action) -> AppResult<
                 .bind(track)
                 .fetch_optional(&mut *db)
                 .await?;
-            if duration
-                .is_some_and(|duration| seconds(&p["listenedSeconds"]) >= 30.min(duration.saturating_sub(1).max(1)))
-            {
-                sqlx::query(
-                    "INSERT INTO listening_history (id,user_id,track_id,played_at,playback_position)
-                    VALUES ($1,$2,$3,$4,$5)",
-                )
-                .bind(Uuid::new_v4())
-                .bind(user)
-                .bind(track)
-                .bind(time(action))
-                .bind(seconds(&p["playbackPosition"]))
-                .execute(&mut *db)
-                .await?;
+            if duration.is_some_and(|duration| {
+                seconds(&p["listenedSeconds"]) >= history::THRESHOLD_SECONDS.min(duration.saturating_sub(1).max(1))
+            }) {
+                history::save(db, user, track, seconds(&p["playbackPosition"]), time(action)).await?;
             }
         }
         "library" => {
@@ -181,7 +179,7 @@ async fn apply(db: &mut PgConnection, user: Uuid, action: &Action) -> AppResult<
         "favorite" => {
             let track = id(action)?;
             if !track_exists(db, track).await? {
-                return Ok(());
+                return Ok(None);
             }
             if p["value"].as_bool().ok_or_else(invalid)? {
                 sqlx::query(
@@ -263,23 +261,13 @@ async fn apply(db: &mut PgConnection, user: Uuid, action: &Action) -> AppResult<
             if owner.is_some_and(|owner| owner != user) {
                 return Err(AppError::forbidden("Only the playlist owner can edit it."));
             }
-            sqlx::query("DELETE FROM playlists WHERE id=$1 AND user_id=$2")
-                .bind(playlist)
-                .bind(user)
-                .execute(&mut *db)
-                .await?;
+            return playlists::delete_row(db, user, playlist).await;
         }
         "playlistAdd" | "playlistRemove" | "playlistOrder" => {
             let playlist = id(action)?;
             owned(db, user, playlist).await?;
-            let mut ids = Vec::new();
             let values = p["trackIds"].as_array().filter(|a| a.len() <= 10_000).ok_or_else(invalid)?;
-            for value in values {
-                let id = uuid(value)?;
-                if !ids.contains(&id) {
-                    ids.push(id);
-                }
-            }
+            let ids = crate::ids::distinct(values.iter().map(uuid).collect::<AppResult<Vec<_>>>()?);
             match action.kind.as_str() {
                 "playlistAdd" => {
                     sqlx::query("INSERT INTO playlist_tracks (id,playlist_id,track_id,position)
@@ -328,7 +316,7 @@ async fn apply(db: &mut PgConnection, user: Uuid, action: &Action) -> AppResult<
                 WHEN 3 THEN EXISTS(SELECT 1 FROM albums WHERE id=$2) ELSE EXISTS(SELECT 1 FROM genres WHERE id=$2) END")
                 .bind(target).bind(target_id).fetch_one(&mut *db).await?;
             if !exists {
-                return Ok(());
+                return Ok(None);
             }
             let days = p["days"].as_i64().unwrap_or(30);
             if !(1..=365).contains(&days) {
@@ -352,7 +340,7 @@ async fn apply(db: &mut PgConnection, user: Uuid, action: &Action) -> AppResult<
         }
         _ => return Err(invalid()),
     }
-    Ok(())
+    Ok(None)
 }
 
 async fn touch(db: &mut PgConnection, playlist: Uuid) -> AppResult<()> {

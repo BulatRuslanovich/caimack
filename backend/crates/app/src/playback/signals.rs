@@ -6,7 +6,7 @@ use std::sync::LazyLock;
 use chrono::{DateTime, Duration, Utc};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
 use crate::AppResult;
@@ -184,28 +184,24 @@ pub async fn record(db: &PgPool, user: Uuid, request: RecordEventsRequest) -> Ap
         created.into_iter().filter(|event| event.track_id.is_none_or(|id| existing.contains(&id))).collect();
 
     if !accepted.is_empty() {
-        let mut tx = db.begin().await?;
-        for event in &accepted {
-            sqlx::query!(
-                "INSERT INTO playback_events (id, user_id, track_id, entity_id, type, occurred_at, position_seconds,
-                                              listened_seconds, duration_seconds, session_id, source)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
-                Uuid::now_v7(),
-                user,
-                event.track_id,
-                event.entity_id,
-                event.kind as i32,
-                event.occurred_at,
-                event.position,
-                event.listened,
-                event.duration,
-                event.session_id,
-                event.source
-            )
-            .execute(&mut *tx)
-            .await?;
-        }
-        tx.commit().await?;
+        let mut query = QueryBuilder::<Postgres>::new(
+            "INSERT INTO playback_events (id, user_id, track_id, entity_id, type, occurred_at, position_seconds,
+                                          listened_seconds, duration_seconds, session_id, source) ",
+        );
+        query.push_values(&accepted, |mut row, event| {
+            row.push_bind(Uuid::now_v7())
+                .push_bind(user)
+                .push_bind(event.track_id)
+                .push_bind(event.entity_id)
+                .push_bind(event.kind as i32)
+                .push_bind(event.occurred_at)
+                .push_bind(event.position)
+                .push_bind(event.listened)
+                .push_bind(event.duration)
+                .push_bind(event.session_id)
+                .push_bind(&event.source);
+        });
+        query.build().execute(db).await?;
     }
 
     let rejected = total - accepted.len();

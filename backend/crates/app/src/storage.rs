@@ -67,6 +67,8 @@ impl Storage {
                 .with_context(|| format!("Could not create {} in the storage root", directory))?;
         }
         let root = root.canonicalize().with_context(|| format!("Storage root {} is not usable", root.display()))?;
+        media::ffmpeg::cleanup_partial_hls(&root.join(HLS_DIRECTORY))
+            .context("Could not clean up interrupted HLS renditions")?;
         tracing::info!("Music storage rooted at {}", root.display());
         Ok(Self { root, ready_variants: Arc::default() })
     }

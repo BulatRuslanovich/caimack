@@ -199,19 +199,6 @@ pub fn parse_format(raw: &str, format: &str, duration_ms: i32) -> anyhow::Result
     formats::parse(raw, format, duration_ms).map(ParsedLyrics::clean)
 }
 
-pub fn from_timed_lines(lines: Vec<LyricLine>) -> ParsedLyrics {
-    let mut timed: Vec<LyricLine> = lines.into_iter().filter(|line| line.at >= 0).collect();
-    if timed.is_empty() {
-        return ParsedLyrics::default();
-    }
-    timed.sort_by_key(|line| line.at);
-    let mut plain = String::new();
-    for line in &timed {
-        append_line(&mut plain, line.text.trim());
-    }
-    build(&plain, timed)
-}
-
 fn build(plain: &str, mut timed: Vec<LyricLine>) -> ParsedLyrics {
     let text = plain.trim_end_matches('\n');
     if text.is_empty() && timed.is_empty() {

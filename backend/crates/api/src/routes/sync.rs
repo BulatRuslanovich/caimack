@@ -64,7 +64,7 @@ async fn actions(
     CurrentUser(user): CurrentUser,
     Json(batch): Json<sync::actions::Batch>,
 ) -> ApiResult<impl IntoResponse> {
-    let result = sync::actions::exchange(&state.db, user.user_id, batch).await?;
+    let result = sync::actions::exchange(&state.db, &state.storage, user.user_id, batch).await?;
     state.recommendations.listeners.forget(user.user_id);
     Ok(Json(result))
 }

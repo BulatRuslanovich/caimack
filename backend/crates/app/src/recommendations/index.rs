@@ -78,7 +78,7 @@ async fn signature(db: &PgPool) -> sqlx::Result<Signature> {
     Ok(Signature { revision, vectors: row.vectors, analyzed_at: row.analyzed_at, tracks: row.tracks })
 }
 
-pub async fn load(db: &PgPool) -> sqlx::Result<Snapshot> {
+pub async fn load(db: &PgPool) -> crate::AppResult<Snapshot> {
     let rows = sqlx::query!(
         r#"SELECT e.track_id, e.vector, e.dimension, t.artist_id, t.album_id, t.genre_id, t.duration_seconds, t.year,
                   t.created_at, t.content_hash, t.title, ar.name AS artist_name,
@@ -100,34 +100,38 @@ pub async fn load(db: &PgPool) -> sqlx::Result<Snapshot> {
     .fetch_all(db)
     .await?;
 
-    let dimension = rows.first().map_or(0, |row| usize::try_from(row.dimension).unwrap_or(0));
-    let entries = rows
-        .into_iter()
-        .map(|row| {
-            let mut artists = vec![row.artist_id];
-            artists.extend(row.credits.into_iter().filter(|&artist| artist != row.artist_id));
-            let meta = TrackMeta {
-                track_id: row.track_id,
-                artists,
-                album_id: row.album_id,
-                genre_id: row.genre_id,
-                duration_seconds: row.duration_seconds,
-                year: row.year,
-                added_at: row.created_at.timestamp(),
-                #[expect(clippy::cast_possible_truncation, reason = "a share in [0, 1]")]
-                popularity: row.popularity as f32,
-                content_hash: row.content_hash,
-                song_key: snapshot::song_key(&row.artist_name, &row.title),
-                #[expect(clippy::cast_possible_truncation, reason = "a tempo in BPM")]
-                tempo_bpm: row.tempo_bpm.map(|bpm| bpm as f32),
-                musical_key: row.musical_key.and_then(|key| u8::try_from(key).ok()),
-                #[expect(clippy::cast_possible_truncation, reason = "a loudness in LUFS")]
-                loudness_lufs: row.loudness_lufs.map(|lufs| lufs as f32),
-            };
-            (meta, row.vector)
-        })
-        .collect();
-    Ok(Snapshot::new(dimension, entries))
+    tokio::task::spawn_blocking(move || {
+        let dimension = rows.first().map_or(0, |row| usize::try_from(row.dimension).unwrap_or(0));
+        let entries = rows
+            .into_iter()
+            .map(|row| {
+                let mut artists = vec![row.artist_id];
+                artists.extend(row.credits.into_iter().filter(|&artist| artist != row.artist_id));
+                let meta = TrackMeta {
+                    track_id: row.track_id,
+                    artists,
+                    album_id: row.album_id,
+                    genre_id: row.genre_id,
+                    duration_seconds: row.duration_seconds,
+                    year: row.year,
+                    added_at: row.created_at.timestamp(),
+                    #[expect(clippy::cast_possible_truncation, reason = "a share in [0, 1]")]
+                    popularity: row.popularity as f32,
+                    content_hash: row.content_hash,
+                    song_key: snapshot::song_key(&row.artist_name, &row.title),
+                    #[expect(clippy::cast_possible_truncation, reason = "a tempo in BPM")]
+                    tempo_bpm: row.tempo_bpm.map(|bpm| bpm as f32),
+                    musical_key: row.musical_key.and_then(|key| u8::try_from(key).ok()),
+                    #[expect(clippy::cast_possible_truncation, reason = "a loudness in LUFS")]
+                    loudness_lufs: row.loudness_lufs.map(|lufs| lufs as f32),
+                };
+                (meta, row.vector)
+            })
+            .collect();
+        Snapshot::new(dimension, entries)
+    })
+    .await
+    .map_err(crate::AppError::internal)
 }
 
 pub fn spawn(db: PgPool, index: EmbeddingIndex, cancel: CancellationToken) -> tokio::task::JoinHandle<()> {
@@ -140,15 +144,22 @@ pub fn spawn(db: PgPool, index: EmbeddingIndex, cancel: CancellationToken) -> to
                     let started = Instant::now();
                     match load(&db).await {
                         Ok(mut snapshot) => {
-                            match sound::dismissed(&db).await {
-                                Ok(dismissed) => {
-                                    snapshot.set_sound_alikes(&sound::groups(&index.sound.cached(), &dismissed));
+                            let dismissed = match sound::dismissed(&db).await {
+                                Ok(dismissed) => Some(dismissed),
+                                Err(error) => {
+                                    tracing::error!("Loading dismissed duplicates failed: {error}");
+                                    None
                                 }
-                                Err(error) => tracing::error!("Loading dismissed duplicates failed: {error}"),
-                            }
+                            };
                             let (count, dimension) = (snapshot.len(), snapshot.dimension());
                             let index = index.clone();
-                            let published = tokio::task::spawn_blocking(move || index.publish(snapshot)).await;
+                            let published = tokio::task::spawn_blocking(move || {
+                                if let Some(dismissed) = dismissed {
+                                    snapshot.set_sound_alikes(&sound::groups(&index.sound.cached(), &dismissed));
+                                }
+                                index.publish(snapshot);
+                            })
+                            .await;
                             if let Err(error) = published {
                                 tracing::error!("Publishing the embedding index failed: {error}");
                             } else {
