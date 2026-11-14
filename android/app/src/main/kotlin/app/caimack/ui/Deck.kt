@@ -91,6 +91,8 @@ private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Mo
     val haptic = rememberPlayerHaptics()
     val track = state.current ?: return
     val player = LocalContainer.current.player
+    val sceneGesture = LocalPlayerSceneGesture.current
+    val latestSceneGesture by rememberUpdatedState(sceneGesture)
     val motion = playerMotionEnabled()
     val latestMotion by rememberUpdatedState(motion)
     val scope = rememberCoroutineScope()
@@ -108,7 +110,7 @@ private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Mo
             .pointerInput(Unit) {
                 awaitEachGesture {
                     val down = awaitFirstDown()
-                    if (swiping) return@awaitEachGesture
+                    if (swiping || latestSceneGesture?.acceptsDrag == false) return@awaitEachGesture
                     val sleeve = layout.sleeve() ?: return@awaitEachGesture
                     val gap = 24.dp.toPx()
                     val step = sleeve.width * (1 + RECORD_OUT) + gap
@@ -174,7 +176,12 @@ private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Mo
                     swiping = true
                     var armed = committing(dragged)
                     if (armed) haptic(PlayerHaptic.SwipeArmed)
-                    scope.launch { swipe.snapTo(shown(dragged)) }
+                    fun move() {
+                        val gesture = latestSceneGesture
+                        if (gesture != null) gesture.drag(shown(dragged))
+                        else scope.launch { swipe.snapTo(shown(dragged)) }
+                    }
+                    move()
 
                     val released = horizontalDrag(start.id) { change ->
                         dragged += change.positionChange().x
@@ -184,7 +191,7 @@ private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Mo
                             armed = !armed
                             haptic(if (armed) PlayerHaptic.SwipeArmed else PlayerHaptic.SwipeCancelled)
                         }
-                        scope.launch { swipe.snapTo(shown(dragged)) }
+                        move()
                     }
 
                     val speed = velocity.calculateVelocity().x
@@ -196,6 +203,17 @@ private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Mo
                     scope.launch {
                         if (commit) {
                             haptic(PlayerHaptic.Skip)
+                            val gesture = latestSceneGesture
+                            if (gesture != null) {
+                                gesture.commit(index)
+                                player.skipTo(index)
+                                // Acknowledged track changes finish through the shared scene.
+                                // A rejected command returns that same scene to its resting position.
+                                delay(SKIP_ACK_TIMEOUT_MS)
+                                gesture.cancelUnacknowledged()
+                                swiping = false
+                                return@launch
+                            }
                             if (latestMotion) swipe.animateTo(if (toNext) -step else step, tween(220)) else swipe.snapTo(if (toNext) -step else step)
                             player.skipTo(index)
                             // Keep the incoming sleeve in place until the player acknowledges
@@ -206,7 +224,8 @@ private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Mo
                             if (latestMotion) swipe.animateTo(0f, spring()) else swipe.snapTo(0f)
                             swiping = false
                         } else {
-                            if (latestMotion) swipe.animateTo(0f, spring()) else swipe.snapTo(0f)
+                            if (latestSceneGesture != null) latestSceneGesture?.cancel()
+                            else if (latestMotion) swipe.animateTo(0f, spring()) else swipe.snapTo(0f)
                             swiping = false
                         }
                     }
@@ -239,7 +258,7 @@ private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Mo
                 out = (state.playing || scratching) && !swiping,
                 twist = twist,
                 modifier = Modifier.fillMaxSize().offset { IntOffset(swipe.value.roundToInt(), 0) },
-                jacket = Modifier.nowPlayingCover(LocalFullPlayerVisibility.current),
+                jacket = if (sceneGesture == null || sceneGesture.sharedCover) Modifier.nowPlayingCover(LocalFullPlayerVisibility.current) else Modifier,
             )
         }
     }

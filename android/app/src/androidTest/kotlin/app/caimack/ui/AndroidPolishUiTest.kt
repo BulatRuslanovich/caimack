@@ -190,9 +190,9 @@ class AndroidPolishUiTest {
             }
         }
         try {
-            compose.waitUntil(10_000) { scene?.transition?.targetState?.surface?.top?.let { it != playerBackdropSurface(null).top } == true }
+            compose.waitUntil(10_000) { scene?.current?.surface?.top?.let { it != playerBackdropSurface(null).top } == true }
             compose.waitForIdle()
-            assertFalse(scene!!.transition.isRunning)
+            assertFalse(scene!!.isRunning)
             assertEquals(0f, compose.onNodeWithTag("record-frame-0:blue").fetchSemanticsNode().boundsInRoot.left, 0.5f)
             screenshot("player-open")
             compose.mainClock.autoAdvance = false
@@ -210,7 +210,7 @@ class AndroidPolishUiTest {
             compose.mainClock.advanceTimeBy(1200)
             compose.mainClock.autoAdvance = true
             compose.waitForIdle()
-            assertFalse(scene!!.transition.isRunning)
+            assertFalse(scene!!.isRunning)
         } finally {
             container.appearance.setPlayerEffects(originalEffects)
             runBlocking {
