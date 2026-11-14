@@ -68,21 +68,26 @@ import kotlinx.coroutines.launch
 @Composable
 fun LoginScreen(session: Session, lastAddress: String, expired: Boolean) {
     val palette = LocalPalette.current
+    val container = LocalContainer.current
     var address by rememberSaveable { mutableStateOf(lastAddress) }
     var username by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf<LoginFailure?>(null) }
     val scope = rememberCoroutineScope()
+    val localNetwork = rememberLocalNetworkPermission { failure = LoginFailure.LocalNetworkDenied }
 
     val ready = !busy && address.isNotBlank() && username.isNotBlank() && password.isNotEmpty()
     val submit = {
         if (ready) {
-            busy = true
-            scope.launch {
-                failure = session.login(address, username, password)
-                busy = false
+            val connect: () -> Unit = {
+                busy = true
+                scope.launch {
+                    failure = session.login(address, username, password)
+                    busy = false
+                }
             }
+            if (container.connectionPreferences.allowLocalHttp.value && localServerAddress(address)) localNetwork(connect) else connect()
         }
     }
 
@@ -127,6 +132,7 @@ fun LoginScreen(session: Session, lastAddress: String, expired: Boolean) {
             LocalHttpSetting()
 
             val message = when (val shown = failure) {
+                LoginFailure.LocalNetworkDenied -> stringResource(R.string.auth_local_network_denied)
                 LoginFailure.LocalHttpDisabled -> stringResource(R.string.auth_local_http_disabled)
                 LoginFailure.NonLocalHttp -> stringResource(R.string.auth_non_local_http)
                 LoginFailure.BadAddress -> stringResource(R.string.auth_bad_address)

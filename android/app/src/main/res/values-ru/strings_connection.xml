@@ -1,4 +1,6 @@
 <resources>
+    <string name="settings_local_network_permission">Разрешить доступ к локальной сети</string>
+    <string name="auth_local_network_denied">Для подключения к этому серверу разрешите доступ к локальной сети. Разрешение можно выдать в системных настройках приложения.</string>
     <string name="settings_connection">Подключение</string>
     <string name="settings_local_http">Разрешить HTTP в локальной сети</string>
     <string name="settings_local_http_hint">Разрешить подключение без шифрования только к локальному серверу. По умолчанию выключено.</string>

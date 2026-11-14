@@ -23,6 +23,7 @@ sealed interface SessionState {
 }
 
 sealed interface LoginFailure {
+    data object LocalNetworkDenied : LoginFailure
     data object LocalHttpDisabled : LoginFailure
     data object NonLocalHttp : LoginFailure
     data object BadAddress : LoginFailure

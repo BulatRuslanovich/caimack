@@ -20,3 +20,10 @@ and images. Turning the setting off cancels active music-server requests when th
 server uses HTTP; retained downloads remain available.
 
 No build parameter or HTTP allowlist is required. Use HTTPS for public servers.
+
+On Android 17 and later, local servers also require the system local network
+permission. The app requests it only when local HTTP is enabled: when enabling
+the switch, or before signing in to a local address with the switch on. While
+the switch is off, the app does not request this permission. Turning HTTP off
+blocks HTTP requests immediately; Android manages the lifetime of an already
+granted system permission separately in the app permissions screen.
