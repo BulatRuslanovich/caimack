@@ -37,6 +37,7 @@ internal class PlayerScene(initial: PlayerSceneFrame) {
     private var requestedKey = initial.key
     private var neighbours = emptyMap<Int, PlayerSceneFrame>()
     private var direction = 1
+    private var previewDirection = 1
     private var drag by mutableFloatStateOf(0f)
     private var start = 0f
     private var started by mutableStateOf(false)
@@ -48,7 +49,7 @@ internal class PlayerScene(initial: PlayerSceneFrame) {
 
     fun position(key: String): Float = when {
         key == outgoing?.key -> shift - direction
-        key == preview?.key -> shift + if (drag < 0) 1 else -1
+        key == preview?.key -> shift + previewDirection
         else -> shift
     } * distance
 
@@ -58,9 +59,15 @@ internal class PlayerScene(initial: PlayerSceneFrame) {
         if (motion == SceneMotion.Dragging || motion == SceneMotion.Awaiting)
             preview = preview?.let { old -> neighbours.values.firstOrNull { it.key == old.key } ?: old }
         if (ready == null) { pending = null; return }
-        if (ready.key == current.key) {
-            current = ready
+        val sameTrack = ready.state.current?.id == current.state.current?.id
+        val sameTrackAcknowledged = sameTrack && motion == SceneMotion.Awaiting && ready.state.index != current.state.index
+        if (ready.key == current.key || (sameTrack && motion != SceneMotion.Dragging && (motion != SceneMotion.Awaiting || sameTrackAcknowledged))) {
+            // Shuffle and radio can move the playing entry to another index.
+            // Refresh its queue state without replacing or animating its scene.
+            current = ready.copy(key = current.key)
+            requestedKey = current.key
             pending = null
+            if (sameTrackAcknowledged) finish()
         } else if (isRunning) {
             // Rapid skips replace the pending destination, never add a third moving layer.
             pending = ready
@@ -69,7 +76,7 @@ internal class PlayerScene(initial: PlayerSceneFrame) {
 
     private fun begin(frame: PlayerSceneFrame) {
         val fromSwipe = preview?.key == frame.key
-        direction = if (fromSwipe) (if (drag < 0) 1 else -1) else sceneDirection(current.state, frame.state)
+        direction = if (fromSwipe) previewDirection else sceneDirection(current.state, frame.state)
         start = direction + if (fromSwipe) drag else 0f
         outgoing = current
         current = frame
@@ -89,15 +96,20 @@ internal class PlayerScene(initial: PlayerSceneFrame) {
         if (!acceptsDrag(key)) return
         motion = SceneMotion.Dragging
         drag = pixels / distance.coerceAtLeast(1)
+        previewDirection = if (pixels < 0) 1 else -1
         val index = if (pixels < 0) current.state.nextIndex else current.state.previousIndex
-        preview = neighbours[index]
+        preview = neighbour(index)
+        // Repeated occurrences of one song have the same artwork and colour.
+        if (neighbours[index] != null && preview == null) drag = 0f
     }
 
     fun commit(key: String, index: Int) {
         if (current.key != key || motion != SceneMotion.Dragging) return
-        preview = neighbours[index]
+        preview = neighbour(index)
         motion = SceneMotion.Awaiting
     }
+
+    private fun neighbour(index: Int) = neighbours[index]?.takeUnless { it.state.current?.id == current.state.current?.id }
 
     fun cancel(key: String, onlyUnacknowledged: Boolean = false) {
         if (current.key != key || (motion != SceneMotion.Dragging && motion != SceneMotion.Awaiting)) return

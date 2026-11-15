@@ -36,7 +36,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { PlayerBackdrop } from "./ArtBackdrop";
 import { ArtworkScene } from "./ArtworkScene";
 import { ArtistLinks } from "./ArtistLinks";
@@ -51,15 +51,25 @@ import { StreamQuality } from "./StreamQuality";
 import { TrackMenu } from "./TrackMenu";
 import { Button } from "./ui/button";
 import { WaveformSeekbar } from "./WaveformSeekbar";
+import { Loading } from "./Loading";
 
 const IDLE_MS = 2500;
 
 const SWIPE_CLOSE_PX = 120;
 
-const DJControls = dynamic(() => import("./DJControls").then((m) => m.DJControls));
-const QueueList = dynamic(() => import("./QueueList").then((m) => m.QueueList));
-const LyricsPane = dynamic(() => import("./LyricsPane").then((m) => m.LyricsPane));
-const ShareCardDialog = dynamic(() => import("./ShareCardDialog").then((m) => m.ShareCardDialog));
+// A cold panel chunk must suspend locally, keeping the fullscreen dialog mounted.
+const DJControls = dynamic(() => import("./DJControls").then((m) => m.DJControls), {
+  loading: () => null,
+});
+const QueueList = dynamic(() => import("./QueueList").then((m) => m.QueueList), {
+  loading: () => <Loading />,
+});
+const LyricsPane = dynamic(() => import("./LyricsPane").then((m) => m.LyricsPane), {
+  loading: () => <Loading />,
+});
+const ShareCardDialog = dynamic(() => import("./ShareCardDialog").then((m) => m.ShareCardDialog), {
+  loading: () => null,
+});
 
 function FullScreenProgress({ track, chrome }: { track: Track; chrome: string }) {
   const t = useT();
@@ -239,8 +249,20 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
             data-player-fullscreen="true"
             data-aura-host
             onTouchStart={(event) => {
+              const target = event.target as Element;
+              const interactive = target.closest(
+                "button, a, input, select, textarea, [role='slider'], [role='menu']",
+              );
               const atTop = (stage.current?.scrollTop ?? 0) === 0;
-              swipeFrom.current = panel === "art" && atTop ? event.touches[0].clientY : null;
+              const insidePlayer =
+                target.closest("[data-player-fullscreen]") === event.currentTarget;
+              swipeFrom.current =
+                panel === "art" && atTop && !interactive && insidePlayer
+                  ? event.touches[0].clientY
+                  : null;
+            }}
+            onTouchCancel={() => {
+              swipeFrom.current = null;
             }}
             onTouchEnd={(event) => {
               const from = swipeFrom.current;
@@ -448,24 +470,26 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
                   )}
 
                   <div className={cn("flex items-center gap-2", chrome)}>
-                    <TrackMenu
-                      track={track}
-                      open={menuOpen}
-                      onOpenChange={setMenuOpen}
-                      onNavigate={onClose}
-                      isFavorite={track.isFavorite}
-                      onToggleFavorite={onToggleFavorite}
-                      trigger={
-                        <Button
-                          variant="ghost"
-                          size="icon-lg"
-                          className="max-lg:hidden"
-                          aria-label={t("tracks.moreActions", { title: track.title })}
-                        >
-                          <EllipsisVerticalIcon />
-                        </Button>
-                      }
-                    />
+                    <Suspense fallback={null}>
+                      <TrackMenu
+                        track={track}
+                        open={menuOpen}
+                        onOpenChange={setMenuOpen}
+                        onNavigate={onClose}
+                        isFavorite={track.isFavorite}
+                        onToggleFavorite={onToggleFavorite}
+                        trigger={
+                          <Button
+                            variant="ghost"
+                            size="icon-lg"
+                            className="max-lg:hidden"
+                            aria-label={t("tracks.moreActions", { title: track.title })}
+                          >
+                            <EllipsisVerticalIcon />
+                          </Button>
+                        }
+                      />
+                    </Suspense>
 
                     <div className="ml-auto flex w-[12.5rem] max-w-[50%] items-center gap-2 pointer-coarse:hidden">
                       <PlayerVolume size="icon-lg" />

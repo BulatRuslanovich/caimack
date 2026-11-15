@@ -23,15 +23,19 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -172,17 +176,41 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
     }
 
     Surface(Modifier.fillMaxSize(), color = palette.background, contentColor = palette.foreground) {
-        Box(Modifier.fillMaxSize()) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+        val viewportHeight = maxHeight
+        val portrait = maxWidth <= maxHeight
+        val sleeveSize = minOf((maxWidth - 64.dp) / 1.7f, (maxHeight - 24.dp) / 1.7f, 300.dp).coerceAtLeast(1.dp)
+        val safeInsets = WindowInsets.safeDrawing.asPaddingValues()
+        val safeTop = safeInsets.calculateTopPadding() + 12.dp
+        val metadataTop = viewportHeight / 2 + sleeveSize / 2 + 24.dp
+        val artworkTop = safeTop + 48.dp
+        // Use the seekbar's bottom-anchored block and one-line metadata as a
+        // stable reference, so a longer title never shifts the artwork.
+        val baselineTextHeight = with(LocalDensity.current) {
+            Type.display.lineHeight.toDp() + Type.body.lineHeight.toDp() + Type.tiny.lineHeight.toDp() * 2
+        }
+        val baselineControlsHeight = baselineTextHeight + 48.dp + 68.dp + 48.dp + 24.dp
+        val artworkBottom = (viewportHeight - safeInsets.calculateBottomPadding() - 12.dp - baselineControlsHeight).coerceAtLeast(metadataTop)
         PlayerSceneBackground(scene, Modifier.matchParentSize())
-        BoxWithConstraints(Modifier.safeDrawingPadding().padding(horizontal = 20.dp, vertical = 12.dp)) {
-            val wide = maxWidth > maxHeight
-            val scrollingArtwork = maxHeight < 600.dp || LocalDensity.current.fontScale >= 1.3f
-            val scrollArtworkHeight = minOf(maxWidth, maxHeight * 0.5f).coerceAtLeast(160.dp)
+        if (portrait && panel == Panel.None) {
+            PlayerArtwork(
+                scene,
+                { scrub = it },
+                Modifier.fillMaxWidth().height((artworkBottom - artworkTop).coerceAtLeast(1.dp)).offset(y = artworkTop),
+                horizontalInset = 20.dp,
+            )
+        }
+        BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 20.dp, vertical = 12.dp)) {
+            val wide = !portrait
+            // Centre the artwork in the space above the metadata, keeping the
+            // lower block anchored to the seekbar as titles grow or scroll.
+            val controlsTop = metadataTop - safeTop
+            val controlsHeight = (maxHeight - controlsTop).coerceAtLeast(96.dp)
 
             val header = @Composable {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().testTag("full-player-header"), verticalAlignment = Alignment.CenterVertically) {
                     IconAction(Lucide.ChevronDown, stringResource(R.string.player_close_full), onClick = onClose)
-                    Text(stringResource(R.string.player_now_playing), style = Type.small, color = palette.muted, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(stringResource(R.string.player_now_playing), style = Type.small, color = palette.muted, modifier = Modifier.weight(1f).testTag("full-player-context"), textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Box {
                         IconAction(Lucide.EllipsisVertical, stringResource(R.string.menu_more)) { options = true }
                         DropdownMenu(options, onDismissRequest = { options = false }) {
@@ -196,19 +224,17 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
             val stage: @Composable (Modifier) -> Unit = { modifier ->
                 Box(modifier) {
                     when (panel) {
-                        Panel.None -> PlayerSceneLayer(scene, Modifier.fillMaxSize().testTag("player-artwork-scene")) { frame ->
-                            Deck(frame.state, onScrub = { scrub = it }, modifier = Modifier.fillMaxSize().padding(bottom = if (wide) 0.dp else 24.dp), alignment = if (wide) Alignment.Center else Alignment.BottomCenter)
-                        }
+                        Panel.None -> PlayerArtwork(scene, { scrub = it }, Modifier.fillMaxSize())
                         Panel.Lyrics -> LyricsPanel(track, position, state.playing)
                         Panel.Queue -> QueuePanel(state, undoable)
                     }
                 }
             }
 
-            val controls = @Composable {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            val controls: @Composable (Modifier) -> Unit = { modifier ->
+                Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.Bottom)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             if (panel == Panel.None) {
                                 Text(track.title, style = displayStyle(track.title))
                             } else {
@@ -240,7 +266,6 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
                         ) { haptic(PlayerHaptic.Favorite); container.favorites.toggle(track) }
                     }
                     if (panel != Panel.Queue) {
-                    Spacer(Modifier.height(8.dp))
                     Seekbar(position, duration, peaks) { player.seekTo(it) }
                     Row {
                         Text(clock(position), style = Type.tiny, color = palette.muted)
@@ -292,21 +317,23 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
                         header()
                         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                             Spacer(Modifier.height(16.dp))
-                            controls()
+                            controls(Modifier)
                         }
                     }
                 }
-            } else if (panel == Panel.None && scrollingArtwork) {
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            } else if (panel == Panel.None) {
+                Column(Modifier.fillMaxSize()) {
                     header()
-                    stage(Modifier.fillMaxWidth().height(scrollArtworkHeight))
-                    controls()
+                    Spacer(Modifier.weight(1f))
+                    Box(Modifier.fillMaxWidth().height(controlsHeight).testTag("full-player-controls-region").verticalScroll(rememberScrollState())) {
+                        controls(Modifier.fillMaxWidth().heightIn(min = controlsHeight))
+                    }
                 }
             } else {
                 Column {
                     header()
                     stage(Modifier.weight(1f).fillMaxWidth())
-                    controls()
+                    controls(Modifier)
                 }
             }
         }
@@ -316,6 +343,19 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
         }
     }
 }
+
+@Composable
+private fun PlayerArtwork(scene: PlayerScene, onScrub: (Long?) -> Unit, modifier: Modifier, horizontalInset: Dp = 0.dp) {
+    val palette = LocalPalette.current
+    PlayerSceneLayer(scene, modifier.testTag("player-artwork-scene")) { frame ->
+        val frameTone = rememberPlayerCoverTone(frame.state.current?.let { trackCover(it) })
+        val auraColor = frameTone?.color(palette, LocalColorway.current) ?: palette.primary
+        CompositionLocalProvider(LocalNowPlayingTone provides auraColor) {
+            Deck(frame.state, onScrub, Modifier.fillMaxSize().padding(horizontal = horizontalInset))
+        }
+    }
+}
+
 @Composable
 private fun Seekbar(positionMs: Long, durationMs: Long, peaks: List<Int>?, onSeek: (Long) -> Unit) {
     val haptic = rememberPlayerHaptics()

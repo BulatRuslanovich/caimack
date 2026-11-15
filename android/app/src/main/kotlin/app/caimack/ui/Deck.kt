@@ -85,7 +85,7 @@ fun Deck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Modifier = Modi
     val track = state.current ?: return
     // The new song and its neutral position must be installed in the same composition.
     // Resetting the old offset in an effect briefly puts the next neighbour in the centre.
-    key(track.id, state.index) { TrackDeck(state, onScrub, modifier.testTag("player-deck"), alignment) }
+    key(track.id) { TrackDeck(state, onScrub, modifier.testTag("player-deck"), alignment) }
 }
 
 @Composable
@@ -104,7 +104,7 @@ private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Mo
     var scratching by remember { mutableStateOf(false) }
     var twist by remember(track.id) { mutableFloatStateOf(0f) }
     val layout = remember { DeckLayout() }
-    val extension by animateFloatAsState(if (state.playing || scratching) 1f else 0f, tween(if (motion) 240 else 0), label = "deck-centering")
+    val extension by animateFloatAsState(if (state.playing || scratching) 1f else 0f, tween(if (motion) 650 else 0), label = "deck-centering")
 
 
     BoxWithConstraints(
@@ -236,39 +236,43 @@ private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Mo
             },
         contentAlignment = alignment,
     ) {
-        val sleeveSize = minOf(maxWidth * 0.68f, maxHeight * 0.9f, 300.dp)
-        Box(
-            Modifier
-                .size(sleeveSize)
-                .offset { IntOffset((-sleeveSize.toPx() * RECORD_OUT * 0.5f * extension).roundToInt(), 0) }
-                .aspectRatio(1f)
-                .testTag("player-record")
-                .onGloballyPositioned { layout.record = it },
-        ) {
-            val offset = swipe.value
-            if (offset != 0f) {
-                val gap = with(LocalDensity.current) { 24.dp.toPx() }
-                val step = (layout.record?.size?.width ?: 0) * (1 + RECORD_OUT) + gap
-                state.previous?.takeIf { offset > 0 }?.let { Neighbour(it, offset - step) }
-                state.next?.takeIf { offset < 0 }?.let { Neighbour(it, offset + step) }
+        // Include the extended disc, the widest beat glow and its vertical orbits.
+        // Reserving their bounds keeps the aura away from the scene's clipping edge.
+        val sleeveSize = minOf((maxWidth - 24.dp) / 1.7f, (maxHeight - 24.dp) / 1.7f, 300.dp).coerceAtLeast(1.dp)
+        Box(Modifier.size(sleeveSize * 1.7f).testTag("player-record-visuals"), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier
+                    .size(sleeveSize)
+                    .offset { IntOffset((-sleeveSize.toPx() * RECORD_OUT * 0.5f * extension).roundToInt(), 0) }
+                    .aspectRatio(1f)
+                    .testTag("player-record")
+                    .onGloballyPositioned { layout.record = it },
+            ) {
+                val offset = swipe.value
+                if (offset != 0f) {
+                    val gap = with(LocalDensity.current) { 24.dp.toPx() }
+                    val step = (layout.record?.size?.width ?: 0) * (1 + RECORD_OUT) + gap
+                    state.previous?.takeIf { offset > 0 }?.let { Neighbour(it, offset - step) }
+                    state.next?.takeIf { offset < 0 }?.let { Neighbour(it, offset + step) }
+                }
+
+                BeatGlow(track, state.playing && !state.buffering, extension, Modifier.fillMaxSize().offset { IntOffset(swipe.value.roundToInt(), 0) })
+
+                Record(
+                    track,
+                    spinning = state.playing && !state.buffering,
+                    out = (state.playing || scratching) && (sceneGesture != null || !swiping),
+                    twist = twist,
+                    modifier = Modifier.fillMaxSize().offset { IntOffset(swipe.value.roundToInt(), 0) },
+                    jacket = if (sceneGesture == null || sceneGesture.sharedCover) Modifier.nowPlayingCover(LocalFullPlayerVisibility.current) else Modifier,
+                )
             }
-
-            BeatGlow(track, state.playing && !state.buffering, Modifier.fillMaxSize().offset { IntOffset(swipe.value.roundToInt(), 0) })
-
-            Record(
-                track,
-                spinning = state.playing && !state.buffering,
-                out = (state.playing || scratching) && !swiping,
-                twist = twist,
-                modifier = Modifier.fillMaxSize().offset { IntOffset(swipe.value.roundToInt(), 0) },
-                jacket = if (sceneGesture == null || sceneGesture.sharedCover) Modifier.nowPlayingCover(LocalFullPlayerVisibility.current) else Modifier,
-            )
         }
     }
 }
 
 @Composable
-private fun BeatGlow(track: Track, playing: Boolean, modifier: Modifier) {
+private fun BeatGlow(track: Track, playing: Boolean, extension: Float, modifier: Modifier) {
     val player = LocalContainer.current.player
     val palette = LocalPalette.current
     val tone = LocalNowPlayingTone.current
@@ -300,7 +304,7 @@ private fun BeatGlow(track: Track, playing: Boolean, modifier: Modifier) {
 
     Canvas(modifier) {
         if (opacity < 0.01f) return@Canvas
-        val centre = Offset(size.width * (RECORD_OUT + 0.5f), size.height / 2)
+        val centre = Offset(size.width * (RECORD_OUT * 0.5f * extension + 0.5f), size.height / 2)
         val disc = size.width * 0.5f
         val radius = disc * (1.6f + 0.1f * pulse)
         drawCircle(Brush.radialGradient(listOf(light.copy(alpha = opacity * (0.07f + 0.035f * pulse)),

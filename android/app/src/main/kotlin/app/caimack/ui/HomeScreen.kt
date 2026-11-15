@@ -350,7 +350,8 @@ private fun Tile(label: String, sublabel: String, onClick: () -> Unit, toneUrl: 
             .clip(Radius.tile)
             .background(palette.card)
             .background(Brush.horizontalGradient(0f to tone.copy(alpha = tone.alpha * 0.3f), 0.55f to Color.Transparent))
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(48.dp)) { art() }

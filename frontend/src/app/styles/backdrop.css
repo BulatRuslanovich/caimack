@@ -66,6 +66,8 @@
   --foreground: #f5f5f5;
   --muted-foreground: #d6d6d6;
   --faint-foreground: #bcbcbc;
+  --library-secondary: var(--muted-foreground);
+  --library-tertiary: var(--faint-foreground);
   --library-surface: color-mix(in oklab, var(--card) 65%, var(--background));
   --border: color-mix(in oklab, var(--foreground) 12%, transparent);
   --border-strong: color-mix(in oklab, var(--foreground) 24%, transparent);
