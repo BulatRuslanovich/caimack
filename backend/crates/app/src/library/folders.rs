@@ -19,6 +19,7 @@ pub struct Folder {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "operation", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum Change {
+    Reorder { folder_id: Option<Uuid>, order: Vec<String> },
     Create { id: Uuid, name: String, folder_id: Option<Uuid> },
     Rename { id: Uuid, name: String },
     MoveFolder { id: Uuid, folder_id: Option<Uuid> },
@@ -33,6 +34,15 @@ pub async fn list<'e>(db: impl sqlx::PgExecutor<'e>, user: Uuid) -> AppResult<Ve
     .bind(user)
     .fetch_all(db)
     .await?)
+}
+
+pub async fn order<'e>(
+    db: impl sqlx::PgExecutor<'e>,
+    user: Uuid,
+) -> AppResult<std::collections::BTreeMap<String, Vec<String>>> {
+    let rows: Vec<(String, sqlx::types::Json<Vec<String>>)> =
+        sqlx::query_as("SELECT scope,item_keys FROM library_order WHERE user_id=$1").bind(user).fetch_all(db).await?;
+    Ok(rows.into_iter().map(|(scope, keys)| (scope, keys.0)).collect())
 }
 
 fn name(value: &str) -> AppResult<&str> {
@@ -71,6 +81,32 @@ pub async fn apply(db: &mut PgConnection, user: Uuid, change: &Change, at: DateT
         .execute(&mut *db)
         .await?;
     match change {
+        Change::Reorder { folder_id, order } => {
+            destination(db, user, *folder_id, None).await?;
+            if order.len() > 10000 || order.iter().collect::<std::collections::HashSet<_>>().len() != order.len() {
+                return Err(AppError::validation("Invalid library order."));
+            }
+            let mut allowed = std::collections::HashSet::new();
+            for item in super::collection::list(&mut *db, user).await? {
+                if item.folder_id == *folder_id {
+                    allowed.insert(format!("{}:{}", item.kind, item.id));
+                }
+            }
+            for folder in list(&mut *db, user).await? {
+                if folder.parent_id == *folder_id {
+                    allowed.insert(format!("folder:{}", folder.id));
+                }
+            }
+            if folder_id.is_none() {
+                allowed.extend(["favorites".to_owned(), "downloads".to_owned()]);
+            }
+            if order.iter().any(|key| !allowed.contains(key)) {
+                return Err(AppError::validation("Order must contain only entries from this library folder."));
+            }
+            let scope = folder_id.map(|id| id.to_string()).unwrap_or_else(|| "root".into());
+            sqlx::query("INSERT INTO library_order(user_id,scope,item_keys) VALUES($1,$2,$3) ON CONFLICT(user_id,scope) DO UPDATE SET item_keys=excluded.item_keys")
+                .bind(user).bind(scope).bind(sqlx::types::Json(order)).execute(&mut *db).await?;
+        }
         Change::Create { id, name: value, folder_id } => {
             let value = name(value)?;
             destination(db, user, *folder_id, Some(*id)).await?;
@@ -117,6 +153,11 @@ pub async fn apply(db: &mut PgConnection, user: Uuid, change: &Change, at: DateT
                     .bind(user)
                     .bind(id)
                     .bind(up)
+                    .execute(&mut *db)
+                    .await?;
+                sqlx::query("DELETE FROM library_order WHERE user_id=$1 AND scope=$2")
+                    .bind(user)
+                    .bind(id.to_string())
                     .execute(&mut *db)
                     .await?;
                 sqlx::query("DELETE FROM library_folders WHERE user_id=$1 AND id=$2")

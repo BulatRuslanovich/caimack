@@ -51,6 +51,7 @@ pub(super) async fn download(
 #[derive(Serialize)]
 struct Waveform {
     peaks: Vec<i32>,
+    version: i32,
 }
 
 pub(super) async fn waveform(
@@ -58,7 +59,7 @@ pub(super) async fn waveform(
     RoutePath(id): RoutePath<Uuid>,
 ) -> ApiResult<impl IntoResponse> {
     let peaks = streaming::waveform(&state.db, id).await?;
-    Ok(([(header::CACHE_CONTROL, "private, max-age=86400")], Json(Waveform { peaks })))
+    Ok(([(header::CACHE_CONTROL, "private, max-age=86400")], Json(Waveform { peaks, version: media::cues::VERSION })))
 }
 
 #[derive(Deserialize)]

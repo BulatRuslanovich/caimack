@@ -3,7 +3,7 @@
 
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type Ref } from "react";
 import { cn } from "@/lib/cn";
 import { useT } from "@/contexts/I18nContext";
 import { Button } from "./ui/button";
@@ -17,12 +17,18 @@ export function SearchField({
   placeholder,
   autoFocus = false,
   className,
+  inputRef,
+  onBlur,
+  onEmptyEscape,
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
   autoFocus?: boolean;
   className?: string;
+  inputRef?: Ref<HTMLInputElement>;
+  onBlur?: (value: string) => void;
+  onEmptyEscape?: () => void;
 }) {
   const t = useT();
   const inputId = useId();
@@ -64,6 +70,9 @@ export function SearchField({
 
   return (
     <div
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) onBlur?.(input.trim());
+      }}
       className={cn(
         "search-field flex max-w-xl items-center gap-2.5 rounded-lg border border-border bg-card px-3.5 text-muted-foreground transition-[background-color,border-color,box-shadow] duration-150",
         "hover:border-border-strong focus-within:border-ring focus-within:bg-raised focus-within:text-foreground focus-within:ring-2 focus-within:ring-ring/15",
@@ -75,6 +84,7 @@ export function SearchField({
         {placeholder}
       </label>
       <input
+        ref={inputRef}
         id={inputId}
         type="search"
         placeholder={placeholder}
@@ -83,9 +93,10 @@ export function SearchField({
         autoFocus={autoFocus}
         onChange={(event) => setInput(event.target.value)}
         onKeyDown={(event) => {
-          if (event.key === "Escape" && input !== "") {
+          if (event.key === "Escape" && (input !== "" || onEmptyEscape)) {
             event.preventDefault();
-            clear();
+            if (input !== "") clear();
+            else onEmptyEscape?.();
           }
         }}
         className="w-full min-w-0 bg-transparent py-2.5 text-base text-foreground outline-none placeholder:text-faint [&::-webkit-search-cancel-button]:hidden"

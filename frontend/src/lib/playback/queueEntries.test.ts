@@ -1,11 +1,22 @@
 import type { Track } from "@/lib/types";
 import { describe, expect, it } from "vitest";
-import { queueEntries, queueEntryKey } from "./queueEntries";
+import { queueEntries, queueEntryKey, sameQueueEntryOrder } from "./queueEntries";
 
 const track = (id: string) => ({ id, title: id }) as Track;
 const keys = (tracks: Track[]) => tracks.map(queueEntryKey);
 
 describe("queue occurrence identity", () => {
+  it("recognizes stale order snapshots without confusing identical track occurrences", () => {
+    const original = queueEntries([track("a"), track("b"), track("a")]);
+    expect(
+      sameQueueEntryOrder(
+        original,
+        original.map((item) => ({ ...item, title: "updated" })),
+      ),
+    ).toBe(true);
+    expect(sameQueueEntryOrder(original, [original[2], original[1], original[0]])).toBe(false);
+    expect(sameQueueEntryOrder(original, original.slice(1))).toBe(false);
+  });
   it("preserves duplicate entries across moves, insertion, edits, and removal", () => {
     const original = queueEntries([track("a"), track("a"), track("b")]);
     expect(new Set(keys(original)).size).toBe(3);

@@ -23,11 +23,14 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 
+internal const val LIBRARY_ORDER = "library-order"
 internal const val LIBRARY_FOLDERS = "library-folders"
 
 internal suspend fun refreshLibrary(api: CaimackApi) {
     val items = api.savedLibrary()
     val folders = api.libraryFolders()
+    val order = api.libraryOrder()
+    Remote.update(LIBRARY_ORDER, order)
     Remote.update(SAVED_LIBRARY, items)
     Remote.update(LIBRARY_FOLDERS, folders)
 }

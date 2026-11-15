@@ -17,11 +17,7 @@ import { useT } from "@/contexts/I18nContext";
 import { useToast } from "@/lib/useToast";
 import { Panel } from "./Panel";
 import { setTatarMafia, useTatarMafia } from "@/lib/tatarMafia";
-import {
-  enableVinylScratch,
-  prepareVinylScratch,
-  vinylScratchSupported,
-} from "@/lib/playback/equalizer";
+import { vinylScratchSupported } from "@/lib/playback/equalizer";
 
 const subscribeSupport = () => () => {};
 
@@ -51,11 +47,7 @@ export function Experimental() {
           checked={tatarMafia}
           disabled={!scratchSupported}
           aria-describedby="tatar-mafia-hint"
-          onCheckedChange={(enabled) => {
-            setTatarMafia(enabled);
-            enableVinylScratch(enabled);
-            if (enabled) void prepareVinylScratch();
-          }}
+          onCheckedChange={setTatarMafia}
         />
         <span className="flex max-w-xl flex-col gap-1">
           <span className="font-medium">{t("settings.tatarMafia")}</span>

@@ -158,6 +158,7 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
             var playlists = snapshot.objects("playlists")
             var savedLibrary = snapshot.objects("savedLibrary")
             var libraryFolders = snapshot.objects("libraryFolders")
+            var libraryOrder = snapshot["libraryOrder"] ?: buildJsonObject {}
             fun save(kind: String, id: String?, at: String) {
                 if (savedLibrary.none { it.string("kind") == kind && it.string("id") == id }) {
                     savedLibrary = savedLibrary + buildJsonObject { put("kind", kind); put("id", id); put("savedAt", at) }
@@ -171,13 +172,14 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
                 when (action.kind) {
                     "libraryOrganize" -> {
                         val current = buildJsonObject {
-                            put("savedLibrary", JsonArray(savedLibrary)); put("libraryFolders", JsonArray(libraryFolders))
+                            put("savedLibrary", JsonArray(savedLibrary)); put("libraryFolders", JsonArray(libraryFolders)); put("libraryOrder", libraryOrder)
                         }
                         // A concurrently removed destination must not break offline browsing.
                         val next = try { organizeLibrary(current, p, action.occurredAt) }
                             catch (_: IllegalArgumentException) { current }
                         savedLibrary = next.objects("savedLibrary")
                         libraryFolders = next.objects("libraryFolders")
+                        libraryOrder = next["libraryOrder"] ?: buildJsonObject {}
                     }
                     "library" -> {
                         val kind = p.string("kind")
@@ -271,6 +273,7 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
             return snapshot.with(
                 "savedLibrary" to JsonArray(savedLibrary),
                 "libraryFolders" to JsonArray(libraryFolders),
+                "libraryOrder" to libraryOrder,
                 "tracks" to JsonArray(tracks),
                 "playlists" to JsonArray(playlists),
                 "playlistTracks" to JsonObject(membership),
@@ -335,6 +338,7 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
             val playlists = data.objects("playlists")
             return when {
                 path == "me/library" -> result(data["savedLibrary"] ?: JsonArray(emptyList()))
+                path == "me/library/order" -> result(data["libraryOrder"] ?: buildJsonObject {})
                 path == "me/library/folders" -> result(data["libraryFolders"] ?: JsonArray(emptyList()))
                 path == "auth/me" -> result(data["user"])
                 path == "config" ->

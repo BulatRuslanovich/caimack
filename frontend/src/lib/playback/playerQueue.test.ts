@@ -10,9 +10,14 @@ import {
   indexAfterRemoval,
   insertAfter,
   moveInQueue,
+  materializeQueue,
+  restorePlaybackOrder,
+  selectQueueEntry,
+  startPlaybackQueue,
   radioStartAfterInsert,
   remapIndexAfterMove,
 } from "@/lib/playback/playerQueue";
+import { queueEntries, queueEntryKey } from "./queueEntries";
 import type { Track } from "@/lib/types";
 
 function track(id: string): Track {
@@ -168,34 +173,37 @@ describe("indexAfterRemoval", () => {
 
 describe("moveInQueue", () => {
   it("moves a track down the list", () => {
-    const next = moveInQueue(tracks("a", "b", "c", "d"), [0, 1, 2, 3], 0, 2, false);
+    const next = moveInQueue(tracks("a", "b", "c", "d"), [0, 1, 2, 3], 0, 2);
 
     expect(next.queue.map((item) => item.id)).toEqual(["b", "c", "a", "d"]);
   });
 
   it("moves a track up the list", () => {
-    const next = moveInQueue(tracks("a", "b", "c", "d"), [0, 1, 2, 3], 3, 1, false);
+    const next = moveInQueue(tracks("a", "b", "c", "d"), [0, 1, 2, 3], 3, 1);
 
     expect(next.queue.map((item) => item.id)).toEqual(["a", "d", "b", "c"]);
   });
 
   it("makes the new list the playback order when not shuffled", () => {
-    const next = moveInQueue(tracks("a", "b", "c", "d"), [0, 1, 2, 3], 3, 0, false);
+    const next = moveInQueue(tracks("a", "b", "c", "d"), [0, 1, 2, 3], 3, 0);
 
     expect(next.order).toEqual([0, 1, 2, 3]);
     expect(playbackFrom(next.queue, next.order, 0)).toEqual(["d", "a", "b", "c"]);
   });
 
-  it("keeps the shuffled playback order intact", () => {
+  it("makes a dragged shuffled queue play in the new visible order", () => {
     for (const order of ORDERS) {
       for (let from = 0; from < 4; from += 1) {
         for (let to = 0; to < 4; to += 1) {
-          const queue = tracks("a", "b", "c", "d");
-          const before = order.map((index) => queue[index].id);
-          const next = moveInQueue(queue, order, from, to, true);
+          const source = tracks("a", "b", "c", "d");
+          const queue = order.map((index) => source[index]);
+          const visible = [...queue];
+          visible.splice(to, 0, ...visible.splice(from, 1));
+          const next = moveInQueue(queue, [0, 1, 2, 3], from, to);
 
           expect(isPermutation(next.order, next.queue.length)).toBe(true);
-          expect(next.order.map((index) => next.queue[index].id)).toEqual(before);
+          expect(next.queue).toEqual(visible);
+          expect(next.order.map((index) => next.queue[index])).toEqual(visible);
         }
       }
     }
@@ -207,7 +215,7 @@ describe("moveInQueue", () => {
     for (let current = 0; current < 4; current += 1) {
       for (let from = 0; from < 4; from += 1) {
         for (let to = 0; to < 4; to += 1) {
-          const next = moveInQueue(queue, [0, 1, 2, 3], from, to, false);
+          const next = moveInQueue(queue, [0, 1, 2, 3], from, to);
           const movedCurrent = remapIndexAfterMove(from, to, current);
 
           expect(next.queue[movedCurrent].id).toBe(queue[current].id);
@@ -220,9 +228,63 @@ describe("moveInQueue", () => {
     const queue = tracks("a", "b");
     const order = [1, 0];
 
-    expect(moveInQueue(queue, order, 1, 1, true)).toEqual({ queue, order });
-    expect(moveInQueue(queue, order, -1, 0, true)).toEqual({ queue, order });
-    expect(moveInQueue(queue, order, 0, 5, true)).toEqual({ queue, order });
+    expect(moveInQueue(queue, order, 1, 1)).toEqual({ queue, order });
+    expect(moveInQueue(queue, order, -1, 0)).toEqual({ queue, order });
+    expect(moveInQueue(queue, order, 0, 5)).toEqual({ queue, order });
+  });
+});
+
+describe("visible playback queue", () => {
+  it.each([0, 2, 5])(
+    "shuffles the entire queue from position %i and retains the playing object",
+    (index) => {
+      const queue = queueEntries(tracks("a", "b", "c", "d", "e", "f"));
+      const next = startPlaybackQueue(queue, index, true, mulberry(7));
+      expect(next.index).toBe(0);
+      expect(next.queue[0]).toBe(queue[index]);
+      expect(next.queue.map(queueEntryKey).sort()).toEqual(queue.map(queueEntryKey).sort());
+      expect(next.order).toEqual([0, 1, 2, 3, 4, 5]);
+      expect(next.queue.slice(1)).not.toEqual(queue.filter((_, position) => position !== index));
+      for (let at = 0; at < next.queue.length - 1; at++) {
+        expect(advanceIn(next.order, at, 1, false)).toEqual({ kind: "play", index: at + 1 });
+      }
+      expect(advanceIn(next.order, 5, 1, false)).toEqual({ kind: "stop" });
+      expect(advanceIn(next.order, 5, 1, true)).toEqual({ kind: "play", index: 0 });
+    },
+  );
+
+  it("keeps duplicate occurrences separate and restores their original relative order", () => {
+    const queue = queueEntries(tracks("a", "b", "a", "c", "d"));
+    const shuffled = startPlaybackQueue(queue, 2, true, mulberry(13));
+    expect(shuffled.queue[0]).toBe(queue[2]);
+    expect(new Set(shuffled.queue.map(queueEntryKey)).size).toBe(5);
+    const restored = restorePlaybackOrder(shuffled.queue, 0, queue);
+    expect(restored.queue.map(queueEntryKey)).toEqual(
+      [2, 3, 4, 0, 1].map((index) => queueEntryKey(queue[index])),
+    );
+    expect(restored.index).toBe(0);
+  });
+
+  it("does not mark earlier songs as history when starting a new queue in the middle", () => {
+    const next = startPlaybackQueue(tracks("a", "b", "c", "d"), 2, false);
+    expect(next.queue.map((track) => track.id)).toEqual(["c", "d", "a", "b"]);
+    expect(next.index).toBe(0);
+  });
+
+  it("keeps intermediate unvisited songs upcoming after a manual jump", () => {
+    const next = selectQueueEntry(tracks("a", "b", "c", "d", "e"), 0, 4);
+    expect(next.queue.map((track) => track.id)).toEqual(["a", "e", "b", "c", "d"]);
+    expect(next.index).toBe(1);
+    expect(advanceIn(next.order, next.index, 1, false)).toEqual({ kind: "play", index: 2 });
+  });
+
+  it("materializes a transferred order and preserves its selected occurrence and history", () => {
+    const queue = tracks("a", "b", "c", "d", "e");
+    const next = materializeQueue(queue, [3, 1, 4, 0, 2], 4);
+    expect(next.queue.map((track) => track.id)).toEqual(["d", "b", "e", "a", "c"]);
+    expect(next.index).toBe(2);
+    expect(next.queue[next.index]).toBe(queue[4]);
+    expect(next.order).toEqual([0, 1, 2, 3, 4]);
   });
 });
 

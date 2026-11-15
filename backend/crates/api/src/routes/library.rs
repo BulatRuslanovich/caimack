@@ -53,6 +53,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/me/library", get(saved_library))
         .route("/api/me/library/folders", get(library_folders))
+        .route("/api/me/library/order", get(library_order))
         .route("/api/me/library/organize", post(organize_library))
         .route("/api/me/library/{kind}/{id}", put(save_library_item).delete(remove_library_item))
         .route("/api/config", get(client_config))
@@ -346,6 +347,10 @@ async fn library_folders(
     CurrentUser(user): CurrentUser,
 ) -> ApiResult<impl IntoResponse> {
     Ok(Json(app::library::folders::list(&state.db, user.user_id).await?))
+}
+
+async fn library_order(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> ApiResult<impl IntoResponse> {
+    Ok(Json(app::library::folders::order(&state.db, user.user_id).await?))
 }
 
 async fn organize_library(

@@ -3,7 +3,12 @@
 import { useSyncExternalStore } from "react";
 import { mediaUrl } from "@/lib/media";
 import { fetchWithSession } from "@/lib/http";
-import { loadVinylScratchTrack, prepareVinylScratch, unloadVinylScratchTrack } from "./equalizer";
+import {
+  enableVinylScratch,
+  loadVinylScratchTrack,
+  prepareVinylScratch,
+  unloadVinylScratchTrack,
+} from "./equalizer";
 
 export const VINYL_TURN_SECONDS = 1.8;
 const MAX_FILE_BYTES = 48 * 1024 * 1024;
@@ -69,6 +74,7 @@ export async function prepareVinylDeck(
   signal: AbortSignal,
 ): Promise<void> {
   const current = ++revision;
+  enableVinylScratch(true);
   unloadVinylScratchTrack();
   publish(trackId, "loading");
   try {
@@ -87,6 +93,7 @@ export async function prepareVinylDeck(
 export function releaseVinylDeck(): void {
   revision++;
   unloadVinylScratchTrack();
+  enableVinylScratch(false);
   publish("", "idle");
 }
 

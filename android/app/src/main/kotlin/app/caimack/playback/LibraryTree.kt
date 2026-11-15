@@ -44,6 +44,7 @@ import kotlinx.coroutines.withContext
 class LibraryTree(
     context: Context,
     private val container: AppContainer,
+    private val onQueueJump: (Int, String) -> Unit,
     private val resolve: (MediaItem) -> MediaItem,
 ) : MediaLibrarySession.Callback {
     private val strings = Appearance.localized(context)
@@ -55,6 +56,7 @@ class LibraryTree(
                 .add(SessionCommand(FAVORITE, Bundle.EMPTY))
                 .add(SessionCommand(SHUFFLE, Bundle.EMPTY))
                 .add(SessionCommand(REPEAT, Bundle.EMPTY))
+                .add(SessionCommand(QUEUE_JUMP, Bundle.EMPTY))
                 .build(),
             MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS,
         )
@@ -77,6 +79,13 @@ class LibraryTree(
                 Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
                 Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
                 else -> Player.REPEAT_MODE_OFF
+            }
+            QUEUE_JUMP -> {
+                val index = args.getInt("index", -1)
+                val id = args.getString("trackId")
+                if (id == null || runCatching { onQueueJump(index, id) }.isFailure) {
+                    return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
+                }
             }
             else -> return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
         }
@@ -229,7 +238,7 @@ class LibraryTree(
         val saved = container.json.decodeFromString(SavedQueue.serializer(), container.queue.readText())
         saved.tracks.forEach { container.tracks[it.id] = it }
         return MediaSession.MediaItemsWithStartPosition(
-            saved.tracks.map { resolve(it.toMediaItem(container.media)) },
+            preserveQueue(saved.tracks.map { resolve(it.toMediaItem(container.media)) }),
             saved.index,
             saved.positionMs,
         )
@@ -374,6 +383,7 @@ class LibraryTree(
         const val FAVORITE = "app.caimack.FAVORITE"
         const val SHUFFLE = "app.caimack.SHUFFLE"
         const val REPEAT = "app.caimack.REPEAT"
+        const val QUEUE_JUMP = "app.caimack.QUEUE_JUMP"
 
         private const val SEPARATOR = "|"
         private const val ROOT = "root"

@@ -5,14 +5,22 @@ import androidx.compose.animation.core.Spring
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
@@ -23,6 +31,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
@@ -50,30 +68,63 @@ internal val libraryMutation = Mutex()
 @Composable
 fun LibraryScreen(nav: NavController) {
     val api = LocalContainer.current.api
-    Column(Modifier.fillMaxSize()) {
-        LibraryEntry(stringResource(R.string.downloads_title), pluralStringResource(R.plurals.count_tracks, LocalAvailableTracks.current.size, LocalAvailableTracks.current.size), Lucide.Download) {
-            nav.navigate(DownloadsRoute)
-        }
-        Box(Modifier.weight(1f)) {
-            Load(LIBRARY_FOLDERS, { api.libraryFolders() }) { folders -> LibraryBrowser(nav, folders) }
-        }
+    Load(LIBRARY_FOLDERS, { api.libraryFolders() }) { folders ->
+        Load(LIBRARY_ORDER, { api.libraryOrder() }) { order -> LibraryBrowser(nav, folders, order) }
     }
 }
 
 @Composable
-internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
+@OptIn(ExperimentalLayoutApi::class)
+internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, order: Map<String, List<String>>) {
     val container = LocalContainer.current
     val local = LocalOfflineLibrary.current
     val api = catalogApi()
     val palette = LocalPalette.current
     var filter by rememberSaveable { mutableStateOf("all") }
+    var downloadedOnly by rememberSaveable { mutableStateOf(false) }
+    val available = LocalAvailableCollections.current
+    val availableTracks = LocalAvailableTracks.current
     var search by rememberSaveable { mutableStateOf("") }
+    var searchExpanded by rememberSaveable { mutableStateOf(false) }
+    var searchFocused by remember { mutableStateOf(false) }
+    val searchFocus = remember { FocusRequester() }
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    var searchBounds by remember { mutableStateOf<Rect?>(null) }
+    var searchButtonBounds by remember { mutableStateOf<Rect?>(null) }
+    var libraryOrigin by remember { mutableStateOf(Offset.Zero) }
+    val dismissSearch by rememberUpdatedState { point: Offset ->
+        if (searchExpanded && searchBounds?.contains(point + libraryOrigin) != true &&
+            searchButtonBounds?.contains(point + libraryOrigin) != true) {
+            focus.clearFocus()
+            if (search.isBlank()) { search = ""; searchExpanded = false; keyboard?.hide() }
+        }
+    }
+    val imeVisible = WindowInsets.isImeVisible
+    var keyboardWasVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(imeVisible, searchExpanded) {
+        if (!searchExpanded) keyboardWasVisible = false
+        else if (imeVisible) keyboardWasVisible = true
+        else if (keyboardWasVisible) {
+            keyboardWasVisible = false
+            focus.clearFocus()
+            if (search.isBlank()) { search = ""; searchExpanded = false }
+        }
+    }
     var favoriteCount by remember(local) { mutableStateOf<Int?>(null) }
-    LaunchedEffect(local) {
-        try { favoriteCount = api.favorites(1, 1).total }
+    LaunchedEffect(local, downloadedOnly, availableTracks) {
+        favoriteCount = null
+        try {
+            favoriteCount = if (downloadedOnly) collectionTracks { api.favorites(it, TRACK_PAGE_SIZE) }.count { it.id in availableTracks }
+                else api.favorites(1, 1).total
+        }
         catch (error: Exception) { if (error is CancellationException) throw error }
     }
-    var alphabetical by rememberSaveable { mutableStateOf(false) }
+    var sort by rememberSaveable { mutableStateOf("manual") }
+    val alphabetical = sort == "name"
+    var organizing by remember { mutableStateOf(false) }
+    val snackbar = LocalSnackbar.current
+    val failure = stringResource(R.string.collection_failed)
     var grid by rememberSaveable { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
     var createMenu by remember { mutableStateOf(false) }
@@ -82,10 +133,14 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
     val currentFolder = folders.find { it.id == selectedFolder }
     val folderId = currentFolder?.id
     BackHandler(currentFolder != null) { selectedFolder = currentFolder?.parentId }
+    BackHandler(searchExpanded && search.isBlank() && !imeVisible) {
+        focus.clearFocus(); search = ""; searchExpanded = false
+    }
     var catalog by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val query = search.trim()
-    val showFavorites = folderId == null && (filter == "all" || filter == "playlist") && stringResource(R.string.nav_favorites).contains(query, ignoreCase = true)
+    val downloadsTitle = stringResource(R.string.downloads_title)
+    val showFavorites = (!downloadedOnly || (favoriteCount ?: 0) > 0) && folderId == null && (filter == "all" || filter == "playlist") && stringResource(R.string.nav_favorites).contains(query, ignoreCase = true)
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         if (!local) scope.launch {
             libraryMutation.withLock {
@@ -109,11 +164,27 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
         }
     }
     if (creatingFolder) LibraryFolderEditor(parentId = folderId) { creatingFolder = false }
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().onGloballyPositioned { libraryOrigin = it.positionInRoot() }
+        .pointerInput(Unit) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                dismissSearch(down.position)
+            }
+        }) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             if (currentFolder != null) IconButton(onClick = { selectedFolder = currentFolder.parentId }) { Icon(Lucide.ArrowLeft, stringResource(R.string.folders_up)) }
             Text(currentFolder?.name ?: stringResource(R.string.nav_library), style = Type.title, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (currentFolder != null) LibraryFolderMenu(currentFolder, folders)
+            IconButton(
+                onClick = {
+                    if (searchExpanded && search.isBlank()) {
+                        focus.clearFocus(); keyboard?.hide(); search = ""; searchExpanded = false
+                    } else if (searchExpanded) { searchFocus.requestFocus(); keyboard?.show() }
+                    else searchExpanded = true
+                },
+                modifier = Modifier.onGloballyPositioned { searchButtonBounds = it.boundsInRoot() }
+                    .semantics { selected = searchExpanded },
+            ) { Icon(Lucide.Search, stringResource(R.string.collection_search), tint = if (searchExpanded) palette.primary else palette.foreground) }
             if (!local) Box {
                 IconButton(onClick = { createMenu = true }) { Icon(Lucide.Plus, stringResource(R.string.folders_create)) }
                 DropdownMenu(createMenu, onDismissRequest = { createMenu = false }) {
@@ -122,43 +193,32 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
                 }
             }
         }
-        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (filter != "all") item(key = "clear") {
-                IconButton(
-                    onClick = { filter = "all" },
-                    modifier = Modifier.animateItem(
-                        fadeInSpec = tween(220),
-                        placementSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
-                        fadeOutSpec = tween(140),
-                    ),
-                ) {
-                    Icon(Lucide.X, stringResource(R.string.collection_clear_filter), tint = palette.muted)
-                }
+        AnimatedVisibility(searchExpanded,
+            enter = expandVertically(tween(220)) + fadeIn(tween(160)),
+            exit = shrinkVertically(tween(180)) + fadeOut(tween(120)),
+        ) {
+            var hadFocus by remember { mutableStateOf(false) }
+            LaunchedEffect(searchExpanded) {
+                if (searchExpanded) { searchFocus.requestFocus(); keyboard?.show() }
             }
-            items(listOf("playlist" to R.string.nav_playlists, "album" to R.string.nav_albums, "artist" to R.string.nav_artists).filter { filter == "all" || it.first == filter }, key = { it.first }) { (kind, label) ->
-                FilterChip(
-                    modifier = Modifier.animateItem(
-                        fadeInSpec = tween(220),
-                        placementSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
-                        fadeOutSpec = tween(140),
-                    ),
-                    selected = filter == kind,
-                    onClick = { filter = if (filter == kind) "all" else kind },
-                    label = { Text(stringResource(label)) },
-                    shape = CircleShape,
-                    border = null,
-                    colors = FilterChipDefaults.filterChipColors(
-                        containerColor = palette.raised, labelColor = palette.foreground,
-                        selectedContainerColor = palette.primary, selectedLabelColor = palette.onPrimary,
-                    ),
+            Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                .onGloballyPositioned { searchBounds = it.boundsInRoot() }) {
+                SearchInput(search, {
+                    search = it
+                    if (it.isBlank() && !searchFocused) { search = ""; searchExpanded = false }
+                }, stringResource(R.string.collection_search),
+                    focusRequester = searchFocus,
+                    onFocusChange = { focused ->
+                        searchFocused = focused
+                        if (focused) hadFocus = true
+                        else if (hadFocus && search.isBlank()) { search = ""; searchExpanded = false }
+                    },
                 )
             }
         }
-        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-            SearchInput(search, { search = it }, stringResource(R.string.collection_search))
-        }
+        LibraryFilters(filter, downloadedOnly, { filter = it }, { downloadedOnly = it })
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { alphabetical = !alphabetical }, modifier = Modifier.weight(1f)) { Text(stringResource(if (alphabetical) R.string.collection_name else R.string.collection_recent), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            TextButton(onClick = { sort = when (sort) { "manual" -> "recent"; "recent" -> "name"; else -> "manual" } }, modifier = Modifier.weight(1f)) { Text(stringResource(when (sort) { "name" -> R.string.collection_name; "recent" -> R.string.collection_recent; else -> R.string.collection_manual }), maxLines = 1, overflow = TextOverflow.Ellipsis) }
             Box {
                 IconButton(onClick = { catalog = true }) { Icon(Lucide.LibraryBig, stringResource(R.string.collection_catalog)) }
                 DropdownMenu(expanded = catalog, onDismissRequest = { catalog = false }) {
@@ -174,30 +234,103 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
             IconButton(onClick = { grid = !grid }) { Icon(if (grid) Lucide.List else Lucide.LayoutGrid, stringResource(if (grid) R.string.collection_list else R.string.collection_grid)) }
         }
         Load(SAVED_LIBRARY, { api.savedLibrary() }) { library ->
-            val shown = library.filter { (query.isNotEmpty() || it.folderId == folderId) && (filter == "all" || it.kind == filter) && "${it.title} ${it.subtitle}".contains(query, ignoreCase = true) }
+            val eligible = if (downloadedOnly) library.filter { (it.kind to it.id) in available } else library
+            val availableFolders = remember(eligible, folders) { libraryFolderAncestors(eligible, folders) }
+            val shown = eligible.filter { (query.isNotEmpty() || it.folderId == folderId) && (filter == "all" || it.kind == filter) && "${it.title} ${it.subtitle}".contains(query, ignoreCase = true) }
                 .let { if (alphabetical) it.sortedBy { item -> item.title.lowercase() } else it.sortedByDescending { item -> Instant.parse(item.savedAt) } }
-            val shownFolders = folders.filter { if (query.isEmpty()) it.parentId == folderId else it.name.contains(query, ignoreCase = true) }
+            val shownFolders = folders.filter { !downloadedOnly || it.id in availableFolders }.filter { if (query.isEmpty()) it.parentId == folderId else it.name.contains(query, ignoreCase = true) }
                 .let { if (alphabetical) it.sortedBy { folder -> folder.name.lowercase() } else it.sortedByDescending { folder -> folder.createdAt } }
-            val density = LocalLibraryDensity.current
-            LazyVerticalGrid(
-                columns = if (grid) GridCells.Adaptive(density.cardWidth) else GridCells.Fixed(1),
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = playerContentPadding(start = if (grid) 16.dp else 0.dp, end = if (grid) 16.dp else 0.dp, bottom = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(if (grid) density.gap else 0.dp),
-                verticalArrangement = Arrangement.spacedBy(if (grid) 20.dp else 0.dp),
-            ) {
-                if (showFavorites) item(key = "favorites") {
-                    LibraryEntry(stringResource(R.string.nav_favorites), stringResource(R.string.playlists_kind), Lucide.Heart,
-                        grid = grid, details = favoriteCount?.let { pluralStringResource(R.plurals.count_tracks, it, it) },
-                    ) { nav.navigate(FavoritesRoute) }
+            val defaultKeys = buildList {
+                if (folderId == null) add("favorites")
+                addAll(folders.filter { it.parentId == folderId }.sortedByDescending { it.createdAt }.map { "folder:${it.id}" })
+                addAll(library.filter { it.folderId == folderId }.sortedByDescending { Instant.parse(it.savedAt) }.map { "${it.kind}:${it.id}" })
+                if (folderId == null) add("downloads")
+            }
+            val fullOrder = orderedLibraryKeys(defaultKeys, order[folderId ?: "root"].orEmpty())
+            val ranks = fullOrder.withIndex().associate { it.value to it.index }
+            val visibleKeys = buildList {
+                if (showFavorites) add("favorites")
+                addAll(shownFolders.map { "folder:${it.id}" })
+                addAll(shown.map { "${it.kind}:${it.id}" })
+                if (folderId == null && downloadsTitle.contains(query, ignoreCase = true)) add("downloads")
+            }.let { keys -> if (sort == "manual" && query.isEmpty()) keys.sortedBy { ranks[it] ?: Int.MAX_VALUE } else keys }
+            suspend fun change(request: LibraryChange) {
+                if (organizing) return
+                organizing = true
+                val previousSort = sort
+                when (request.operation) {
+                    "reorder" -> {
+                        Remote.update(LIBRARY_ORDER, order + ((folderId ?: "root") to request.order.orEmpty()))
+                        sort = "manual"
+                    }
+                    "moveItem" -> Remote.update(SAVED_LIBRARY, library.map {
+                        if (it.id == request.id && it.kind == request.kind) it.copy(folderId = request.folderId) else it
+                    })
+                    "moveFolder" -> Remote.update(LIBRARY_FOLDERS, folders.map {
+                        if (it.id == request.id) it.copy(parentId = request.folderId) else it
+                    })
                 }
-                items(shownFolders, key = { "folder:" + it.id }) { folder ->
-                    LibraryFolderView(folder, folders, library.count { it.folderId == folder.id } + folders.count { it.parentId == folder.id }, grid) { selectedFolder = folder.id }
+                run {
+                    var committed = false
+                    try {
+                        libraryMutation.withLock {
+                            container.api.organizeLibrary(request)
+                            committed = true
+                            refreshLibrary(container.api)
+                        }
+                    } catch (error: Exception) {
+                        if (error is CancellationException) throw error
+                        if (!committed) {
+                            when (request.operation) {
+                                "reorder" -> { Remote.update(LIBRARY_ORDER, order); sort = previousSort }
+                                "moveItem" -> Remote.update(SAVED_LIBRARY, library)
+                                "moveFolder" -> Remote.update(LIBRARY_FOLDERS, folders)
+                            }
+                        }
+                        snackbar.showSnackbar(failure)
+                    } finally { organizing = false }
                 }
-                items(shown, key = { "${it.kind}:${it.id}" }) { item -> LibraryItemView(item, library, folders, nav, grid) }
-                if (shown.isEmpty() && shownFolders.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
+            }
+            LibraryDragGrid(
+                keys = (if (currentFolder != null && query.isEmpty()) listOf("up") else emptyList()) + visibleKeys,
+                grid = grid, enabled = !local && !organizing && query.isEmpty(), scopeKey = "${folderId}:${filter}:${downloadedOnly}:${query}:${grid}",
+                canDrop = { moving, target ->
+                    val destination = if (target == "up") currentFolder?.parentId else target.removePrefix("folder:")
+                    moving !in listOf("favorites", "downloads") &&
+                        (target == "up" || target.startsWith("folder:")) &&
+                        (!moving.startsWith("folder:") || folderTrail(folders, destination).none { "folder:${it.id}" == moving })
+                },
+                onFolder = { moving, target ->
+                    val kind = moving.substringBefore(':')
+                    val destination = if (target == "up") currentFolder?.parentId else target.substringAfter(':')
+                    change(LibraryChange(if (kind == "folder") "moveFolder" else "moveItem", moving.substringAfter(':'),
+                        kind = kind.takeIf { it != "folder" }, folderId = destination))
+                },
+                onOrder = { moved ->
+                    val base = if (sort == "manual") fullOrder else orderedLibraryKeys(defaultKeys, visibleKeys)
+                    change(LibraryChange("reorder", folderId = folderId, order = mergeVisibleLibraryOrder(base, moved)))
+                },
+                empty = {
                     if (showFavorites) Text(stringResource(R.string.collection_hint), style = Type.small, color = LocalPalette.current.muted, modifier = Modifier.padding(24.dp))
                     else Empty(stringResource(if (query.isNotEmpty()) R.string.collection_no_results else R.string.collection_empty), stringResource(if (currentFolder != null) R.string.folders_empty_hint else R.string.collection_hint))
+                },
+            ) { key ->
+                when (key) {
+                    "up" -> TextButton(onClick = { selectedFolder = currentFolder?.parentId }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Lucide.ArrowLeft, null); Text(stringResource(R.string.folders_up))
+                    }
+                    "favorites" -> LibraryEntry(stringResource(R.string.nav_favorites), stringResource(R.string.playlists_kind), Lucide.Heart,
+                        grid = grid, details = favoriteCount?.let { pluralStringResource(R.plurals.count_tracks, it, it) },
+                    ) { nav.navigate(FavoritesRoute) }
+                    "downloads" -> {
+                        val count = LocalAvailableTracks.current.size
+                        LibraryEntry(downloadsTitle, pluralStringResource(R.plurals.count_tracks, count, count), Lucide.Download, grid = grid) { nav.navigate(DownloadsRoute) }
+                    }
+                    else -> if (key.startsWith("folder:")) {
+                        folders.find { "folder:${it.id}" == key }?.let { folder ->
+                            LibraryFolderView(folder, folders, eligible.count { it.folderId == folder.id } + folders.count { it.parentId == folder.id && (!downloadedOnly || it.id in availableFolders) }, grid) { selectedFolder = folder.id }
+                        }
+                    } else library.find { "${it.kind}:${it.id}" == key }?.let { item -> LibraryItemView(item, library, folders, nav, grid) }
                 }
             }
         }
@@ -317,5 +450,59 @@ internal fun LibraryEntry(title: String, hint: String?, icon: ImageVector, grid:
         Box(modifier.clip(Radius.cover).background(palette.primarySoft), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = palette.primary, modifier = Modifier.size(if (grid) 34.dp else 24.dp))
         }
+    }
+}
+
+@Composable
+internal fun LibraryFilters(filter: String, downloadedOnly: Boolean, onFilter: (String) -> Unit, onDownloaded: (Boolean) -> Unit) {
+    val palette = LocalPalette.current
+    val scroll = rememberLazyListState()
+    LaunchedEffect(filter, downloadedOnly) { scroll.animateScrollToItem(0) }
+    val downloadedChip: @Composable (Modifier) -> Unit = { modifier ->
+        FilterChip(
+            modifier = modifier,
+            selected = downloadedOnly,
+            onClick = { onDownloaded(!downloadedOnly) },
+            label = { Text(stringResource(R.string.collection_downloaded)) },
+            shape = CircleShape, border = null,
+            colors = FilterChipDefaults.filterChipColors(
+                containerColor = palette.raised, labelColor = palette.foreground,
+                selectedContainerColor = palette.primary, selectedLabelColor = palette.onPrimary,
+            ),
+        )
+    }
+    LazyRow(state = scroll, contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (filter != "all" || downloadedOnly) item(key = "clear") {
+            IconButton(
+                onClick = { onFilter("all"); onDownloaded(false) },
+                modifier = Modifier.animateItem(
+                    fadeInSpec = tween(220),
+                    placementSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
+                    fadeOutSpec = tween(140),
+                ),
+            ) {
+                Icon(Lucide.X, stringResource(R.string.collection_clear_filter), tint = palette.muted)
+            }
+        }
+        if (downloadedOnly) item(key = "downloaded") { downloadedChip(Modifier.animateItem()) }
+        items(listOf("playlist" to R.string.nav_playlists, "album" to R.string.nav_albums, "artist" to R.string.nav_artists).filter { filter == "all" || it.first == filter }, key = { it.first }) { (kind, label) ->
+            FilterChip(
+                modifier = Modifier.animateItem(
+                    fadeInSpec = tween(220),
+                    placementSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
+                    fadeOutSpec = tween(140),
+                ),
+                selected = filter == kind,
+                onClick = { onFilter(if (filter == kind) "all" else kind) },
+                label = { Text(stringResource(label)) },
+                shape = CircleShape,
+                border = null,
+                colors = FilterChipDefaults.filterChipColors(
+                    containerColor = palette.raised, labelColor = palette.foreground,
+                    selectedContainerColor = palette.primary, selectedLabelColor = palette.onPrimary,
+                ),
+            )
+        }
+        if (!downloadedOnly) item(key = "downloaded") { downloadedChip(Modifier.animateItem()) }
     }
 }

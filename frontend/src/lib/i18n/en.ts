@@ -9,6 +9,8 @@ export const en = {
   "collection.remove": "Remove from library",
   "collection.saved": "In your library",
   "collection.search": "Search your library",
+  "collection.manual": "Custom order",
+  "collection.dragSearch": "Clear search to drag library entries.",
   "collection.recent": "Recently added",
   "collection.name": "By name",
   "collection.sort": "Sort library",

@@ -22,9 +22,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -49,6 +49,7 @@ import app.caimack.api.Track
 import app.caimack.playback.PlayerState
 import app.caimack.playback.QueueSnapshot
 import app.caimack.playback.RadioNote
+import kotlinx.coroutines.delay
 
 private sealed interface QueueLine {
     val key: Any
@@ -57,8 +58,8 @@ private sealed interface QueueLine {
         override val key: Any get() = "section:$label"
     }
 
-    data class Entry(val index: Int, val track: Track) : QueueLine {
-        override val key: Any get() = index
+    data class Entry(val entry: QueueEntry) : QueueLine {
+        override val key: Any get() = entry.key
     }
 }
 
@@ -77,12 +78,30 @@ fun QueuePanel(state: PlayerState, onUndoable: (String, QueueSnapshot) -> Unit) 
     if (state.queue.isEmpty()) return Empty(stringResource(R.string.queue_empty))
 
     var showHistory by rememberSaveable { mutableStateOf(false) }
-    var order by remember(state.queue) { mutableStateOf(state.queue.indices.toList()) }
-    var dragged by remember { mutableStateOf<Int?>(null) }
-    var dragOffset by remember { mutableFloatStateOf(0f) }
+    val order = remember { QueueOrderState(state.queue) }
+    order.sync(state.queue)
+    val list = rememberLazyListState(
+        initialFirstVisibleItemIndex = when {
+            state.index <= 0 -> 0
+            showHistory -> state.index + 1
+            else -> 1
+        },
+    )
+    val drag = rememberQueueDragState(list, order::move)
+    LaunchedEffect(order.revision) { drag.finish() }
+    LaunchedEffect(order.pending) {
+        if (order.pending != null) {
+            delay(12_500)
+            order.cancel()
+        }
+    }
+    val dragged = drag.dragged
 
-    val current = order.indexOf(state.index).coerceAtLeast(0)
-    val firstShown = if (showHistory) 0 else current
+    val entries = order.entries
+    val current = entries.indexOfFirst { order.sourceIndex(it.key) == state.index }.coerceAtLeast(0)
+    // Do not dispose the active handle when it crosses the current track.
+    val held = dragged ?: drag.landed
+    val firstShown = if (showHistory) 0 else minOf(current, entries.indexOfFirst { it.key == held }.takeIf { it >= 0 } ?: current)
     val seedTitle = state.queue.firstOrNull { it.id == radio.seedTrackId }?.title
     val radioLabel = seedTitle?.let { stringResource(R.string.queue_radio_from, it) }
         ?: stringResource(R.string.queue_similar)
@@ -90,23 +109,19 @@ fun QueuePanel(state: PlayerState, onUndoable: (String, QueueSnapshot) -> Unit) 
 
     val lines = buildList {
         var radioStarted = false
-        for (position in firstShown until order.size) {
-            val index = order[position]
-            val track = state.queue[index]
+        for (position in firstShown until entries.size) {
+            val entry = entries[position]
+            val track = entry.track
             val fromRadio = position > current && track.id in radio.notes
             when {
                 fromRadio && !radioStarted -> add(QueueLine.Section(radioLabel))
                 position == current + 1 -> add(QueueLine.Section(upNextLabel))
             }
             if (fromRadio) radioStarted = true
-            add(QueueLine.Entry(index, track))
+            add(QueueLine.Entry(entry))
         }
     }
 
-    val historyRows = if (current > 0) 1 else 0
-    val list = rememberLazyListState(
-        initialFirstVisibleItemIndex = historyRows + lines.indexOfFirst { it is QueueLine.Entry && it.index == state.index }.coerceAtLeast(0),
-    )
     val resources = LocalResources.current
 
     Column(Modifier.fillMaxSize()) {
@@ -161,46 +176,41 @@ fun QueuePanel(state: PlayerState, onUndoable: (String, QueueSnapshot) -> Unit) 
                         modifier = Modifier.padding(top = 12.dp, bottom = 4.dp).animateItem(),
                     )
                     is QueueLine.Entry -> {
-                        val isDragged = dragged == line.index
-                        val isCurrent = line.index == state.index
-                        val next = order.getOrNull(current + 1) == line.index
+                        val key = line.entry.key
+                        val track = line.entry.track
+                        val isDragged = dragged == key
+                        val isCurrent = order.sourceIndex(key) == state.index
+                        val next = entries.getOrNull(current + 1)?.key == key
                         QueueRow(
-                            track = line.track,
+                            track = track,
                             current = isCurrent,
                             playing = isCurrent && state.playing,
-                            note = if (isCurrent || next) radio.notes[line.track.id] else null,
-                            modifier = (if (isDragged) Modifier.zIndex(1f).graphicsLayer { translationY = dragOffset } else Modifier.animateItem()),
+                            note = if (isCurrent || next) radio.notes[track.id] else null,
+                            modifier = (if (isDragged || drag.landed == key) Modifier.zIndex(if (isDragged) 1f else 0f).graphicsLayer { translationY = drag.translation(key) } else Modifier.animateItem()),
                             lifted = isDragged,
-                            onPlay = { player.skipTo(line.index) },
+                            onPlay = { player.skipTo(order.sourceIndex(key)) },
                             onRemove = {
                                 val snapshot = player.snapshot()
-                                player.remove(line.index)
-                                onUndoable(resources.getString(R.string.queue_removed, line.track.title), snapshot)
+                                player.remove(order.sourceIndex(key))
+                                onUndoable(resources.getString(R.string.queue_removed, track.title), snapshot)
                             },
-                            handle = Modifier.pointerInput(line.index) {
+                            handle = Modifier.pointerInput(key, order.pending) {
+                                if (order.pending != null) return@pointerInput
                                 detectDragGestures(
                                     onDragStart = {
-                                        dragged = line.index
-                                        dragOffset = 0f
+                                        drag.start(key)
                                     },
                                     onDragEnd = {
-                                        val from = dragged
-                                        dragged = null
-                                        dragOffset = 0f
-                                        if (from != null) player.move(from, order.indexOf(from))
+                                        val from = drag.finish()
+                                        if (from != null) order.commit(from)?.let { (source, target) -> player.move(source, target) }
                                     },
                                     onDragCancel = {
-                                        dragged = null
-                                        dragOffset = 0f
-                                        order = state.queue.indices.toList()
+                                        drag.cancel()
+                                        order.cancel()
                                     },
                                 ) { change, amount ->
                                     change.consume()
-                                    dragOffset += amount.y
-                                    val swap = swapTarget(list, line.index, dragOffset) ?: return@detectDragGestures
-                                    val (target, shift) = swap
-                                    order = order.toMutableList().apply { add(indexOf(target), removeAt(indexOf(line.index))) }
-                                    dragOffset -= shift
+                                    drag.dragBy(amount.y)
                                 }
                             },
                         )

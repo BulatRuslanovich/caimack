@@ -3,7 +3,7 @@
 
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { HeartIcon, ListMusicIcon } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
@@ -95,7 +95,8 @@ function recentTiles(block: HomeBlock) {
 
 function AlbumTile({ album }: { album: NonNullable<HomeBlock["albums"]>[number] }) {
   const client = useQueryClient();
-  const { currentAlbumId, isPlaying } = useNowPlaying();
+  const { currentAlbumId } = useNowPlaying();
+  const detail = useQuery({ ...queries.album(album.id), enabled: currentAlbumId === album.id });
 
   return (
     <Tile
@@ -107,7 +108,7 @@ function AlbumTile({ album }: { album: NonNullable<HomeBlock["albums"]>[number] 
       play={
         <CardPlayButton
           name={album.title}
-          playing={isPlaying && currentAlbumId === album.id}
+          tracks={detail.data?.tracks}
           load={async () => (await client.fetchQuery(queries.album(album.id))).tracks}
           size={8}
           className="quick-tile-play top-1/2 left-4 -translate-y-1/2 [@media(hover:none)]:hidden"
@@ -137,6 +138,7 @@ function TrackTile({ track, context }: { track: Track; context: Track[] }) {
 function PlaylistTile({ playlist }: { playlist: NonNullable<HomeBlock["playlists"]>[number] }) {
   const t = useT();
   const client = useQueryClient();
+  const detail = useQuery({ ...queries.playlist(playlist.id), enabled: false });
 
   return (
     <Tile
@@ -154,7 +156,7 @@ function PlaylistTile({ playlist }: { playlist: NonNullable<HomeBlock["playlists
         playlist.trackCount > 0 && (
           <CardPlayButton
             name={playlist.name}
-            playing={false}
+            tracks={detail.data?.tracks}
             load={async () => (await client.fetchQuery(queries.playlist(playlist.id))).tracks}
             size={8}
             className="quick-tile-play top-1/2 left-4 -translate-y-1/2 [@media(hover:none)]:hidden"

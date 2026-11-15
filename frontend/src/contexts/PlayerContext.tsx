@@ -5,12 +5,15 @@
 
 import { api } from "@/lib/api";
 import { deviceId, recordEvent } from "@/lib/events";
+import { connectEqualizer } from "@/lib/playback/equalizer";
 import {
-  connectEqualizer,
-  enableVinylScratch,
-  prepareVinylScratch,
-} from "@/lib/playback/equalizer";
-import { advanceIn, buildOrder } from "@/lib/playback/playerQueue";
+  advanceIn,
+  materializeQueue,
+  restorePlaybackOrder,
+  selectQueueEntry,
+  startPlaybackQueue,
+} from "@/lib/playback/playerQueue";
+import { queueEntries } from "@/lib/playback/queueEntries";
 import type {
   PlayerActions,
   PlayerNowPlaying,
@@ -29,7 +32,6 @@ import { useQueueEditing } from "@/lib/playback/useQueueEditing";
 import { useQueueState } from "@/lib/playback/useQueueState";
 import { useRadioSession } from "@/lib/playback/useRadioSession";
 import { useSleepTimer } from "@/lib/playback/useSleepTimer";
-import { useTatarMafia } from "@/lib/tatarMafia";
 import type { PlaybackHandoff, Track } from "@/lib/types";
 import { useRequiredContext } from "@/lib/useRequiredContext";
 import { useToast } from "@/lib/useToast";
@@ -75,7 +77,6 @@ function PlayerSessionProvider({
   children: React.ReactNode;
   userId: string | null;
 }) {
-  const tatarMafia = useTatarMafia();
   const { notifyError } = useToast();
 
   const {
@@ -89,6 +90,7 @@ function PlayerSessionProvider({
     setRepeat,
     queueRef,
     orderRef,
+    originalQueueRef,
     applyQueue,
     currentTrack,
     nextTrack,
@@ -211,19 +213,6 @@ function PlayerSessionProvider({
     );
   }, [primaryAudioRef, secondaryAudioRef]);
 
-  useEffect(() => {
-    enableVinylScratch(tatarMafia);
-    if (!tatarMafia) return;
-    const prepare = () => void prepareVinylScratch();
-    window.addEventListener("pointerdown", prepare, { capture: true, once: true });
-    window.addEventListener("keydown", prepare, { capture: true, once: true });
-    return () => {
-      window.removeEventListener("pointerdown", prepare, true);
-      window.removeEventListener("keydown", prepare, true);
-      enableVinylScratch(false);
-    };
-  }, [tatarMafia]);
-
   const replaceQueue = useCallback(
     (tracks: Track[], startIndex = 0, shuffled = live.current.shuffle) => {
       if (tracks.length === 0) return;
@@ -233,12 +222,14 @@ function PlayerSessionProvider({
       startQueue();
       resetRadio();
 
-      applyQueue(tracks, buildOrder(tracks.length, shuffled, safeIndex));
+      originalQueueRef.current = queueEntries(tracks);
+      const next = startPlaybackQueue(originalQueueRef.current, safeIndex, shuffled);
+      applyQueue(next.queue, next.order);
       setShuffle(shuffled);
-      setCurrentIndex(safeIndex);
+      setCurrentIndex(next.index);
       setIsPlaying(true);
     },
-    [applyQueue, resetRadio, setCurrentIndex, setShuffle, startQueue],
+    [applyQueue, originalQueueRef, resetRadio, setCurrentIndex, setShuffle, startQueue],
   );
 
   const playQueue = useCallback(
@@ -389,9 +380,14 @@ function PlayerSessionProvider({
     const { currentIndex, shuffle } = live.current;
     const nowShuffled = !shuffle;
 
-    applyQueue(queueRef.current, buildOrder(queueRef.current.length, nowShuffled, currentIndex));
+    if (nowShuffled) originalQueueRef.current = queueRef.current;
+    const next = nowShuffled
+      ? startPlaybackQueue(queueRef.current, currentIndex, true)
+      : restorePlaybackOrder(queueRef.current, currentIndex, originalQueueRef.current);
+    applyQueue(next.queue, next.order);
+    setCurrentIndex(next.index);
     setShuffle(nowShuffled);
-  }, [applyQueue, queueRef, setShuffle]);
+  }, [applyQueue, originalQueueRef, queueRef, setCurrentIndex, setShuffle]);
 
   const setShuffleMode = useCallback(
     (enabled: boolean) => {
@@ -431,8 +427,9 @@ function PlayerSessionProvider({
       resumeAt(snapshot.queue[snapshot.index]?.id, snapshot.position);
       restoreRadioSession(snapshot.radioSession, snapshot.radioFrom);
 
-      applyQueue(snapshot.queue, snapshot.order);
-      setCurrentIndex(snapshot.index);
+      const next = materializeQueue(snapshot.queue, snapshot.order, snapshot.index);
+      applyQueue(next.queue, next.order);
+      setCurrentIndex(next.index);
     },
     [applyQueue, restoreRadioSession, resumeAt, setCurrentIndex],
   );
@@ -442,24 +439,27 @@ function PlayerSessionProvider({
     resetRadio();
 
     applyQueue([], []);
+    originalQueueRef.current = [];
     setCurrentIndex(-1);
     setIsPlaying(false);
     resetProgress();
-  }, [applyQueue, resetProgress, resetRadio, setCurrentIndex, stopRadioSession]);
+  }, [applyQueue, originalQueueRef, resetProgress, resetRadio, setCurrentIndex, stopRadioSession]);
 
   const jumpTo = useCallback(
     (index: number) => {
       if (index < 0 || index >= queueRef.current.length) return;
 
-      setCurrentIndex(index);
+      const next = selectQueueEntry(queueRef.current, live.current.currentIndex, index);
+      applyQueue(next.queue, next.order);
+      setCurrentIndex(next.index);
       resetProgress();
       setIsPlaying(true);
     },
-    [queueRef, resetProgress, setCurrentIndex],
+    [applyQueue, queueRef, resetProgress, setCurrentIndex],
   );
 
   const takeOver = useCallback(
-    (handoff: PlaybackHandoff, playing = true) => {
+    (handoff: PlaybackHandoff, playing = true, original: Track[] = handoff.tracks) => {
       const { tracks, index, positionSeconds } = handoff;
       const target = tracks[index];
       if (!target) return;
@@ -470,7 +470,11 @@ function PlayerSessionProvider({
       startQueue();
       resetRadio();
 
-      applyQueue(tracks, buildOrder(tracks.length, handoff.shuffle, index));
+      originalQueueRef.current = original;
+      applyQueue(
+        tracks,
+        tracks.map((_, position) => position),
+      );
       setShuffle(handoff.shuffle);
       setRepeat(handoff.repeat);
       setCurrentIndex(index);
@@ -482,6 +486,7 @@ function PlayerSessionProvider({
     },
     [
       applyQueue,
+      originalQueueRef,
       queueRef,
       resetRadio,
       resumeAt,
@@ -643,19 +648,23 @@ function PlayerSessionProvider({
       tracks: Track[],
       command: Extract<import("@/lib/playback/connect").ConnectCommand, { type: "play" }>,
     ) => {
+      const original = queueEntries(tracks);
+      const next = command.order
+        ? materializeQueue(original, command.order, command.index)
+        : startPlaybackQueue(original, command.index, command.shuffle);
       takeOver(
         {
           deviceId: deviceId(),
           deviceName: "",
-          tracks,
-          index: command.index,
+          tracks: next.queue,
+          index: next.index,
           positionSeconds: command.positionSeconds,
           shuffle: command.shuffle,
           repeat: command.repeat,
         },
         command.playing,
+        original,
       );
-      if (command.order) applyQueue(tracks, command.order);
       if (command.radio) {
         restoreRadioSession(command.radio);
         tagSource(
@@ -664,7 +673,7 @@ function PlayerSessionProvider({
         );
       }
     },
-    [takeOver, applyQueue, restoreRadioSession],
+    [takeOver, restoreRadioSession],
   );
   const connected = useConnectPlayback(userId, state, actions, progress, output, load);
   const artwork = useArtworkNavigation(
@@ -678,10 +687,22 @@ function PlayerSessionProvider({
   const currentTrackId = connected.state.currentTrack?.id ?? null;
   const currentAlbumId = connected.state.currentTrack?.albumId ?? null;
   const displayedPlaying = connected.state.isPlaying;
+  const automaticTrackKey = useMemo(
+    () =>
+      Object.keys(connected.state.radioSession?.reasons ?? {})
+        .filter((id) => !connected.state.radioSession?.manualTrackIds?.includes(id))
+        .sort()
+        .join(","),
+    [connected.state.radioSession],
+  );
+  const automaticTrackIds = useMemo(
+    () => (automaticTrackKey ? automaticTrackKey.split(",") : []),
+    [automaticTrackKey],
+  );
 
   const nowPlaying = useMemo<PlayerNowPlaying>(
-    () => ({ currentTrackId, currentAlbumId, isPlaying: displayedPlaying }),
-    [currentTrackId, currentAlbumId, displayedPlaying],
+    () => ({ currentTrackId, currentAlbumId, isPlaying: displayedPlaying, automaticTrackIds }),
+    [currentTrackId, currentAlbumId, displayedPlaying, automaticTrackIds],
   );
 
   return (

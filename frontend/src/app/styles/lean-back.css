@@ -51,8 +51,20 @@
 }
 
 .lean-back-meta {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  place-self: stretch;
+  /* Lyrics wrap below a fixed midpoint without moving the track information. */
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 1rem;
+}
+
+.lean-back-info {
   display: flex;
   min-width: 0;
+  align-self: end;
   flex-direction: column;
   gap: 1rem;
 }
@@ -95,10 +107,6 @@
   .lean-back-record {
     width: min(60vw, 38vh);
     margin-right: 22%;
-  }
-
-  .lean-back-meta {
-    align-items: center;
   }
 }
 

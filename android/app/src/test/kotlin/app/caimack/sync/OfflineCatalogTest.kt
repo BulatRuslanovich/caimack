@@ -85,6 +85,20 @@ class OfflineCatalogTest {
     }
 
     @Test
+    fun libraryOrderReplaysAndRemainsAvailableFromTheOfflineApi() {
+        val actions = listOf(
+            action("library", "album", """{"kind":"album","value":true}"""),
+            action("libraryOrganize", null, """{"operation":"reorder","order":["downloads","album:album","favorites"]}"""),
+        )
+        val view = OfflineCatalog.view(snapshot, actions)
+        val expected = Json.parseToJsonElement("""["downloads","album:album","favorites"]""")
+        assertEquals(expected, view["libraryOrder"]!!.jsonObject["root"])
+        assertEquals(expected, read("me/library/order", data = view)["root"])
+        val invalid = Json.parseToJsonElement("""{"operation":"reorder","order":["album:missing"]}""").jsonObject
+        assertThrows(IllegalArgumentException::class.java) { organizeLibrary(view, invalid, "now") }
+    }
+
+    @Test
     fun invalidFolderMovesAreRejectedAndStaleDestinationsDoNotBreakReplay() {
         val tree = Json.parseToJsonElement("""{"libraryFolders":[{"id":"parent","name":"A"},{"id":"child","name":"B","parentId":"parent"}],"savedLibrary":[]}""").jsonObject
         val cycle = Json.parseToJsonElement("""{"operation":"moveFolder","id":"parent","folderId":"child"}""").jsonObject

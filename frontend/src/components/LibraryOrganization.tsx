@@ -6,6 +6,7 @@ import { EllipsisIcon, FolderInputIcon, PencilIcon, TrashIcon } from "lucide-rea
 import { api } from "@/lib/api";
 import { queries } from "@/lib/queries";
 import { canMoveFolder, folderTrail } from "@/lib/libraryFolders";
+import { optimisticLibraryChange } from "@/lib/libraryOptimistic";
 import type { LibraryFolder, LibraryKind } from "@/lib/types";
 import { useT } from "@/contexts/I18nContext";
 import { Button } from "./ui/button";
@@ -22,8 +23,13 @@ export function useOrganizeLibrary() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: api.organizeLibrary,
+    onMutate: (change) => optimisticLibraryChange(client, change),
+    onError: (_error, _change, context) => {
+      if (context) client.setQueryData(context.queryKey, context.previous);
+    },
     onSuccess: async () => {
       await Promise.all([
+        client.invalidateQueries({ queryKey: ["libraryOrder"] }),
         client.invalidateQueries({ queryKey: ["libraryFolders"] }),
         client.invalidateQueries({ queryKey: ["savedLibrary"] }),
       ]);

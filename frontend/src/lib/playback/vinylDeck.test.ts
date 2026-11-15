@@ -6,12 +6,13 @@ vi.mock("react", () => ({
 }));
 vi.mock("@/lib/http", () => ({ API_BASE: "/api", fetchWithSession: vi.fn() }));
 vi.mock("./equalizer", () => ({
+  enableVinylScratch: vi.fn(),
   prepareVinylScratch: vi.fn().mockResolvedValue(true),
   loadVinylScratchTrack: vi.fn().mockReturnValue(true),
   unloadVinylScratchTrack: vi.fn(),
 }));
 import { fetchWithSession } from "@/lib/http";
-import { loadVinylScratchTrack, unloadVinylScratchTrack } from "./equalizer";
+import { enableVinylScratch, loadVinylScratchTrack, unloadVinylScratchTrack } from "./equalizer";
 import { decodeVinylTrack, prepareVinylDeck, releaseVinylDeck, useVinylDeck } from "./vinylDeck";
 
 const decoded = () => ({
@@ -40,6 +41,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 it("fetches and decodes the actual track, loading only the current deck", async () => {
   await prepareVinylDeck("track", 180, new AbortController().signal);
+  expect(enableVinylScratch).toHaveBeenLastCalledWith(true);
   expect(fetchWithSession).toHaveBeenCalledWith(
     "/api/tracks/track/stream",
     expect.objectContaining({ signal: expect.any(AbortSignal) }),
@@ -48,6 +50,7 @@ it("fetches and decodes the actual track, loading only the current deck", async 
   expect(useVinylDeck("track")).toBe("ready");
   expect(useVinylDeck("other")).toBe("idle");
   releaseVinylDeck();
+  expect(enableVinylScratch).toHaveBeenLastCalledWith(false);
   expect(useVinylDeck("track")).toBe("idle");
   expect(unloadVinylScratchTrack).toHaveBeenCalled();
 });

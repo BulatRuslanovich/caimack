@@ -4,6 +4,7 @@
 import { deviceId, flushEvents } from "@/lib/events";
 import { fileForm, qs, request, requestFile } from "@/lib/http";
 import { markImageChanged } from "@/lib/media";
+import { WAVEFORM_VERSION } from "@/lib/waveform";
 import type {
   LibraryItem,
   LibraryFolder,
@@ -93,6 +94,7 @@ async function withoutImage(
 
 export const api = {
   savedLibrary: () => request<LibraryItem[]>("/me/library"),
+  libraryOrder: () => request<Record<string, string[]>>("/me/library/order"),
   libraryFolders: () => request<LibraryFolder[]>("/me/library/folders"),
   organizeLibrary: (change: LibraryChange) =>
     request<void>("/me/library/organize", { method: "POST", body: change }),
@@ -185,7 +187,13 @@ export const api = {
     request<SearchResults>(`/search${qs({ q, limit })}`, { signal }),
   searchTab: <T extends SearchTab>(tab: T, q: string, params: PageParams, signal?: AbortSignal) =>
     request<SearchTabResult[T]>(`/search/${tab}${qs({ q, ...params })}`, { signal }),
-  waveform: (trackId: string) => request<{ peaks: number[] }>(`/tracks/${trackId}/waveform`),
+  waveform: (trackId: string) =>
+    request<{ peaks: number[]; version?: number }>(
+      `/tracks/${trackId}/waveform?v=${WAVEFORM_VERSION}`,
+      {
+        headers: { "Cache-Control": "no-cache" },
+      },
+    ),
   lyrics: (trackId: string) => request<Lyrics | null>(`/tracks/${trackId}/lyrics`),
 
   updateTrack: (

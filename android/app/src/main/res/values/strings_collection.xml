@@ -22,4 +22,6 @@
     <string name="folders_create">Create</string>
     <string name="collection_search">Search your library</string>
     <string name="collection_no_results">No matching items</string>
+    <string name="collection_downloaded">Downloaded</string>
+    <string name="collection_manual">Custom order</string>
 </resources>

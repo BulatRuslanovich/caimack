@@ -6,18 +6,22 @@
 import { useCallback } from "react";
 import type { Track } from "@/lib/types";
 import { useNowPlaying, usePlayerActions, usePlayerQueue } from "@/contexts/PlayerContext";
+import { matchesCollection } from "./collectionQueue";
 
 export function usePlayback() {
-  const { currentTrackId, isPlaying } = useNowPlaying();
+  const { currentTrackId, isPlaying, automaticTrackIds = [] } = useNowPlaying();
   const queue = usePlayerQueue();
   const player = usePlayerActions();
 
   const setIsOnAir = useCallback(
     (tracks: Track[]) =>
-      currentTrackId !== null &&
-      tracks.length === queue.length &&
-      tracks.every((track, index) => track.id === queue[index].id),
-    [currentTrackId, queue],
+      matchesCollection(
+        tracks.map((track) => track.id),
+        queue.map((track) => track.id),
+        currentTrackId,
+        automaticTrackIds,
+      ),
+    [automaticTrackIds, currentTrackId, queue],
   );
 
   const playTrack = useCallback(

@@ -8,6 +8,7 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Headers
 import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
@@ -18,6 +19,9 @@ import retrofit2.http.Query
 interface CaimackApi {
     @GET("api/me/library")
     suspend fun savedLibrary(): List<LibraryItem>
+
+    @GET("api/me/library/order")
+    suspend fun libraryOrder(): Map<String, List<String>>
 
     @GET("api/me/library/folders")
     suspend fun libraryFolders(): List<LibraryFolder>
@@ -58,7 +62,8 @@ interface CaimackApi {
     @GET("api/tracks/{id}/lyrics")
     suspend fun lyrics(@Path("id") id: String): Response<Lyrics>
 
-    @GET("api/tracks/{id}/waveform")
+    @Headers("Cache-Control: no-cache")
+    @GET("api/tracks/{id}/waveform?v=" + Waveform.VERSION)
     suspend fun waveform(@Path("id") id: String): Response<Waveform>
 
     @POST("api/playback/signals")

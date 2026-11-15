@@ -57,6 +57,7 @@ pub async fn snapshot(db: &PgPool, storage: &Storage, user: Uuid) -> AppResult<V
     .fetch_all(&mut *tx)
     .await?;
     let saved_library = crate::library::collection::list(&mut *tx, user).await?;
+    let library_order = crate::library::folders::order(&mut *tx, user).await?;
     let library_folders = crate::library::folders::list(&mut *tx, user).await?;
     let mut pq = playlists::select();
     pq.push(" WHERE p.user_id=").push_bind(user).push(" OR p.is_public ORDER BY p.name,p.id");
@@ -83,11 +84,16 @@ pub async fn snapshot(db: &PgPool, storage: &Storage, user: Uuid) -> AppResult<V
     for lyric in crate::catalog::lyrics::all(&mut tx).await? {
         lyrics.insert(lyric.track_id, serde_json::to_value(lyric).map_err(crate::AppError::internal)?);
     }
-    let waveform_rows: Vec<(Uuid, Vec<u8>)> =
-        sqlx::query_as("SELECT track_id,waveform FROM track_cues WHERE succeeded AND waveform IS NOT NULL")
-            .fetch_all(&mut *tx)
-            .await?;
-    let waveforms: BTreeMap<_, _> = waveform_rows.into_iter().map(|(id, peaks)| (id, json!({"peaks":peaks}))).collect();
+    let waveform_rows: Vec<(Uuid, Vec<u8>)> = sqlx::query_as(
+        "SELECT track_id,waveform FROM track_cues WHERE version=$1 AND succeeded AND waveform IS NOT NULL",
+    )
+    .bind(media::cues::VERSION)
+    .fetch_all(&mut *tx)
+    .await?;
+    let waveforms: BTreeMap<_, _> = waveform_rows
+        .into_iter()
+        .map(|(id, peaks)| (id, json!({"peaks":peaks,"version":media::cues::VERSION})))
+        .collect();
     let recent: Vec<Uuid> = sqlx::query_scalar(
         "SELECT track_id FROM listening_history WHERE user_id=$1 GROUP BY track_id ORDER BY max(played_at) DESC LIMIT 1000"
     ).bind(user).fetch_all(&mut *tx).await?;
@@ -122,7 +128,7 @@ pub async fn snapshot(db: &PgPool, storage: &Storage, user: Uuid) -> AppResult<V
     Ok(json!({
         "protocol":1, "serverId":server, "user":{"id":user,"username":username},
         "generatedAt":chrono::Utc::now(), "tracks":tracks, "files":files, "albums":albums,"artists":artists,
-        "savedLibrary":saved_library, "libraryFolders":library_folders, "genres":genres, "playlists":playlist_summaries, "playlistTracks":playlist_tracks,
+        "libraryOrder":library_order, "savedLibrary":saved_library, "libraryFolders":library_folders, "genres":genres, "playlists":playlist_summaries, "playlistTracks":playlist_tracks,
         "lyrics":lyrics,"waveforms":waveforms,"recent":recent,"assets":asset_manifest,
         "vectorVersion":hash(vector_revision.as_bytes())
     }))

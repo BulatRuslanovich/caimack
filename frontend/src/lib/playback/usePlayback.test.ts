@@ -10,6 +10,7 @@ const player = vi.hoisted(() => ({
   queue: [] as Track[],
   currentTrack: null as Track | null,
   isPlaying: true,
+  automaticTrackIds: [] as string[],
   toggle: vi.fn(),
   playQueue: vi.fn(),
   playTrack: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock("@/contexts/PlayerContext", () => ({
   useNowPlaying: () => ({
     currentTrackId: player.currentTrack?.id ?? null,
     isPlaying: player.isPlaying,
+    automaticTrackIds: player.automaticTrackIds,
   }),
   usePlayerQueue: () => player.queue,
   usePlayerActions: () => player,
@@ -41,6 +43,8 @@ describe("playing a collection", () => {
     vi.clearAllMocks();
     player.queue = tracks("a", "shared");
     player.currentTrack = player.queue[1];
+    player.isPlaying = true;
+    player.automaticTrackIds = [];
   });
 
   it("replaces another collection even when it contains the current track", () => {
@@ -61,10 +65,30 @@ describe("playing a collection", () => {
     expect(player.playQueue).not.toHaveBeenCalled();
   });
 
+  it("toggles the same collection after shuffle, reordering or starting in the middle", () => {
+    const same = tracks("shared", "a");
+    const view = playback();
+    expect(view.setIsOnAir(same)).toBe(true);
+    view.playSet(same);
+    expect(player.toggle).toHaveBeenCalledOnce();
+    expect(player.playQueue).not.toHaveBeenCalled();
+  });
+
+  it("resumes a paused collection without replacing its shuffled queue", () => {
+    player.isPlaying = false;
+    const same = tracks("shared", "a");
+    const view = playback();
+    expect(view.isPlaying).toBe(false);
+    expect(view.setIsOnAir(same)).toBe(true);
+    view.playSet(same);
+    expect(player.toggle).toHaveBeenCalledOnce();
+    expect(player.playQueue).not.toHaveBeenCalled();
+  });
+
   it.each([
-    ["shared", "a"],
     ["a", "shared", "shared"],
-  ])("replaces a queue with different order or repeated entries: %j", (...ids) => {
+    ["a", "a"],
+  ])("replaces a queue with different repeated entries: %j", (...ids) => {
     const next = tracks(...ids);
     playback().playSet(next);
     expect(player.playQueue).toHaveBeenCalledWith(next, 0);
@@ -75,6 +99,17 @@ describe("playing a collection", () => {
     playback().playSet([]);
     expect(player.playQueue).not.toHaveBeenCalled();
     expect(player.toggle).not.toHaveBeenCalled();
+  });
+
+  it("still toggles the collection while automatic recommendations wait at the end", () => {
+    const collection = tracks("a", "shared");
+    player.queue = tracks("shared", "a", "radio");
+    player.automaticTrackIds = ["radio"];
+    const view = playback();
+    expect(view.setIsOnAir(collection)).toBe(true);
+    view.playSet(collection);
+    expect(player.toggle).toHaveBeenCalledOnce();
+    expect(player.playQueue).not.toHaveBeenCalled();
   });
 
   it("starts playback when there is no current track", () => {

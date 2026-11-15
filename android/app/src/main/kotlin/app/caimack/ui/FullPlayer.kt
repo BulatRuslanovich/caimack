@@ -124,7 +124,22 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
     val liked = container.favorites.isFavorite(track)
     val note = displayedRadio().notes[track.id]
     val peaks by produceState<List<Int>?>(null, track.id) {
-        value = runCatching { container.api.waveform(track.id).body()?.peaks }.getOrNull()?.takeIf { it.isNotEmpty() }
+        value = null
+        while (true) {
+            val response = try {
+                container.api.waveform(track.id)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                break
+            }
+            val waveform = response.body()
+            value = waveform?.takeIf { it.version == app.caimack.api.Waveform.VERSION }?.peaks?.takeIf { it.isNotEmpty() }
+            if (value != null || (!response.isSuccessful && response.code() != 404)) break
+            // Old waveforms are rebuilt in the background after an analysis
+            // upgrade. Show the regular seekbar until fresh data is ready.
+            delay(15_000)
+        }
     }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()

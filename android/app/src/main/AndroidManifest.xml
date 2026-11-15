@@ -136,7 +136,7 @@
 
         <provider
             android:name=".playback.ArtworkProvider"
-            android:authorities="app.caimack.artwork"
+            android:authorities="${artworkAuthority}"
             android:exported="true"
             tools:ignore="ExportedContentProvider" />
 

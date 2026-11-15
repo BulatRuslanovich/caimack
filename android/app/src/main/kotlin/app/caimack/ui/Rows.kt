@@ -209,16 +209,20 @@ fun TrackRow(
             )
             Text(artistsOf(track), style = Type.small, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        if (showDownloadBadge) {
-            Icon(Lucide.CircleArrowDown, stringResource(R.string.downloads_available), tint = palette.primary, modifier = Modifier.size(14.dp))
-        }
         Text(durationOf(track.durationSeconds), style = Type.tiny, color = palette.faint)
-        Icon(
-            Lucide.EllipsisVertical,
-            stringResource(R.string.menu_more),
-            tint = palette.faint,
-            modifier = Modifier.clip(CircleShape).clickable(enabled = available) { actions = true }.padding(15.dp).size(18.dp),
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(14.dp), contentAlignment = Alignment.Center) {
+                if (showDownloadBadge) {
+                    Icon(Lucide.CircleArrowDown, stringResource(R.string.downloads_available), tint = palette.primary, modifier = Modifier.fillMaxSize())
+                }
+            }
+            Icon(
+                Lucide.EllipsisVertical,
+                stringResource(R.string.menu_more),
+                tint = palette.faint,
+                modifier = Modifier.clip(CircleShape).clickable(enabled = available) { actions = true }.padding(15.dp).size(18.dp),
+            )
+        }
     }
 }
 @Composable

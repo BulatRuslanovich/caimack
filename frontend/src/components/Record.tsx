@@ -24,7 +24,6 @@ type RecordTrack = Pick<Track, "id" | "title" | "albumId" | "albumTitle" | "hasC
 const TURN_MS = VINYL_TURN_SECONDS * 1000;
 const SPIN_UP_MS = 500;
 const SPIN_DOWN_MS = 1100;
-const SCRATCH_SECONDS_PER_TURN = 10;
 
 export function Record({
   track,
@@ -157,7 +156,10 @@ export function Record({
           scratchAngle.current = angleAt(event);
           spin.current?.pause();
           audibleScratch.current =
-            djMode && !muted && volume > 0 && startVinylScratch(track.id, needlePosition.current);
+            !connect.selectedId &&
+            !muted &&
+            volume > 0 &&
+            startVinylScratch(track.id, needlePosition.current);
           setScratching(true);
           holdScrub();
         }}
@@ -171,9 +173,9 @@ export function Record({
           scratchAngle.current = angle;
 
           const turns = delta / (2 * Math.PI);
-          const elapsed = Math.max(4, event.timeStamp - scratchTime.current) / 1000;
+          const elapsed = Math.max(0.1, event.timeStamp - scratchTime.current) / 1000;
           scratchTime.current = event.timeStamp;
-          const seconds = turns * (djMode ? VINYL_TURN_SECONDS : SCRATCH_SECONDS_PER_TURN);
+          const seconds = turns * VINYL_TURN_SECONDS;
           const position = Math.max(
             0,
             Math.min(getDuration() || Infinity, needlePosition.current + seconds),

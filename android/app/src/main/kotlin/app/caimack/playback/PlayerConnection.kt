@@ -6,6 +6,7 @@ package app.caimack.playback
 import android.content.ComponentName
 import android.content.Context
 import android.media.AudioManager
+import android.os.Bundle
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -13,6 +14,7 @@ import androidx.media3.common.MediaItem.RequestMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import androidx.media3.session.SessionCommand
 import app.caimack.api.Media
 import app.caimack.api.ConnectCommand
 import app.caimack.api.RadioBatch
@@ -162,7 +164,12 @@ class PlayerConnection(
 
     fun skipTo(index: Int) {
         val track = state.value.queue.getOrNull(index) ?: return
-        withController(ConnectCommand.Jump(index, track.id)) { it.seekTo(index, 0) }
+        withController(ConnectCommand.Jump(index, track.id)) {
+            it.sendCustomCommand(SessionCommand(LibraryTree.QUEUE_JUMP, Bundle.EMPTY), Bundle().apply {
+                putInt("index", index)
+                putString("trackId", track.id)
+            })
+        }
     }
 
     fun remove(index: Int) {
@@ -189,10 +196,11 @@ class PlayerConnection(
     fun restore(snapshot: QueueSnapshot) = withController(ConnectCommand.Play(
         snapshot.tracks.map { it.id }, snapshot.index, snapshot.positionMs / 1000.0,
         state.value.playing, state.value.shuffle, repeatOf(state.value.repeat),
+        order = snapshot.tracks.indices.toList(),
     )) {
         if (snapshot.tracks.isEmpty()) return@withController
         snapshot.tracks.forEach { track -> known[track.id] = track }
-        it.setMediaItems(snapshot.tracks.map { track -> track.toMediaItem(media) }, snapshot.index, snapshot.positionMs)
+        it.setMediaItems(preserveQueue(snapshot.tracks.map { track -> track.toMediaItem(media) }), snapshot.index, snapshot.positionMs)
         it.prepare()
         radio.restore(snapshot.radio)
     }
@@ -221,7 +229,8 @@ class PlayerConnection(
         PlaySources.tag(tracks.map { track -> track.id }, command.source)
         it.shuffleModeEnabled = command.shuffle
         it.repeatMode = repeatModeOf(command.repeat)
-        it.setMediaItems(tracks.map { track -> track.toMediaItem(media) }, command.index, (command.positionSeconds * 1000).toLong())
+        val (items, index) = orderedQueue(tracks.map { track -> track.toMediaItem(media) }, command.index, command.order)
+        it.setMediaItems(items, index, (command.positionSeconds * 1000).toLong())
         it.prepare()
         it.playWhenReady = command.playing
     }

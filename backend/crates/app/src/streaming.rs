@@ -187,8 +187,9 @@ pub async fn hls_asset(
 
 pub async fn waveform(db: &PgPool, id: Uuid) -> AppResult<Vec<i32>> {
     let waveform = sqlx::query_scalar!(
-        r#"SELECT waveform AS "waveform!" FROM track_cues WHERE track_id = $1 AND succeeded AND waveform IS NOT NULL"#,
-        id
+        r#"SELECT waveform AS "waveform!" FROM track_cues WHERE track_id = $1 AND version = $2 AND succeeded AND waveform IS NOT NULL"#,
+        id,
+        media::cues::VERSION
     )
     .fetch_optional(db)
     .await?

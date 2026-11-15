@@ -11,6 +11,13 @@ export function queueEntryKey(track: Track): string {
   return (track as Entry)[ENTRY] ?? track.id;
 }
 
+export function sameQueueEntryOrder(left: Track[], right: Track[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every((track, index) => queueEntryKey(track) === queueEntryKey(right[index]))
+  );
+}
+
 export function queueEntries(tracks: Track[], previous: Track[] = []): Track[] {
   const available = new Map<string, string[]>();
   for (const track of previous) {

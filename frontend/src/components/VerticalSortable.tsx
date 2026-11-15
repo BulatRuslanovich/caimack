@@ -6,6 +6,7 @@
 import { cn } from "@/lib/cn";
 import {
   DndContext,
+  AutoScrollActivator,
   KeyboardSensor,
   PointerSensor,
   closestCenter,
@@ -51,6 +52,7 @@ export function VerticalSortable({
       id={id}
       sensors={sensors}
       collisionDetection={closestCenter}
+      autoScroll={{ activator: AutoScrollActivator.DraggableRect, threshold: { x: 0, y: 0.2 } }}
       modifiers={[
         restrictToVerticalAxis,
         constrainToScroll ? restrictToFirstScrollableAncestor : restrictToParentElement,
@@ -74,7 +76,7 @@ export function DragHandle({ className, ...props }: ComponentProps<"button">) {
     <button
       type="button"
       className={cn(
-        "cursor-grab text-faint opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 active:cursor-grabbing [@media(hover:none)]:opacity-100",
+        "touch-none select-none cursor-grab text-faint opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 active:cursor-grabbing [@media(hover:none)]:opacity-100",
         className,
       )}
       {...props}
