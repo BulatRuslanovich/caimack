@@ -42,6 +42,7 @@ import { ArtworkScene } from "./ArtworkScene";
 import { ArtistLinks } from "./ArtistLinks";
 import { PlayerEffectsBackdrop } from "./PlayerEffectsBackdrop";
 import { PlayerTransport } from "./PlayerTransport";
+import { PlayerPanelTransport } from "./PlayerPanelTransport";
 import { PlayerVolume } from "./PlayerVolume";
 import { RecordTransition } from "./RecordTransition";
 import { SleepTimerButton } from "./SleepTimerButton";
@@ -300,7 +301,10 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
 
             <div
               ref={stage}
-              className="relative z-1 flex min-h-0 flex-1 gap-[clamp(2rem,5vw,5rem)] max-lg:-mx-5 max-lg:flex-col max-lg:overflow-x-hidden max-lg:overflow-y-auto max-lg:px-5"
+              className={cn(
+                "relative z-1 flex min-h-0 flex-1 gap-[clamp(2rem,5vw,5rem)] max-lg:-mx-5 max-lg:flex-col max-lg:overflow-x-hidden max-lg:px-5",
+                panel === "art" ? "max-lg:overflow-y-auto" : "max-lg:gap-0 max-lg:overflow-hidden",
+              )}
             >
               {panel === "art" && (
                 <div className="flex min-h-0 flex-[1.2] items-center justify-end pr-[min(40%,20vh)] max-lg:flex-[1_0_auto] max-lg:justify-center max-lg:pt-[calc(min(76vw,22rem)*0.22+1rem)] max-lg:pr-0">
@@ -438,6 +442,12 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
                 </div>
               )}
             </div>
+
+            {panel !== "art" && (
+              <div className="relative z-1 -mx-5 shrink-0 border-t border-border bg-background/95 px-5 pt-2 lg:hidden">
+                <PlayerPanelTransport onShowArtwork={() => setPanel("art")} />
+              </div>
+            )}
           </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>

@@ -206,13 +206,17 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             // Keep the deck's available height independent of title wrapping/font choice.
-                            Box(Modifier.fillMaxWidth().height(titleHeight), contentAlignment = Alignment.BottomStart) {
-                                Text(track.title, style = displayStyle(track.title), maxLines = if (wide) 1 else 3, overflow = TextOverflow.Ellipsis)
+                            if (panel == Panel.None) {
+                                Box(Modifier.fillMaxWidth().height(titleHeight), contentAlignment = Alignment.BottomStart) {
+                                    Text(track.title, style = displayStyle(track.title), maxLines = if (wide) 1 else 3, overflow = TextOverflow.Ellipsis)
+                                }
+                            } else {
+                                Text(track.title, style = Type.body, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
                             Text(artistsOf(track), style = Type.body, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            note?.let { RadioNoteLine(it) }
+                            if (panel == Panel.None) note?.let { RadioNoteLine(it) }
                             val delivery by container.playbackDelivery.collectAsStateWithLifecycle()
-                            delivery?.takeIf { it.trackId == track.id }?.let { stream ->
+                            delivery?.takeIf { it.trackId == track.id && panel == Panel.None }?.let { stream ->
                                 val label = when {
                                     !stream.adaptive -> stringResource(R.string.player_delivery_original)
                                     stream.bitrateKbps != null -> stringResource(R.string.player_delivery_aac, stream.bitrateKbps)

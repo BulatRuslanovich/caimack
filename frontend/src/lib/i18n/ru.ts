@@ -426,6 +426,11 @@ export const ru: Dictionary = {
   "player.anotherDevice": "другом устройстве",
 
   "queue.title": "Очередь",
+  "player.showArtwork": "Показать обложку: {title}",
+  "queue.edit": "Изменить очередь",
+  "queue.finishEditing": "Готово",
+  "queue.moveUp": "Переместить выше",
+  "queue.moveDown": "Переместить ниже",
   "queue.label": "Очередь воспроизведения",
   "queue.close": "Закрыть очередь",
   "queue.empty": "Очередь пуста.",

@@ -402,6 +402,11 @@ export const en = {
   "player.anotherDevice": "another device",
 
   "queue.title": "Queue",
+  "player.showArtwork": "Show artwork for {title}",
+  "queue.edit": "Edit queue",
+  "queue.finishEditing": "Done",
+  "queue.moveUp": "Move up",
+  "queue.moveDown": "Move down",
   "queue.label": "Playback queue",
   "queue.close": "Close the queue",
   "queue.empty": "The queue is empty.",
