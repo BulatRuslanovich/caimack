@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useT } from "@/contexts/I18nContext";
 import { isTypingTarget } from "@/lib/shortcuts";
-import { prepareVinylDeck, releaseVinylDeck, useVinylDeck } from "@/lib/playback/vinylDeck";
+import { useVinylDeck } from "@/lib/playback/vinylDeck";
 import { setVinylCrossfader } from "@/lib/playback/equalizer";
 import type { Track } from "@/lib/types";
 import { Button } from "./ui/button";
@@ -17,16 +17,6 @@ export function DJControls({ track }: { track: Track }) {
   const [cutting, setCutting] = useState(false);
   const faderRef = useRef(fader);
   const held = useRef(new Set<string>());
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void prepareVinylDeck(track.id, track.durationSeconds, controller.signal);
-    return () => {
-      controller.abort();
-      setVinylCrossfader(1);
-      releaseVinylDeck();
-    };
-  }, [track.id, track.durationSeconds]);
 
   useEffect(() => {
     const heldKeys = held.current;

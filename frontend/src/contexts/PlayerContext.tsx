@@ -5,11 +5,7 @@
 
 import { api } from "@/lib/api";
 import { deviceId, recordEvent } from "@/lib/events";
-import {
-  connectEqualizer,
-  enableVinylScratch,
-  prepareVinylScratch,
-} from "@/lib/playback/equalizer";
+import { connectEqualizer } from "@/lib/playback/equalizer";
 import { advanceIn, buildOrder } from "@/lib/playback/playerQueue";
 import type {
   PlayerActions,
@@ -29,7 +25,6 @@ import { useQueueEditing } from "@/lib/playback/useQueueEditing";
 import { useQueueState } from "@/lib/playback/useQueueState";
 import { useRadioSession } from "@/lib/playback/useRadioSession";
 import { useSleepTimer } from "@/lib/playback/useSleepTimer";
-import { useTatarMafia } from "@/lib/tatarMafia";
 import type { PlaybackHandoff, Track } from "@/lib/types";
 import { useRequiredContext } from "@/lib/useRequiredContext";
 import { useToast } from "@/lib/useToast";
@@ -75,7 +70,6 @@ function PlayerSessionProvider({
   children: React.ReactNode;
   userId: string | null;
 }) {
-  const tatarMafia = useTatarMafia();
   const { notifyError } = useToast();
 
   const {
@@ -210,19 +204,6 @@ function PlayerSessionProvider({
       ),
     );
   }, [primaryAudioRef, secondaryAudioRef]);
-
-  useEffect(() => {
-    enableVinylScratch(tatarMafia);
-    if (!tatarMafia) return;
-    const prepare = () => void prepareVinylScratch();
-    window.addEventListener("pointerdown", prepare, { capture: true, once: true });
-    window.addEventListener("keydown", prepare, { capture: true, once: true });
-    return () => {
-      window.removeEventListener("pointerdown", prepare, true);
-      window.removeEventListener("keydown", prepare, true);
-      enableVinylScratch(false);
-    };
-  }, [tatarMafia]);
 
   const replaceQueue = useCallback(
     (tracks: Track[], startIndex = 0, shuffled = live.current.shuffle) => {

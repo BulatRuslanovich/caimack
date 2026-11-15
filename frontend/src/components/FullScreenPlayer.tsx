@@ -18,6 +18,7 @@ import { leanBack } from "@/lib/leanBack";
 import { planTransition } from "@/lib/playback/transitions";
 import { useConnect } from "@/lib/playback/useConnectPlayback";
 import { usePlaybackProgress } from "@/lib/playback/usePlaybackProgress";
+import { prepareVinylDeck, releaseVinylDeck } from "@/lib/playback/vinylDeck";
 import { reasonLabel } from "@/lib/recommendationReason";
 import { SEEK_STEP } from "@/lib/shortcuts";
 import { useTatarMafia } from "@/lib/tatarMafia";
@@ -164,9 +165,21 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
   const [panel, setPanel] = useState<"art" | "queue" | "lyrics">("art");
   const [menuOpen, setMenuOpen] = useState(false);
   const track = player.currentTrack;
+  const trackId = track?.id;
+  const trackDuration = track?.durationSeconds;
   const idle = useIdle(IDLE_MS, panel === "art" && !menuOpen && !djMode);
   const stage = useRef<HTMLDivElement>(null);
   const swipeFrom = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!trackId || trackDuration === undefined || connect.selectedId) return;
+    const controller = new AbortController();
+    void prepareVinylDeck(trackId, trackDuration, controller.signal);
+    return () => {
+      controller.abort();
+      releaseVinylDeck();
+    };
+  }, [trackId, trackDuration, connect.selectedId]);
 
   useEffect(() => {
     let lock: Promise<WakeLockSentinel | undefined> | undefined;
