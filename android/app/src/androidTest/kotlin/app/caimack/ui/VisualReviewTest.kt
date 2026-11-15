@@ -20,6 +20,7 @@ import android.graphics.Bitmap
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.performTouchInput
@@ -88,6 +89,7 @@ class VisualReviewTest {
     private val originalDensity = container.appearance.libraryDensity.value
     private val originalPlayerEffects = container.appearance.playerEffects.value
     private val originalColorway = container.appearance.colorway.value
+    private val originalLocalHttp = container.connectionPreferences.allowLocalHttp.value
     private val originalMapLayers = context.getSharedPreferences("map_layers", 0).getStringSet("hidden", emptySet())?.toSet()
     private val user = User("visual-review", "Визуальная проверка")
     private val original = listOf(
@@ -103,7 +105,10 @@ class VisualReviewTest {
 
     @Before
     fun start() = runBlocking {
+        check(context.packageName.endsWith(".uitest")) { "Visual fixtures require the isolated test package" }
+        container.connectionPreferences.setAllowLocalHttp(true)
         InstrumentationRegistry.getInstrumentation().uiAutomation.grantRuntimePermission(context.packageName, Manifest.permission.POST_NOTIFICATIONS)
+        if (android.os.Build.VERSION.SDK_INT >= 37) InstrumentationRegistry.getInstrumentation().uiAutomation.grantRuntimePermission(context.packageName, "android.permission.ACCESS_LOCAL_NETWORK")
         Remote.cache.clear()
         web.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
@@ -114,6 +119,9 @@ class VisualReviewTest {
                     path == "/api/config" -> json("{\"recommendationsEnabled\":true}")
                     path == "/api/tracks/lookup" -> json(Json.encodeToString(tracks))
                     path == "/api/me/settings" -> json("{\"quality\":\"Original\"}")
+                    path == "/api/me/library" -> json("""[{"kind":"album","id":"album-0","title":"Ночной город","subtitle":"Электрические сны","hasImage":false,"savedAt":"2026-11-15T09:00:00Z","trackCount":3,"durationSeconds":646},{"kind":"playlist","id":"review","title":"Вечерний маршрут","subtitle":"Визуальная проверка","hasImage":false,"savedAt":"2026-11-15T09:00:00Z","trackCount":3,"durationSeconds":646}]""")
+                    path == "/api/me/library/folders" -> json("""[{"id":"review-folder","name":"На вечер","parentId":null,"createdAt":"2026-11-15T09:00:00Z"}]""")
+                    path == "/api/me/library/order" -> json("{}")
                     path == "/api/home/feed" -> json("{\"blocks\":[]}")
                     path == "/api/playlists" || path == "/api/playlists/public" -> json(Json.encodeToString(listOf(Playlist("review", "Вечерний маршрут", ownerId = user.id, ownerName = user.username, trackCount = tracks.size))))
                     path == "/api/playlists/review" -> json(Json.encodeToString(PlaylistDetail("review", "Вечерний маршрут", description = "Музыка, чтобы выдохнуть после длинного дня", ownerId = user.id, ownerName = user.username, tracks = tracks)))
@@ -131,6 +139,7 @@ class VisualReviewTest {
                     }
                     path == "/api/favorites" || path == "/api/history/recent" || path == "/api/tracks" -> json(Json.encodeToString(Paged(tracks, tracks.size, 1, 50)))
                     path == "/api/genres" -> json("[]")
+                    path == "/api/artists" || path == "/api/albums" -> json("""{"items":[],"total":0,"page":1,"pageSize":60,"totalPages":0}""")
                     else -> MockResponse.Builder().code(204).build()
                 }
             }
@@ -150,6 +159,7 @@ class VisualReviewTest {
         context.getSharedPreferences("map_layers", 0).edit().putStringSet("hidden", originalMapLayers).apply()
         shell("settings put system font_scale $originalFontScale")
         container.session.expire()
+        container.connectionPreferences.setAllowLocalHttp(originalLocalHttp)
         Remote.cache.clear()
         web.close()
     }
@@ -258,6 +268,85 @@ class VisualReviewTest {
     @Test fun lightTheme() = review(dark = false, fontScale = 1f, prefix = "light")
     @Test fun largerText() = review(dark = true, fontScale = 1.3f, prefix = "large-text")
 
+    @Test fun auditLibraryAndQueue() {
+        container.appearance.setLanguage("ru")
+        container.appearance.setTheme(Appearance.DARK)
+        InstrumentationRegistry.getArguments().getString("uxFontScale")?.toFloatOrNull()?.takeIf { it in 1f..2f }?.let {
+            shell("settings put system font_scale $it")
+        }
+        compose.activityRule.scenario.recreate()
+        compose.onNode(hasText(label(R.string.nav_library)) and hasClickAction()).performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("Ночной город").fetchSemanticsNodes().isNotEmpty() }
+        capture("library-saved")
+        compose.onNodeWithContentDescription(label(R.string.player_open_full)).performClick()
+        capture("player-paused")
+        compose.onNodeWithContentDescription(label(R.string.queue_title)).performClick()
+        compose.onAllNodesWithText("Тепло твоих рук")[0].assertIsDisplayed()
+        capture("queue-paused")
+        androidx.test.espresso.Espresso.pressBack()
+        compose.onNodeWithTag("player-artwork-scene").assertIsDisplayed()
+        androidx.test.espresso.Espresso.pressBack()
+        compose.onNodeWithContentDescription(label(R.string.player_open_full)).assertIsDisplayed()
+    }
+
+    @Test fun catalogScopeKeepsTheSavedFolderOnReturn() {
+        container.appearance.setLanguage("ru")
+        compose.activityRule.scenario.recreate()
+        compose.onNode(hasText(label(R.string.nav_library)) and hasClickAction()).performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("На вечер").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNode(hasText("На вечер") and hasClickAction()).performClick()
+        compose.onNodeWithText(label(R.string.collection_saved)).assertIsSelected()
+        compose.onNodeWithText(label(R.string.collection_catalog)).performClick()
+        compose.onNodeWithText(label(R.string.collection_catalog)).assertIsSelected()
+        compose.onNode(hasText(label(R.string.nav_artists)) and hasClickAction()).performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText(label(R.string.artists_empty)).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(label(R.string.artists_empty)).assertIsDisplayed()
+        capture("library-catalog", seedPlayback = false)
+        compose.onNodeWithText(label(R.string.collection_saved)).performClick()
+        compose.onNodeWithText("На вечер").assertIsDisplayed()
+        compose.onNodeWithContentDescription(label(R.string.folders_up)).assertIsDisplayed()
+    }
+
+    @Test fun auditSearchBrowseAndKeyboard() {
+        val previous = web.dispatcher
+        web.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val body = when (request.url.encodedPath) {
+                    "/api/genres" -> """[{"id":"electronic","name":"Electronic","trackCount":16,"coverAlbumIds":[]},{"id":"indie","name":"Indie","trackCount":12,"coverAlbumIds":[]},{"id":"rock","name":"Rock","trackCount":10,"coverAlbumIds":[]},{"id":"jazz","name":"Jazz","trackCount":8,"coverAlbumIds":[]},{"id":"pop","name":"Pop","trackCount":8,"coverAlbumIds":[]},{"id":"folk","name":"Folk","trackCount":6,"coverAlbumIds":[]}]"""
+                    "/api/search" -> """{"tracks":${Json.encodeToString(original)},"albums":[],"artists":[],"genres":[]}"""
+                    else -> return previous.dispatch(request)
+                }
+                return MockResponse.Builder().code(200).addHeader("Content-Type", "application/json").body(body).build()
+            }
+        }
+        container.appearance.setLanguage("ru")
+        compose.activityRule.scenario.recreate()
+        compose.onNode(hasText(label(R.string.nav_search)) and hasClickAction()).performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText(label(R.string.genre_electronic)).fetchSemanticsNodes().isNotEmpty() }
+        capture("search-browse", seedPlayback = false)
+        compose.onNodeWithContentDescription(label(R.string.search_placeholder)).performTextInput("ночной")
+        compose.waitUntil(10_000) { compose.onAllNodesWithText(original.first().title).fetchSemanticsNodes().isNotEmpty() }
+        capture("search-keyboard", seedPlayback = false)
+        compose.onNodeWithContentDescription(label(R.string.search_clear)).performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText(label(R.string.genre_electronic)).fetchSemanticsNodes().isNotEmpty() }
+    }
+
+    @Test fun auditLandscapePlayer() {
+        container.appearance.setLanguage("ru")
+        compose.activityRule.scenario.recreate()
+        compose.runOnIdle { (container.player.state as MutableStateFlow<PlayerState>).value = PlayerState(queue = original, index = 1) }
+        compose.onNodeWithContentDescription(label(R.string.player_open_full)).performClick()
+        try {
+            compose.runOnIdle { compose.activity.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
+            compose.waitUntil(10_000) { compose.activity.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE }
+            compose.onNodeWithContentDescription(label(R.string.player_next)).performScrollTo().assertIsDisplayed()
+            compose.onNodeWithContentDescription(label(R.string.player_close_full)).assertIsDisplayed()
+            capture("player-landscape", seedPlayback = false)
+        } finally {
+            compose.runOnIdle { compose.activity.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT }
+        }
+    }
+
     @Test
     fun interfaceMatchesTheUpdatedWebClient() {
         val previous = web.dispatcher
@@ -299,7 +388,10 @@ class VisualReviewTest {
                     return MockResponse.Builder().code(200).addHeader("Content-Type", "image/png").body(Buffer().write(covers[index % covers.size])).build()
                 }
                 val body = when (request.url.encodedPath) {
-                    "/api/home/feed" -> Json.encodeToString(HomeFeed(listOf(HomeBlock("daily", "dailyMix", "Hero", "Lead", tracks = screenshotTracks, totalCount = 26))))
+                    "/api/home/feed" -> Json.encodeToString(HomeFeed(listOf(
+                        HomeBlock("daily", "dailyMix", "Hero", "Lead", tracks = screenshotTracks, totalCount = 26),
+                        HomeBlock("quick", "quickTiles", "QuickTiles", "Quick", tracks = screenshotTracks + screenshotTracks.first().copy(id = "fourth", title = "Длинное название вечернего концерта")),
+                    )))
                     "/api/recommendations/radio" -> Json.encodeToString(RadioBatch((listOf(screenshotTracks[1]) + screenshotTracks.filterIndexed { index, _ -> index != 1 }).map { RecommendedTrack(it) }))
                     "/api/albums" -> Json.encodeToString(Paged(albums, albums.size, 1, 60))
                     else -> return previous.dispatch(request)
@@ -371,7 +463,8 @@ class VisualReviewTest {
         capture("parity-density-settings")
         compose.activityRule.scenario.recreate()
         compose.onNode(hasText(label(R.string.nav_library)) and hasClickAction()).performClick()
-        compose.onNodeWithText(label(R.string.nav_albums)).performClick()
+        compose.onNodeWithText(label(R.string.collection_catalog)).performClick()
+        compose.onNode(hasText(label(R.string.nav_albums)) and hasClickAction()).performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText(original[0].title).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText(label(R.string.view_grid)).assertDoesNotExist()
         compose.onNodeWithText(label(R.string.view_crate)).assertDoesNotExist()

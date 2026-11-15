@@ -61,6 +61,10 @@ class PlayerSceneSwipeTest {
         val oldRoute = player.remoteRoute
         val oldSelected = player.remoteSelected
         val oldEffects = container.appearance.playerEffects.value
+        val oldLocalHttp = container.connectionPreferences.allowLocalHttp.value
+        check(context.packageName.endsWith(".uitest"))
+        container.connectionPreferences.setAllowLocalHttp(true)
+        if (android.os.Build.VERSION.SDK_INT >= 37) InstrumentationRegistry.getInstrumentation().uiAutomation.grantRuntimePermission(context.packageName, "android.permission.ACCESS_LOCAL_NETWORK")
         runBlocking { container.server.remember(web.url("/").toString()) }
         container.appearance.setPlayerEffects(true)
         val queue = images.keys.map { Track(it, it, "artist", "Artist", albumId = it, hasCover = true, durationSeconds = 200) }
@@ -105,6 +109,7 @@ class PlayerSceneSwipeTest {
             player.remoteSelected = oldSelected
             player.showLocal()
             container.appearance.setPlayerEffects(oldEffects)
+            container.connectionPreferences.setAllowLocalHttp(oldLocalHttp)
             runBlocking {
                 if (oldServer != null) container.server.remember(oldServer.toString())
                 else { container.preferences.edit { it.remove(stringPreferencesKey("server")) }; container.server.restore() }

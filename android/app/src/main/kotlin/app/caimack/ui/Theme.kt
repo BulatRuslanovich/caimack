@@ -338,7 +338,7 @@ object Type {
     )
     val title = TextStyle(
         fontFamily = Unbounded, fontWeight = FontWeight.Medium,
-        fontSize = 22.sp, lineHeight = 25.sp, letterSpacing = (-0.015).em,
+        fontSize = 24.sp, lineHeight = 32.sp, letterSpacing = (-0.015).em,
     )
     val section = TextStyle(
         fontFamily = Onest, fontWeight = FontWeight.SemiBold,

@@ -41,7 +41,7 @@
     <string name="reason_discovery">A new corner of your library</string>
     <string name="mixes_kind">Mix</string>
     <string name="mixes_empty">Not enough tracks for this mix yet</string>
-    <string name="tracks_empty">No tracks here yet.</string>
+    <string name="tracks_empty">There are no tracks on this server yet.</string>
     <string name="search_placeholder">Music, artists, albums, genres…</string>
     <string name="search_nothing_found">Nothing matched.</string>
     <string name="search_top_result">Top result</string>
@@ -51,10 +51,10 @@
     <string name="search_forget">Remove from recent: %1$s</string>
     <string name="favorites_empty_title">No favourites yet</string>
     <string name="albums_kind">Album</string>
-    <string name="albums_empty">No albums yet.</string>
+    <string name="albums_empty">There are no albums on this server yet.</string>
     <string name="albums_more_by_artist">More by %1$s</string>
     <string name="artists_kind">Artist</string>
-    <string name="artists_empty">No artists yet.</string>
+    <string name="artists_empty">There are no artists on this server yet.</string>
     <string name="artists_top_tracks">Popular</string>
     <string name="artists_discography">Discography</string>
     <string name="genres_empty">No genres yet.</string>

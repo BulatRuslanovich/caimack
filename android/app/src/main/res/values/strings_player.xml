@@ -8,6 +8,7 @@
     <string name="player_repeat">Repeat</string>
     <string name="action_pause">Pause</string>
     <string name="queue_title">Queue</string>
+    <string name="player_now_playing">Now playing</string>
     <string name="queue_edit">Edit queue</string>
     <string name="queue_move_up">Move up</string>
     <string name="queue_move_down">Move down</string>

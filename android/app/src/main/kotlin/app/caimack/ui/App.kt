@@ -241,13 +241,13 @@ fun App(user: User) {
         ) {
             composable<HomeRoute> { HomeScreen(nav) }
             composable<SearchRoute> { SearchScreen(nav, play) }
-            composable<TracksRoute> { TracksScreen(play) }
+            composable<TracksRoute> { LibraryCatalogFrame(nav, TracksRoute) { TracksScreen(play) } }
             composable<LibraryRoute> { LibraryScreen(nav) }
-            composable<PlaylistsRoute> { PlaylistsScreen(nav) }
+            composable<PlaylistsRoute> { LibraryCatalogFrame(nav, PlaylistsRoute) { PlaylistsScreen(nav) } }
             composable<FavoritesRoute> { FavoritesScreen(play) }
-            composable<AlbumsRoute> { AlbumsScreen(nav) }
-            composable<ArtistsRoute> { ArtistsScreen(nav) }
-            composable<GenresRoute> { GenresScreen(nav) }
+            composable<AlbumsRoute> { LibraryCatalogFrame(nav, AlbumsRoute) { AlbumsScreen(nav) } }
+            composable<ArtistsRoute> { LibraryCatalogFrame(nav, ArtistsRoute) { ArtistsScreen(nav) } }
+            composable<GenresRoute> { LibraryCatalogFrame(nav, GenresRoute) { GenresScreen(nav) } }
             composable<RecentRoute> { RecentScreen(play) }
             composable<SettingsRoute> { SettingsScreen() }
             composable<DownloadsRoute> { DownloadsScreen(play) }

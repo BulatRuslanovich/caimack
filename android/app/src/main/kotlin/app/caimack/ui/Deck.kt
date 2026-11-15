@@ -14,11 +14,13 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
 import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -79,15 +81,15 @@ private const val FLING_DP_PER_SECOND = 800
 private const val SKIP_ACK_TIMEOUT_MS = 1_500L
 
 @Composable
-fun Deck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Modifier = Modifier) {
+fun Deck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Modifier = Modifier, alignment: Alignment = Alignment.Center) {
     val track = state.current ?: return
     // The new song and its neutral position must be installed in the same composition.
     // Resetting the old offset in an effect briefly puts the next neighbour in the centre.
-    key(track.id, state.index) { TrackDeck(state, onScrub, modifier.testTag("player-deck")) }
+    key(track.id, state.index) { TrackDeck(state, onScrub, modifier.testTag("player-deck"), alignment) }
 }
 
 @Composable
-private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Modifier) {
+private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Modifier, alignment: Alignment) {
     val haptic = rememberPlayerHaptics()
     val track = state.current ?: return
     val player = LocalContainer.current.player
@@ -102,9 +104,10 @@ private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Mo
     var scratching by remember { mutableStateOf(false) }
     var twist by remember(track.id) { mutableFloatStateOf(0f) }
     val layout = remember { DeckLayout() }
+    val extension by animateFloatAsState(if (state.playing || scratching) 1f else 0f, tween(if (motion) 240 else 0), label = "deck-centering")
 
 
-    Box(
+    BoxWithConstraints(
         modifier
             .onGloballyPositioned { layout.deck = it }
             .pointerInput(Unit) {
@@ -231,13 +234,13 @@ private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Mo
                     }
                 }
             },
-        contentAlignment = Alignment.Center,
+        contentAlignment = alignment,
     ) {
+        val sleeveSize = minOf(maxWidth * 0.68f, maxHeight * 0.9f, 300.dp)
         Box(
             Modifier
-                .fillMaxWidth(0.68f)
-                .widthIn(max = 300.dp)
-                .offset(x = (-48).dp)
+                .size(sleeveSize)
+                .offset { IntOffset((-sleeveSize.toPx() * RECORD_OUT * 0.5f * extension).roundToInt(), 0) }
                 .aspectRatio(1f)
                 .testTag("player-record")
                 .onGloballyPositioned { layout.record = it },

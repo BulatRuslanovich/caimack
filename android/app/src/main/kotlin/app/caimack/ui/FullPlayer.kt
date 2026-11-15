@@ -12,6 +12,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -44,6 +46,8 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -119,6 +123,7 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
     var panel by rememberSaveable { mutableStateOf(Panel.None) }
     var actions by remember { mutableStateOf(false) }
     var sleeping by remember { mutableStateOf(false) }
+    var options by remember { mutableStateOf(false) }
     val sleepTimer = displayedSleepTimer()
     container.favorites.state.collectAsState().value
     val liked = container.favorites.isFavorite(track)
@@ -158,7 +163,7 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
     val position = scrub ?: live
     val duration = state.durationMs.takeIf { it > 0 } ?: (track.durationSeconds * 1000L)
 
-    BackHandler(onBack = onClose)
+    BackHandler { if (panel != Panel.None) panel = Panel.None else onClose() }
 
     val view = LocalView.current
     DisposableEffect(view) {
@@ -171,19 +176,19 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
         PlayerSceneBackground(scene, Modifier.matchParentSize())
         BoxWithConstraints(Modifier.safeDrawingPadding().padding(horizontal = 20.dp, vertical = 12.dp)) {
             val wide = maxWidth > maxHeight
+            val scrollingArtwork = maxHeight < 600.dp || LocalDensity.current.fontScale >= 1.3f
+            val scrollArtworkHeight = minOf(maxWidth, maxHeight * 0.5f).coerceAtLeast(160.dp)
 
             val header = @Composable {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconAction(Lucide.ChevronDown, stringResource(R.string.player_close_full), onClick = onClose)
-                    PlaybackDevicesButton(Modifier.weight(1f))
-                    IconAction(Lucide.Moon, stringResource(R.string.sleep_title), tint = if (sleepTimer != null) palette.primary else palette.foreground) {
-                        sleeping = true
-                    }
-                    IconAction(Lucide.MicVocal, stringResource(R.string.lyrics_title), tint = if (panel == Panel.Lyrics) palette.primary else palette.foreground) {
-                        panel = if (panel == Panel.Lyrics) Panel.None else Panel.Lyrics
-                    }
-                    IconAction(Lucide.ListVideo, stringResource(R.string.queue_title), tint = if (panel == Panel.Queue) palette.primary else palette.foreground) {
-                        panel = if (panel == Panel.Queue) Panel.None else Panel.Queue
+                    Text(stringResource(R.string.player_now_playing), style = Type.small, color = palette.muted, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Box {
+                        IconAction(Lucide.EllipsisVertical, stringResource(R.string.menu_more)) { options = true }
+                        DropdownMenu(options, onDismissRequest = { options = false }) {
+                            DropdownMenuItem(text = { Text(stringResource(R.string.menu_more)) }, onClick = { options = false; actions = true })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.sleep_title)) }, leadingIcon = { Icon(Lucide.Moon, null, tint = if (sleepTimer != null) palette.primary else palette.muted) }, onClick = { options = false; sleeping = true })
+                        }
                     }
                 }
             }
@@ -192,7 +197,7 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
                 Box(modifier) {
                     when (panel) {
                         Panel.None -> PlayerSceneLayer(scene, Modifier.fillMaxSize().testTag("player-artwork-scene")) { frame ->
-                            Deck(frame.state, onScrub = { scrub = it }, modifier = Modifier.fillMaxSize())
+                            Deck(frame.state, onScrub = { scrub = it }, modifier = Modifier.fillMaxSize().padding(bottom = if (wide) 0.dp else 24.dp), alignment = if (wide) Alignment.Center else Alignment.BottomCenter)
                         }
                         Panel.Lyrics -> LyricsPanel(track, position, state.playing)
                         Panel.Queue -> QueuePanel(state, undoable)
@@ -201,15 +206,11 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
             }
 
             val controls = @Composable {
-                val titleHeight = with(LocalDensity.current) { (Type.display.lineHeight * if (wide) 1 else 3).toDp() }
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            // Keep the deck's available height independent of title wrapping/font choice.
                             if (panel == Panel.None) {
-                                Box(Modifier.fillMaxWidth().height(titleHeight), contentAlignment = Alignment.BottomStart) {
-                                    Text(track.title, style = displayStyle(track.title), maxLines = if (wide) 1 else 3, overflow = TextOverflow.Ellipsis)
-                                }
+                                Text(track.title, style = displayStyle(track.title))
                             } else {
                                 Text(track.title, style = Type.body, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
@@ -237,14 +238,15 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
                             stringResource(if (liked) R.string.menu_unlike else R.string.menu_like),
                             tint = if (liked) palette.primary else palette.muted,
                         ) { haptic(PlayerHaptic.Favorite); container.favorites.toggle(track) }
-                        IconAction(Lucide.EllipsisVertical, stringResource(R.string.menu_more), tint = palette.muted) { actions = true }
                     }
+                    if (panel != Panel.Queue) {
                     Spacer(Modifier.height(8.dp))
                     Seekbar(position, duration, peaks) { player.seekTo(it) }
                     Row {
                         Text(clock(position), style = Type.tiny, color = palette.muted)
                         Spacer(Modifier.weight(1f))
                         Text(clock(duration), style = Type.tiny, color = palette.muted)
+                    }
                     }
                     Row(Modifier.fillMaxWidth().testTag("full-player-transport"), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         IconAction(Lucide.Shuffle, stringResource(R.string.player_shuffle), tint = if (state.shuffle) palette.primary else palette.muted) { haptic(PlayerHaptic.Button); player.toggleShuffle() }
@@ -271,6 +273,15 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
                             tint = if (state.repeat == Player.REPEAT_MODE_OFF) palette.muted else palette.primary,
                         ) { haptic(PlayerHaptic.Button); player.cycleRepeat() }
                     }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        PlaybackDevicesButton(Modifier.weight(1f))
+                        Box(Modifier.semantics { selected = panel == Panel.Lyrics }) {
+                            IconAction(Lucide.MicVocal, stringResource(R.string.lyrics_title), tint = if (panel == Panel.Lyrics) palette.primary else palette.muted) { panel = if (panel == Panel.Lyrics) Panel.None else Panel.Lyrics }
+                        }
+                        Box(Modifier.semantics { selected = panel == Panel.Queue }) {
+                            IconAction(Lucide.ListVideo, stringResource(R.string.queue_title), tint = if (panel == Panel.Queue) palette.primary else palette.muted) { panel = if (panel == Panel.Queue) Panel.None else Panel.Queue }
+                        }
+                    }
                 }
             }
 
@@ -279,9 +290,17 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
                     stage(Modifier.weight(1f).fillMaxHeight())
                     Column(Modifier.weight(1f).fillMaxHeight()) {
                         header()
-                        Spacer(Modifier.weight(1f))
-                        controls()
+                        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                            Spacer(Modifier.height(16.dp))
+                            controls()
+                        }
                     }
+                }
+            } else if (panel == Panel.None && scrollingArtwork) {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                    header()
+                    stage(Modifier.fillMaxWidth().height(scrollArtworkHeight))
+                    controls()
                 }
             } else {
                 Column {

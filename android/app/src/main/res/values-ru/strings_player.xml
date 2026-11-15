@@ -8,6 +8,7 @@
     <string name="player_repeat">Повтор</string>
     <string name="action_pause">Пауза</string>
     <string name="queue_title">Очередь</string>
+    <string name="player_now_playing">Сейчас играет</string>
     <string name="queue_edit">Изменить очередь</string>
     <string name="queue_move_up">Переместить выше</string>
     <string name="queue_move_down">Переместить ниже</string>

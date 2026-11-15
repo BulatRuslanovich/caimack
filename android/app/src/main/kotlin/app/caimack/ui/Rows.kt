@@ -103,7 +103,7 @@ fun Card(
     val shape = if (round) CircleShape else Radius.cover
     val text: @Composable (Modifier) -> Unit = { textModifier ->
         Column(textModifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(title, style = if (list) Type.body else Type.small.copy(fontWeight = FontWeight.Medium),
+            Text(title, style = Type.body.copy(fontWeight = FontWeight.Medium),
                 maxLines = 2, overflow = TextOverflow.Ellipsis,
                 textAlign = if (round && !list) TextAlign.Center else TextAlign.Start,
                 modifier = Modifier.fillMaxWidth())
@@ -202,7 +202,7 @@ fun TrackRow(
         Column(Modifier.weight(1f)) {
             Text(
                 track.title,
-                style = Type.small.copy(fontWeight = FontWeight.Medium),
+                style = Type.body.copy(fontWeight = FontWeight.Medium),
                 color = if (current) palette.primary else palette.foreground,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,

@@ -101,7 +101,7 @@ fun <T : Any> rememberPager(key: String, load: suspend (Int) -> Paged<T>): Pager
 fun PageTitle(title: String, subtitle: String? = null, inset: Boolean = true) {
     val palette = LocalPalette.current
     Column(Modifier.fillMaxWidth().padding(horizontal = if (inset) 16.dp else 0.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(title, style = Type.display)
+        Text(title, style = Type.title)
         subtitle?.let { Text(it, style = Type.small, color = palette.muted) }
     }
 }

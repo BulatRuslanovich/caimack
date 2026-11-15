@@ -41,7 +41,7 @@
     <string name="reason_discovery">Новый уголок вашей библиотеки</string>
     <string name="mixes_kind">Сборник</string>
     <string name="mixes_empty">Для этого микса пока мало треков</string>
-    <string name="tracks_empty">Здесь пока нет треков.</string>
+    <string name="tracks_empty">На сервере пока нет треков.</string>
     <string name="search_placeholder">Музыка, исполнители, альбомы, жанры…</string>
     <string name="search_nothing_found">Ничего не найдено.</string>
     <string name="search_top_result">Лучшее совпадение</string>
@@ -51,10 +51,10 @@
     <string name="search_forget">Убрать из недавних: %1$s</string>
     <string name="favorites_empty_title">В избранном пока пусто</string>
     <string name="albums_kind">Альбом</string>
-    <string name="albums_empty">Альбомов пока нет.</string>
+    <string name="albums_empty">На сервере пока нет альбомов.</string>
     <string name="albums_more_by_artist">Ещё у %1$s</string>
     <string name="artists_kind">Исполнитель</string>
-    <string name="artists_empty">Исполнителей пока нет.</string>
+    <string name="artists_empty">На сервере пока нет исполнителей.</string>
     <string name="artists_top_tracks">Популярное</string>
     <string name="artists_discography">Дискография</string>
     <string name="genres_empty">Жанров пока нет.</string>
