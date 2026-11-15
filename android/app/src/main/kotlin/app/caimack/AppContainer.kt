@@ -254,13 +254,20 @@ class AppContainer(context: Context) {
     init {
         scope.launch {
             for (request in lyricsRefresh) {
-                if (session.state.value !is SessionState.SignedIn) continue
-                val ids = kotlinx.coroutines.withContext(Dispatchers.Main) {
-                    downloads.state.value.values.filter { downloads.visible(it) }.mapNotNull { it.track?.id }
+                val owner = accountKey ?: continue
+                // The first response can contain only line timing while word timing
+                // is being fetched by the server. Persist the richer response too.
+                for (attempt in 0 until 5) {
+                    if (accountKey != owner) break
+                    val ids = kotlinx.coroutines.withContext(Dispatchers.Main) {
+                        downloads.state.value.values.filter { downloads.visible(it) }.mapNotNull { it.track?.id }
+                    }
+                    if (!downloadedLyrics.refresh(ids)) break
+                    if (attempt < 4) kotlinx.coroutines.delay(15_000)
                 }
-                downloadedLyrics.refresh(ids)
             }
         }
+
         scope.launch {
             for (request in artworkRefresh) {
                 if (session.state.value !is SessionState.SignedIn) continue

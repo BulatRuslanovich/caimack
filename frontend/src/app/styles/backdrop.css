@@ -51,7 +51,7 @@
   );
 }
 
-/* The observed player has one hue and a shallow vertical lightness ramp. */
+/* Static fallback remains visible until the low-resolution lava canvas is ready. */
 .art-backdrop[data-mode="player"] .art-backdrop-palette {
   background: linear-gradient(180deg, var(--art-color), var(--art-bottom));
 }
@@ -165,4 +165,13 @@
 :root[data-theme="light"] .art-backdrop-grain {
   opacity: 0.02;
   mix-blend-mode: multiply;
+}
+
+/* Smooth browser upscaling keeps the render cost independent of display resolution. */
+.lava-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }

@@ -42,6 +42,13 @@ available if the server cannot be reached.
 Lyrics are fetched automatically for individual downloads, without opening the
 lyrics panel first, and retained in private storage for the current server and
 account. Plain text, line/word timestamps and provider credits survive app restarts.
+Plain text and line-only timing are provisional while the server looks for word
+timing. Downloads retry incomplete lyrics every 15 seconds, up to five checks
+per refresh, and retain word intervals for the same progressive karaoke fill
+used online. Existing line-only downloads are upgraded on startup, resume or
+reconnection without downloading their audio again. Manual lyrics are preserved.
+When no word-timed source exists, line highlighting remains the fallback;
+the app does not invent word timings.
 Previously downloaded tracks receive missing lyrics when the app next starts,
 resumes or reconnects to the server; their audio does not need to be downloaded
 again. Failed requests keep the last saved text. Lyrics must be available on the

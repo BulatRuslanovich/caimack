@@ -10,6 +10,7 @@ import { useCoverTone } from "@/lib/useCoverTone";
 import { useArtworkTransition } from "@/lib/visuals/useArtworkTransition";
 import { backdropPalette } from "@/lib/visuals/backdropPalette";
 import { PLAYER_BACKDROP, backdropRgb, playerBackdropSurface } from "@/lib/visuals/playerBackdrop";
+import { LavaBackdrop } from "./LavaBackdrop";
 import { useArtworkScene } from "./ArtworkScene";
 
 function paletteStyle(
@@ -91,7 +92,9 @@ function BackdropLayers({
           className="art-backdrop-palette"
           data-state="leaving"
           style={previousStyle}
-        />
+        >
+          {mode === "player" && <LavaBackdrop src={previous.src} />}
+        </div>
       )}
       <div
         key={current.key}
@@ -99,7 +102,9 @@ function BackdropLayers({
         data-state={previous ? "entering" : "settled"}
         style={currentStyle}
         onAnimationEnd={onAnimationEnd}
-      />
+      >
+        {mode === "player" && <LavaBackdrop src={current.src} />}
+      </div>
       {mode !== "player" && <div className="art-backdrop-grain" />}
     </div>
   );
