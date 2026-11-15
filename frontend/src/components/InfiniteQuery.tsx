@@ -9,7 +9,7 @@ import type { UseInfiniteQueryResult } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { EmptyState } from "./EmptyState";
 import { Loading } from "./Loading";
-import { LoadError } from "./Query";
+import { LoadError, RefreshError } from "./Query";
 
 export function InfiniteQuery<T>({
   result,
@@ -42,11 +42,17 @@ export function InfiniteQuery<T>({
   const total = data.pages[0]?.total ?? items.length;
 
   if (empty && total === 0) {
-    return <EmptyState icon={empty.icon} title={empty.title} description={empty.description} />;
+    return (
+      <>
+        {error && <RefreshError onRetry={() => void refetch()} />}
+        <EmptyState icon={empty.icon} title={empty.title} description={empty.description} />
+      </>
+    );
   }
 
   return (
     <>
+      {error && <RefreshError onRetry={() => void refetch()} />}
       {children(items)}
 
       {hasNextPage && <LoadMore busy={isFetchingNextPage} onReach={() => void fetchNextPage()} />}

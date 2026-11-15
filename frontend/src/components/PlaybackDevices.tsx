@@ -12,6 +12,20 @@ import { useT } from "@/contexts/I18nContext";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent } from "./ui/dialog";
 
+export function PlaybackDeviceStatus() {
+  const connect = useConnect();
+  const t = useT();
+  if (!connect.selectedId) return null;
+  const label = t(connect.available ? "connect.playingOn" : "connect.unavailable", {
+    device: connect.selectedName,
+  });
+  return (
+    <span role="status" title={label} className="truncate text-xs text-primary">
+      {label}
+    </span>
+  );
+}
+
 export function PlaybackDevices({
   compact = false,
   onlyRemote = false,

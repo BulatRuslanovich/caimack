@@ -25,7 +25,8 @@ import { useYandexMusicSettings } from "@/lib/useYandexMusic";
 import { useAuth } from "@/contexts/AuthContext";
 import { YandexSearchWorkspace } from "@/components/yandex/YandexSearchWorkspace";
 import { YandexActivityButton } from "@/components/yandex/YandexImports";
-import { GenreChips } from "./GenreChips";
+import { GenreCategories, GenreChips } from "./GenreChips";
+import Link from "next/link";
 import { RecentSearches } from "./RecentSearches";
 import { TopResult } from "./TopResult";
 
@@ -33,7 +34,7 @@ const PAGE_SIZE = 50;
 
 const PREVIEW = 5;
 
-const START_GENRES = 24;
+const START_GENRES = 8;
 
 const TABS: SearchTab[] = ["tracks", "albums", "artists", "genres"];
 
@@ -105,7 +106,7 @@ function SearchView() {
   const previewTracks = useMemo(() => results.data?.tracks.slice(0, PREVIEW) ?? [], [results.data]);
 
   return (
-    <>
+    <div className="flex min-w-0 flex-col gap-6">
       <div className="search-controls flex flex-col gap-4 max-md:gap-3">
         <PageHeader title={t("nav.search")} actions={yandex && <YandexActivityButton />} />
 
@@ -232,7 +233,7 @@ function SearchView() {
           </div>
         </>
       )}
-    </>
+    </div>
   );
 }
 
@@ -293,11 +294,22 @@ function SearchStart() {
     <>
       <RecentSearches />
 
-      {genres.isPending ? null : top.length === 0 ? null : (
-        <Section title={t("search.browseGenres")} href="/genres">
-          <GenreChips genres={top} />
-        </Section>
-      )}
+      <Query
+        result={genres}
+        empty={{ title: t("search.browseEmpty"), description: t("search.browseEmptyHint") }}
+      >
+        {() => (
+          <Section title={t("search.browseGenres")} className="pt-1">
+            <GenreCategories genres={top} />
+            <Link
+              href="/genres"
+              className="w-fit rounded-sm py-2 text-sm text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring"
+            >
+              {t("search.allGenres")}
+            </Link>
+          </Section>
+        )}
+      </Query>
     </>
   );
 }

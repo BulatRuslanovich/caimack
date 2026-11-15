@@ -495,7 +495,7 @@ const TrackRow = memo(function TrackRow({
       <span className="flex min-w-0 items-center gap-3" role="cell">
         {showCover && <TrackCover track={track} size={40} className="library-track-cover" />}
         <span className="flex min-w-0 flex-col">
-          <span className={cn("truncate font-semibold", isCurrent && "text-primary")}>
+          <span className={cn("truncate text-body font-semibold", isCurrent && "text-primary")}>
             {track.title}
           </span>
           {(showArtist || showSpec) && (

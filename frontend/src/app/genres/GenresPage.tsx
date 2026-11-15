@@ -16,12 +16,13 @@ import { usePage } from "@/lib/usePage";
 import type { Genre } from "@/lib/types";
 import { AlbumMosaic } from "@/components/collection/CoverMosaic";
 import { Card } from "@/components/MediaCard";
-import { CardGrid, PageHeader, Section } from "@/components/PageHeader";
+import { CardGrid, CardGridSkeleton, PageHeader, Section } from "@/components/PageHeader";
 import { Pagination } from "@/components/PageToolbar";
 import { PlayAllButton } from "@/components/PlayAllButton";
 import { Query } from "@/components/Query";
 import { TrackList } from "@/components/TrackList";
 import { useT } from "@/contexts/I18nContext";
+import { LibraryNavigation } from "@/components/LibraryNavigation";
 
 export function GenresPage() {
   const t = useT();
@@ -57,7 +58,7 @@ function GenresView() {
   const selectedGenre = genres.data?.find((genre) => genre.id === selected) ?? null;
 
   return (
-    <>
+    <div className="flex min-w-0 flex-col gap-6 max-md:gap-5">
       <PageHeader
         title={t("nav.genres")}
         subtitle={genres.data ? t("count.genres", { count: genres.data.length }) : undefined}
@@ -68,7 +69,12 @@ function GenresView() {
         }
       />
 
-      <Query result={genres} empty={{ icon: <TagsIcon size={24} />, title: t("genres.empty") }}>
+      <LibraryNavigation />
+      <Query
+        result={genres}
+        skeleton={<CardGridSkeleton />}
+        empty={{ icon: <TagsIcon size={24} />, title: t("genres.empty") }}
+      >
         {(list) => (
           <CardGrid>
             {list.map((genre) => (
@@ -97,7 +103,7 @@ function GenresView() {
           </Query>
         </Section>
       ) : null}
-    </>
+    </div>
   );
 }
 

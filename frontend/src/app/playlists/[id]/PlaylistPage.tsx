@@ -25,7 +25,13 @@ import { TrackList } from "@/components/TrackList";
 import { useConfirm } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ListMusicIcon, PencilIcon, Trash2Icon } from "lucide-react";
+import { EllipsisVerticalIcon, ListMusicIcon, PencilIcon, Trash2Icon } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useT } from "@/contexts/I18nContext";
 import { Section } from "@/components/PageHeader";
 
@@ -82,7 +88,7 @@ export function PlaylistPage() {
         const isOwner = user?.id === detail.ownerId;
 
         return (
-          <>
+          <div className="flex min-w-0 flex-col gap-6">
             <DetailHeader
               kind={t("playlists.kind")}
               title={detail.name}
@@ -122,24 +128,35 @@ export function PlaylistPage() {
                   <PlayAllButton tracks={detail.tracks} name={detail.name} />
                   <LibrarySaveButton kind="playlist" id={id} />
                   {isOwner && (
-                    <>
-                      <Button onClick={() => setEditing(true)}>
-                        <PencilIcon size={16} /> {t("action.edit")}
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        onClick={() =>
-                          confirm({
-                            title: t("playlists.confirmDelete", { name: detail.name }),
-                            confirmLabel: t("action.delete"),
-                            destructive: true,
-                            action: () => remove.mutate(),
-                          })
-                        }
-                      >
-                        <Trash2Icon size={16} /> {t("action.delete")}
-                      </Button>
-                    </>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon-lg"
+                          aria-label={t("tracks.moreActions", { title: detail.name })}
+                        >
+                          <EllipsisVerticalIcon size={22} />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        <DropdownMenuItem onSelect={() => setEditing(true)}>
+                          <PencilIcon size={16} /> {t("action.edit")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onSelect={() =>
+                            confirm({
+                              title: t("playlists.confirmDelete", { name: detail.name }),
+                              confirmLabel: t("action.delete"),
+                              destructive: true,
+                              action: () => remove.mutate(),
+                            })
+                          }
+                        >
+                          <Trash2Icon size={16} /> {t("action.delete")}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   )}
                 </>
               }
@@ -169,7 +186,7 @@ export function PlaylistPage() {
             )}
 
             {confirmDialog}
-          </>
+          </div>
         );
       }}
     </Query>

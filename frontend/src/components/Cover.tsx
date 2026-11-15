@@ -51,7 +51,7 @@ export function Cover({
   fallback,
   preview,
 }: CoverProps) {
-  const [failed, setFailed] = useState(false);
+  const [failedSource, setFailedSource] = useState<string | null>(null);
   const [loadedSource, setLoadedSource] = useState<string | null>(null);
   const t = useT();
 
@@ -60,7 +60,7 @@ export function Cover({
     : playlistId
       ? playlistCoverUrl({ playlistId, hasCover, coverTrackId, variant })
       : coverUrl({ albumId, trackId, hasCover, variant });
-  const showImage = source !== null && !failed;
+  const showImage = source !== null && failedSource !== source;
 
   const srcSet = !sizes
     ? null
@@ -111,7 +111,7 @@ export function Cover({
             loading="lazy"
             decoding="async"
             onLoad={() => setLoadedSource(source)}
-            onError={() => setFailed(true)}
+            onError={() => setFailedSource(source)}
             className={cn(
               "relative size-full object-cover",
               "[transition:opacity_300ms_var(--ease),scale_150ms_var(--ease)]",

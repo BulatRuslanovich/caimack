@@ -6,6 +6,7 @@
 import { ChevronRightIcon } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
+import { useId } from "react";
 import { cn } from "@/lib/cn";
 import { formatArtists, formatDuration } from "@/lib/format";
 import { trackCoverUrl } from "@/lib/media";
@@ -37,6 +38,7 @@ export function DailyMix<T extends string>({
   href?: Route<T>;
 }) {
   const t = useT();
+  const artistDescriptionId = useId();
   const format = useFormat();
   const { currentTrackId, playTrack, soundingNow } = usePlayback();
 
@@ -82,6 +84,7 @@ export function DailyMix<T extends string>({
       style={toneStyle(tone)}
       className="daily-mix"
       aria-labelledby="daily-mix-heading"
+      aria-describedby={artistDescriptionId}
     >
       <div className="daily-mix-header">
         <div className="daily-mix-mosaic" aria-hidden="true">
@@ -99,11 +102,10 @@ export function DailyMix<T extends string>({
         </div>
         <PlayAllButton tracks={tracks} name={title} />
       </div>
-      <p className="daily-mix-artists" title={who}>
+      <p id={artistDescriptionId} className="sr-only">
         {who}
       </p>
       <div className="daily-mix-preview">
-        <p className="text-xs text-faint">{t("home.mixStartsWith")}</p>
         <ol aria-label={title}>
           {tracks.slice(0, HERO_PREVIEW_SIZE).map((track) => {
             const current = currentTrackId === track.id;
