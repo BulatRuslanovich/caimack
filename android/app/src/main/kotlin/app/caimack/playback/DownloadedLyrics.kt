@@ -78,27 +78,37 @@ class DownloadedLyrics(
     }
 
     /** Backfill existing downloads and retry missing/pending lyrics on reconnect. */
-    suspend fun refresh(ids: Collection<String>) = withContext(Dispatchers.IO) {
-        val owner = identity() ?: return@withContext
+    suspend fun refresh(ids: Collection<String>): Boolean = withContext(Dispatchers.IO) {
+        val owner = identity() ?: return@withContext false
         val folder = File(directory, hash(owner))
         val retained = downloadedIds().mapTo(hashSetOf()) { hash(it) + ".json" }
-        if (identity() != owner) return@withContext
+        if (identity() != owner) return@withContext false
         folder.listFiles()?.filter { it.extension == "json" && it.name !in retained }?.forEach { it.delete() }
+        var pending = false
         for (id in ids.distinct()) {
-            if (identity() != owner) return@withContext
+            if (identity() != owner) return@withContext false
             if (!available(owner, id)) continue
             val cached = read(owner, id)
-            if (cached != null && (cached.lyrics.plain.isNotBlank() || cached.lyrics.lines.isNotEmpty()) &&
-                clock() - cached.checkedAt in 0 until TimeUnit.HOURS.toMillis(1)) continue
+            val needsWords = cached == null || cached.lyrics.needsWordTiming()
+            val freshness = if (needsWords) 15_000L else TimeUnit.HOURS.toMillis(1)
+            if (cached != null && clock() - cached.checkedAt in 0 until freshness) {
+                pending = pending || needsWords
+                continue
+            }
             try {
-                load(id, offline = false, fallbackOnFailure = false)
+                val lyrics = load(id, offline = false, fallbackOnFailure = false)
+                pending = pending || lyrics.needsWordTiming()
             } catch (_: IOException) {
-                return@withContext
+                return@withContext false
             } catch (error: HttpException) {
-                if (error.code() == 401 || error.code() >= 500) return@withContext
+                if (error.code() == 401 || error.code() >= 500) return@withContext false
             } catch (_: SerializationException) {
                 // A malformed response for one track must not block the remaining downloads.
             }
         }
+        pending
     }
+
+    private fun Lyrics.needsWordTiming(): Boolean = source != "Manual" &&
+        (lines.isEmpty() || lines.any { it.text.isNotBlank() && it.words.isEmpty() })
 }

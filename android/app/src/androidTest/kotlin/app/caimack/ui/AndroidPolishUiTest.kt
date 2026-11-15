@@ -84,7 +84,28 @@ class AndroidPolishUiTest {
 
     @Test fun wordHighlightIsBrightAndFollowsItsTimestamp() {
         var at by mutableLongStateOf(900)
-        val line = LyricLine(at = 1000, text = "Sing with me", words = listOf(LyricWord(1000, 2000, "Sing with me")))
+        // Exercise the downloaded text after a restart with all network access failing.
+        val line = runBlocking {
+            val context = InstrumentationRegistry.getInstrumentation().targetContext
+            val directory = java.nio.file.Files.createTempDirectory(context.cacheDir.toPath(), "lyrics-test-").toFile()
+            val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+            val rich = app.caimack.api.Lyrics(lines = listOf(
+                LyricLine(at = 1000, text = "Sing with me", words = listOf(LyricWord(1000, 2000, "Sing with me"))),
+            ))
+            var now = 0L
+            var response = rich.copy(lines = rich.lines.map { it.copy(words = emptyList()) })
+            try {
+                val cache = app.caimack.playback.DownloadedLyrics(directory, json, { "test-account" }, { setOf("song") },
+                    { retrofit2.Response.success(response) }, { now })
+                assertTrue(cache.refresh(listOf("song")))
+                now += 15_000
+                response = rich
+                assertFalse(cache.refresh(listOf("song")))
+                val restored = app.caimack.playback.DownloadedLyrics(directory, json, { "test-account" }, { setOf("song") },
+                    { throw java.io.IOException("Network unavailable") })
+                restored.load("song", offline = true).lines.single()
+            } finally { directory.deleteRecursively() }
+        }
         compose.setContent {
             CaimackTheme {
                 Box(Modifier.fillMaxSize().background(Color(0xff243c5b)).padding(24.dp)) {

@@ -83,6 +83,7 @@ class DownloadedLyricsTest {
         web.enqueue(MockResponse.Builder().code(204).build())
         cache().refresh(listOf("song"))
         assertEquals(Lyrics(), cache().load("song", offline = true))
+        now += 15_000
         val plain = Lyrics(plain = "Newly discovered text")
         respond(plain)
         cache().refresh(listOf("song"))
@@ -106,6 +107,48 @@ class DownloadedLyricsTest {
         store.refresh(listOf("song", "other"))
         assertEquals(replacement, cache().load("song", offline = true))
         assertEquals(4, fetches)
+    }
+
+    @Test fun `line timing is provisional until word timing is saved for offline karaoke`() = runBlocking {
+        val linesOnly = rich.copy(lines = rich.lines.map { it.copy(words = emptyList()) })
+        respond(linesOnly)
+        val store = cache()
+        assertTrue(store.refresh(listOf("song")))
+        assertEquals(linesOnly, cache().load("song", offline = true))
+        assertTrue(store.refresh(listOf("song")))
+        assertEquals(1, fetches)
+        now += 15_000
+        respond(rich)
+        assertFalse(store.refresh(listOf("song")))
+        online = false
+        val offline = cache().load("song", offline = true)
+        assertEquals(rich, offline)
+        val word = offline.lines.single().words.first()
+        assertEquals(0.5f, app.caimack.ui.lyricWordProgress(word, 250), 0.001f)
+        assertEquals(2, fetches)
+    }
+
+    @Test fun `partially timed lyrics keep retrying but blank lines and manual lyrics do not`() = runBlocking {
+        val partial = rich.copy(lines = rich.lines + LyricLine(1000, "Later line"))
+        respond(partial)
+        val store = cache()
+        assertTrue(store.refresh(listOf("song")))
+        now += 15_000
+        respond(rich.copy(lines = rich.lines + LyricLine(1000, "")))
+        assertFalse(store.refresh(listOf("song")))
+        now += TimeUnit.HOURS.toMillis(1)
+        respond(Lyrics(plain = "User text", source = "Manual"))
+        assertFalse(store.refresh(listOf("song")))
+    }
+
+    @Test fun `empty responses wait for the retry interval`() = runBlocking {
+        web.enqueue(MockResponse.Builder().code(204).build())
+        val store = cache()
+        repeat(5) { assertTrue(store.refresh(listOf("song"))) }
+        assertEquals(1, fetches)
+        now += 15_000
+        respond(rich)
+        assertFalse(store.refresh(listOf("song")))
     }
 
     @Test fun `connection failures and server errors preserve lyrics but authorization failures are not hidden`() = runBlocking {
