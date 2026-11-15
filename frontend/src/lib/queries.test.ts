@@ -1,8 +1,34 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { QueryClient, type QueryKey } from "@tanstack/react-query";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { api } from "./api";
+import { ApiError } from "./http";
+import { WAVEFORM_VERSION } from "./waveform";
 import { invalidates, queries } from "./queries";
+
+describe("waveform analysis upgrades", () => {
+  it.each(["not ready", "obsolete"])(
+    "refetches a %s waveform instead of caching it forever",
+    async (state) => {
+      const client = new QueryClient();
+      const request = vi.spyOn(api, "waveform");
+      if (state === "not ready") request.mockRejectedValueOnce(new ApiError(404, "Not ready"));
+      else request.mockResolvedValueOnce({ peaks: [255, 255, 255], version: WAVEFORM_VERSION - 1 });
+      request.mockResolvedValue({ peaks: [20, 120, 240], version: WAVEFORM_VERSION });
+      try {
+        const options = queries.waveform("track");
+        expect(await client.fetchQuery(options)).toBeNull();
+        expect(await client.fetchQuery(options)).toEqual([20, 120, 240]);
+        expect(await client.fetchQuery(options)).toEqual([20, 120, 240]);
+        expect(request).toHaveBeenCalledTimes(2);
+      } finally {
+        request.mockRestore();
+        client.clear();
+      }
+    },
+  );
+});
 
 describe("favorite cache invalidation", () => {
   it("marks every cached track view stale, including inactive pages", async () => {

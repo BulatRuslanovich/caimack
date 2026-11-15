@@ -84,11 +84,16 @@ pub async fn snapshot(db: &PgPool, storage: &Storage, user: Uuid) -> AppResult<V
     for lyric in crate::catalog::lyrics::all(&mut tx).await? {
         lyrics.insert(lyric.track_id, serde_json::to_value(lyric).map_err(crate::AppError::internal)?);
     }
-    let waveform_rows: Vec<(Uuid, Vec<u8>)> =
-        sqlx::query_as("SELECT track_id,waveform FROM track_cues WHERE succeeded AND waveform IS NOT NULL")
-            .fetch_all(&mut *tx)
-            .await?;
-    let waveforms: BTreeMap<_, _> = waveform_rows.into_iter().map(|(id, peaks)| (id, json!({"peaks":peaks}))).collect();
+    let waveform_rows: Vec<(Uuid, Vec<u8>)> = sqlx::query_as(
+        "SELECT track_id,waveform FROM track_cues WHERE version=$1 AND succeeded AND waveform IS NOT NULL",
+    )
+    .bind(media::cues::VERSION)
+    .fetch_all(&mut *tx)
+    .await?;
+    let waveforms: BTreeMap<_, _> = waveform_rows
+        .into_iter()
+        .map(|(id, peaks)| (id, json!({"peaks":peaks,"version":media::cues::VERSION})))
+        .collect();
     let recent: Vec<Uuid> = sqlx::query_scalar(
         "SELECT track_id FROM listening_history WHERE user_id=$1 GROUP BY track_id ORDER BY max(played_at) DESC LIMIT 1000"
     ).bind(user).fetch_all(&mut *tx).await?;

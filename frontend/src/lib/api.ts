@@ -4,6 +4,7 @@
 import { deviceId, flushEvents } from "@/lib/events";
 import { fileForm, qs, request, requestFile } from "@/lib/http";
 import { markImageChanged } from "@/lib/media";
+import { WAVEFORM_VERSION } from "@/lib/waveform";
 import type {
   LibraryItem,
   LibraryFolder,
@@ -186,7 +187,13 @@ export const api = {
     request<SearchResults>(`/search${qs({ q, limit })}`, { signal }),
   searchTab: <T extends SearchTab>(tab: T, q: string, params: PageParams, signal?: AbortSignal) =>
     request<SearchTabResult[T]>(`/search/${tab}${qs({ q, ...params })}`, { signal }),
-  waveform: (trackId: string) => request<{ peaks: number[] }>(`/tracks/${trackId}/waveform`),
+  waveform: (trackId: string) =>
+    request<{ peaks: number[]; version?: number }>(
+      `/tracks/${trackId}/waveform?v=${WAVEFORM_VERSION}`,
+      {
+        headers: { "Cache-Control": "no-cache" },
+      },
+    ),
   lyrics: (trackId: string) => request<Lyrics | null>(`/tracks/${trackId}/lyrics`),
 
   updateTrack: (

@@ -7,7 +7,7 @@ use realfft::{RealFftPlanner, RealToComplex};
 
 pub const SAMPLE_RATE: u32 = 11_025;
 
-pub const VERSION: i32 = 3;
+pub const VERSION: i32 = 4;
 
 const FRAME_LENGTH: usize = 1024;
 const HOP_LENGTH: usize = 256;
@@ -16,8 +16,6 @@ pub const HOP_SECONDS: f64 = HOP_LENGTH as f64 / SAMPLE_RATE as f64;
 const FRAME_SECONDS: f64 = FRAME_LENGTH as f64 / SAMPLE_RATE as f64;
 
 pub const WAVEFORM_BARS: usize = 240;
-
-const WAVEFORM_CURVE: f64 = 0.7;
 
 const SILENCE_FLOOR_DB: f64 = -60.0;
 const SILENCE_BELOW_PEAK_DB: f64 = 45.0;
@@ -158,8 +156,11 @@ fn waveform(energy: &[f64]) -> Vec<u8> {
     for (bar, value) in bars.iter_mut().enumerate() {
         let from = bar * count / WAVEFORM_BARS;
         let to = (from + 1).max((bar + 1) * count / WAVEFORM_BARS);
-        for frame_energy in &energy[from..to.min(count)] {
-            *value = value.max(frame_energy.sqrt());
+        let frames = &energy[from..to.min(count)];
+        if !frames.is_empty() {
+            // Pool energy across the whole interval. Taking its loudest frame
+            // makes regularly mastered drum hits flatten an entire song.
+            *value = (frames.iter().sum::<f64>() / frames.len() as f64).sqrt();
         }
     }
 
@@ -167,7 +168,7 @@ fn waveform(energy: &[f64]) -> Vec<u8> {
     if loudest <= 0.0 {
         return vec![0; WAVEFORM_BARS];
     }
-    bars.iter().map(|bar| (255.0 * (bar / loudest).powf(WAVEFORM_CURVE)).round_ties_even() as u8).collect()
+    bars.iter().map(|bar| (255.0 * bar / loudest).round_ties_even() as u8).collect()
 }
 
 fn outro_start(
@@ -288,5 +289,39 @@ mod tests {
         let mut detector = CueDetector::default();
         detector.feed(&vec![0.0; SAMPLE_RATE as usize * 5]);
         assert_eq!(detector.complete(), None);
+    }
+
+    #[test]
+    fn repeated_equal_peak_hits_do_not_hide_the_dynamics_between_them() {
+        let mut energy = Vec::new();
+        for bar in 0..WAVEFORM_BARS {
+            let background = [0.001, 0.01, 0.1, 0.6][bar / 60];
+            energy.push(1.0);
+            energy.extend(std::iter::repeat_n(background, 31));
+        }
+        let bars = waveform(&energy);
+        assert_eq!(bars.len(), WAVEFORM_BARS);
+        assert!(bars[0] < bars[60]);
+        assert!(bars[60] < bars[120]);
+        assert!(bars[120] < bars[180]);
+        assert!(bars[180] - bars[0] > 150);
+    }
+
+    #[test]
+    fn waveform_retains_amplitude_ratios_and_real_silent_sections() {
+        let energy: Vec<f64> = [0.0, 0.01, 0.25, 0.0].into_iter().flat_map(|e| std::iter::repeat_n(e, 120)).collect();
+        let bars = waveform(&energy);
+        assert!(bars[..60].iter().all(|&bar| bar == 0));
+        assert!(bars[60..120].iter().all(|&bar| bar == 51));
+        assert!(bars[120..180].iter().all(|&bar| bar == 255));
+        assert!(bars[180..].iter().all(|&bar| bar == 0));
+    }
+
+    #[test]
+    fn constant_audio_is_flat_and_short_or_empty_audio_remains_finite() {
+        assert_eq!(waveform(&[0.25; 480]), vec![255; WAVEFORM_BARS]);
+        assert_eq!(waveform(&[0.25]), vec![255; WAVEFORM_BARS]);
+        assert_eq!(waveform(&[0.0]), vec![0; WAVEFORM_BARS]);
+        assert_eq!(waveform(&[]), vec![0; WAVEFORM_BARS]);
     }
 }

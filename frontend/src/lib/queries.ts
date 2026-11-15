@@ -3,6 +3,7 @@
 
 import { api, type SearchTab } from "@/lib/api";
 import { ApiError } from "@/lib/http";
+import { WAVEFORM_VERSION } from "@/lib/waveform";
 import { CARD_PAGE_SIZE, TRACK_PAGE_SIZE } from "@/lib/pageSizes";
 import type {
   ArtistDetail,
@@ -78,16 +79,20 @@ export const queries = {
 
   waveform: (trackId: string) =>
     queryOptions({
-      queryKey: ["waveform", trackId],
+      queryKey: ["waveform", trackId, WAVEFORM_VERSION],
       queryFn: async () => {
         try {
-          return (await api.waveform(trackId)).peaks;
+          const waveform = await api.waveform(trackId);
+          return waveform.version === WAVEFORM_VERSION && waveform.peaks.length > 0
+            ? waveform.peaks
+            : null;
         } catch (error) {
           if (error instanceof ApiError && error.status === 404) return null;
           throw error;
         }
       },
-      staleTime: Infinity,
+      staleTime: (query) => (query.state.data ? Infinity : 0),
+      refetchInterval: (query) => (query.state.data === null ? 15_000 : false),
       retry: false,
     }),
 

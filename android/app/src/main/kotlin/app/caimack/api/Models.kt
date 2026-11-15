@@ -207,7 +207,9 @@ data class LyricWord(val at: Long, val end: Long, val text: String)
 data class LyricsAttribution(val url: String? = null, val submitter: String? = null, val submitterUrl: String? = null)
 
 @Serializable
-data class Waveform(val peaks: List<Int> = emptyList())
+data class Waveform(val peaks: List<Int> = emptyList(), val version: Int = 0) {
+    companion object { const val VERSION = 4 }
+}
 
 @Serializable
 data class Lyrics(
