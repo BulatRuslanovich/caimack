@@ -211,7 +211,7 @@ class AppContainer(context: Context) {
             val synced = syncStore.tracks()
             val all = (songs + synced).distinctBy { it.id }
             val result = app.caimack.playback.LocalLibrary(owner, all.mapTo(hashSetOf()) { it.id }, synced,
-                downloadedCatalog.availableCollections(all))
+                downloadedCatalog.availableCollections(all), syncStore.audioBytes())
             if (owner == accountKey) result else app.caimack.playback.LocalLibrary()
         }.stateIn(scope, SharingStarted.Eagerly, app.caimack.playback.LocalLibrary())
     }

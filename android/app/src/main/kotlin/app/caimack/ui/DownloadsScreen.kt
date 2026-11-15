@@ -32,24 +32,53 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.util.UnstableApi
 import app.caimack.R
 import app.caimack.api.Track
+import app.caimack.playback.Offline
+import app.caimack.sync.SyncStatus
 
 @OptIn(UnstableApi::class)
 @Composable
 fun DownloadsScreen(play: (List<Track>, Int) -> Unit) {
-    val palette = LocalPalette.current
     val container = LocalContainer.current
-    val context = LocalContext.current
     val offline by container.downloads.state.collectAsStateWithLifecycle()
     val synchronized by container.syncStore.status.collectAsStateWithLifecycle()
     val catalog by container.localLibrary.collectAsStateWithLifecycle()
-    val library = catalog.takeIf { it.account == container.accountKey }?.syncedTracks.orEmpty()
+    val local = catalog.takeIf { it.account == container.accountKey }
+    val library = local?.syncedTracks.orEmpty()
     val libraryIds = library.map { it.id }.toSet()
-    val entries = offline.values.filter { it.track != null && it.track.id !in libraryIds && container.downloads.visible(it) }.sortedBy { it.track!!.title.lowercase() }
+    val individual = offline.values.filter { it.track != null && container.downloads.visible(it) }
+    val entries = individual.filter { it.track!!.id !in libraryIds }.sortedBy { it.track!!.title.lowercase() }
+    // Two stored copies occupy space even when their track only appears once in the list.
+    val occupiedBytes = (local?.syncedBytes ?: 0L) + individual.sumOf { it.download.bytesDownloaded.coerceAtLeast(0L) }
+    DownloadsContent(library, entries, occupiedBytes, synchronized, play, container.downloads::remove)
+}
+
+@OptIn(UnstableApi::class)
+@Composable
+internal fun DownloadsContent(
+    library: List<Track>,
+    entries: List<Offline>,
+    occupiedBytes: Long,
+    synchronized: SyncStatus,
+    play: (List<Track>, Int) -> Unit,
+    remove: (Collection<String>) -> Unit,
+) {
+    val palette = LocalPalette.current
+    val context = LocalContext.current
     val ready = entries.filter { it.done }.map { it.track!! }
     val pending = entries.count { !it.done }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(bottom = 24.dp)) {
         item { PageTitle(stringResource(R.string.downloads_title)) }
+        if (library.isNotEmpty() || entries.isNotEmpty()) {
+            item {
+                Text(
+                    stringResource(R.string.downloads_size, Formatter.formatShortFileSize(context, occupiedBytes)),
+                    Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    style = Type.small,
+                    color = palette.muted,
+                )
+            }
+        }
         if(library.isNotEmpty()) {
             item { Text(stringResource(R.string.sync_progress,synchronized.completed,synchronized.total),Modifier.padding(16.dp),style=Type.small) }
             item { PlayActions(Modifier.padding(horizontal=16.dp,vertical=8.dp),trackIds=library.map { it.id },onPlay={play(library,0)}) }
@@ -66,14 +95,9 @@ fun DownloadsScreen(play: (List<Track>, Int) -> Unit) {
             Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                     Text(pluralStringResource(R.plurals.count_tracks, ready.size, ready.size), style = Type.small, color = palette.muted)
-                    Text(
-                        stringResource(R.string.downloads_size, Formatter.formatShortFileSize(context, entries.sumOf { it.download.bytesDownloaded })),
-                        style = Type.small,
-                        color = palette.muted,
-                    )
                     if (pending > 0) Text(pluralStringResource(R.plurals.downloads_pending, pending, pending), style = Type.small, color = palette.muted)
                 }
-                TextButton(onClick = { container.downloads.remove(entries.map { it.download.request.id }) }) {
+                TextButton(onClick = { remove(entries.map { it.download.request.id }) }) {
                     Text(stringResource(R.string.downloads_remove_all), color = palette.muted)
                 }
             }
@@ -92,7 +116,7 @@ fun DownloadsScreen(play: (List<Track>, Int) -> Unit) {
                     TrackRow(track, { if (entry.done) play(ready, ready.indexOf(track)) })
                 }
                 Box(
-                    Modifier.padding(end = 8.dp).size(48.dp).clip(Radius.row).clickable { container.downloads.remove(listOf(track.id)) },
+                    Modifier.padding(end = 8.dp).size(48.dp).clip(Radius.row).clickable { remove(listOf(track.id)) },
                     contentAlignment = Alignment.Center,
                 ) {
                     if (entry.done) {
