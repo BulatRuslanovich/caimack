@@ -88,6 +88,7 @@ class VisualReviewTest {
     private val originalDensity = container.appearance.libraryDensity.value
     private val originalPlayerEffects = container.appearance.playerEffects.value
     private val originalColorway = container.appearance.colorway.value
+    private val originalLocalHttp = container.connectionPreferences.allowLocalHttp.value
     private val originalMapLayers = context.getSharedPreferences("map_layers", 0).getStringSet("hidden", emptySet())?.toSet()
     private val user = User("visual-review", "Визуальная проверка")
     private val original = listOf(
@@ -136,6 +137,7 @@ class VisualReviewTest {
             }
         }
         web.start()
+        container.connectionPreferences.setAllowLocalHttp(true)
         check(container.session.login(web.url("/").toString(), user.username, "visual-fixture") == null)
     }
 
@@ -150,6 +152,7 @@ class VisualReviewTest {
         context.getSharedPreferences("map_layers", 0).edit().putStringSet("hidden", originalMapLayers).apply()
         shell("settings put system font_scale $originalFontScale")
         container.session.expire()
+        container.connectionPreferences.setAllowLocalHttp(originalLocalHttp)
         Remote.cache.clear()
         web.close()
     }
@@ -202,12 +205,12 @@ class VisualReviewTest {
         compose.waitUntil(10_000) { compose.onAllNodesWithText(original.first().title).fetchSemanticsNodes().isNotEmpty() }
         capture("$prefix-restored")
         compose.onNode(hasText("В") and hasClickAction()).performClick()
-        compose.onNodeWithText(label(R.string.settings_title)).performClick()
         compose.onNodeWithContentDescription(label(R.string.settings_search)).assertIsDisplayed()
         capture("$prefix-settings")
         compose.onNodeWithContentDescription(label(R.string.settings_search)).performTextInput("тёмная")
         compose.onNodeWithContentDescription(label(R.string.settings_search)).performImeAction()
         capture("$prefix-settings-search")
+        compose.onNodeWithContentDescription(label(R.string.settings_close)).performClick()
         compose.onNodeWithText(label(R.string.nav_home)).performClick()
         compose.onNodeWithText(label(R.string.home_empty_title)).assertIsDisplayed()
     }
@@ -241,7 +244,7 @@ class VisualReviewTest {
         container.appearance.setPlayerEffects(true)
         compose.activityRule.scenario.recreate()
         compose.onNode(hasText("В") and hasClickAction()).performClick()
-        compose.onNodeWithText(label(R.string.settings_title)).performClick()
+        compose.onNodeWithText(label(R.string.settings_appearance)).performClick()
         compose.onNodeWithContentDescription(label(R.string.settings_search)).performTextInput("эффекты")
         compose.onNodeWithContentDescription(label(R.string.settings_search)).performImeAction()
         compose.onNodeWithText(label(R.string.settings_player_effects)).performClick()
@@ -359,12 +362,12 @@ class VisualReviewTest {
         compose.onNodeWithContentDescription(label(R.string.player_close_full)).performClick()
 
         compose.onNode(hasText("В") and hasClickAction()).performClick()
-        compose.onNodeWithText(label(R.string.settings_title)).performClick()
         compose.onNodeWithContentDescription(label(R.string.settings_search)).performTextInput("альбом")
         compose.onNodeWithText(label(R.string.view_crate)).assertDoesNotExist()
         capture("parity-layout-settings")
         compose.onNodeWithContentDescription(label(R.string.search_clear)).performClick()
         compose.onNodeWithContentDescription(label(R.string.settings_search)).performTextInput("плотность")
+        compose.onNodeWithText(label(R.string.settings_appearance)).performClick()
         compose.onNodeWithText(label(R.string.settings_density_comfortable)).performScrollTo().performClick()
         compose.onNodeWithText(label(R.string.settings_density_spacious)).performClick()
         assertEquals(LibraryDensity.Spacious, Appearance(context).libraryDensity.value)

@@ -6,6 +6,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalResources
 import app.caimack.R
 
 enum class SettingsCategory(val key: String, val title: Int, val hint: Int) {
@@ -20,10 +22,19 @@ enum class SettingsCategory(val key: String, val title: Int, val hint: Int) {
 }
 
 @Composable
-internal fun SettingsOverview() {
+internal fun SettingsOverview(query: String = "") {
     val navigate = LocalNavigate.current
+    val resources = LocalResources.current
+    // Observe locale changes as well as the query (Resources itself can be reused).
+    LocalConfiguration.current
+    val recommendations = recommendationsEnabled()
+    val matching = matchingSettings(query, resources).filter { recommendations || it != SettingKey.Tile }
+    val categories = SettingsCategory.entries.filter { category ->
+        query.isBlank() || matching.any { it.section == category.title }
+    }
     Column {
-        SettingsCategory.entries.forEach { category ->
+        if (categories.isEmpty()) Empty(stringResource(R.string.settings_search_empty))
+        categories.forEach { category ->
             val icon: ImageVector = when (category) {
                 SettingsCategory.Playback -> Lucide.AudioLines
                 SettingsCategory.Equalizer -> Lucide.Disc3
