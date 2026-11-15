@@ -415,6 +415,11 @@ try {
     sessions.push(page);
     await page.send("Runtime.enable");
     await page.send("Page.enable");
+    await page.send("Page.addScriptToEvaluateOnNewDocument", {
+      // Effects are off by default. Enable one explicitly for the fullscreen
+      // renderer checks instead of depending on a previous browser preference.
+      source: `localStorage.setItem("music-streaming.player-effects", JSON.stringify({ effect: "aurora", intensity: 65, sensitivity: 65 }));`,
+    });
     await page.send("Emulation.setDeviceMetricsOverride", {
       width: 1440,
       height: 1000,
@@ -452,6 +457,73 @@ try {
     "controller mirrors the renderer",
   );
   assert.equal(await playing(controller.page), false, "controller must not play audio");
+  // Shuffle the entire existing queue, including the previous history, and
+  // then follow exactly the sequence shown in the remote queue panel.
+  for (const title of ["Second tone", "Third tone"]) {
+    await click(controller.page, "Next track");
+    await until(async () => (await text(renderer.page)).includes(title), `advance to ${title}`);
+  }
+  const activeTime = () =>
+    renderer.page.eval(
+      `[...document.querySelectorAll('audio')].find(audio => !audio.paused && audio.currentSrc.includes(${JSON.stringify(tracks[2].id)}))?.currentTime || 0`,
+    );
+  await until(async () => (await activeTime()) > 0.2, "last track audio started");
+  const beforeShuffleTime = await activeTime();
+  await controller.page.eval(
+    `document.querySelector('footer.player-shell button[aria-label="Shuffle"]').click()`,
+  );
+  await until(
+    () => playback?.shuffle && playback.index === 0 && playback.trackIds[0] === tracks[2].id,
+    "whole queue shuffled from the last track",
+  );
+  const shuffledIds = [...playback.trackIds];
+  assert.deepEqual([...shuffledIds].sort(), tracks.map((track) => track.id).sort());
+  assert.deepEqual(playback.order, [0, 1, 2]);
+  assert(
+    (await activeTime()) >= beforeShuffleTime - 0.1,
+    "shuffling preserves the playing track and its position",
+  );
+  await click(controller.page, "Playback queue");
+  const shuffledTitles = shuffledIds.map((id) => tracks.find((track) => track.id === id).title);
+  await until(
+    async () =>
+      JSON.stringify(
+        await controller.page.eval(
+          `[...document.querySelectorAll('[data-queue-panel] .queue-row .font-semibold')].map(row => row.textContent)`,
+        ),
+      ) === JSON.stringify(shuffledTitles),
+    "visible queue matches the physical shuffled sequence",
+  );
+  for (let index = 1; index < shuffledIds.length; index++) {
+    await click(controller.page, "Next track");
+    await until(
+      () => playback?.index === index && playback.trackIds[index] === shuffledIds[index],
+      `sequential shuffled queue entry ${index}`,
+    );
+    assert.deepEqual(playback.trackIds, shuffledIds, "next must not reshuffle the queue");
+  }
+  await controller.page.eval(
+    `document.querySelector('footer.player-shell button[aria-label="Shuffle"]').click()`,
+  );
+  await until(() => playback?.shuffle === false, "shuffle disabled");
+  await click(controller.page, "Playback queue");
+  // The final shuffled entry can already be First tone, whose row button
+  // toggles playback. Choose another song before starting the regular queue.
+  await click(controller.page, "Play Third tone");
+  await until(
+    async () =>
+      playback?.index === 0 &&
+      playback.trackIds[0] === tracks[2].id &&
+      (await text(controller.page)).includes("Third tone"),
+    "another track selected before restoring the regular queue",
+  );
+  await click(controller.page, "Play First tone");
+  await until(
+    () => playback?.index === 0 && playback.trackIds[0] === tracks[0].id,
+    "regular queue restored for transport checks",
+  );
+  await until(() => playing(renderer.page), "regular queue playback resumed");
+  console.log("Whole queue shuffle and sequential visible playback passed");
   await click(controller.page, "Pause");
   await until(async () => !(await playing(renderer.page)), "remote pause applied");
   await click(controller.page, "Next track");
@@ -641,6 +713,7 @@ try {
         "discovery",
         "mirrored player",
         "silent controller",
+        "whole queue shuffle and sequential visible playback",
         "pause",
         "next",
         "volume",

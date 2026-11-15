@@ -16,6 +16,7 @@ export function useQueueState() {
   const [repeat, setRepeat] = useState<RepeatMode>("off");
   const queueRef = useRef<Track[]>([]);
   const orderRef = useRef<number[]>([]);
+  const originalQueueRef = useRef<Track[]>([]);
 
   const applyQueue = useCallback((tracks: Track[], nextOrder: number[]) => {
     const entries = queueEntries(tracks, queueRef.current);
@@ -32,6 +33,7 @@ export function useQueueState() {
         saved.queue,
         saved.queue.map((_, index) => index),
       );
+      originalQueueRef.current = queueRef.current;
       if (saved.index >= 0) setCurrentIndex(saved.index);
       setShuffle(saved.shuffle);
       setRepeat(saved.repeat);
@@ -54,6 +56,7 @@ export function useQueueState() {
     setRepeat,
     queueRef,
     orderRef,
+    originalQueueRef,
     applyQueue,
     currentTrack,
     nextTrack,

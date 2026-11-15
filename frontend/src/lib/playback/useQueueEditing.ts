@@ -6,7 +6,6 @@ import { recordEvent } from "@/lib/events";
 import { tagSource } from "@/lib/playback/playSource";
 import {
   appendTrack,
-  buildOrder,
   indexAfterRemoval,
   insertAfter,
   moveInQueue as reorderQueue,
@@ -75,17 +74,20 @@ export function useQueueEditing({
       if (index < 0 || index >= current.length) return;
 
       const remaining = current.filter((_, position) => position !== index);
-      applyQueue(remaining, buildOrder(remaining.length, live.current.shuffle, -1));
+      applyQueue(
+        remaining,
+        remaining.map((_, position) => position),
+      );
 
       setCurrentIndex((activeIndex) => indexAfterRemoval(index, activeIndex, remaining.length));
     },
-    [applyQueue, live, queueRef, setCurrentIndex],
+    [applyQueue, queueRef, setCurrentIndex],
   );
 
   const moveInQueue = useCallback(
     (from: number, to: number) => {
       const current = queueRef.current;
-      const next = reorderQueue(current, orderRef.current, from, to, live.current.shuffle);
+      const next = reorderQueue(current, orderRef.current, from, to);
       if (next.queue === current) return;
       tagSource([current[from].id], "queue");
       pinRadioTrack(current[from].id);
@@ -93,7 +95,7 @@ export function useQueueEditing({
       applyQueue(next.queue, next.order);
       setCurrentIndex((index) => (index < 0 ? index : remapIndexAfterMove(from, to, index)));
     },
-    [applyQueue, live, orderRef, queueRef, setCurrentIndex, pinRadioTrack],
+    [applyQueue, orderRef, queueRef, setCurrentIndex, pinRadioTrack],
   );
 
   const patchTrack = useCallback(

@@ -2,10 +2,70 @@
 // Copyright (c) 2026 Bulat Ruslanovich
 
 import type { Track } from "@/lib/types";
+import { queueEntryKey } from "./queueEntries";
 
 interface QueueShape {
   queue: Track[];
   order: number[];
+}
+
+interface QueuePlayback extends QueueShape {
+  index: number;
+}
+
+/** Store the actual playback sequence in the visible queue, with no hidden shuffle order. */
+export function materializeQueue(queue: Track[], order: number[], index: number): QueuePlayback {
+  const valid =
+    order.length === queue.length &&
+    new Set(order).size === queue.length &&
+    order.every((value) => Number.isInteger(value) && value >= 0 && value < queue.length);
+  const sequence = valid ? order : queue.map((_, position) => position);
+  return {
+    queue: sequence.map((position) => queue[position]),
+    order: queue.map((_, position) => position),
+    index: sequence.indexOf(index),
+  };
+}
+
+export function startPlaybackQueue(
+  queue: Track[],
+  startIndex: number,
+  shuffled: boolean,
+  random: () => number = Math.random,
+): QueuePlayback {
+  if (!queue.length) return { queue, order: [], index: -1 };
+  const index = Math.max(0, Math.min(startIndex, queue.length - 1));
+  const order = shuffled
+    ? buildOrder(queue.length, true, index, random)
+    : [...queue.keys()].slice(index).concat([...queue.keys()].slice(0, index));
+  return materializeQueue(queue, order, index);
+}
+
+export function restorePlaybackOrder(
+  queue: Track[],
+  index: number,
+  original: Track[],
+): QueuePlayback {
+  const ranks = new Map(original.map((track, position) => [queueEntryKey(track), position]));
+  const start = queue[index] ? (ranks.get(queueEntryKey(queue[index])) ?? -1) : -1;
+  const rank = (position: number) => {
+    const value = ranks.get(queueEntryKey(queue[position]));
+    return value === undefined || original.length === 0
+      ? original.length + position
+      : (value - start - 1 + original.length) % original.length;
+  };
+  const order = [...queue.keys()];
+  const tail = order.slice(index + 1).sort((a, b) => rank(a) - rank(b));
+  return materializeQueue(queue, order.slice(0, index + 1).concat(tail), index);
+}
+
+export function selectQueueEntry(queue: Track[], current: number, selected: number): QueuePlayback {
+  const order = [...queue.keys()];
+  if (selected < 0 || selected >= queue.length) return { queue, order, index: current };
+  const index =
+    selected === current ? current : current < 0 ? 0 : selected > current ? current + 1 : current;
+  order.splice(index, 0, ...order.splice(selected, 1));
+  return materializeQueue(queue, order, selected);
 }
 
 type Advance =
@@ -74,13 +134,7 @@ export function remapIndexAfterMove(from: number, to: number, index: number): nu
   return index >= to && index < from ? index + 1 : index;
 }
 
-export function moveInQueue(
-  queue: Track[],
-  order: number[],
-  from: number,
-  to: number,
-  shuffled: boolean,
-): QueueShape {
+export function moveInQueue(queue: Track[], order: number[], from: number, to: number): QueueShape {
   const last = queue.length - 1;
   if (from === to || from < 0 || to < 0 || from > last || to > last) return { queue, order };
 
@@ -90,9 +144,7 @@ export function moveInQueue(
 
   return {
     queue: moved,
-    order: shuffled
-      ? order.map((index) => remapIndexAfterMove(from, to, index))
-      : moved.map((_, index) => index),
+    order: moved.map((_, index) => index),
   };
 }
 

@@ -32,7 +32,6 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import androidx.media3.session.CacheBitmapLoader
@@ -86,6 +85,7 @@ class PlaybackService : MediaLibraryService() {
     private lateinit var exclusive: ExclusiveSession
     private var playbackLease = false
     private var outputPlayer: ExoPlayer? = null
+    private lateinit var queuePlayback: QueuePlayback
     private var connectPlayer: ConnectMediaPlayer? = null
     private var connectSession: Job? = null
     private var heart: Job? = null
@@ -136,6 +136,7 @@ class PlaybackService : MediaLibraryService() {
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
 
+        queuePlayback = QueuePlayback(player)
         signals = container.signals
         outputPlayer = player
         radioReactions = container.scope.launch(Dispatchers.Main) {
@@ -342,7 +343,10 @@ class PlaybackService : MediaLibraryService() {
             }
         }.also { getSystemService(ConnectivityManager::class.java).registerDefaultNetworkCallback(it) }
 
-        val tree = LibraryTree(this, container) { resolve(container, it) }
+        val tree = LibraryTree(this, container, onQueueJump = { index, id ->
+            check(index in 0 until player.mediaItemCount && player.getMediaItemAt(index).mediaId == id) { "Playback queue changed" }
+            queuePlayback.jumpTo(index)
+        }) { resolve(container, it) }
         container.scope.launch {
             val saved = runCatching { tree.resumption() }.getOrNull() ?: return@launch
             withContext(Dispatchers.Main) {
@@ -784,8 +788,9 @@ class PlaybackService : MediaLibraryService() {
                 PlaySources.tag(command.trackIds, command.source)
                 player.shuffleModeEnabled = command.shuffle
                 player.repeatMode = repeatModeOf(command.repeat)
-                player.setMediaItems(tracks.map(::item), command.index, (command.positionSeconds * 1000).toLong())
-                command.order?.let { player.setShuffleOrder(DefaultShuffleOrder(it.toIntArray(), 0L)) }
+                val (items, index) = if (command.order != null) orderedQueue(tracks.map(::item), command.index, command.order)
+                    else tracks.map(::item) to command.index
+                player.setMediaItems(items, index, (command.positionSeconds * 1000).toLong())
                 command.radio?.let { radio ->
                     container.radio.restore(RadioState(seedTrackId = radio.seedTrackId,
                         notes = radio.reasons.mapValues { RadioNote(it.value, false) }, active = true, focus = radio.focus))
@@ -804,7 +809,7 @@ class PlaybackService : MediaLibraryService() {
                 player.addMediaItem(at, item(track))
             }
             is ConnectCommand.Remove -> { checkIndex(command.index, command.trackId); player.removeMediaItem(command.index) }
-            is ConnectCommand.Jump -> { checkIndex(command.index, command.trackId); player.seekTo(command.index, 0); player.play() }
+            is ConnectCommand.Jump -> { checkIndex(command.index, command.trackId); queuePlayback.jumpTo(command.index) }
             is ConnectCommand.Move -> {
                 checkIndex(command.from, command.trackId)
                 check(command.to in 0 until player.mediaItemCount)
