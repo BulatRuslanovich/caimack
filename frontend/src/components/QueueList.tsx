@@ -14,11 +14,11 @@ import { useInvalidate } from "@/lib/useInvalidate";
 import { useRecommendations } from "@/lib/useRecommendations";
 import { useToast } from "@/lib/useToast";
 import { type DragEndEvent } from "@dnd-kit/core";
-import { useSortable } from "@dnd-kit/sortable";
+import { defaultAnimateLayoutChanges, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ChevronRightIcon, ListMusicIcon, ListVideoIcon, Trash2Icon } from "lucide-react";
 import dynamic from "next/dynamic";
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 import { TrackCover } from "./Cover";
 import { EmptyState } from "./EmptyState";
 import { NowPlayingBars } from "./PlaybackIndicators";
@@ -27,7 +27,7 @@ import { Switch } from "./ui/switch";
 import { ToggleGroup, ToggleGroupButton } from "./ui/toggle-group";
 import { DragHandle, VerticalSortable } from "./VerticalSortable";
 
-import { queueEntryKey } from "@/lib/playback/queueEntries";
+import { queueEntryKey, sameQueueEntryOrder } from "@/lib/playback/queueEntries";
 import { QueueViewport } from "./QueueViewport";
 
 const RADIO_FOCUSES: RadioFocus[] = ["closer", "balanced", "wider"];
@@ -41,6 +41,18 @@ export function QueueList() {
   const invalidate = useInvalidate();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [landed, setLanded] = useState<string | null>(null);
+  const [pending, setPending] = useState<{ source: Track[]; queue: Track[] } | null>(null);
+  const waiting = pending !== null && sameQueueEntryOrder(player.queue, pending.source);
+  // Keep the dropped order while a remote player acknowledges the command.
+  // A changed authoritative order confirms it or supersedes it.
+  if (pending !== null && !waiting) setPending(null);
+  const queue = waiting ? pending.queue : player.queue;
+  useEffect(() => {
+    if (!pending) return;
+    const timer = window.setTimeout(() => setPending(null), 12_500);
+    return () => window.clearTimeout(timer);
+  }, [pending]);
   const { snapshotQueue, removeFromQueue, restoreQueue } = player;
   const remove = useCallback(
     (index: number, track: Track) => {
@@ -79,13 +91,22 @@ export function QueueList() {
     const to = player.queue.findIndex((track) => queueEntryKey(track) === over.id);
     if (from < 0 || to < 0) return;
 
+    const next = [...player.queue];
+    next.splice(to, 0, ...next.splice(from, 1));
+    setLanded(String(active.id));
+    setPending({ source: player.queue, queue: next });
     player.moveInQueue(from, to);
   };
 
+  const sourceIndices = new Map(player.queue.map((track, index) => [queueEntryKey(track), index]));
+  const currentKey =
+    player.queue[player.currentIndex] && queueEntryKey(player.queue[player.currentIndex]);
+  const currentIndex = queue.findIndex((track) => queueEntryKey(track) === currentKey);
   const radioFrom = player.snapshotQueue().radioFrom;
-  const radioStart = Math.max(radioFrom, player.currentIndex + 1);
-  const played = Math.max(player.currentIndex, 0);
-  const firstShown = showHistory ? 0 : played;
+  const radioStart = Math.max(radioFrom, currentIndex + 1);
+  const played = Math.max(currentIndex, 0);
+  const landedIndex = queue.findIndex((track) => queueEntryKey(track) === landed);
+  const firstShown = showHistory ? 0 : Math.min(played, landedIndex >= 0 ? landedIndex : played);
   const seedTitle = player.queue.find(
     (track) => track.id === player.radioSession?.seedTrackId,
   )?.title;
@@ -167,14 +188,17 @@ export function QueueList() {
 
       <VerticalSortable
         constrainToScroll
-        items={player.queue.slice(firstShown).map(queueEntryKey)}
+        items={queue.slice(firstShown).map(queueEntryKey)}
         onDragEnd={onDragEnd}
-        onActiveChange={setActiveId}
+        onActiveChange={(id) => {
+          setActiveId(id);
+          if (id !== null) setLanded(null);
+        }}
       >
         <QueueViewport
           activeId={activeId}
-          initialIndex={Math.max(0, player.currentIndex - firstShown)}
-          rows={player.queue.slice(firstShown).map((track, offset) => {
+          initialIndex={Math.max(0, currentIndex - firstShown)}
+          rows={queue.slice(firstShown).map((track, offset) => {
             const index = firstShown + offset;
 
             return {
@@ -183,18 +207,20 @@ export function QueueList() {
                 <QueueRow
                   key={queueEntryKey(track)}
                   track={track}
-                  index={index}
-                  isCurrent={index === player.currentIndex}
-                  isPlaying={index === player.currentIndex && player.isPlaying}
+                  index={sourceIndices.get(queueEntryKey(track)) ?? -1}
+                  isCurrent={index === currentIndex}
+                  isPlaying={index === currentIndex && player.isPlaying}
+                  landed={queueEntryKey(track) === landed}
+                  disabled={waiting}
                   section={
                     index === radioStart && radioStart < player.queue.length
                       ? radioLabel
-                      : index === player.currentIndex + 1 && player.currentIndex >= 0
+                      : index === currentIndex + 1 && currentIndex >= 0
                         ? t("queue.upNext")
                         : undefined
                   }
                   reason={
-                    index === player.currentIndex || index === player.currentIndex + 1
+                    index === currentIndex || index === currentIndex + 1
                       ? player.radioSession?.reasons[track.id]
                       : undefined
                   }
@@ -255,6 +281,8 @@ const QueueRow = memo(function QueueRow({
   index,
   isCurrent,
   isPlaying,
+  landed,
+  disabled,
   section,
   reason,
   signals,
@@ -265,6 +293,8 @@ const QueueRow = memo(function QueueRow({
   index: number;
   isCurrent: boolean;
   isPlaying: boolean;
+  landed: boolean;
+  disabled: boolean;
   section?: string;
   reason?: RecommendationReason;
   signals?: QueueSignals;
@@ -274,6 +304,8 @@ const QueueRow = memo(function QueueRow({
   const t = useT();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: queueEntryKey(track),
+    disabled,
+    animateLayoutChanges: (args) => !landed && defaultAnimateLayoutChanges(args),
   });
 
   return (

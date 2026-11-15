@@ -103,7 +103,7 @@ class ArtworkProvider : ContentProvider() {
     override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?): Int = 0
 
     companion object {
-        const val AUTHORITY = "app.caimack.artwork"
+        const val AUTHORITY = app.caimack.BuildConfig.APPLICATION_ID + ".artwork"
 
         private const val SIZE = "size"
         private val SIZES = setOf("thumb", "large")

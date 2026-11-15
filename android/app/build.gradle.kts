@@ -17,6 +17,10 @@ val appVersion = providers.fileContents(rootProject.layout.projectDirectory.file
     .map { (JsonSlurper().parseText(it) as Map<*, *>)["version"] as String }
     .get()
 
+// Device UI tests must use a separate package so Gradle cleanup cannot remove
+// the user's installed application or its account/downloads.
+val isolatedUiTests = providers.gradleProperty("caimackIsolatedUiTests").orNull == "true"
+
 val appSourceUrl = providers.gradleProperty("caimackSourceUrl")
     .orElse(providers.environmentVariable("CAIMACK_SOURCE_URL"))
     .getOrElse("https://github.com/BulatRuslanovich/caimack")
@@ -52,7 +56,7 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "app.caimack"
+        applicationId = if (isolatedUiTests) "app.caimack.uitest" else "app.caimack"
         minSdk = 33
         targetSdk = 37
         versionName = appVersion
@@ -61,6 +65,7 @@ android {
         // Keep 1.0.0 installable over the pre-release 2.4.0 (20400).
         versionCode = 1000000 + appVersion.split('.').map(String::toInt).fold(0) { code, part -> code * 100 + part }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        manifestPlaceholders["artworkAuthority"] = "${applicationId}.artwork"
 
         ndk {
             abiFilters += "arm64-v8a"
@@ -116,6 +121,15 @@ tasks.matching { it.name == "packageRelease" || it.name == "packageReleaseBundle
                 "Release signing is not configured (missing: ${missing.joinToString()}). " +
                     "Fill android/keystore.properties or set the CAIMACK_* variables, see README."
             )
+        }
+    }
+}
+
+tasks.matching { it.name.startsWith("connected") && it.name.endsWith("AndroidTest") }.configureEach {
+    val usesIsolatedPackage = isolatedUiTests
+    doFirst {
+        check(usesIsolatedPackage) {
+            "Device UI tests require -PcaimackIsolatedUiTests=true to protect the installed app and its data."
         }
     }
 }

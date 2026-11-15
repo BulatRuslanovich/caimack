@@ -301,6 +301,17 @@ Test release tooling with `node --test scripts/image-plan.test.mjs scripts/relea
 make apk   # android/app/build/outputs/apk/release/app-release.apk
 ```
 
+Run connected Android UI tests in their isolated application package:
+
+```bash
+cd android
+./gradlew connectedDebugAndroidTest -PcaimackIsolatedUiTests=true
+```
+
+This installs `app.caimack.uitest` separately from the normal app. Connected
+tests without this flag are blocked so test cleanup cannot remove the user's
+installed app, sign-in data, or downloads. Build the normal APK without the flag.
+
 <details>
 <summary>Release signing for Android</summary>
 
