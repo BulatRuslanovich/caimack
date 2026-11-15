@@ -41,3 +41,9 @@
     #253747
   );
 }
+
+.player-effect-preview[data-effect="lava"] {
+  background:
+    radial-gradient(ellipse at 25% 30%, #96655c, transparent 65%),
+    radial-gradient(ellipse at 75% 70%, #6b799e, transparent 65%), #252634;
+}

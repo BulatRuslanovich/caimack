@@ -7,7 +7,7 @@ import type { Rgb } from "@/lib/cssColor";
 import { trackCoverUrl } from "@/lib/media";
 import { audioAnalyser } from "@/lib/playback/equalizer";
 import { bandBins, bandLevel, beatPulse } from "@/lib/playback/spectrum";
-import { type PlayerEffect } from "@/lib/playerEffects";
+import { type ReactivePlayerEffect } from "@/lib/playerEffects";
 import type { Track } from "@/lib/types";
 import { AudioMotion, MOTION_BANDS } from "@/lib/visuals/audioMotion";
 import { effectPalette, type EffectPalette } from "@/lib/visuals/effectPalette";
@@ -22,7 +22,7 @@ export function EffectCanvas({
   playing,
   frozen = false,
 }: {
-  effect: PlayerEffect;
+  effect: ReactivePlayerEffect;
   intensity: number;
   sensitivity: number;
   track: Track;

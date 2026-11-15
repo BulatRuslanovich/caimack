@@ -51,9 +51,9 @@
   );
 }
 
-/* Static fallback remains visible until the low-resolution lava canvas is ready. */
+/* Effects are optional overlays over the solid cover colour. */
 .art-backdrop[data-mode="player"] .art-backdrop-palette {
-  background: linear-gradient(180deg, var(--art-color), var(--art-bottom));
+  background: var(--art-color);
 }
 
 /* The player is a dark stage even when the surrounding library uses light mode. */
