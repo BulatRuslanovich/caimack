@@ -172,7 +172,7 @@ class PlaybackService : MediaLibraryService() {
             override fun run() {
                 player.currentMediaItem?.let { signals.progress(it.mediaId, secondsOf(it), player.currentPosition / 1000.0) }
                 if (++reportTicks % REPORT_EVERY_TICKS == 0) report(container, player)
-                if (reportTicks % WIDGET_EVERY_TICKS == 0 && player.isPlaying && getSystemService(PowerManager::class.java).isInteractive) {
+                if (reportTicks % WIDGET_EVERY_TICKS == 0 && !container.connect.isRemote && player.isPlaying && getSystemService(PowerManager::class.java).isInteractive) {
                     NowPlayingWidget.progress(this@PlaybackService, player.currentPosition, player.duration)
                 }
                 ticks.postDelayed(this, TICK_MS)
@@ -187,7 +187,7 @@ class PlaybackService : MediaLibraryService() {
                     if (oldPosition.mediaItem?.mediaId == newPosition.mediaItem?.mediaId) {
                         signals.tracker.reposition(newPosition.positionMs / 1000.0)
                     }
-                    NowPlayingWidget.progress(this@PlaybackService, player.currentPosition, player.duration)
+                    if (!container.connect.isRemote) NowPlayingWidget.progress(this@PlaybackService, player.currentPosition, player.duration)
                 }
             }
 
@@ -212,7 +212,6 @@ class PlaybackService : MediaLibraryService() {
                 if (player.playWhenReady) listen(player)
                 continueWithRadio(container, player)
                 showButtons(container)
-                NowPlayingWidget.show(this@PlaybackService, mediaItem?.mediaId?.let { container.tracks[it] }, player.isPlaying, player.currentPosition, player.duration)
             }
 
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
@@ -277,7 +276,6 @@ class PlaybackService : MediaLibraryService() {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 musicHaptics?.update(player.audioSessionId, container.haptics.musicEnabled.value, isPlaying)
                 ticks.removeCallbacks(tick)
-                NowPlayingWidget.show(this@PlaybackService, player.currentMediaItem?.mediaId?.let { container.tracks[it] }, isPlaying, player.currentPosition, player.duration)
                 if (isPlaying) {
                     playbackLease = true
                     failures = 0
@@ -392,8 +390,6 @@ class PlaybackService : MediaLibraryService() {
             }
             container.favorites.state.collect {
                 showButtons(container)
-                val track = player.currentMediaItem?.mediaId?.let { id -> container.tracks[id] }
-                if (track != null) NowPlayingWidget.show(this@PlaybackService, track, player.isPlaying, player.currentPosition, player.duration)
             }
         }
         tone = container.scope.launch(Dispatchers.Main) { container.equalizer.state.collect { shapeSound(player.audioSessionId, it) } }
@@ -457,7 +453,9 @@ class PlaybackService : MediaLibraryService() {
         signals.flush()
         outputPlayer?.let { player ->
             save((application as CaimackApp).container, player)
-            NowPlayingWidget.show(this@PlaybackService, player.currentMediaItem?.mediaId?.let { (application as CaimackApp).container.tracks[it] }, false)
+            if (!(application as CaimackApp).container.connect.isRemote) {
+                NowPlayingWidget.show(this@PlaybackService, player.currentMediaItem?.mediaId?.let { (application as CaimackApp).container.tracks[it] }, false)
+            }
             player.release()
         }
         session?.release()

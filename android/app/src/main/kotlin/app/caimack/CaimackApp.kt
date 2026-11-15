@@ -19,6 +19,7 @@ class CaimackApp : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         container.scope.launch { container.session.restore() }
         container.connect.start()
+        app.caimack.widget.observeWidgetPlayback(this, container)
         getSystemService(android.net.ConnectivityManager::class.java).registerNetworkCallback(
             android.net.NetworkRequest.Builder().build(),
             object : android.net.ConnectivityManager.NetworkCallback() {
