@@ -56,17 +56,27 @@
   background: var(--art-color);
 }
 
-/* The player is a dark stage even when the surrounding library uses light mode. */
-[data-player-fullscreen] {
+/* Player and idle screens share a dark stage in either library theme. */
+[data-player-fullscreen],
+.lean-back {
   --background: #171819;
+  --card: #232527;
+  --surface-raised: #343739;
+  --accent: #414547;
   --foreground: #f5f5f5;
   --muted-foreground: #d6d6d6;
   --faint-foreground: #bcbcbc;
+  --library-surface: color-mix(in oklab, var(--card) 65%, var(--background));
+  --border: color-mix(in oklab, var(--foreground) 12%, transparent);
+  --border-strong: color-mix(in oklab, var(--foreground) 24%, transparent);
+  --control-border: color-mix(in oklab, var(--foreground) 40%, transparent);
+  --ring: var(--foreground);
   color: var(--foreground);
   color-scheme: dark;
 }
 
-:root[data-theme="light"] [data-player-fullscreen] {
+:root[data-theme="light"] [data-player-fullscreen],
+:root[data-theme="light"] .lean-back {
   --action: #eee6d7;
   --action-hover: #fff9ef;
   --action-foreground: #201e1a;
