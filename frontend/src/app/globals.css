@@ -26,6 +26,7 @@
 @import "./styles/library-save.css";
 @import "./styles/workspaces.css";
 @import "./styles/overlays.css";
+@import "./styles/cat-dance.css";
 
 @layer base {
   html,
