@@ -15,8 +15,8 @@ import kotlinx.coroutines.flow.update
 /** A read-only projection of completed downloads, independent of the server. */
 class DownloadedCatalog(private val directory: File, private val json: Json, private val address: () -> String?,
     private val tracks: () -> List<Track>, private val synchronized: () -> JsonObject?,
-    private val identity: () -> String?) {
-    private val artwork = DownloadedArtwork(File(directory, "artwork"))
+    private val identity: () -> String?, legacyArtworkDirectory: File? = null) {
+    private val artwork = DownloadedArtwork(File(directory, "artwork"), legacyArtworkDirectory)
     val revision = artwork.revision
     val catalogRevision = MutableStateFlow(0L)
     private var metadataFor: String? = null
@@ -44,6 +44,12 @@ class DownloadedCatalog(private val directory: File, private val json: Json, pri
         val server = address() ?: return
         val account = identity() ?: return
         artwork.cache(server, paths, http, account)
+    }
+
+    fun invalidateArtwork(path: String) {
+        val server = address() ?: return
+        val account = identity() ?: return
+        artwork.invalidate(server, path, account)
     }
 
     fun cacheTrackArtwork(tracks: List<Track>, http: OkHttpClient) = cacheArtwork(DownloadedArtwork.paths(tracks), http)

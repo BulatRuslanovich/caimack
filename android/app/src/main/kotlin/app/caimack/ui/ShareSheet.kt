@@ -72,7 +72,7 @@ fun ShareSheet(track: Track, positionMs: Long, onDismiss: () -> Unit) {
                 val request = ImageRequest.Builder(context).data(url).allowHardware(false).build()
                 (SingletonImageLoader.get(context).execute(request) as? SuccessResult)?.image?.toBitmap()
             }
-            val lyrics = runCatching { container.api.lyrics(track.id).body() }.getOrNull()
+            val lyrics = runCatching { container.lyrics(track.id) }.getOrNull()
             val peaks = runCatching { container.api.waveform(track.id).body()?.peaks }.getOrNull().orEmpty()
             ShareSources(cover, lyrics, peaks)
         }

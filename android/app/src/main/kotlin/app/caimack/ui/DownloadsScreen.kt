@@ -44,7 +44,7 @@ fun DownloadsScreen(play: (List<Track>, Int) -> Unit) {
     val catalog by container.localLibrary.collectAsStateWithLifecycle()
     val library = catalog.takeIf { it.account == container.accountKey }?.syncedTracks.orEmpty()
     val libraryIds = library.map { it.id }.toSet()
-    val entries = offline.values.filter { it.track != null && it.track.id !in libraryIds }.sortedBy { it.track!!.title.lowercase() }
+    val entries = offline.values.filter { it.track != null && it.track.id !in libraryIds && container.downloads.visible(it) }.sortedBy { it.track!!.title.lowercase() }
     val ready = entries.filter { it.done }.map { it.track!! }
     val pending = entries.count { !it.done }
 

@@ -18,6 +18,28 @@ class DownloadedArtworkTest {
     private val png = Base64.getDecoder().decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=")
     private fun image() = MockResponse.Builder().addHeader("Content-Type", "image/png").body(Buffer().write(png)).build()
 
+    @Test fun `legacy fork artwork survives an offline upgrade and remains account scoped`() {
+        val directory = Files.createTempDirectory("artwork-fork-upgrade").toFile()
+        try {
+            val legacy = File(directory, "legacy").apply { mkdirs() }
+            val server = "http://192.168.1.10:8080/"
+            val account = "$server|alice"
+            val path = "api/albums/album/cover"
+            val key = java.security.MessageDigest.getInstance("SHA-256").digest((account + path).toByteArray())
+                .joinToString("") { "%02x".format(it) }
+            File(legacy, key).writeBytes(png)
+            val current = File(directory, "current")
+            val cache = DownloadedArtwork(current, legacy)
+            assertNull(cache.asset(server, path, "$server|bob"))
+            val uri = cache.asset(server, path, account)
+            assertNotNull(uri)
+            assertArrayEquals(png, File(URI(uri!!)).readBytes())
+            assertFalse(File(legacy, key).exists())
+            assertEquals(uri, DownloadedArtwork(current, legacy).asset(server, path, account))
+            assertNull(cache.asset(server, path, "$server|bob"))
+        } finally { directory.deleteRecursively() }
+    }
+
     @Test fun `artwork is private to its server and account`() {
         val directory = Files.createTempDirectory("artwork-account").toFile()
         MockWebServer().use { web ->
@@ -79,6 +101,32 @@ class DownloadedArtworkTest {
                 assertEquals(2, web.requestCount)
                 assertEquals(uri, cache.asset(server, path))
                 assertEquals(1L, cache.revision.value)
+            } finally { directory.deleteRecursively() }
+        }
+    }
+
+    @Test fun `editing artwork revalidates immediately while retaining the offline image`() {
+        val directory = Files.createTempDirectory("artwork-edit").toFile()
+        MockWebServer().use { web ->
+            web.start()
+            try {
+                val cache = DownloadedArtwork(directory)
+                val server = web.url("/").toString()
+                val path = "api/playlists/mix/cover"
+                val client = OkHttpClient()
+                web.enqueue(image())
+                cache.cache(server, listOf(path), client)
+                val oldUri = cache.asset(server, path)
+                cache.invalidate(server, path)
+                assertEquals(oldUri, cache.asset(server, path))
+                web.enqueue(MockResponse.Builder().code(503).build())
+                cache.cache(server, listOf(path), client)
+                assertEquals(oldUri, cache.asset(server, path))
+                web.enqueue(MockResponse.Builder().addHeader("Content-Type", "image/png")
+                    .body(Buffer().write(png + byteArrayOf(1))).build())
+                cache.cache(server, listOf(path), client)
+                assertNotEquals(oldUri, cache.asset(server, path))
+                assertEquals(3, web.requestCount)
             } finally { directory.deleteRecursively() }
         }
     }

@@ -138,7 +138,7 @@ private fun DreamScreen() {
     }
 
     val lyrics by produceState<Lyrics?>(null, track?.id) {
-        value = track?.let { runCatching { container.api.lyrics(it.id).body() }.getOrNull() }
+        value = track?.let { runCatching { container.lyrics(it.id) }.getOrNull() }
     }
     val line = lyrics?.lines?.lastOrNull { it.at <= position }?.text?.trim()?.ifEmpty { null }
 

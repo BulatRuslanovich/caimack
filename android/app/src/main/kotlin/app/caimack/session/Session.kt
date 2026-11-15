@@ -23,6 +23,9 @@ sealed interface SessionState {
 }
 
 sealed interface LoginFailure {
+    data object LocalNetworkDenied : LoginFailure
+    data object LocalHttpDisabled : LoginFailure
+    data object NonLocalHttp : LoginFailure
     data object BadAddress : LoginFailure
 
     data object Unreachable : LoginFailure
@@ -41,10 +44,18 @@ class Session(
     private val onLogout: () -> Unit = {},
 ) {
     private val current = MutableStateFlow<SessionState>(SessionState.Restoring)
+    private var revision = 0L
+
+    private fun nextRevision(): Long = synchronized(current) { ++revision }
+
+    private fun publish(version: Long, state: SessionState) = synchronized(current) {
+        if (revision == version) current.value = state
+    }
 
     val state: StateFlow<SessionState> = current
 
     suspend fun restore() {
+        val version = nextRevision()
         server.restore()
         cookies.restore()
 
@@ -52,13 +63,10 @@ class Session(
             runCatching { json.decodeFromString<User>(String(Base64.getUrlDecoder().decode(hint))) }.getOrNull()
         } ?: offlineUser()
 
-        // Restore the local UI before checking the server, including accounts
-        // with individual downloads but no full library synchronization.
-        if (server.url.value != null && hinted != null) {
-            current.value = SessionState.SignedIn(hinted)
-        }
+        // Reach individual downloads immediately while validating the saved session.
+        if (server.url.value != null && hinted != null) publish(version, SessionState.SignedIn(hinted))
 
-        current.value = when {
+        val restored = when {
             server.url.value == null || hinted == null -> SessionState.SignedOut()
             else -> try {
                 SessionState.SignedIn(api.me())
@@ -68,17 +76,21 @@ class Session(
                 if (failure.code() == UNAUTHORIZED) offlineUser()?.let { SessionState.SignedIn(it) } ?: SessionState.SignedOut(expired = true) else SessionState.SignedIn(hinted)
             }
         }
+        publish(version, restored)
     }
 
     suspend fun login(address: String, username: String, password: String): LoginFailure? {
+        val version = nextRevision()
         server.remember(address) ?: return LoginFailure.BadAddress
         cookies.clear()
 
         return try {
             val user = api.login(LoginRequest(username.trim(), password, deviceName(), longLived = true))
             onLogin(user)
-            current.value = SessionState.SignedIn(user)
+            publish(version, SessionState.SignedIn(user))
             null
+        } catch (denied: LocalHttpPolicy.Denied) {
+            if (denied.disabled) LoginFailure.LocalHttpDisabled else LoginFailure.NonLocalHttp
         } catch (_: IOException) {
             LoginFailure.Unreachable
         } catch (refused: HttpException) {
@@ -88,6 +100,7 @@ class Session(
     }
 
     suspend fun logout() {
+        val version = nextRevision()
         onLogout()
         try {
             api.logout()
@@ -95,13 +108,14 @@ class Session(
         } catch (_: HttpException) {
         }
         cookies.clear()
-        current.value = SessionState.SignedOut()
+        publish(version, SessionState.SignedOut())
     }
 
     fun expire() {
-        offlineUser()?.let { current.value = SessionState.SignedIn(it); return }
+        val version = nextRevision()
+        offlineUser()?.let { publish(version, SessionState.SignedIn(it)); return }
         cookies.clear()
-        current.value = SessionState.SignedOut(expired = true)
+        publish(version, SessionState.SignedOut(expired = true))
     }
 
     private companion object {

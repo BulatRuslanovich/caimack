@@ -16,7 +16,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 
 /** Persistent artwork, separate from the evictable image loader cache. */
-class DownloadedArtwork(private val directory: File) {
+class DownloadedArtwork(private val directory: File, private val legacyDirectory: File? = null) {
     private val changed = MutableStateFlow(0L)
     val revision: StateFlow<Long> = changed
 
@@ -34,14 +34,43 @@ class DownloadedArtwork(private val directory: File) {
         } finally { temporary.delete() }
     }
 
-    fun asset(server: String, path: String, account: String = server): String? = entry(record(server, path, account))
-        ?.let { File(directory, it.file) }?.takeIf { it.isFile && it.length() > 0 }?.toURI()?.toString()
+    @Synchronized
+    fun asset(server: String, path: String, account: String = server): String? {
+        val record = record(server, path, account)
+        val cached = entry(record)?.let { File(directory, it.file) }?.takeIf { it.isFile && it.length() > 0 }
+        if (cached != null) return cached.toURI().toString()
+        // The local fork used an account-bound flat cache. Import it without a
+        // network request so upgrades keep previously downloaded artwork offline.
+        val legacy = legacyDirectory?.let { File(it, hash((account + path).toByteArray())) }
+            ?.takeIf { it.isFile && it.length() > 0 } ?: return null
+        return try {
+            directory.mkdirs()
+            val temporary = File.createTempFile("artwork-migrate-", ".part", directory)
+            try {
+                temporary.outputStream().use { output -> legacy.inputStream().use { it.copyTo(output) }; output.fd.sync() }
+                val target = File(directory, record.nameWithoutExtension + "-" + hash(temporary.readBytes()))
+                Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+                save(record, Entry(target.name))
+                legacy.delete()
+                target.toURI().toString()
+            } finally { temporary.delete() }
+        } catch (_: IOException) {
+            legacy.toURI().toString()
+        }
+    }
+
+    @Synchronized
+    fun invalidate(server: String, path: String, account: String = server) {
+        asset(server, path, account)
+        record(server, path, account).setLastModified(0)
+    }
 
     @Synchronized
     fun cache(server: String, paths: List<String>, client: OkHttpClient, account: String = server) {
         directory.mkdirs()
         val http = client.newBuilder().callTimeout(5, TimeUnit.SECONDS).build()
         for (path in paths.distinct()) {
+            asset(server, path, account)
             val record = record(server, path, account)
             val old = entry(record)
             val cached = old?.let { File(directory, it.file) }?.takeIf { it.isFile && it.length() > 0 }

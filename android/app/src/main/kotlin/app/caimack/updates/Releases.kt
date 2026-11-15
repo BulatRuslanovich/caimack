@@ -56,6 +56,15 @@ class GitHubReleases(
     private val repository: String,
     // A separate client: music server interceptors, authentication and cookies must never reach GitHub.
     private val client: OkHttpClient = OkHttpClient.Builder()
+        .followSslRedirects(false)
+        .addInterceptor { chain ->
+            if (chain.request().url.scheme != "https") throw IOException("Updates require HTTPS")
+            chain.proceed(chain.request())
+        }
+        .addNetworkInterceptor { chain ->
+            if (chain.request().url.scheme != "https") throw IOException("Updates require HTTPS")
+            chain.proceed(chain.request())
+        }
         .callTimeout(15, TimeUnit.SECONDS)
         .connectTimeout(10, TimeUnit.SECONDS)
         .cache(null)
