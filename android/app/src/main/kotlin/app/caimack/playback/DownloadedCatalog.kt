@@ -115,6 +115,7 @@ class DownloadedCatalog(private val directory: File, private val json: Json, pri
         // Downloading is not a library-save operation. Membership comes only from
         // the account's saved library (or the cached server response).
         return JsonObject(data + mapOf(
+            "libraryOrder" to (synced?.get("libraryOrder") ?: buildJsonObject {}),
             "savedLibrary" to (synced?.get("savedLibrary") ?: JsonArray(emptyList())),
             "libraryFolders" to (synced?.get("libraryFolders") ?: JsonArray(emptyList())),
         ))

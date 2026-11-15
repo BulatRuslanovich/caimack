@@ -51,11 +51,13 @@ internal val libraryMutation = Mutex()
 @Composable
 fun LibraryScreen(nav: NavController) {
     val api = LocalContainer.current.api
-    Load(LIBRARY_FOLDERS, { api.libraryFolders() }) { folders -> LibraryBrowser(nav, folders) }
+    Load(LIBRARY_FOLDERS, { api.libraryFolders() }) { folders ->
+        Load(LIBRARY_ORDER, { api.libraryOrder() }) { order -> LibraryBrowser(nav, folders, order) }
+    }
 }
 
 @Composable
-internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
+internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, order: Map<String, List<String>>) {
     val container = LocalContainer.current
     val local = LocalOfflineLibrary.current
     val api = catalogApi()
@@ -74,7 +76,11 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
         }
         catch (error: Exception) { if (error is CancellationException) throw error }
     }
-    var alphabetical by rememberSaveable { mutableStateOf(false) }
+    var sort by rememberSaveable { mutableStateOf("manual") }
+    val alphabetical = sort == "name"
+    var organizing by remember { mutableStateOf(false) }
+    val snackbar = LocalSnackbar.current
+    val failure = stringResource(R.string.collection_failed)
     var grid by rememberSaveable { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
     var createMenu by remember { mutableStateOf(false) }
@@ -129,7 +135,7 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
             SearchInput(search, { search = it }, stringResource(R.string.collection_search))
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { alphabetical = !alphabetical }, modifier = Modifier.weight(1f)) { Text(stringResource(if (alphabetical) R.string.collection_name else R.string.collection_recent), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            TextButton(onClick = { sort = when (sort) { "manual" -> "recent"; "recent" -> "name"; else -> "manual" } }, modifier = Modifier.weight(1f)) { Text(stringResource(when (sort) { "name" -> R.string.collection_name; "recent" -> R.string.collection_recent; else -> R.string.collection_manual }), maxLines = 1, overflow = TextOverflow.Ellipsis) }
             Box {
                 IconButton(onClick = { catalog = true }) { Icon(Lucide.LibraryBig, stringResource(R.string.collection_catalog)) }
                 DropdownMenu(expanded = catalog, onDismissRequest = { catalog = false }) {
@@ -151,34 +157,97 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
                 .let { if (alphabetical) it.sortedBy { item -> item.title.lowercase() } else it.sortedByDescending { item -> Instant.parse(item.savedAt) } }
             val shownFolders = folders.filter { !downloadedOnly || it.id in availableFolders }.filter { if (query.isEmpty()) it.parentId == folderId else it.name.contains(query, ignoreCase = true) }
                 .let { if (alphabetical) it.sortedBy { folder -> folder.name.lowercase() } else it.sortedByDescending { folder -> folder.createdAt } }
-            val density = LocalLibraryDensity.current
-            LazyVerticalGrid(
-                columns = if (grid) GridCells.Adaptive(density.cardWidth) else GridCells.Fixed(1),
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = playerContentPadding(start = if (grid) 16.dp else 0.dp, end = if (grid) 16.dp else 0.dp, bottom = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(if (grid) density.gap else 0.dp),
-                verticalArrangement = Arrangement.spacedBy(if (grid) 20.dp else 0.dp),
-            ) {
-                if (showFavorites) item(key = "favorites") {
-                    LibraryEntry(stringResource(R.string.nav_favorites), stringResource(R.string.playlists_kind), Lucide.Heart,
-                        grid = grid, details = favoriteCount?.let { pluralStringResource(R.plurals.count_tracks, it, it) },
-                    ) { nav.navigate(FavoritesRoute) }
+            val defaultKeys = buildList {
+                if (folderId == null) add("favorites")
+                addAll(folders.filter { it.parentId == folderId }.sortedByDescending { it.createdAt }.map { "folder:${it.id}" })
+                addAll(library.filter { it.folderId == folderId }.sortedByDescending { Instant.parse(it.savedAt) }.map { "${it.kind}:${it.id}" })
+                if (folderId == null) add("downloads")
+            }
+            val fullOrder = orderedLibraryKeys(defaultKeys, order[folderId ?: "root"].orEmpty())
+            val ranks = fullOrder.withIndex().associate { it.value to it.index }
+            val visibleKeys = buildList {
+                if (showFavorites) add("favorites")
+                addAll(shownFolders.map { "folder:${it.id}" })
+                addAll(shown.map { "${it.kind}:${it.id}" })
+                if (folderId == null && downloadsTitle.contains(query, ignoreCase = true)) add("downloads")
+            }.let { keys -> if (sort == "manual" && query.isEmpty()) keys.sortedBy { ranks[it] ?: Int.MAX_VALUE } else keys }
+            suspend fun change(request: LibraryChange) {
+                if (organizing) return
+                organizing = true
+                val previousSort = sort
+                when (request.operation) {
+                    "reorder" -> {
+                        Remote.update(LIBRARY_ORDER, order + ((folderId ?: "root") to request.order.orEmpty()))
+                        sort = "manual"
+                    }
+                    "moveItem" -> Remote.update(SAVED_LIBRARY, library.map {
+                        if (it.id == request.id && it.kind == request.kind) it.copy(folderId = request.folderId) else it
+                    })
+                    "moveFolder" -> Remote.update(LIBRARY_FOLDERS, folders.map {
+                        if (it.id == request.id) it.copy(parentId = request.folderId) else it
+                    })
                 }
-                items(shownFolders, key = { "folder:" + it.id }) { folder ->
-                    LibraryFolderView(folder, folders, eligible.count { it.folderId == folder.id } + folders.count { it.parentId == folder.id && (!downloadedOnly || it.id in availableFolders) }, grid) { selectedFolder = folder.id }
+                run {
+                    var committed = false
+                    try {
+                        libraryMutation.withLock {
+                            container.api.organizeLibrary(request)
+                            committed = true
+                            refreshLibrary(container.api)
+                        }
+                    } catch (error: Exception) {
+                        if (error is CancellationException) throw error
+                        if (!committed) {
+                            when (request.operation) {
+                                "reorder" -> { Remote.update(LIBRARY_ORDER, order); sort = previousSort }
+                                "moveItem" -> Remote.update(SAVED_LIBRARY, library)
+                                "moveFolder" -> Remote.update(LIBRARY_FOLDERS, folders)
+                            }
+                        }
+                        snackbar.showSnackbar(failure)
+                    } finally { organizing = false }
                 }
-                items(shown, key = { "${it.kind}:${it.id}" }) { item -> LibraryItemView(item, library, folders, nav, grid) }
-                if (shown.isEmpty() && shownFolders.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
+            }
+            LibraryDragGrid(
+                keys = (if (currentFolder != null && query.isEmpty()) listOf("up") else emptyList()) + visibleKeys,
+                grid = grid, enabled = !local && !organizing && query.isEmpty(), scopeKey = "${folderId}:${filter}:${downloadedOnly}:${query}:${grid}",
+                canDrop = { moving, target ->
+                    val destination = if (target == "up") currentFolder?.parentId else target.removePrefix("folder:")
+                    moving !in listOf("favorites", "downloads") &&
+                        (target == "up" || target.startsWith("folder:")) &&
+                        (!moving.startsWith("folder:") || folderTrail(folders, destination).none { "folder:${it.id}" == moving })
+                },
+                onFolder = { moving, target ->
+                    val kind = moving.substringBefore(':')
+                    val destination = if (target == "up") currentFolder?.parentId else target.substringAfter(':')
+                    change(LibraryChange(if (kind == "folder") "moveFolder" else "moveItem", moving.substringAfter(':'),
+                        kind = kind.takeIf { it != "folder" }, folderId = destination))
+                },
+                onOrder = { moved ->
+                    val base = if (sort == "manual") fullOrder else orderedLibraryKeys(defaultKeys, visibleKeys)
+                    change(LibraryChange("reorder", folderId = folderId, order = mergeVisibleLibraryOrder(base, moved)))
+                },
+                empty = {
                     if (showFavorites) Text(stringResource(R.string.collection_hint), style = Type.small, color = LocalPalette.current.muted, modifier = Modifier.padding(24.dp))
                     else Empty(stringResource(if (query.isNotEmpty()) R.string.collection_no_results else R.string.collection_empty), stringResource(if (currentFolder != null) R.string.folders_empty_hint else R.string.collection_hint))
-                }
-                if (folderId == null && downloadsTitle.contains(query, ignoreCase = true)) item(key = "downloads") {
-                    val count = LocalAvailableTracks.current.size
-                    LibraryEntry(
-                        stringResource(R.string.downloads_title),
-                        pluralStringResource(R.plurals.count_tracks, count, count),
-                        Lucide.Download, grid = grid,
-                    ) { nav.navigate(DownloadsRoute) }
+                },
+            ) { key ->
+                when (key) {
+                    "up" -> TextButton(onClick = { selectedFolder = currentFolder?.parentId }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Lucide.ArrowLeft, null); Text(stringResource(R.string.folders_up))
+                    }
+                    "favorites" -> LibraryEntry(stringResource(R.string.nav_favorites), stringResource(R.string.playlists_kind), Lucide.Heart,
+                        grid = grid, details = favoriteCount?.let { pluralStringResource(R.plurals.count_tracks, it, it) },
+                    ) { nav.navigate(FavoritesRoute) }
+                    "downloads" -> {
+                        val count = LocalAvailableTracks.current.size
+                        LibraryEntry(downloadsTitle, pluralStringResource(R.plurals.count_tracks, count, count), Lucide.Download, grid = grid) { nav.navigate(DownloadsRoute) }
+                    }
+                    else -> if (key.startsWith("folder:")) {
+                        folders.find { "folder:${it.id}" == key }?.let { folder ->
+                            LibraryFolderView(folder, folders, eligible.count { it.folderId == folder.id } + folders.count { it.parentId == folder.id && (!downloadedOnly || it.id in availableFolders) }, grid) { selectedFolder = folder.id }
+                        }
+                    } else library.find { "${it.kind}:${it.id}" == key }?.let { item -> LibraryItemView(item, library, folders, nav, grid) }
                 }
             }
         }

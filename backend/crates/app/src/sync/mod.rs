@@ -57,6 +57,7 @@ pub async fn snapshot(db: &PgPool, storage: &Storage, user: Uuid) -> AppResult<V
     .fetch_all(&mut *tx)
     .await?;
     let saved_library = crate::library::collection::list(&mut *tx, user).await?;
+    let library_order = crate::library::folders::order(&mut *tx, user).await?;
     let library_folders = crate::library::folders::list(&mut *tx, user).await?;
     let mut pq = playlists::select();
     pq.push(" WHERE p.user_id=").push_bind(user).push(" OR p.is_public ORDER BY p.name,p.id");
@@ -122,7 +123,7 @@ pub async fn snapshot(db: &PgPool, storage: &Storage, user: Uuid) -> AppResult<V
     Ok(json!({
         "protocol":1, "serverId":server, "user":{"id":user,"username":username},
         "generatedAt":chrono::Utc::now(), "tracks":tracks, "files":files, "albums":albums,"artists":artists,
-        "savedLibrary":saved_library, "libraryFolders":library_folders, "genres":genres, "playlists":playlist_summaries, "playlistTracks":playlist_tracks,
+        "libraryOrder":library_order, "savedLibrary":saved_library, "libraryFolders":library_folders, "genres":genres, "playlists":playlist_summaries, "playlistTracks":playlist_tracks,
         "lyrics":lyrics,"waveforms":waveforms,"recent":recent,"assets":asset_manifest,
         "vectorVersion":hash(vector_revision.as_bytes())
     }))

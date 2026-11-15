@@ -19,6 +19,9 @@ interface CaimackApi {
     @GET("api/me/library")
     suspend fun savedLibrary(): List<LibraryItem>
 
+    @GET("api/me/library/order")
+    suspend fun libraryOrder(): Map<String, List<String>>
+
     @GET("api/me/library/folders")
     suspend fun libraryFolders(): List<LibraryFolder>
 

@@ -168,7 +168,7 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
     }
 
     companion object {
-        fun cacheable(path: String): Boolean = path in setOf("me/library", "me/library/folders", "favorites", "history/recent", "genres") ||
+        fun cacheable(path: String): Boolean = path in setOf("me/library", "me/library/folders", "me/library/order", "favorites", "history/recent", "genres") ||
             Regex("(tracks|albums|artists|playlists)(/[^/]+)?(/top-tracks)?").matches(path) || path.startsWith("search")
 
         fun merge(local: JsonObject, responses: Map<String, JsonElement>): JsonObject {
@@ -183,6 +183,7 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
             val artists = linkedMapOf<String, JsonObject>()
             val playlists = linkedMapOf<String, JsonObject>()
             val membership = (local["playlistTracks"] as? JsonObject).orEmpty().toMutableMap()
+            var libraryOrder: JsonElement = local["libraryOrder"] ?: buildJsonObject {}
             var saved: JsonElement? = null
             var folders = local["libraryFolders"] ?: JsonArray(emptyList())
             var recent = local["recent"] ?: JsonArray(emptyList())
@@ -192,6 +193,7 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
                 val path = url.substringBefore('?').removePrefix("/api/")
                 val obj = value as? JsonObject
                 when {
+                    path == "me/library/order" -> libraryOrder = value
                     path == "me/library" -> saved = value
                     path == "me/library/folders" -> folders = value
                     path == "tracks" || path == "search/tracks" || path == "favorites" || path == "history/recent" -> {
@@ -244,7 +246,7 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
                 "tracks" to JsonArray(tracks.values.toList()), "albums" to JsonArray(albums.values.toList()),
                 "artists" to JsonArray(artists.values.toList()), "playlists" to JsonArray(playlists.values.toList()),
                 "playlistTracks" to JsonObject(membership), "savedLibrary" to JsonArray(mergedSaved),
-                "libraryFolders" to folders, "recent" to recent,
+                "libraryFolders" to folders, "libraryOrder" to libraryOrder, "recent" to recent,
             )), emptyList())
         }
     }

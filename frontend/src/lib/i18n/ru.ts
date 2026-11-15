@@ -9,6 +9,8 @@ export const ru: Dictionary = {
   "collection.remove": "Убрать из медиатеки",
   "collection.saved": "В медиатеке",
   "collection.search": "Поиск в медиатеке",
+  "collection.manual": "Свой порядок",
+  "collection.dragSearch": "Очистите поиск, чтобы перетаскивать элементы.",
   "collection.recent": "Недавно добавленные",
   "collection.name": "По названию",
   "collection.sort": "Сортировка медиатеки",

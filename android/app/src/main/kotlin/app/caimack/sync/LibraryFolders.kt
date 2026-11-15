@@ -8,7 +8,7 @@ internal fun organizeLibrary(data: JsonObject, change: JsonObject, at: String): 
     var folders = data.objects("libraryFolders")
     var items = data.objects("savedLibrary")
     val id = change.string("id")
-    require(id.isNotBlank()) { "Missing library identifier" }
+    require(id.isNotBlank() || change.string("operation") == "reorder") { "Missing library identifier" }
     val target = change["folderId"]?.jsonPrimitive?.contentOrNull
     val folder = folders.find { it.string("id") == id }
     fun name(): JsonPrimitive {
@@ -27,6 +27,17 @@ internal fun organizeLibrary(data: JsonObject, change: JsonObject, at: String): 
         }
     }
     when (change.string("operation")) {
+        "reorder" -> {
+            destination()
+            val keys = (change["order"] as? JsonArray)?.map { it.jsonPrimitive.content } ?: error("Missing order")
+            val allowed = items.filter { it["folderId"]?.jsonPrimitive?.contentOrNull == target }
+                .map { "${it.string("kind")}:${it.string("id")}" }.toMutableSet()
+            allowed += folders.filter { it["parentId"]?.jsonPrimitive?.contentOrNull == target }.map { "folder:${it.string("id")}" }
+            if (target == null) allowed += listOf("favorites", "downloads")
+            require(keys.size <= 10000 && keys.distinct().size == keys.size && keys.all { it in allowed }) { "Invalid library order" }
+            val order = (data["libraryOrder"] as? JsonObject).orEmpty() + ((target ?: "root") to JsonArray(keys.map(::JsonPrimitive)))
+            return data.with("libraryOrder" to JsonObject(order))
+        }
         "create" -> {
             require(folder == null) { "Folder already exists" }
             destination(id)

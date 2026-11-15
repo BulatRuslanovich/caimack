@@ -317,6 +317,6 @@ data class LibraryFolder(val id: String, val name: String, val parentId: String?
 
 @Serializable
 data class LibraryChange(
-    val operation: String, val id: String, val name: String? = null,
-    val folderId: String? = null, val kind: String? = null,
+    val operation: String, val id: String? = null, val name: String? = null,
+    val folderId: String? = null, val kind: String? = null, val order: List<String>? = null,
 )

@@ -23,4 +23,5 @@
     <string name="collection_search">Поиск в медиатеке</string>
     <string name="collection_no_results">Ничего не найдено</string>
     <string name="collection_downloaded">Скачанные</string>
+    <string name="collection_manual">Свой порядок</string>
 </resources>

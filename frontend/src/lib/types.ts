@@ -554,6 +554,7 @@ export interface LibraryFolder {
   createdAt: string;
 }
 export type LibraryChange =
+  | { operation: "reorder"; folderId: string | null; order: string[] }
   | { operation: "create"; id: string; name: string; folderId: string | null }
   | { operation: "rename"; id: string; name: string }
   | { operation: "moveFolder"; id: string; folderId: string | null }

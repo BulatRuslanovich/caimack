@@ -106,3 +106,33 @@ async fn offline_folder_retries_do_not_recreate_deleted_folders(db: PgPool) -> a
     std::fs::remove_dir_all(directory)?;
     Ok(())
 }
+
+#[sqlx::test(migrations = "../../../db/migrations")]
+async fn manual_order_is_private_scoped_and_rejects_invalid_entries(db: PgPool) -> anyhow::Result<()> {
+    let alice = common::user(&db, "order-alice", false).await?;
+    let bob = common::user(&db, "order-bob", false).await?;
+    let folder = Uuid::new_v4();
+    apply(&db, alice, Change::Create { id: folder, name: "Folder".into(), folder_id: None }).await?;
+    let keys = vec![format!("folder:{folder}"), "downloads".into(), "favorites".into()];
+    apply(&db, alice, Change::Reorder { folder_id: None, order: keys.clone() }).await?;
+    assert_eq!(folders::order(&db, alice).await?["root"], keys);
+    assert!(folders::order(&db, bob).await?.is_empty());
+    assert!(apply(&db, bob, Change::Reorder { folder_id: None, order: keys }).await.is_err());
+    assert!(
+        apply(&db, alice, Change::Reorder { folder_id: Some(folder), order: vec!["favorites".into()] }).await.is_err()
+    );
+    assert!(
+        apply(&db, alice, Change::Reorder { folder_id: None, order: vec!["favorites".into(), "favorites".into()] })
+            .await
+            .is_err()
+    );
+    assert!(
+        apply(&db, alice, Change::Reorder { folder_id: None, order: vec![format!("album:{}", Uuid::new_v4())] })
+            .await
+            .is_err()
+    );
+    apply(&db, alice, Change::Reorder { folder_id: Some(folder), order: vec![] }).await?;
+    apply(&db, alice, Change::Delete { id: folder }).await?;
+    assert!(!folders::order(&db, alice).await?.contains_key(&folder.to_string()));
+    Ok(())
+}

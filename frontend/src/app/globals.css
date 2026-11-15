@@ -86,3 +86,31 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+.library-drag-item {
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+.library-drag-item img {
+  -webkit-user-drag: none;
+}
+.library-drag-item[data-drop-edge]::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  height: 2px;
+  background: var(--primary);
+  pointer-events: none;
+}
+.library-drag-item[data-drop-edge="before"]::after {
+  top: 0;
+}
+.library-drag-item[data-drop-edge="after"]::after {
+  bottom: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .library-drag-item,
+  .library-drag-overlay {
+    transition: none !important;
+  }
+}

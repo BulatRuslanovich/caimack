@@ -93,6 +93,7 @@ async function withoutImage(
 
 export const api = {
   savedLibrary: () => request<LibraryItem[]>("/me/library"),
+  libraryOrder: () => request<Record<string, string[]>>("/me/library/order"),
   libraryFolders: () => request<LibraryFolder[]>("/me/library/folders"),
   organizeLibrary: (change: LibraryChange) =>
     request<void>("/me/library/organize", { method: "POST", body: change }),

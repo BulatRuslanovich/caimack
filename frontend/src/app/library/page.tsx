@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 "use client";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import {
@@ -12,8 +12,10 @@ import {
   ChevronRightIcon,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { LibraryDragList, type LibraryDragEntry } from "@/components/LibraryDragList";
+import { orderedKeys, mergeVisibleOrder } from "@/lib/libraryOrder";
 import { api } from "@/lib/api";
-import { folderTrail, canMoveFolder } from "@/lib/libraryFolders";
+import { folderTrail } from "@/lib/libraryFolders";
 import {
   LibraryFolderEditor,
   LibraryFolderMenu,
@@ -31,7 +33,7 @@ import { useT } from "@/contexts/I18nContext";
 import { useInvalidate } from "@/lib/useInvalidate";
 import { Query } from "@/components/Query";
 import { Card, SavedLibraryCard } from "@/components/MediaCard";
-import { CardGrid, PageHeader } from "@/components/PageHeader";
+import { PageHeader } from "@/components/PageHeader";
 import { PageToolbar, SortSelect } from "@/components/PageToolbar";
 import { ToggleGroup, ToggleGroupButton } from "@/components/ui/toggle-group";
 import { EmptyState } from "@/components/EmptyState";
@@ -45,6 +47,7 @@ export default function LibraryPage() {
   const favoriteResult = useQuery(queries.favorites({ page: 1, pageSize: 1 }));
   const folderResult = useQuery({ ...queries.libraryFolders(), refetchInterval: 30_000 });
   const folders = folderResult.data ?? [];
+  const orderResult = useQuery({ ...queries.libraryOrder(), refetchInterval: 30_000 });
   const router = useRouter();
   const requestedFolder = useSearchParams().get("folder");
   const currentFolder = folders.find((folder) => folder.id === requestedFolder) ?? null;
@@ -52,28 +55,9 @@ export default function LibraryPage() {
   const organize = useOrganizeLibrary();
   const [creatingFolder, setCreatingFolder] = useState(false);
   const openFolder = (id: string | null) => router.push(id ? `/library?folder=${id}` : "/library");
-  const drop = (event: React.DragEvent, destination: string | null) => {
-    event.preventDefault();
-    try {
-      const target = JSON.parse(event.dataTransfer.getData("application/x-caimack-library"));
-      if (typeof target.id !== "string") return;
-      if (target.kind === "folder") {
-        if (canMoveFolder(folders, target.id, destination))
-          organize.mutate({ operation: "moveFolder", id: target.id, folderId: destination });
-      } else if (["album", "artist", "playlist"].includes(target.kind))
-        organize.mutate({
-          operation: "moveItem",
-          id: target.id,
-          kind: target.kind,
-          folderId: destination,
-        });
-    } catch {
-      /* Ignore unrelated dragged content. */
-    }
-  };
   const [filter, setFilter] = useState<LibraryKind | "all">("all");
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState<"recent" | "name">("recent");
+  const [sort, setSort] = useState<"manual" | "recent" | "name">("manual");
   const [grid, setGrid] = useState(false);
   const [creating, setCreating] = useState(false);
   const filters = [
@@ -120,25 +104,13 @@ export default function LibraryPage() {
       />
       {currentFolder && (
         <nav className="flex flex-wrap items-center gap-1 text-sm" aria-label={t("folders.path")}>
-          <Button
-            variant="text"
-            size="sm"
-            onClick={() => openFolder(null)}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => drop(e, null)}
-          >
+          <Button variant="text" size="sm" onClick={() => openFolder(null)}>
             {t("nav.mediaLibrary")}
           </Button>
           {folderTrail(folders, folderId).map((folder) => (
             <span key={folder.id} className="inline-flex items-center">
               <ChevronRightIcon size={14} />
-              <Button
-                variant="text"
-                size="sm"
-                onClick={() => openFolder(folder.id)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => drop(e, folder.id)}
-              >
+              <Button variant="text" size="sm" onClick={() => openFolder(folder.id)}>
                 {folder.name}
               </Button>
             </span>
@@ -157,7 +129,11 @@ export default function LibraryPage() {
           value={sort}
           onChange={setSort}
           label={t("collection.sort")}
-          options={{ recent: "collection.recent", name: "collection.name" }}
+          options={{
+            manual: "collection.manual",
+            recent: "collection.recent",
+            name: "collection.name",
+          }}
         />
         <Button
           variant="ghost"
@@ -193,73 +169,131 @@ export default function LibraryPage() {
                     ? a.name.localeCompare(b.name)
                     : Date.parse(b.createdAt) - Date.parse(a.createdAt),
                 );
+              const allKeys = [
+                ...(folderId === null ? ["favorites"] : []),
+                ...folders
+                  .filter((f) => f.parentId === folderId)
+                  .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+                  .map((f) => `folder:${f.id}`),
+                ...items
+                  .filter((i) => (i.folderId ?? null) === folderId)
+                  .sort((a, b) => Date.parse(b.savedAt) - Date.parse(a.savedAt))
+                  .map((i) => `${i.kind}:${i.id}`),
+                ...(folderId === null ? ["downloads"] : []),
+              ];
+              const savedOrder = orderedKeys(allKeys, orderResult.data?.[folderId ?? "root"]);
+              const entries: LibraryDragEntry[] = [
+                ...(favorites
+                  ? [
+                      {
+                        key: "favorites",
+                        id: "favorites",
+                        kind: "favorites",
+                        node: (
+                          <Card
+                            layout={grid ? "grid" : "list"}
+                            href="/favorites"
+                            title={t("nav.favorites")}
+                            subtitle={t("playlists.kind")}
+                            details={
+                              favoriteResult.data
+                                ? t("count.tracks", { count: favoriteResult.data.total })
+                                : undefined
+                            }
+                            cover={
+                              <div className="grid size-full place-items-center bg-primary-soft text-primary">
+                                <HeartIcon size={32} />
+                              </div>
+                            }
+                          />
+                        ),
+                      },
+                    ]
+                  : []),
+                ...shownFolders.map((folder) => ({
+                  key: `folder:${folder.id}`,
+                  id: folder.id,
+                  kind: "folder",
+                  node: (
+                    <Card
+                      layout={grid ? "grid" : "list"}
+                      onClick={() => openFolder(folder.id)}
+                      title={folder.name}
+                      subtitle={t("folders.items", {
+                        count:
+                          items.filter((item) => item.folderId === folder.id).length +
+                          folders.filter((child) => child.parentId === folder.id).length,
+                      })}
+                      cover={
+                        <div className="grid size-full place-items-center bg-raised text-primary">
+                          <FolderIcon size={32} />
+                        </div>
+                      }
+                      menu={<LibraryFolderMenu folder={folder} />}
+                    />
+                  ),
+                })),
+                ...shown.map((item) => ({
+                  key: `${item.kind}:${item.id}`,
+                  id: item.id,
+                  kind: item.kind,
+                  node: <SavedLibraryCard item={item} layout={grid ? "grid" : "list"} />,
+                })),
+              ];
+              if (sort === "manual" && !q) {
+                const ranks = new Map(savedOrder.map((key, index) => [key, index]));
+                entries.sort(
+                  (a, b) => (ranks.get(a.key) ?? Infinity) - (ranks.get(b.key) ?? Infinity),
+                );
+              }
               return (
                 <>
-                  <LibraryLayout grid={grid}>
-                    {favorites && (
-                      <Card
-                        layout={grid ? "grid" : "list"}
-                        href="/favorites"
-                        title={t("nav.favorites")}
-                        subtitle={t("playlists.kind")}
-                        details={
-                          favoriteResult.data
-                            ? t("count.tracks", { count: favoriteResult.data.total })
-                            : undefined
-                        }
-                        cover={
-                          <div className="grid size-full place-items-center bg-primary-soft text-primary">
-                            <HeartIcon size={32} />
-                          </div>
-                        }
-                      />
-                    )}
-                    {shownFolders.map((folder) => (
-                      <div
-                        key={folder.id}
-                        draggable={!organize.isPending}
-                        onDragStart={(e) =>
-                          e.dataTransfer.setData(
-                            "application/x-caimack-library",
-                            JSON.stringify({ id: folder.id, kind: "folder" }),
-                          )
-                        }
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => drop(e, folder.id)}
-                      >
-                        <Card
-                          layout={grid ? "grid" : "list"}
-                          onClick={() => openFolder(folder.id)}
-                          title={folder.name}
-                          subtitle={t("folders.items", {
-                            count:
-                              items.filter((item) => item.folderId === folder.id).length +
-                              folders.filter((child) => child.parentId === folder.id).length,
-                          })}
-                          cover={
-                            <div className="grid size-full place-items-center bg-raised text-primary">
-                              <FolderIcon size={32} />
-                            </div>
-                          }
-                          menu={<LibraryFolderMenu folder={folder} />}
-                        />
-                      </div>
-                    ))}
-                    {shown.map((item) => (
-                      <div
-                        key={`${item.kind}:${item.id}`}
-                        draggable={!organize.isPending}
-                        onDragStart={(e) =>
-                          e.dataTransfer.setData(
-                            "application/x-caimack-library",
-                            JSON.stringify({ id: item.id, kind: item.kind }),
-                          )
-                        }
-                      >
-                        <SavedLibraryCard item={item} layout={grid ? "grid" : "list"} />
-                      </div>
-                    ))}
-                  </LibraryLayout>
+                  <LibraryDragList
+                    key={`${folderId}:${filter}:${grid}:${q}`}
+                    entries={entries}
+                    folders={folders}
+                    grid={grid}
+                    parent={currentFolder ? currentFolder.parentId : undefined}
+                    disabled={organize.isPending || !orderResult.data || !!q}
+                    onOrder={async (keys) => {
+                      const full =
+                        sort === "manual"
+                          ? savedOrder
+                          : orderedKeys(
+                              allKeys,
+                              entries.map((e) => e.key),
+                            );
+                      setSort("manual");
+                      await organize.mutateAsync({
+                        operation: "reorder",
+                        folderId,
+                        order: mergeVisibleOrder(full, keys),
+                      });
+                    }}
+                    onMove={async (entry, destination) => {
+                      if (entry.kind === "folder")
+                        await organize.mutateAsync({
+                          operation: "moveFolder",
+                          id: entry.id,
+                          folderId: destination,
+                        });
+                      else
+                        await organize.mutateAsync({
+                          operation: "moveItem",
+                          id: entry.id,
+                          kind: entry.kind as LibraryKind,
+                          folderId: destination,
+                        });
+                    }}
+                  />
+                  {organize.isError && (
+                    <p role="alert" className="text-destructive">
+                      {t("folders.failed")}
+                    </p>
+                  )}
+                  {q && (
+                    <p className="text-sm text-muted-foreground">{t("collection.dragSearch")}</p>
+                  )}
                   {shown.length === 0 && shownFolders.length === 0 && !favorites && (
                     <EmptyState
                       title={t(q ? "collection.noResults" : "collection.empty")}
@@ -306,8 +340,4 @@ export default function LibraryPage() {
       )}
     </section>
   );
-}
-
-function LibraryLayout({ grid, children }: { grid: boolean; children: ReactNode }) {
-  return grid ? <CardGrid>{children}</CardGrid> : <div className="space-y-1">{children}</div>;
 }
