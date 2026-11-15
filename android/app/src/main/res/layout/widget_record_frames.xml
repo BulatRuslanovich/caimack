@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<merge xmlns:android="http://schemas.android.com/apk/res/android">
+    <FrameLayout
+        android:id="@+id/widget_record_a"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+        <ViewFlipper
+            android:id="@+id/widget_disc_a"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="false"
+            android:animateFirstView="true"
+            android:inAnimation="@anim/widget_disc_out"
+            android:outAnimation="@anim/widget_disc_in">
+            <FrameLayout
+                android:id="@+id/widget_disc_empty_a"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+            <ImageView
+                android:id="@+id/widget_disc_image_a"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:adjustViewBounds="true"
+                android:importantForAccessibility="no"
+                android:scaleType="fitCenter" />
+        </ViewFlipper>
+        <ImageView
+            android:id="@+id/widget_sleeve_a"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:adjustViewBounds="true"
+            android:importantForAccessibility="no"
+            android:scaleType="fitCenter" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/widget_record_b"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+        <ViewFlipper
+            android:id="@+id/widget_disc_b"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="false"
+            android:animateFirstView="true"
+            android:inAnimation="@anim/widget_disc_out"
+            android:outAnimation="@anim/widget_disc_in">
+            <FrameLayout
+                android:id="@+id/widget_disc_empty_b"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+            <ImageView
+                android:id="@+id/widget_disc_image_b"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:adjustViewBounds="true"
+                android:importantForAccessibility="no"
+                android:scaleType="fitCenter" />
+        </ViewFlipper>
+        <ImageView
+            android:id="@+id/widget_sleeve_b"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:adjustViewBounds="true"
+            android:importantForAccessibility="no"
+            android:scaleType="fitCenter" />
+    </FrameLayout>
+</merge>

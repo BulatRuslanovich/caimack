@@ -95,4 +95,6 @@
     <string name="player_delivery_network">Качество снижено из-за медленного соединения</string>
     <string name="player_delivery_download">Играет скачанная версия AAC</string>
     <string name="player_delivery_waiting">Ждём соединение · продолжим автоматически</string>
+    <string name="widget_record_label">Caimack · Пластинка</string>
+    <string name="widget_record_description">Нажмите на пластинку для пуска или паузы; стрелки переключают треки</string>
 </resources>

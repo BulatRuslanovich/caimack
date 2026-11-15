@@ -93,4 +93,6 @@
     <string name="player_delivery_network">Lower quality for a slow connection</string>
     <string name="player_delivery_download">Playing the downloaded AAC version</string>
     <string name="player_delivery_waiting">Waiting for the connection · resumes automatically</string>
+    <string name="widget_record_label">Caimack · Record</string>
+    <string name="widget_record_description">Tap the record to play or pause; use the arrows to change tracks</string>
 </resources>
