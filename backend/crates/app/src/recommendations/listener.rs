@@ -21,12 +21,13 @@ const HALF_LIFE_DAYS: f64 = 45.0;
 
 const FAVORITE_SCORE: f64 = 1.5;
 
-pub const BROWSED_SOURCES: [&str; 11] = [
+pub const BROWSED_SOURCES: [&str; 12] = [
     "album",
     "artist",
     "playlist",
     "favorites",
     "history",
+    "listening",
     "tracks",
     "genre",
     "genres",

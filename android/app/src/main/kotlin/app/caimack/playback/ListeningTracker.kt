@@ -63,6 +63,10 @@ class ListeningTracker(
         trackId = ""
     }
 
+    fun checkpoint() {
+        if (trackId.isNotEmpty() && listened > 0) progress("trackPlayed")
+    }
+
     fun discard() {
         heard.remove(trackId)
         trackId = ""

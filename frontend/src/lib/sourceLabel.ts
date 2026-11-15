@@ -29,6 +29,7 @@ const KNOWN = new Set([
   "playlist",
   "favorites",
   "history",
+  "listening",
   "search",
   "tracks",
   "genres",

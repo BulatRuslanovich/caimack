@@ -94,6 +94,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object GenresRoute
 @Serializable data object RecentRoute
 @Serializable data object SettingsRoute
+@Serializable data class ListeningRoute(val week: String = "", val view: String = "overview")
 @Serializable data object DownloadsRoute
 @Serializable data object LibraryRoute
 @Serializable data class SettingsSectionRoute(val section: String)
@@ -124,7 +125,7 @@ private val tabs = listOf(
 
 internal fun NavController.openSection(route: Any) {
     // Settings belongs to the account, not to a tab's saved navigation history.
-    while (currentDestination?.let { it.hasRoute(SettingsRoute::class) || it.hasRoute(SettingsSectionRoute::class) } == true) {
+    while (currentDestination?.let { it.hasRoute(SettingsRoute::class) || it.hasRoute(SettingsSectionRoute::class) || it.hasRoute(ListeningRoute::class) } == true) {
         if (!popBackStack()) break
     }
     if (currentDestination?.hasRoute(route::class) == true) return
@@ -250,6 +251,10 @@ fun App(user: User) {
             composable<GenresRoute> { GenresScreen(nav) }
             composable<RecentRoute> { RecentScreen(play) }
             composable<SettingsRoute> { SettingsScreen() }
+            composable<ListeningRoute> { entry ->
+                val route = entry.toRoute<ListeningRoute>()
+                ListeningScreen(route.week, route.view) { week, view -> nav.navigate(ListeningRoute(week, view)) }
+            }
             composable<DownloadsRoute> { DownloadsScreen(play) }
             composable<SettingsSectionRoute> { SettingsScreen(SettingsCategory.of(it.toRoute<SettingsSectionRoute>().section)) }
             composable<AlbumRoute> { AlbumScreen(it.toRoute<AlbumRoute>().id, nav, play) }
@@ -320,8 +325,10 @@ internal fun SheetRow(label: String, icon: ImageVector, onClick: () -> Unit) {
 @Composable
 private fun Header(nav: NavController, user: User, onBack: () -> Unit, onAccount: () -> Unit) {
     val palette = LocalPalette.current
-    val destination = nav.currentBackStackEntryAsState().value?.destination
-    val isSettings = destination?.let { it.hasRoute(SettingsRoute::class) || it.hasRoute(SettingsSectionRoute::class) } == true
+    val entry = nav.currentBackStackEntryAsState().value
+    val destination = entry?.destination
+    val listening = entry?.takeIf { destination?.hasRoute(ListeningRoute::class) == true }?.toRoute<ListeningRoute>()
+    val isSettings = destination?.let { it.hasRoute(SettingsRoute::class) || it.hasRoute(SettingsSectionRoute::class) || it.hasRoute(ListeningRoute::class) } == true
     val showBack = isSettings || (tabs.none { destination?.hasRoute(it.type) == true } && destination != null)
 
     Column(Modifier.background(palette.background).statusBarsPadding()) {
@@ -335,8 +342,16 @@ private fun Header(nav: NavController, user: User, onBack: () -> Unit, onAccount
             }
             if (isSettings) {
                 Text(
-                    stringResource(R.string.settings_title),
-                    style = Type.title.copy(fontSize = 18.sp, letterSpacing = (-0.025).em),
+                    stringResource(when (listening?.view) {
+                        "minutes" -> R.string.listening_minutes
+                        "artists" -> R.string.listening_artists
+                        "songs" -> R.string.listening_songs
+                        "decade", "artistShare", "variety" -> R.string.listening_insights
+                        "overview" -> R.string.listening_header
+                        else -> R.string.settings_title
+                    }),
+                    style = if (listening != null) Type.body.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold) else Type.title.copy(fontSize = 18.sp, letterSpacing = (-0.025).em),
+                    textAlign = if (listening != null) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start,
                     modifier = Modifier.padding(start = 8.dp).weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -346,7 +361,9 @@ private fun Header(nav: NavController, user: User, onBack: () -> Unit, onAccount
                     BrandWordmark(palette.foreground, Modifier.width(127.dp).height(24.dp))
                 }
             }
-            Box(
+            if (listening != null) {
+                androidx.compose.foundation.layout.Spacer(Modifier.width(48.dp))
+            } else Box(
                 Modifier.size(48.dp).clip(CircleShape).clickable(onClickLabel = stringResource(R.string.nav_account), onClick = onAccount),
                 contentAlignment = Alignment.Center,
             ) {

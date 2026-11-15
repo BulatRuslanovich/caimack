@@ -29,6 +29,14 @@ function keepPreviousOf<TData>(id: string | null): PlaceholderDataFunction<TData
 export const SEARCH_MIN_LENGTH = 3;
 
 export const queries = {
+  listeningStats: () =>
+    queryOptions({
+      queryKey: ["listeningStats"],
+      queryFn: api.listeningStats,
+      staleTime: 15_000,
+      refetchInterval: 30_000,
+      refetchOnWindowFocus: true,
+    }),
   libraryOrder: () => queryOptions({ queryKey: ["libraryOrder"], queryFn: api.libraryOrder }),
   libraryFolders: () =>
     queryOptions({

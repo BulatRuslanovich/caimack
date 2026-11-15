@@ -286,6 +286,7 @@ class PlaybackService : MediaLibraryService() {
                     exclusive.hold()
                 } else {
                     if (playbackLease && !container.connect.isRemote) exclusive.hold() else exclusive.release()
+                    signals.tracker.checkpoint()
                     signals.flush()
                     save(container, player)
                     if (!player.playWhenReady) report(container, player)
@@ -451,6 +452,7 @@ class PlaybackService : MediaLibraryService() {
         equalizer = null
         ticks.removeCallbacksAndMessages(null)
         exclusive.release()
+        signals.tracker.checkpoint()
         signals.tracker.discard()
         signals.flush()
         outputPlayer?.let { player ->

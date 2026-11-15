@@ -17,6 +17,9 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface CaimackApi {
+    @GET("api/me/listening-stats")
+    suspend fun listeningStats(): ListeningOverview
+
     @GET("api/me/library")
     suspend fun savedLibrary(): List<LibraryItem>
 

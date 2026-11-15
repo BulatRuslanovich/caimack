@@ -10,6 +10,7 @@ export interface ListeningTracker {
   accumulate(currentTime: number): void;
   reposition(currentTime: number): void;
   listenedSeconds(): number;
+  checkpoint(): void;
   finish(type: "trackCompleted" | "trackSkipped"): void;
   discard(): void;
 }
@@ -55,6 +56,9 @@ export function createListeningTracker(record = recordEvent): ListeningTracker {
       played = { ...IDLE };
     },
     listenedSeconds: () => Math.floor(played.seconds),
+    checkpoint() {
+      if (played.trackId && played.seconds > 0) progressEvent("trackPlayed");
+    },
     reposition(currentTime) {
       played.position = currentTime;
     },

@@ -1,0 +1,42 @@
+<resources>
+    <string name="listening_title">Статистика прослушиваний</string>
+    <string name="listening_header">Статистика</string>
+    <string name="listening_duration">%1$s мин.</string>
+    <string name="listening_intro">Ваша неделя в музыке, любимые песни и исполнители</string>
+    <string name="listening_this_week">Эта неделя</string>
+    <string name="listening_week">Ваша неделя в музыке</string>
+    <string name="listening_minutes">Минуты музыки</string>
+    <string name="listening_top_artist">Любимый исполнитель</string>
+    <string name="listening_top_song">Любимая песня</string>
+    <string name="listening_artists">Топ исполнителей</string>
+    <string name="listening_songs">Топ песен</string>
+    <string name="listening_insights">Ваша музыка в деталях</string>
+    <string name="listening_past_weeks">Прошлые недели</string>
+    <string name="listening_more">Ещё недели</string>
+    <string name="listening_empty">Здесь начинается ваша музыка</string>
+    <string name="listening_empty_hint">Слушайте музыку в Caimack — здесь появится статистика за неделю.</string>
+    <string name="listening_no_week">На этой неделе пока тихо</string>
+    <string name="listening_no_week_hint">Прошлые недели на месте. Включите любимую музыку, чтобы начать новую историю.</string>
+    <plurals name="listening_artists_week"><item quantity="one">За неделю вы слушали %d исполнителя</item><item quantity="few">За неделю вы слушали %d исполнителей</item><item quantity="many">За неделю вы слушали %d исполнителей</item><item quantity="other">За неделю вы слушали %d исполнителя</item></plurals>
+    <plurals name="listening_songs_week"><item quantity="one">За неделю вы слушали %d песню</item><item quantity="few">За неделю вы слушали %d песни</item><item quantity="many">За неделю вы слушали %d песен</item><item quantity="other">За неделю вы слушали %d песни</item></plurals>
+    <string name="listening_you_minutes">За неделю вы слушали музыку %1$s мин.</string>
+    <string name="listening_artists_count">Исполнители: %1$d</string>
+    <string name="listening_songs_count">Песни: %1$d</string>
+    <string name="listening_plays">Прослушивания: %1$d</string>
+    <plurals name="listening_top_weeks">
+        <item quantity="one">%d неделя в топ-5</item><item quantity="few">%d недели в топ-5</item><item quantity="many">%d недель в топ-5</item><item quantity="other">%d недели в топ-5</item>
+    </plurals>
+    <string name="listening_moved_up">Выше на %1$d</string>
+    <string name="listening_moved_down">Ниже на %1$d</string>
+    <string name="listening_new">Впервые в топе</string>
+    <string name="listening_rank">Место: %1$d</string>
+    <string name="listening_decade">Вы погрузились в %1$d-е</string>
+    <string name="listening_decade_note">%1$d%% времени вы слушали музыку из %2$d-х.</string>
+    <string name="listening_artist_share">%1$d%% вашей музыки</string>
+    <string name="listening_artist_note">%1$s — это %2$d%% времени с музыкой на этой неделе.</string>
+    <string name="listening_variety">Неделя, полная музыки</string>
+    <string name="listening_variety_note">Песен: %1$d. Исполнителей: %2$d. Всё это — ваша неделя.</string>
+    <string name="listening_days">Музыка день за днём</string>
+    <string name="listening_previous">Прошлая неделя: %1$s мин.</string>
+    <string name="listening_refresh">Обновить статистику</string>
+</resources>

@@ -1,0 +1,42 @@
+<resources>
+    <string name="listening_title">Listening stats</string>
+    <string name="listening_header">Listening stats</string>
+    <string name="listening_duration">%1$s minutes</string>
+    <string name="listening_intro">Your week in music, top songs and artists</string>
+    <string name="listening_this_week">This week</string>
+    <string name="listening_week">Your week in music</string>
+    <string name="listening_minutes">Minutes listened</string>
+    <string name="listening_top_artist">Top artist</string>
+    <string name="listening_top_song">Top song</string>
+    <string name="listening_artists">Top artists</string>
+    <string name="listening_songs">Top songs</string>
+    <string name="listening_insights">Your latest insights</string>
+    <string name="listening_past_weeks">Past weeks</string>
+    <string name="listening_more">More weeks</string>
+    <string name="listening_empty">Your soundtrack starts here</string>
+    <string name="listening_empty_hint">Listen to music in Caimack to see your weekly stats here.</string>
+    <string name="listening_no_week">No listening this week</string>
+    <string name="listening_no_week_hint">Your past weeks are still here. Play something you love to start this week’s story.</string>
+    <plurals name="listening_artists_week"><item quantity="one">You listened to %d artist this week</item><item quantity="other">You listened to %d artists this week</item></plurals>
+    <plurals name="listening_songs_week"><item quantity="one">You listened to %d song this week</item><item quantity="other">You listened to %d songs this week</item></plurals>
+    <string name="listening_you_minutes">You listened for %1$s minutes this week.</string>
+    <string name="listening_artists_count">%1$d artists</string>
+    <string name="listening_songs_count">%1$d songs</string>
+    <string name="listening_plays">%1$d plays</string>
+    <plurals name="listening_top_weeks">
+        <item quantity="one">%d week in top 5</item><item quantity="other">%d weeks in top 5</item>
+    </plurals>
+    <string name="listening_moved_up">Moved up %1$d</string>
+    <string name="listening_moved_down">Moved down %1$d</string>
+    <string name="listening_new">New</string>
+    <string name="listening_rank">Rank %1$d</string>
+    <string name="listening_decade">You were deep in the %1$ds</string>
+    <string name="listening_decade_note">%1$d%% of your listening time was music from the %2$ds.</string>
+    <string name="listening_artist_share">%1$d%% of your music</string>
+    <string name="listening_artist_note">%1$s soundtracked %2$d%% of your listening time this week.</string>
+    <string name="listening_variety">A week full of music</string>
+    <string name="listening_variety_note">%1$d songs. %2$d artists. All part of your week.</string>
+    <string name="listening_days">Your listening, day by day</string>
+    <string name="listening_previous">Last week: %1$s minutes</string>
+    <string name="listening_refresh">Refresh stats</string>
+</resources>
