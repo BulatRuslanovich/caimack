@@ -1,5 +1,6 @@
 <resources>
     <string name="sync_title">Library synchronization</string>
+    <string name="sync_network_hint">Your phone and server must be on the same local network, and the server address must resolve to a local IP. For a public domain, you can set up a local DNS entry on your router.</string>
     <string name="sync_description">Keep the entire library, lyrics, artwork, vectors and server-prepared mixes on this phone. Original audio quality. Automatic sync over the local Wi-Fi or Ethernet network, including on battery.</string>
     <string name="sync_enable">Synchronize this library</string>
     <string name="sync_choose_folder">Choose music folder</string>

@@ -22,6 +22,10 @@
     <string name="player_playing_on">Пауза — теперь играет на %1$s.</string>
     <string name="downloads_title">Загрузки</string>
     <string name="downloads_add">Скачать</string>
+    <string name="downloads_cancel">Отменить загрузку</string>
+    <string name="downloads_retry">Повторить загрузку</string>
+    <string name="downloads_queued">Добавлено в загрузки</string>
+    <string name="downloads_failed">Не удалось начать загрузку. Проверьте соединение и повторите.</string>
     <string name="downloads_available">Доступно без сети</string>
     <string name="downloads_remove">Удалить загрузку</string>
     <string name="downloads_remove_all">Удалить все</string>

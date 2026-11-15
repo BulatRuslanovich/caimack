@@ -156,6 +156,7 @@ fun TrackSheet(track: Track, onRemoveFromPlaylist: (() -> Unit)? = null, positio
                 say(resources.getString(R.string.menu_added_to_queue, track.title))
                 onDismiss()
             }
+            TrackDownloadAction(track, onDismiss)
             if (recommendationsEnabled()) SheetRow(stringResource(R.string.menu_radio), Lucide.Radio) {
                 onDismiss()
                 container.scope.launch {

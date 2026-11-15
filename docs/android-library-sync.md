@@ -12,6 +12,24 @@ public, loopback and multicast addresses, and never falls back to cellular or a
 VPN connection. A VPN configured to prevent local access must allow the server
 or be disconnected. Android 17 additionally requires local-network permission.
 
+### A public domain on the home Wi-Fi
+
+Joining the same Wi-Fi does not change where a domain points. If the domain
+still resolves to a public IP, synchronization rejects it, even if the router
+routes that connection back to the home server.
+
+For a home PC/NAS, add a local DNS override on the router or home DNS server:
+the existing Caimack hostname should resolve to that machine's LAN IP. The phone
+must use that DNS server. The local HTTPS endpoint must serve that hostname with
+a trusted certificate. The app can then keep its existing server address and
+account binding. All returned A/AAAA addresses must be local; a remaining public
+IPv6 answer also prevents synchronization.
+
+Alternatively, sign in using the local IP and the actual listening port. If that
+endpoint uses HTTP, enable **Allow HTTP on the local network** in connection
+settings. A different server URL has its own offline binding; the app currently
+has no separate LAN address just for synchronization.
+
 Automatic jobs are persisted across reboot and scheduled every 15 minutes, with
 an additional attempt after joining a local network or recording an action.
 Charging is not required. Android can defer background jobs in Doze or under

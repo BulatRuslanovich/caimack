@@ -1,6 +1,12 @@
 # Individual Android downloads
 
-Download tracks or a collection with the download button. Existing automatic
+For one track, open its **⋮ → Download** menu. The same menu offers **Cancel
+download** while a transfer is queued or running, **Retry download** after a
+failure, and **Remove download** once it is complete. Progress and downloaded
+tracks are available in **Library → Downloads**. These actions manage the app's
+offline copy, not the original server file.
+
+Download an album or playlist with the download button next to playback. Existing automatic
 download preferences continue to work. Browsing the catalog does not download
 its audio, and downloading audio does not add albums, artists or playlists to
 the personal library.
