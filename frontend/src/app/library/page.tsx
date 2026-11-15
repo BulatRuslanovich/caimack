@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import {
@@ -10,6 +10,7 @@ import {
   HeartIcon,
   FolderIcon,
   ChevronRightIcon,
+  SearchIcon,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LibraryDragList, type LibraryDragEntry } from "@/components/LibraryDragList";
@@ -34,7 +35,8 @@ import { useInvalidate } from "@/lib/useInvalidate";
 import { Query } from "@/components/Query";
 import { Card, SavedLibraryCard } from "@/components/MediaCard";
 import { PageHeader } from "@/components/PageHeader";
-import { PageToolbar, SortSelect } from "@/components/PageToolbar";
+import { SortSelect } from "@/components/PageToolbar";
+import { SearchField } from "@/components/SearchField";
 import { ToggleGroup, ToggleGroupButton } from "@/components/ui/toggle-group";
 import { EmptyState } from "@/components/EmptyState";
 import { PlaylistDialog } from "@/components/PlaylistDialog";
@@ -57,6 +59,16 @@ export default function LibraryPage() {
   const openFolder = (id: string | null) => router.push(id ? `/library?folder=${id}` : "/library");
   const [filter, setFilter] = useState<LibraryKind | "all">("all");
   const [search, setSearch] = useState("");
+  const [searchExpanded, setSearchExpanded] = useState(false);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const searchButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (searchExpanded) searchInput.current?.focus({ preventScroll: true });
+  }, [searchExpanded]);
+  const closeEmptySearch = () => {
+    setSearch("");
+    setSearchExpanded(false);
+  };
   const [sort, setSort] = useState<"manual" | "recent" | "name">("manual");
   const [grid, setGrid] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -73,35 +85,84 @@ export default function LibraryPage() {
     t("nav.favorites").toLocaleLowerCase().includes(q);
   return (
     <section className="space-y-5">
-      <PageHeader
-        title={currentFolder?.name ?? t("nav.mediaLibrary")}
-        actions={
-          <div className="flex items-center gap-2">
-            {currentFolder && <LibraryFolderMenu folder={currentFolder} />}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  disabled={!folderResult.data}
-                  aria-label={t("action.create")}
-                >
-                  <PlusIcon size={20} />
-                  {t("action.create")}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem onSelect={() => setCreating(true)}>
-                  {t("playlists.new")}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setCreatingFolder(true)}>
-                  <FolderIcon size={16} />
-                  {t("folders.new")}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+      <div>
+        <PageHeader
+          title={currentFolder?.name ?? t("nav.mediaLibrary")}
+          actions={
+            <div className="flex items-center gap-2">
+              {currentFolder && <LibraryFolderMenu folder={currentFolder} />}
+              <Button
+                ref={searchButton}
+                variant="ghost"
+                size="icon"
+                aria-label={t("collection.search")}
+                aria-expanded={searchExpanded}
+                aria-controls="library-search"
+                className={searchExpanded ? "bg-primary-soft text-primary" : undefined}
+                onPointerDown={(event) => {
+                  if (searchExpanded) event.preventDefault();
+                }}
+                onClick={() => {
+                  if (searchExpanded && !searchInput.current?.value.trim()) closeEmptySearch();
+                  else {
+                    setSearchExpanded(true);
+                    searchInput.current?.focus({ preventScroll: true });
+                  }
+                }}
+              >
+                <SearchIcon size={20} />
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    disabled={!folderResult.data}
+                    aria-label={t("action.create")}
+                  >
+                    <PlusIcon size={20} />
+                    {t("action.create")}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onSelect={() => setCreating(true)}>
+                    {t("playlists.new")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setCreatingFolder(true)}>
+                    <FolderIcon size={16} />
+                    {t("folders.new")}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          }
+        />
+        <div
+          id="library-search"
+          className="library-search-panel"
+          data-open={searchExpanded}
+          aria-hidden={!searchExpanded}
+          inert={!searchExpanded}
+        >
+          <div className="min-h-0 overflow-hidden">
+            <div className="pt-4 pb-1">
+              <SearchField
+                inputRef={searchInput}
+                value={search}
+                onChange={setSearch}
+                placeholder={t("collection.search")}
+                className="max-w-none"
+                onBlur={(value) => {
+                  if (!value) closeEmptySearch();
+                }}
+                onEmptyEscape={() => {
+                  closeEmptySearch();
+                  searchButton.current?.focus();
+                }}
+              />
+            </div>
           </div>
-        }
-      />
+        </div>
+      </div>
       {currentFolder && (
         <nav className="flex flex-wrap items-center gap-1 text-sm" aria-label={t("folders.path")}>
           <Button variant="text" size="sm" onClick={() => openFolder(null)}>
@@ -124,7 +185,7 @@ export default function LibraryPage() {
           </ToggleGroupButton>
         ))}
       </ToggleGroup>
-      <PageToolbar search={search} onSearch={setSearch} placeholder={t("collection.search")}>
+      <div className="library-toolbar flex flex-wrap items-center justify-end gap-2.5">
         <SortSelect
           value={sort}
           onChange={setSort}
@@ -143,7 +204,7 @@ export default function LibraryPage() {
         >
           {grid ? <ListIcon /> : <Grid2X2Icon />}
         </Button>
-      </PageToolbar>
+      </div>
       <Query result={folderResult}>
         {() => (
           <Query result={result}>

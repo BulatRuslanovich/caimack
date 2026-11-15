@@ -25,6 +25,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,6 +46,8 @@ internal fun SearchInput(
     label: String,
     modifier: Modifier = Modifier,
     onSearch: () -> Unit = {},
+    focusRequester: FocusRequester? = null,
+    onFocusChange: (Boolean) -> Unit = {},
 ) {
     val palette = LocalPalette.current
     val focus = LocalFocusManager.current
@@ -66,7 +70,10 @@ internal fun SearchInput(
             cursorBrush = SolidColor(palette.foreground),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { onSearch(); focus.clearFocus() }),
-            modifier = Modifier.weight(1f).onFocusChanged { focused = it.isFocused }.padding(vertical = 12.dp).semantics { contentDescription = label },
+            modifier = Modifier.weight(1f)
+                .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+                .onFocusChanged { focused = it.isFocused; onFocusChange(it.isFocused) }
+                .padding(vertical = 12.dp).semantics { contentDescription = label },
             decorationBox = { field ->
                 Box {
                     if (value.isEmpty()) Text(label, style = Type.body, color = palette.faint)

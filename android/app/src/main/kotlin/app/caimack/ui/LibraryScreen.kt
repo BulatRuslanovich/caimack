@@ -5,8 +5,15 @@ import androidx.compose.animation.core.Spring
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -24,6 +31,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
@@ -57,6 +74,7 @@ fun LibraryScreen(nav: NavController) {
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, order: Map<String, List<String>>) {
     val container = LocalContainer.current
     val local = LocalOfflineLibrary.current
@@ -67,6 +85,32 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
     val available = LocalAvailableCollections.current
     val availableTracks = LocalAvailableTracks.current
     var search by rememberSaveable { mutableStateOf("") }
+    var searchExpanded by rememberSaveable { mutableStateOf(false) }
+    var searchFocused by remember { mutableStateOf(false) }
+    val searchFocus = remember { FocusRequester() }
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    var searchBounds by remember { mutableStateOf<Rect?>(null) }
+    var searchButtonBounds by remember { mutableStateOf<Rect?>(null) }
+    var libraryOrigin by remember { mutableStateOf(Offset.Zero) }
+    val dismissSearch by rememberUpdatedState { point: Offset ->
+        if (searchExpanded && searchBounds?.contains(point + libraryOrigin) != true &&
+            searchButtonBounds?.contains(point + libraryOrigin) != true) {
+            focus.clearFocus()
+            if (search.isBlank()) { search = ""; searchExpanded = false; keyboard?.hide() }
+        }
+    }
+    val imeVisible = WindowInsets.isImeVisible
+    var keyboardWasVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(imeVisible, searchExpanded) {
+        if (!searchExpanded) keyboardWasVisible = false
+        else if (imeVisible) keyboardWasVisible = true
+        else if (keyboardWasVisible) {
+            keyboardWasVisible = false
+            focus.clearFocus()
+            if (search.isBlank()) { search = ""; searchExpanded = false }
+        }
+    }
     var favoriteCount by remember(local) { mutableStateOf<Int?>(null) }
     LaunchedEffect(local, downloadedOnly, availableTracks) {
         favoriteCount = null
@@ -89,6 +133,9 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
     val currentFolder = folders.find { it.id == selectedFolder }
     val folderId = currentFolder?.id
     BackHandler(currentFolder != null) { selectedFolder = currentFolder?.parentId }
+    BackHandler(searchExpanded && search.isBlank() && !imeVisible) {
+        focus.clearFocus(); search = ""; searchExpanded = false
+    }
     var catalog by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val query = search.trim()
@@ -117,11 +164,27 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
         }
     }
     if (creatingFolder) LibraryFolderEditor(parentId = folderId) { creatingFolder = false }
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().onGloballyPositioned { libraryOrigin = it.positionInRoot() }
+        .pointerInput(Unit) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                dismissSearch(down.position)
+            }
+        }) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             if (currentFolder != null) IconButton(onClick = { selectedFolder = currentFolder.parentId }) { Icon(Lucide.ArrowLeft, stringResource(R.string.folders_up)) }
             Text(currentFolder?.name ?: stringResource(R.string.nav_library), style = Type.title, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (currentFolder != null) LibraryFolderMenu(currentFolder, folders)
+            IconButton(
+                onClick = {
+                    if (searchExpanded && search.isBlank()) {
+                        focus.clearFocus(); keyboard?.hide(); search = ""; searchExpanded = false
+                    } else if (searchExpanded) { searchFocus.requestFocus(); keyboard?.show() }
+                    else searchExpanded = true
+                },
+                modifier = Modifier.onGloballyPositioned { searchButtonBounds = it.boundsInRoot() }
+                    .semantics { selected = searchExpanded },
+            ) { Icon(Lucide.Search, stringResource(R.string.collection_search), tint = if (searchExpanded) palette.primary else palette.foreground) }
             if (!local) Box {
                 IconButton(onClick = { createMenu = true }) { Icon(Lucide.Plus, stringResource(R.string.folders_create)) }
                 DropdownMenu(createMenu, onDismissRequest = { createMenu = false }) {
@@ -130,10 +193,30 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
                 }
             }
         }
-        LibraryFilters(filter, downloadedOnly, { filter = it }, { downloadedOnly = it })
-        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-            SearchInput(search, { search = it }, stringResource(R.string.collection_search))
+        AnimatedVisibility(searchExpanded,
+            enter = expandVertically(tween(220)) + fadeIn(tween(160)),
+            exit = shrinkVertically(tween(180)) + fadeOut(tween(120)),
+        ) {
+            var hadFocus by remember { mutableStateOf(false) }
+            LaunchedEffect(searchExpanded) {
+                if (searchExpanded) { searchFocus.requestFocus(); keyboard?.show() }
+            }
+            Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                .onGloballyPositioned { searchBounds = it.boundsInRoot() }) {
+                SearchInput(search, {
+                    search = it
+                    if (it.isBlank() && !searchFocused) { search = ""; searchExpanded = false }
+                }, stringResource(R.string.collection_search),
+                    focusRequester = searchFocus,
+                    onFocusChange = { focused ->
+                        searchFocused = focused
+                        if (focused) hadFocus = true
+                        else if (hadFocus && search.isBlank()) { search = ""; searchExpanded = false }
+                    },
+                )
+            }
         }
+        LibraryFilters(filter, downloadedOnly, { filter = it }, { downloadedOnly = it })
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = { sort = when (sort) { "manual" -> "recent"; "recent" -> "name"; else -> "manual" } }, modifier = Modifier.weight(1f)) { Text(stringResource(when (sort) { "name" -> R.string.collection_name; "recent" -> R.string.collection_recent; else -> R.string.collection_manual }), maxLines = 1, overflow = TextOverflow.Ellipsis) }
             Box {
