@@ -412,6 +412,9 @@ fun SettingsScreen(category: SettingsCategory? = null) {
 
             if (SettingKey.Updates in visible) UpdatesSettings()
 
+            if (SettingKey.LocalHttp in visible) {
+                Panel(stringResource(R.string.settings_connection)) { LocalHttpSetting() }
+            }
             if (SettingKey.SignOut in visible) {
                 TextButton(onClick = { scope.launch { Remote.cache.clear(); container.player.stop(); container.session.logout() } }, modifier = Modifier.padding(horizontal = 8.dp)) {
                     Text(stringResource(R.string.sign_out), color = palette.muted)

@@ -88,6 +88,10 @@ The home screen above brings together personal radio, a daily mix and new additi
 The web app is a PWA with its own mobile layout. There is also a native Android client with
 background playback, offline downloads and Android Auto.
 
+[Individual downloads](docs/android-downloads.md) retain catalog metadata and
+artwork for offline browsing. The fork also supports opt-in
+[HTTP connections to a local server](docs/android-local-http.md).
+
 Android also supports opt-in [full library synchronization](docs/android-library-sync.md)
 to a folder you choose: original music, lyrics, artwork, vectors and server-prepared
 mixes/radio remain available away from your local network. Offline listening and

@@ -1,0 +1,9 @@
+<resources>
+    <string name="settings_local_network_permission">Allow access to the local network</string>
+    <string name="auth_local_network_denied">Allow local network access to connect to this server. You can grant it in the app permissions in system settings.</string>
+    <string name="settings_connection">Connection</string>
+    <string name="settings_local_http">Allow HTTP on the local network</string>
+    <string name="settings_local_http_hint">Allow unencrypted connections only to a local server. Off by default.</string>
+    <string name="auth_local_http_disabled">Local HTTP is disabled. Use HTTPS or enable local HTTP in connection settings.</string>
+    <string name="auth_non_local_http">HTTP is allowed only for a local IP address or localhost. Use HTTPS for a public server.</string>
+</resources>

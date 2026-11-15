@@ -6,6 +6,7 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
+import okhttp3.OkHttpClient
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -56,7 +57,7 @@ class ReleasesTest {
             web.enqueue(MockResponse.Builder().code(200).body(payload()).build())
             web.enqueue(MockResponse.Builder().code(404).build())
             web.enqueue(MockResponse.Builder().code(403).body("rate limited").build())
-            val source = GitHubReleases(repo, api = web.url("/"))
+            val source = GitHubReleases(repo, client = OkHttpClient(), api = web.url("/"))
             assertEquals("v1.0.9", source.latest()?.tag)
             val request = web.takeRequest(2, TimeUnit.SECONDS)!!
             assertEquals("/repos/$repo/releases/latest", request.url.encodedPath)
@@ -72,9 +73,20 @@ class ReleasesTest {
             web.start()
             web.enqueue(MockResponse.Builder().code(200).chunkedBody(payload(), 32).build())
             web.enqueue(MockResponse.Builder().code(200).body("x".repeat(2_000_001)).build())
-            val source = GitHubReleases(repo, api = web.url("/"))
+            val source = GitHubReleases(repo, client = OkHttpClient(), api = web.url("/"))
             assertNotNull(source.latest())
             try { source.latest(); fail("Oversized response accepted") } catch (_: IOException) { }
+        }
+    }
+
+    @Test fun `default update client requires HTTPS regardless of the music server preference`() = runBlocking {
+        MockWebServer().use { web ->
+            web.start()
+            try {
+                GitHubReleases(repo, api = web.url("/")).latest()
+                fail("Updates must require HTTPS")
+            } catch (_: IOException) { }
+            assertEquals(0, web.requestCount)
         }
     }
 }

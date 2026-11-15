@@ -73,3 +73,12 @@ Migration 0011 reconciles rich-lyrics invalidation with the stable audio identit
 used by metadata export. Tag-only exports retain lyrics and provider backoff;
 changes to the recording, title, artist, album or duration invalidate matches and
 restart enrichment. Existing upstream migrations remain unchanged.
+
+The local fork previously shipped collections/folders as migrations 0008/0009.
+Use `caimack migrate` for its first upgrade: it recognizes the exact original
+checksums and atomically aligns those two ledger entries to 0009/0010 before
+applying upstream migrations. Saved items, folders, timestamps and checksums
+are preserved; unknown or edited histories are rejected. Fresh databases and
+databases already using upstream numbering follow the normal migration path.
+Do not use `cargo sqlx migrate run` directly for this legacy upgrade, or run the
+old binary against a database after upgrading it.

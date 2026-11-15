@@ -145,6 +145,31 @@ class SessionTest {
         }
     }
 
+    @Test
+    fun `late server validation cannot restore an expired session`() = runBlocking {
+        rememberUser()
+        val requested = CountDownLatch(1)
+        val respond = CountDownLatch(1)
+        web.dispatcher =
+            object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    requested.countDown()
+                    check(respond.await(5, TimeUnit.SECONDS))
+                    return MockResponse.Builder().body(json.encodeToString(cachedUser)).build()
+                }
+            }
+        val session = session()
+        val restoring = launch(Dispatchers.IO) { session.restore() }
+        try {
+            assertTrue(requested.await(5, TimeUnit.SECONDS))
+            session.expire()
+        } finally {
+            respond.countDown()
+            restoring.join()
+        }
+        assertEquals(SessionState.SignedOut(expired = true), session.state.value)
+    }
+
     private fun session(offlineUser: () -> User? = { null }): Session {
         val server = Server(preferences)
         val cookies = PersistentCookieJar(preferences, scope)
