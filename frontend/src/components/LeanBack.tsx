@@ -109,10 +109,12 @@ function LeanBackScreen({ track }: { track: Track }) {
         />
 
         <div className="lean-back-meta">
-          <h2 className={cn("font-display text-balance", "lean-back-title")}>{track.title}</h2>
-          <p className="text-xl text-muted-foreground">
-            {[formatArtists(track), track.albumTitle].filter(Boolean).join(" — ")}
-          </p>
+          <div className="lean-back-info">
+            <h2 className={cn("font-display text-balance", "lean-back-title")}>{track.title}</h2>
+            <p className="text-xl text-muted-foreground">
+              {[formatArtists(track), track.albumTitle].filter(Boolean).join(" — ")}
+            </p>
+          </div>
           {track.hasLyrics && <LyricLine trackId={track.id} />}
         </div>
       </div>
