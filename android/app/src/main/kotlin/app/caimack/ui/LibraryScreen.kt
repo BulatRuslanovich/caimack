@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
@@ -50,14 +51,7 @@ internal val libraryMutation = Mutex()
 @Composable
 fun LibraryScreen(nav: NavController) {
     val api = LocalContainer.current.api
-    Column(Modifier.fillMaxSize()) {
-        LibraryEntry(stringResource(R.string.downloads_title), pluralStringResource(R.plurals.count_tracks, LocalAvailableTracks.current.size, LocalAvailableTracks.current.size), Lucide.Download) {
-            nav.navigate(DownloadsRoute)
-        }
-        Box(Modifier.weight(1f)) {
-            Load(LIBRARY_FOLDERS, { api.libraryFolders() }) { folders -> LibraryBrowser(nav, folders) }
-        }
-    }
+    Load(LIBRARY_FOLDERS, { api.libraryFolders() }) { folders -> LibraryBrowser(nav, folders) }
 }
 
 @Composable
@@ -67,10 +61,17 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
     val api = catalogApi()
     val palette = LocalPalette.current
     var filter by rememberSaveable { mutableStateOf("all") }
+    var downloadedOnly by rememberSaveable { mutableStateOf(false) }
+    val available = LocalAvailableCollections.current
+    val availableTracks = LocalAvailableTracks.current
     var search by rememberSaveable { mutableStateOf("") }
     var favoriteCount by remember(local) { mutableStateOf<Int?>(null) }
-    LaunchedEffect(local) {
-        try { favoriteCount = api.favorites(1, 1).total }
+    LaunchedEffect(local, downloadedOnly, availableTracks) {
+        favoriteCount = null
+        try {
+            favoriteCount = if (downloadedOnly) collectionTracks { api.favorites(it, TRACK_PAGE_SIZE) }.count { it.id in availableTracks }
+                else api.favorites(1, 1).total
+        }
         catch (error: Exception) { if (error is CancellationException) throw error }
     }
     var alphabetical by rememberSaveable { mutableStateOf(false) }
@@ -85,7 +86,8 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
     var catalog by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val query = search.trim()
-    val showFavorites = folderId == null && (filter == "all" || filter == "playlist") && stringResource(R.string.nav_favorites).contains(query, ignoreCase = true)
+    val downloadsTitle = stringResource(R.string.downloads_title)
+    val showFavorites = (!downloadedOnly || (favoriteCount ?: 0) > 0) && folderId == null && (filter == "all" || filter == "playlist") && stringResource(R.string.nav_favorites).contains(query, ignoreCase = true)
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         if (!local) scope.launch {
             libraryMutation.withLock {
@@ -122,38 +124,7 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
                 }
             }
         }
-        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (filter != "all") item(key = "clear") {
-                IconButton(
-                    onClick = { filter = "all" },
-                    modifier = Modifier.animateItem(
-                        fadeInSpec = tween(220),
-                        placementSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
-                        fadeOutSpec = tween(140),
-                    ),
-                ) {
-                    Icon(Lucide.X, stringResource(R.string.collection_clear_filter), tint = palette.muted)
-                }
-            }
-            items(listOf("playlist" to R.string.nav_playlists, "album" to R.string.nav_albums, "artist" to R.string.nav_artists).filter { filter == "all" || it.first == filter }, key = { it.first }) { (kind, label) ->
-                FilterChip(
-                    modifier = Modifier.animateItem(
-                        fadeInSpec = tween(220),
-                        placementSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
-                        fadeOutSpec = tween(140),
-                    ),
-                    selected = filter == kind,
-                    onClick = { filter = if (filter == kind) "all" else kind },
-                    label = { Text(stringResource(label)) },
-                    shape = CircleShape,
-                    border = null,
-                    colors = FilterChipDefaults.filterChipColors(
-                        containerColor = palette.raised, labelColor = palette.foreground,
-                        selectedContainerColor = palette.primary, selectedLabelColor = palette.onPrimary,
-                    ),
-                )
-            }
-        }
+        LibraryFilters(filter, downloadedOnly, { filter = it }, { downloadedOnly = it })
         Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
             SearchInput(search, { search = it }, stringResource(R.string.collection_search))
         }
@@ -174,9 +145,11 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
             IconButton(onClick = { grid = !grid }) { Icon(if (grid) Lucide.List else Lucide.LayoutGrid, stringResource(if (grid) R.string.collection_list else R.string.collection_grid)) }
         }
         Load(SAVED_LIBRARY, { api.savedLibrary() }) { library ->
-            val shown = library.filter { (query.isNotEmpty() || it.folderId == folderId) && (filter == "all" || it.kind == filter) && "${it.title} ${it.subtitle}".contains(query, ignoreCase = true) }
+            val eligible = if (downloadedOnly) library.filter { (it.kind to it.id) in available } else library
+            val availableFolders = remember(eligible, folders) { libraryFolderAncestors(eligible, folders) }
+            val shown = eligible.filter { (query.isNotEmpty() || it.folderId == folderId) && (filter == "all" || it.kind == filter) && "${it.title} ${it.subtitle}".contains(query, ignoreCase = true) }
                 .let { if (alphabetical) it.sortedBy { item -> item.title.lowercase() } else it.sortedByDescending { item -> Instant.parse(item.savedAt) } }
-            val shownFolders = folders.filter { if (query.isEmpty()) it.parentId == folderId else it.name.contains(query, ignoreCase = true) }
+            val shownFolders = folders.filter { !downloadedOnly || it.id in availableFolders }.filter { if (query.isEmpty()) it.parentId == folderId else it.name.contains(query, ignoreCase = true) }
                 .let { if (alphabetical) it.sortedBy { folder -> folder.name.lowercase() } else it.sortedByDescending { folder -> folder.createdAt } }
             val density = LocalLibraryDensity.current
             LazyVerticalGrid(
@@ -192,12 +165,20 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>) {
                     ) { nav.navigate(FavoritesRoute) }
                 }
                 items(shownFolders, key = { "folder:" + it.id }) { folder ->
-                    LibraryFolderView(folder, folders, library.count { it.folderId == folder.id } + folders.count { it.parentId == folder.id }, grid) { selectedFolder = folder.id }
+                    LibraryFolderView(folder, folders, eligible.count { it.folderId == folder.id } + folders.count { it.parentId == folder.id && (!downloadedOnly || it.id in availableFolders) }, grid) { selectedFolder = folder.id }
                 }
                 items(shown, key = { "${it.kind}:${it.id}" }) { item -> LibraryItemView(item, library, folders, nav, grid) }
                 if (shown.isEmpty() && shownFolders.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
                     if (showFavorites) Text(stringResource(R.string.collection_hint), style = Type.small, color = LocalPalette.current.muted, modifier = Modifier.padding(24.dp))
                     else Empty(stringResource(if (query.isNotEmpty()) R.string.collection_no_results else R.string.collection_empty), stringResource(if (currentFolder != null) R.string.folders_empty_hint else R.string.collection_hint))
+                }
+                if (folderId == null && downloadsTitle.contains(query, ignoreCase = true)) item(key = "downloads") {
+                    val count = LocalAvailableTracks.current.size
+                    LibraryEntry(
+                        stringResource(R.string.downloads_title),
+                        pluralStringResource(R.plurals.count_tracks, count, count),
+                        Lucide.Download, grid = grid,
+                    ) { nav.navigate(DownloadsRoute) }
                 }
             }
         }
@@ -317,5 +298,59 @@ internal fun LibraryEntry(title: String, hint: String?, icon: ImageVector, grid:
         Box(modifier.clip(Radius.cover).background(palette.primarySoft), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = palette.primary, modifier = Modifier.size(if (grid) 34.dp else 24.dp))
         }
+    }
+}
+
+@Composable
+internal fun LibraryFilters(filter: String, downloadedOnly: Boolean, onFilter: (String) -> Unit, onDownloaded: (Boolean) -> Unit) {
+    val palette = LocalPalette.current
+    val scroll = rememberLazyListState()
+    LaunchedEffect(filter, downloadedOnly) { scroll.animateScrollToItem(0) }
+    val downloadedChip: @Composable (Modifier) -> Unit = { modifier ->
+        FilterChip(
+            modifier = modifier,
+            selected = downloadedOnly,
+            onClick = { onDownloaded(!downloadedOnly) },
+            label = { Text(stringResource(R.string.collection_downloaded)) },
+            shape = CircleShape, border = null,
+            colors = FilterChipDefaults.filterChipColors(
+                containerColor = palette.raised, labelColor = palette.foreground,
+                selectedContainerColor = palette.primary, selectedLabelColor = palette.onPrimary,
+            ),
+        )
+    }
+    LazyRow(state = scroll, contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (filter != "all" || downloadedOnly) item(key = "clear") {
+            IconButton(
+                onClick = { onFilter("all"); onDownloaded(false) },
+                modifier = Modifier.animateItem(
+                    fadeInSpec = tween(220),
+                    placementSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
+                    fadeOutSpec = tween(140),
+                ),
+            ) {
+                Icon(Lucide.X, stringResource(R.string.collection_clear_filter), tint = palette.muted)
+            }
+        }
+        if (downloadedOnly) item(key = "downloaded") { downloadedChip(Modifier.animateItem()) }
+        items(listOf("playlist" to R.string.nav_playlists, "album" to R.string.nav_albums, "artist" to R.string.nav_artists).filter { filter == "all" || it.first == filter }, key = { it.first }) { (kind, label) ->
+            FilterChip(
+                modifier = Modifier.animateItem(
+                    fadeInSpec = tween(220),
+                    placementSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
+                    fadeOutSpec = tween(140),
+                ),
+                selected = filter == kind,
+                onClick = { onFilter(if (filter == kind) "all" else kind) },
+                label = { Text(stringResource(label)) },
+                shape = CircleShape,
+                border = null,
+                colors = FilterChipDefaults.filterChipColors(
+                    containerColor = palette.raised, labelColor = palette.foreground,
+                    selectedContainerColor = palette.primary, selectedLabelColor = palette.onPrimary,
+                ),
+            )
+        }
+        if (!downloadedOnly) item(key = "downloaded") { downloadedChip(Modifier.animateItem()) }
     }
 }
