@@ -25,11 +25,16 @@ const browserPath =
   ].find(existsSync);
 assert(browserPath, "Set CAIMACK_TEST_BROWSER to a Chromium browser executable");
 const user = { id: randomUUID(), username: "connect-test", isAdmin: false };
+const albumId = randomUUID();
+const artistId = randomUUID();
+const playlistId = randomUUID();
 const tracks = ["First tone", "Second tone", "Third tone"].map((title) => ({
   id: randomUUID(),
   title,
-  artistId: randomUUID(),
+  artistId,
   artistName: "Connect test",
+  albumId,
+  albumTitle: "Test album",
   durationSeconds: 240,
   originalFileName: "silence.wav",
   isFavorite: false,
@@ -38,6 +43,29 @@ const tracks = ["First tone", "Second tone", "Third tone"].map((title) => ({
   createdAt: new Date().toISOString(),
   codec: "wav",
 }));
+const album = {
+  id: albumId,
+  title: "Test album",
+  artistId,
+  artistName: "Connect test",
+  trackCount: 3,
+  durationSeconds: 720,
+  hasCover: false,
+  createdAt: new Date().toISOString(),
+};
+const playlist = {
+  id: playlistId,
+  name: "Test playlist",
+  isPublic: false,
+  ownerId: user.id,
+  ownerName: user.username,
+  trackCount: 3,
+  durationSeconds: 720,
+  hasCover: false,
+  coverTrackId: tracks[0].id,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+};
 const audio = Buffer.alloc(44 + 8000 * 2 * 240);
 audio.write("RIFF");
 audio.writeUInt32LE(audio.length - 8, 4);
@@ -216,6 +244,11 @@ const backend = createServer(async (request, response) => {
       });
     if (path === "/api/tracks")
       return json(response, { items: tracks, total: 3, page: 1, pageSize: 50, totalPages: 1 });
+    if (path === `/api/albums/${albumId}`) return json(response, { ...album, tracks });
+    if (path === "/api/albums")
+      return json(response, { items: [album], total: 1, page: 1, pageSize: 50, totalPages: 1 });
+    if (path === `/api/playlists/${playlistId}`) return json(response, { ...playlist, tracks });
+    if (path === "/api/playlists") return json(response, [playlist]);
     if (path === "/api/tracks/lookup")
       return json(
         response,
@@ -494,6 +527,63 @@ try {
       ) === JSON.stringify(shuffledTitles),
     "visible queue matches the physical shuffled sequence",
   );
+  const collectionQueue = [...playback.trackIds];
+  const collectionIndex = playback.index;
+  const collectionPlays = commands.filter((command) => command.type === "play").length;
+  const navigate = async (href) => {
+    await controller.page.eval(`(() => {
+      const link = [...document.querySelectorAll('a')].find(link => link.getAttribute('href') === ${JSON.stringify(href)});
+      if (!link) throw Error('Missing navigation link: ' + ${JSON.stringify(href)});
+      link.click();
+    })()`);
+    await until(
+      () => controller.page.eval(`location.pathname === ${JSON.stringify(href)}`),
+      `navigate to ${href}`,
+    );
+  };
+  const toggleCollection = async (scope, name) => {
+    const pause = `${scope} button[aria-label="Pause"]`;
+    const play = `${scope} button[aria-label="Play ${name}"]`;
+    await until(
+      () => controller.page.eval(`Boolean(document.querySelector(${JSON.stringify(pause)}))`),
+      `${name} pause icon`,
+    );
+    await controller.page.eval(`document.querySelector(${JSON.stringify(pause)}).click()`);
+    await until(() => playback?.isPlaying === false, `${name} pauses the renderer`);
+    await until(
+      () => controller.page.eval(`Boolean(document.querySelector(${JSON.stringify(play)}))`),
+      `${name} play icon`,
+    );
+    await controller.page.eval(`document.querySelector(${JSON.stringify(play)}).click()`);
+    await until(() => playback?.isPlaying === true, `${name} resumes the renderer`);
+    assert.deepEqual(
+      playback.trackIds,
+      collectionQueue,
+      `${name} must preserve the shuffled queue`,
+    );
+    assert.equal(playback.index, collectionIndex, `${name} must preserve the selected track`);
+    assert.equal(
+      commands.filter((command) => command.type === "play").length,
+      collectionPlays,
+      `${name} must not restart playback`,
+    );
+  };
+  await navigate(`/albums/${albumId}`);
+  await toggleCollection("#content header", "Test album");
+  await navigate("/playlists");
+  await until(
+    () =>
+      controller.page.eval(`Boolean(document.querySelector('a[href="/playlists/${playlistId}"]'))`),
+    "playlist card loaded",
+  );
+  await navigate(`/playlists/${playlistId}`);
+  await toggleCollection("#content header", "Test playlist");
+  await navigate("/playlists");
+  await toggleCollection("#content .media-card", "Test playlist");
+  await navigate("/albums");
+  await toggleCollection("#content .media-card", "Test album");
+  await navigate("/tracks");
+  console.log("Collection header and card play/pause controls passed after shuffle");
   for (let index = 1; index < shuffledIds.length; index++) {
     await click(controller.page, "Next track");
     await until(
@@ -714,6 +804,7 @@ try {
         "mirrored player",
         "silent controller",
         "whole queue shuffle and sequential visible playback",
+        "album and playlist header/card play-pause after shuffle",
         "pause",
         "next",
         "volume",

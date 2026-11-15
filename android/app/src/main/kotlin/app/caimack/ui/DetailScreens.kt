@@ -171,7 +171,7 @@ internal fun Actions(tracks: List<Track>, play: (List<Track>, Int) -> Unit, onMo
     val complete = mine.count { it.done } == tracks.size
 
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        PlayActions(Modifier.weight(1f), enabled = !LocalOfflineLibrary.current || tracks.any { it.id in LocalAvailableTracks.current }, onPlay = { play(tracks, 0) })
+        PlayActions(Modifier.weight(1f), enabled = !LocalOfflineLibrary.current || tracks.any { it.id in LocalAvailableTracks.current }, trackIds = tracks.map { it.id }, onPlay = { play(tracks, 0) })
         libraryAction?.invoke()
         if (!librarySync && !LocalOfflineLibrary.current) Box(
             Modifier.size(48.dp).clip(CircleShape).clickable {

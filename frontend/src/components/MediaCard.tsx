@@ -3,7 +3,7 @@
 
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Route } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -220,10 +220,9 @@ export function SavedLibraryCard({ item, layout }: { item: LibraryItem; layout: 
 
 export function AlbumCard({ album }: { album: Album }) {
   const client = useQueryClient();
-  const { currentAlbumId, isPlaying } = useNowPlaying();
+  const { currentAlbumId } = useNowPlaying();
+  const detail = useQuery({ ...queries.album(album.id), enabled: currentAlbumId === album.id });
   const prefetch = () => void client.prefetchQuery(queries.album(album.id));
-
-  const playing = isPlaying && currentAlbumId === album.id;
 
   return (
     <Card
@@ -238,7 +237,7 @@ export function AlbumCard({ album }: { album: Album }) {
         <>
           <CardPlayButton
             name={album.title}
-            playing={playing}
+            tracks={detail.data?.tracks}
             load={async () => (await client.fetchQuery(queries.album(album.id))).tracks}
           />
         </>
@@ -274,6 +273,7 @@ export function PlaylistCard({ playlist, showOwner }: { playlist: Playlist; show
   const t = useT();
   const format = useFormat();
   const client = useQueryClient();
+  const detail = useQuery({ ...queries.playlist(playlist.id), enabled: false });
   const prefetch = () => void client.prefetchQuery(queries.playlist(playlist.id));
 
   const tail = showOwner
@@ -300,7 +300,7 @@ export function PlaylistCard({ playlist, showOwner }: { playlist: Playlist; show
         <>
           <CardPlayButton
             name={playlist.name}
-            playing={false}
+            tracks={detail.data?.tracks}
             load={async () => (await client.fetchQuery(queries.playlist(playlist.id))).tracks}
           />
         </>
@@ -311,31 +311,34 @@ export function PlaylistCard({ playlist, showOwner }: { playlist: Playlist; show
 
 export function CardPlayButton({
   name,
-  playing,
+  tracks,
   load,
   size,
   className = "right-2.5 bottom-2.5",
 }: {
   name: string;
-  playing: boolean;
+  tracks?: Track[];
   load: () => Promise<Track[]>;
   size?: 8 | 9;
   className?: string;
 }) {
   const t = useT();
-  const { playSet } = usePlayback();
+  const { playSet, setIsOnAir, isPlaying } = usePlayback();
   const play = useMutation({ mutationFn: load, onSuccess: (tracks) => playSet(tracks) });
+  const collection = tracks ?? play.data;
+  const active = collection !== undefined && setIsOnAir(collection);
+  const playing = active && isPlaying;
 
   return (
     <button
       type="button"
-      onClick={() => play.mutate()}
+      onClick={() => (active ? playSet(collection) : play.mutate())}
       disabled={play.isPending}
       aria-label={playing ? t("action.pause") : t("action.playNamed", { name })}
       aria-busy={play.isPending}
       className={cn("pointer-events-auto absolute rounded-full", className)}
     >
-      <PlayBadge size={size} playing={playing} visible={playing || play.isPending} standalone />
+      <PlayBadge size={size} playing={playing} visible={active || play.isPending} standalone />
       {play.isPending && <BufferingRing />}
     </button>
   );

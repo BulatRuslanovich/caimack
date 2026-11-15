@@ -177,6 +177,7 @@ internal fun TrackPage(
     val snackbar = LocalSnackbar.current
     val failure = stringResource(R.string.error_load)
     var preparing by remember(key) { mutableStateOf(false) }
+    var preparedIds by rememberSaveable(key) { mutableStateOf<List<String>?>(null) }
     var preparation by remember { mutableStateOf<Job?>(null) }
     DisposableEffect(key) { onDispose { preparation?.cancel() } }
     val prepare: () -> Unit = {
@@ -185,7 +186,10 @@ internal fun TrackPage(
             preparation = scope.launch {
                 try {
                     val tracks = collectionTracks { withNetworkRetries { load(it) } }
-                    if (tracks.isNotEmpty()) play(tracks, 0)
+                    if (tracks.isNotEmpty()) {
+                        preparedIds = tracks.map { it.id }
+                        play(tracks, 0)
+                    }
                 } catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) { snackbar.showSnackbar(failure) }
                 finally { preparing = false }
@@ -197,7 +201,7 @@ internal fun TrackPage(
         toolbar?.let { item { it() } }
         if (total != null && total > 0) item {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                PlayActions(enabled = !preparing, onPlay = prepare)
+                PlayActions(enabled = !preparing, trackIds = preparedIds ?: pager.items.map { it.id }, onPlay = prepare)
                 if (preparing) Text(stringResource(R.string.tracks_preparing), style = Type.small, color = LocalPalette.current.muted)
             }
         }

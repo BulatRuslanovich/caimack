@@ -687,10 +687,22 @@ function PlayerSessionProvider({
   const currentTrackId = connected.state.currentTrack?.id ?? null;
   const currentAlbumId = connected.state.currentTrack?.albumId ?? null;
   const displayedPlaying = connected.state.isPlaying;
+  const automaticTrackKey = useMemo(
+    () =>
+      Object.keys(connected.state.radioSession?.reasons ?? {})
+        .filter((id) => !connected.state.radioSession?.manualTrackIds?.includes(id))
+        .sort()
+        .join(","),
+    [connected.state.radioSession],
+  );
+  const automaticTrackIds = useMemo(
+    () => (automaticTrackKey ? automaticTrackKey.split(",") : []),
+    [automaticTrackKey],
+  );
 
   const nowPlaying = useMemo<PlayerNowPlaying>(
-    () => ({ currentTrackId, currentAlbumId, isPlaying: displayedPlaying }),
-    [currentTrackId, currentAlbumId, displayedPlaying],
+    () => ({ currentTrackId, currentAlbumId, isPlaying: displayedPlaying, automaticTrackIds }),
+    [currentTrackId, currentAlbumId, displayedPlaying, automaticTrackIds],
   );
 
   return (

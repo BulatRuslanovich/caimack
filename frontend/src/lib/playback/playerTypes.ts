@@ -51,6 +51,7 @@ export interface PlayerNowPlaying {
   currentTrackId: string | null;
   currentAlbumId: string | null;
   isPlaying: boolean;
+  automaticTrackIds: string[];
 }
 
 export interface PlayerActions {

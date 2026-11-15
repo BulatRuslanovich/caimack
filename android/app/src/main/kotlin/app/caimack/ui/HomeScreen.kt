@@ -39,6 +39,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.navigation.NavController
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.draw.drawBehind
@@ -48,6 +49,7 @@ import androidx.compose.ui.graphics.Color
 import app.caimack.R
 import app.caimack.api.HomeBlock
 import app.caimack.api.Track
+import app.caimack.playback.matchesCollection
 
 private const val HERO_PREVIEW = 3
 private const val MOBILE_UP_NEXT = 2
@@ -207,10 +209,7 @@ private fun DailyMix(tracks: List<Track>, total: Int, title: String, play: (List
                 Text(title, style = Type.section, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(pluralStringResource(R.plurals.count_tracks, total, total), style = Type.tiny, color = palette.muted)
             }
-            Box(Modifier.size(48.dp).clip(CircleShape).background(palette.action)
-                .clickable(role = androidx.compose.ui.semantics.Role.Button) { play(tracks, 0) }, contentAlignment = Alignment.Center) {
-                Icon(Lucide.Play, stringResource(R.string.action_play), tint = palette.onAction, modifier = Modifier.size(20.dp))
-            }
+            CollectionPlayButton(tracks.map { it.id }, size = 48.dp, iconSize = 20.dp) { play(tracks, 0) }
         }
         Text(tracks.map { artistsOf(it) }.distinct().take(3).joinToString(" · "),
             style = Type.small, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -244,19 +243,36 @@ private fun Collage(collage: List<Track>, lead: Track, modifier: Modifier) {
 }
 
 @Composable
-fun PlayActions(modifier: Modifier = Modifier, enabled: Boolean = true, onPlay: () -> Unit) {
+internal fun CollectionPlayButton(trackIds: List<String>, enabled: Boolean = true, size: Dp = 52.dp, iconSize: Dp = 22.dp, onPlay: () -> Unit) {
+    val palette = LocalPalette.current
+    val player = LocalContainer.current.player
+    val state by player.state.collectAsStateWithLifecycle()
+    val available = LocalAvailableTracks.current
+    val collection = if (LocalOfflineLibrary.current) trackIds.filter { it in available } else trackIds
+    val automatic = displayedRadio().notes.keys
+    val active = matchesCollection(collection, state.queue.map { it.id }, state.current?.id, automatic)
+    val playing = active && state.playing
+    Box(
+        Modifier.size(size).clip(CircleShape).background(palette.action).clickable(enabled = enabled, role = Role.Button) {
+            if (active) player.toggle() else onPlay()
+        },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(if (playing) Lucide.Pause else Lucide.Play,
+            stringResource(if (playing) R.string.action_pause else R.string.action_play),
+            tint = palette.onAction, modifier = Modifier.size(iconSize))
+    }
+}
+
+@Composable
+fun PlayActions(modifier: Modifier = Modifier, enabled: Boolean = true, trackIds: List<String> = emptyList(), onPlay: () -> Unit) {
     val palette = LocalPalette.current
     val player = LocalContainer.current.player
     val state by player.state.collectAsStateWithLifecycle()
     val background by animateColorAsState(if (state.shuffle) palette.primary else palette.background, label = "shuffle background")
     val foreground by animateColorAsState(if (state.shuffle) palette.onPrimary else palette.foreground, label = "shuffle foreground")
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier.size(52.dp).clip(CircleShape).background(palette.action).clickable(enabled = enabled, onClick = onPlay),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Lucide.Play, stringResource(R.string.action_play), tint = palette.onAction, modifier = Modifier.size(22.dp))
-        }
+        CollectionPlayButton(trackIds, enabled = enabled, onPlay = onPlay)
         Row(
             Modifier
                 .heightIn(min = 48.dp)
