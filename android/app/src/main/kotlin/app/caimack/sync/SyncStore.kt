@@ -16,6 +16,7 @@ import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.*
 
 internal fun JsonObject.string(key: String): String =
@@ -79,6 +80,7 @@ data class SyncStatus(
  * Private index plus a durable account-scoped action log. Public music is kept in the user's SAF
  * folder; no cache eviction policy can remove it.
  */
+@OptIn(ExperimentalSerializationApi::class)
 class SyncStore(private val context: Context, val json: Json, private val server: Server) {
     val catalogRevision = MutableStateFlow(0L)
     private var tracksRevision = -1L
@@ -98,20 +100,20 @@ class SyncStore(private val context: Context, val json: Json, private val server
     private val confirmedFile = AtomicFile(File(directory, "confirmed.json"))
     private val rejectedFile = AtomicFile(File(directory, "rejected.json"))
     @Volatile
-    var snapshot: JsonObject? = read(snapshotFile)?.let { json.parseToJsonElement(it).jsonObject }
+    var snapshot: JsonObject? = read(snapshotFile)
         private set
 
     @Volatile
     var index: FileIndex =
-        read(indexFile)?.let { json.decodeFromString<FileIndex>(it) } ?: FileIndex()
+        read(indexFile) ?: FileIndex()
         private set
 
     private var actions: List<SyncAction> =
-        read(actionsFile)?.let { json.decodeFromString<List<SyncAction>>(it) } ?: emptyList()
+        read(actionsFile) ?: emptyList()
     private var confirmed: List<SyncAction> =
-        read(confirmedFile)?.let { json.decodeFromString<List<SyncAction>>(it) } ?: emptyList()
+        read(confirmedFile) ?: emptyList()
     private var rejected: List<JsonObject> =
-        read(rejectedFile)?.let { json.decodeFromString<List<JsonObject>>(it) } ?: emptyList()
+        read(rejectedFile) ?: emptyList()
     @Volatile private var signedIn: String? = null
     val status =
         MutableStateFlow(
@@ -252,7 +254,7 @@ class SyncStore(private val context: Context, val json: Json, private val server
         val updated = actions + action
         write(
             actionsFile,
-            json.encodeToString(updated),
+            updated,
         ) // persist before acknowledging optimistic UI
         actions = updated
         catalogChanged(metadata = true)
@@ -285,7 +287,7 @@ class SyncStore(private val context: Context, val json: Json, private val server
         // Write failures first. Replaying after a crash is harmless and retains
         // the reason for a rejected edit instead of silently dropping it.
         rejected = (rejected + failures).distinctBy { it.string("id") }
-        write(rejectedFile, json.encodeToString(rejected))
+        write(rejectedFile, rejected)
         confirmed =
             (confirmed +
                     actions.filter { action ->
@@ -294,9 +296,9 @@ class SyncStore(private val context: Context, val json: Json, private val server
                         }
                     })
                 .distinctBy { it.id }
-        write(confirmedFile, json.encodeToString(confirmed))
+        write(confirmedFile, confirmed)
         val updated = actions.filter { it.id !in accepted }
-        write(actionsFile, json.encodeToString(updated))
+        write(actionsFile, updated)
         actions = updated
         catalogChanged(metadata = true)
         status.value = status.value.copy(pending = actions.size, rejected = rejected.size)
@@ -327,7 +329,7 @@ class SyncStore(private val context: Context, val json: Json, private val server
         ) {
             "Incomplete library manifest"
         }
-        write(snapshotFile, value.toString())
+        write(snapshotFile, value)
         snapshot = value
         confirmedFile.delete()
         confirmed = emptyList()
@@ -339,7 +341,7 @@ class SyncStore(private val context: Context, val json: Json, private val server
     fun updateIndex(transform: (FileIndex) -> FileIndex) {
         val before = index
         val next = transform(before)
-        write(indexFile, json.encodeToString(next))
+        write(indexFile, next)
         index = next
         if (next.files != before.files) catalogChanged()
         status.value = status.value.copy(completed = index.files.size)
@@ -388,14 +390,14 @@ class SyncStore(private val context: Context, val json: Json, private val server
             ?.toString()
     }
 
-    private fun read(file: AtomicFile): String? =
+    private inline fun <reified T> read(file: AtomicFile): T? =
         if (!file.baseFile.exists() && !File(file.baseFile.path + ".bak").exists()) null
-        else file.openRead().bufferedReader().use { it.readText() }
+        else file.openRead().use { json.decodeFromStream<T>(it) }
 
-    private fun write(file: AtomicFile, value: String) {
+    private inline fun <reified T> write(file: AtomicFile, value: T) {
         val stream = file.startWrite()
         try {
-            stream.write(value.toByteArray())
+            json.encodeToStream(value, stream)
             file.finishWrite(stream)
         } catch (error: Throwable) {
             file.failWrite(stream)

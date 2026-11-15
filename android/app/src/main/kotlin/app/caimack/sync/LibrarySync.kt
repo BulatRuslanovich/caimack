@@ -10,6 +10,7 @@ import app.caimack.R
 import app.caimack.session.Server
 import java.io.File
 import java.io.IOException
+import java.io.OutputStream
 import java.security.MessageDigest
 import java.util.Base64
 import java.util.UUID
@@ -20,6 +21,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -37,6 +39,7 @@ private data class Transfer(
     val verified: Boolean = false,
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 class LibrarySync(
     private val context: Context,
     val store: SyncStore,
@@ -88,10 +91,9 @@ class LibrarySync(
                     folder,
                     service,
                     "library.json",
-                    snapshot.toString().toByteArray(),
                     "application/json",
                     "catalog",
-                )
+                ) { store.json.encodeToStream(JsonObject.serializer(), snapshot, it) }
                 val vectors = snapshot.string("vectorVersion")
                 val vectorFile = store.index.exports["vectors"]
                 if (
@@ -99,15 +101,21 @@ class LibrarySync(
                         vectorFile == null ||
                         !folder.exists(Uri.parse(vectorFile))
                 ) {
-                    val value = getJson(client, "api/sync/vectors")
-                    export(
-                        folder,
-                        service,
-                        "vectors.json",
-                        value.toString().toByteArray(),
-                        "application/json",
-                        "vectors",
-                    )
+                    // Vectors are an opaque export. Parsing every number into a JSON tree
+                    // and rebuilding one large string exhausts the Android heap.
+                    execute(client, Request.Builder().url(url("api/sync/vectors")).build()).use { response ->
+                        export(folder, service, "vectors.json", "application/json", "vectors") { output ->
+                            response.body.byteStream().use { input ->
+                                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                                while (true) {
+                                    checkActive()
+                                    val count = input.read(buffer)
+                                    if (count == -1) break
+                                    output.write(buffer, 0, count)
+                                }
+                            }
+                        }
+                    }
                     store.updateIndex { it.copy(vectorVersion = vectors) }
                 }
                 syncAssets(client, snapshot)
@@ -226,10 +234,9 @@ class LibrarySync(
                         folder,
                         service,
                         "library.json",
-                        refreshed.toString().toByteArray(),
                         "application/json",
                         "catalog",
-                    )
+                    ) { store.json.encodeToStream(JsonObject.serializer(), refreshed, it) }
                     exportPlaylists(folder, root, refreshed)
                 }
                 checkActive()
@@ -284,7 +291,7 @@ class LibrarySync(
 
     private fun getJson(client: OkHttpClient, path: String, version: String? = null): JsonElement =
         execute(client, Request.Builder().url(url(path, version)).build()).use { response ->
-            store.json.parseToJsonElement(response.body.string())
+            store.json.decodeFromStream<JsonElement>(response.body.byteStream())
         }
 
     private suspend fun uploadActions(client: OkHttpClient) {
@@ -309,10 +316,7 @@ class LibrarySync(
                             .build(),
                     )
                     .use {
-                        store.json
-                            .parseToJsonElement(it.body.string())
-                            .jsonObject
-                            .objects("results")
+                        store.json.decodeFromStream<JsonObject>(it.body.byteStream()).objects("results")
                     }
             if (result.map { it.string("id") }.toSet() != batch.map { it.id }.toSet())
                 throw IOException("Incomplete sync acknowledgement")
@@ -534,6 +538,15 @@ class LibrarySync(
         bytes: ByteArray,
         mime: String,
         key: String,
+    ): String = export(folder, parent, name, mime, key) { it.write(bytes) }
+
+    private inline fun export(
+        folder: MusicFolder,
+        parent: Uri,
+        name: String,
+        mime: String,
+        key: String,
+        write: (OutputStream) -> Unit,
     ): String {
         val old = store.index.exports[key]
         // Give the provider an unambiguous name before writing. No overwrite of
@@ -545,7 +558,7 @@ class LibrarySync(
                 ".${UUID.randomUUID()}-$name.part",
                 "application/octet-stream",
             )
-        folder.output(temp).use { it.write(bytes) }
+        folder.output(temp).use { write(it) }
         if (old != null && folder.exists(Uri.parse(old))) folder.delete(Uri.parse(old))
         val target =
             if (folder.children(parent).containsKey(name))

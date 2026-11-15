@@ -31,7 +31,7 @@ class SyncStoreProjectionTest {
         server.remember("https://example.invalid/")
         val json = Json { ignoreUnknownKeys = true }
         val user = User("alice", "Alice")
-        val first = Track("one", "One", "artist", "Artist", durationSeconds = 60)
+        val first = Track("one", "Тепло твоих рук 🎵 \"live\"\n", "artist", "Artist", durationSeconds = 60)
         val second = first.copy(id = "two", title = "Two")
         fun manifest(tracks: List<Track>) = buildJsonObject {
             put("protocol", 1); put("serverId", "test"); put("user", json.encodeToJsonElement(user))
@@ -52,6 +52,23 @@ class SyncStoreProjectionTest {
             store.updateIndex { it.copy(files = it.files + (second.id to audio(second.id))) }
             assertEquals(listOf("one", "two"), store.tracks().map { it.id })
             assertSame(initial.single(), store.tracks().first())
+            val edit = SyncAction(kind = "favorite", entityId = first.id, payload = buildJsonObject { put("value", true) })
+            assertTrue(store.enqueue(edit))
+            val restored = SyncStore(isolated, json, server).apply { session(user) }
+            assertEquals(store.snapshot, restored.snapshot)
+            assertEquals(store.index, restored.index)
+            assertEquals(listOf(edit), restored.pending())
+            assertEquals(first.title, restored.tracks().first().title)
+            store.acknowledge(listOf(buildJsonObject { put("id", edit.id); put("status", "applied") }))
+            val confirmed = SyncStore(isolated, json, server).apply { session(user) }
+            assertTrue(confirmed.pending().isEmpty())
+            assertEquals(listOf(edit), confirmed.edits())
+            val rejected = edit.copy(id = "rejected-edit")
+            assertTrue(store.enqueue(rejected))
+            store.acknowledge(listOf(buildJsonObject {
+                put("id", rejected.id); put("status", "rejected"); put("message", "Нет доступа — попробуйте позже")
+            }))
+            assertEquals("Нет доступа — попробуйте позже", SyncStore(isolated, json, server).rejectionMessages())
             store.accept(manifest(listOf(first.copy(title = "Updated"), second)))
             assertEquals("Updated", store.tracks().first().title)
             store.updateIndex { it.copy(files = emptyMap()) }

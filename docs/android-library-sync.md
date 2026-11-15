@@ -30,6 +30,12 @@ endpoint uses HTTP, enable **Allow HTTP on the local network** in connection
 settings. A different server URL has its own offline binding; the app currently
 has no separate LAN address just for synchronization.
 
+The default Docker/Caddy deployment redirects HTTP to HTTPS and serves the
+configured public hostname. Opening `http://<LAN-IP>` can therefore redirect to
+`https://<LAN-IP>`, which does not match the domain certificate. Allowing local
+HTTP does not bypass that redirect or certificate verification. Use the domain
+with a local DNS override, or explicitly configure a separate local endpoint.
+
 Automatic jobs are persisted across reboot and scheduled every 15 minutes, with
 an additional attempt after joining a local network or recording an action.
 Charging is not required. Android can defer background jobs in Doze or under
@@ -61,6 +67,12 @@ private catalog, image cache, file ownership index and action journal so browsin
 searching, lyrics and playback work without a server after restarting the app.
 Vectors are exported as data; the Android client does not run MERT or recommendation
 algorithms.
+
+Vector exports stream from the local server into a temporary document with a
+fixed-size buffer. Their size does not create a corresponding JSON tree, string
+or byte array in the Android heap. The previous complete export and its version
+remain current if a transfer is interrupted. Catalog JSON is also read and
+written through streams; its decoded metadata remains available for offline use.
 
 While synchronization is active for the signed-in account, manual download
 buttons and per-track download badges are hidden, and new manual/background
