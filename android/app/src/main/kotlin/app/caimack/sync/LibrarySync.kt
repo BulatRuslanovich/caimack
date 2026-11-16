@@ -78,7 +78,7 @@ class LibrarySync(
                 recoverCreation(folder)
                 clean(folder)
                 uploadActions(client)
-                val snapshot = getJson(client, "api/sync/snapshot").jsonObject
+                val snapshot = getSnapshot(client)
                 checkActive()
                 store.accept(snapshot)
                 val identity =
@@ -227,7 +227,7 @@ class LibrarySync(
                 exportPlaylists(folder, root, snapshot)
                 if (store.pending().isNotEmpty()) {
                     uploadActions(client)
-                    val refreshed = getJson(client, "api/sync/snapshot").jsonObject
+                    val refreshed = getSnapshot(client)
                     checkActive()
                     store.accept(refreshed)
                     export(
@@ -292,6 +292,11 @@ class LibrarySync(
     private fun getJson(client: OkHttpClient, path: String, version: String? = null): JsonElement =
         execute(client, Request.Builder().url(url(path, version)).build()).use { response ->
             store.json.decodeFromStream<JsonElement>(response.body.byteStream())
+        }
+
+    private fun getSnapshot(client: OkHttpClient): JsonObject =
+        execute(client, Request.Builder().url(url("api/sync/snapshot")).build()).use { response ->
+            SnapshotJson(store.json).read(response.body.byteStream())
         }
 
     private suspend fun uploadActions(client: OkHttpClient) {

@@ -100,7 +100,10 @@ class SyncStore(private val context: Context, val json: Json, private val server
     private val confirmedFile = AtomicFile(File(directory, "confirmed.json"))
     private val rejectedFile = AtomicFile(File(directory, "rejected.json"))
     @Volatile
-    var snapshot: JsonObject? = read(snapshotFile)
+    var snapshot: JsonObject? =
+        if (snapshotFile.baseFile.exists() || File(snapshotFile.baseFile.path + ".bak").exists())
+            snapshotFile.openRead().use { SnapshotJson(json).read(it) }
+        else null
         private set
 
     @Volatile

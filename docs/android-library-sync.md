@@ -72,7 +72,11 @@ Vector exports stream from the local server into a temporary document with a
 fixed-size buffer. Their size does not create a corresponding JSON tree, string
 or byte array in the Android heap. The previous complete export and its version
 remain current if a transfer is interrupted. Catalog JSON is also read and
-written through streams; its decoded metadata remains available for offline use.
+written through streams. Track lists and other browsing metadata remain decoded;
+lyrics and waveforms are retained as encoded per-track JSON and decoded only for
+the requested track. Loading a new snapshot or restoring it after a restart does
+not build hundreds of thousands of lyric-line maps and waveform-number objects.
+The persisted and exported catalog keeps the same JSON format.
 
 While synchronization is active for the signed-in account, manual download
 buttons and per-track download badges are hidden, and new manual/background
@@ -202,6 +206,20 @@ Server integration tests cover concurrent retries, timestamps, account/server
 binding, rejected actions, merged playlist changes and separate audio/tag
 versions. Android unit tests cover offline catalog contracts and network address
 restrictions.
+
+`SnapshotJsonDeviceTest` generates a catalog of 2,500 tracks with 400,000 timed
+lyric lines and 600,000 waveform peaks. It checks retained heap usage below
+96 MiB, unchanged JSON export, offline detail reads and restoration from the
+private snapshot. `SyncStreamingDeviceTest` also covers a vector export larger
+than 100 MiB and interrupted-transfer recovery. These tests use an isolated app
+package and a fixture documents provider; no real account or music folder is
+required:
+
+```sh
+cd android
+./gradlew :app:connectedDebugAndroidTest -PcaimackIsolatedUiTests=true \
+  '-Pandroid.testInstrumentationRunnerArguments.class=app.caimack.sync.SnapshotJsonDeviceTest'
+```
 
 For the physical-device test, connect an Android 13+ phone through adb, join
 Wi-Fi and grant a music folder through the app. The test uses a separate random
