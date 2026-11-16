@@ -236,10 +236,10 @@ private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Mo
             },
         contentAlignment = alignment,
     ) {
-        // Include the extended disc, the widest beat glow and its vertical orbits.
-        // Reserving their bounds keeps the aura away from the scene's clipping edge.
-        val sleeveSize = minOf((maxWidth - 24.dp) / 1.7f, (maxHeight - 24.dp) / 1.7f, 300.dp).coerceAtLeast(1.dp)
-        Box(Modifier.size(sleeveSize * 1.7f).testTag("player-record-visuals"), contentAlignment = Alignment.Center) {
+        // Size the sleeve around the extended record's footprint. The soft aura
+        // can use the scene's side insets instead of shrinking the artwork.
+        val sleeveSize = minOf((maxWidth - 8.dp) / (1 + RECORD_OUT), (maxHeight - 24.dp) / 1.4f, 320.dp).coerceAtLeast(1.dp)
+        Box(Modifier.size(width = sleeveSize * (1 + RECORD_OUT), height = sleeveSize * 1.4f).testTag("player-record-visuals"), contentAlignment = Alignment.Center) {
             Box(
                 Modifier
                     .size(sleeveSize)
@@ -256,8 +256,6 @@ private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Mo
                     state.next?.takeIf { offset < 0 }?.let { Neighbour(it, offset + step) }
                 }
 
-                BeatGlow(track, state.playing && !state.buffering, extension, Modifier.fillMaxSize().offset { IntOffset(swipe.value.roundToInt(), 0) })
-
                 Record(
                     track,
                     spinning = state.playing && !state.buffering,
@@ -265,6 +263,7 @@ private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Mo
                     twist = twist,
                     modifier = Modifier.fillMaxSize().offset { IntOffset(swipe.value.roundToInt(), 0) },
                     jacket = if (sceneGesture == null || sceneGesture.sharedCover) Modifier.nowPlayingCover(LocalFullPlayerVisibility.current) else Modifier,
+                    aura = { BeatGlow(track, state.playing && !state.buffering, it) },
                 )
             }
         }
@@ -272,7 +271,7 @@ private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Mo
 }
 
 @Composable
-private fun BeatGlow(track: Track, playing: Boolean, extension: Float, modifier: Modifier) {
+private fun BeatGlow(track: Track, playing: Boolean, modifier: Modifier) {
     val player = LocalContainer.current.player
     val palette = LocalPalette.current
     val tone = LocalNowPlayingTone.current
@@ -302,34 +301,43 @@ private fun BeatGlow(track: Track, playing: Boolean, extension: Float, modifier:
         }
     }
 
-    Canvas(modifier) {
+    Canvas(modifier.testTag("player-record-aura")) {
         if (opacity < 0.01f) return@Canvas
-        val centre = Offset(size.width * (RECORD_OUT * 0.5f * extension + 0.5f), size.height / 2)
-        val disc = size.width * 0.5f
-        val radius = disc * (1.6f + 0.1f * pulse)
-        drawCircle(Brush.radialGradient(listOf(light.copy(alpha = opacity * (0.07f + 0.035f * pulse)),
-            Color.Transparent), centre, radius), radius, centre)
-        // Slow broken orbits; the wider bass arc follows the track BPM when available.
+        // This canvas shares the disc's padding and animated offset in Record.
+        // Keep the light at the rim so it emerges from behind the vinyl.
+        val centre = center
+        val disc = size.minDimension * 0.5f
+        val radius = disc * (1.26f + 0.02f * pulse)
+        drawCircle(Brush.radialGradient(
+            0f to Color.Transparent,
+            0.64f to Color.Transparent,
+            0.78f to light.copy(alpha = opacity * (0.12f + 0.045f * pulse)),
+            0.88f to light.copy(alpha = opacity * (0.045f + 0.015f * pulse)),
+            1f to Color.Transparent,
+            center = centre,
+            radius = radius,
+        ), radius, centre)
+        // Fine arcs echo the grooves, close to the edge of the physical record.
         repeat(3) { ring ->
-            val r = disc * (1.12f + ring * 0.15f + pulse * 0.025f)
+            val r = disc * (1.035f + ring * 0.07f + pulse * 0.015f)
             val direction = if (ring == 1) -1 else 1
             val start = phase * (2.5f + ring) * direction + ring * 108f
             repeat(2) { segment ->
-                drawArc(light.copy(alpha = opacity * (0.16f - ring * 0.03f)), start + segment * 180f,
+                drawArc(light.copy(alpha = opacity * (0.18f - ring * 0.04f)), start + segment * 180f,
                     64f + ring * 12f, false, Offset(centre.x - r, centre.y - r), Size(r * 2, r * 2),
-                    style = Stroke((0.8f + (2 - ring) * 0.25f).dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
+                    style = Stroke((0.65f + (2 - ring) * 0.15f).dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
             }
         }
         if (pulse > 0.02f) {
-            val r = disc * (1.08f + (1 - pulse) * 0.48f)
+            val r = disc * (1.025f + (1 - pulse) * 0.22f)
             drawArc(light.copy(alpha = opacity * pulse * 0.15f), -58f, 116f, false,
-                Offset(centre.x - r, centre.y - r), Size(r * 2, r * 2), style = Stroke(2.dp.toPx()))
+                Offset(centre.x - r, centre.y - r), Size(r * 2, r * 2), style = Stroke(1.2.dp.toPx()))
         }
         repeat(3) { glint ->
             val angle = (phase * (3.0 + glint) + glint * 123) * Math.PI / 180
-            val r = disc * (1.15f + glint * 0.12f)
+            val r = disc * (1.06f + glint * 0.055f)
             val shimmer = (0.5 + 0.5 * kotlin.math.sin(phase * 0.8 + glint * 2)).toFloat()
-            drawCircle(light.copy(alpha = opacity * shimmer * 0.35f), (0.8f + shimmer * 0.5f).dp.toPx(),
+            drawCircle(light.copy(alpha = opacity * shimmer * 0.28f), (0.65f + shimmer * 0.35f).dp.toPx(),
                 centre + Offset(kotlin.math.cos(angle).toFloat() * r, kotlin.math.sin(angle).toFloat() * r))
         }
     }

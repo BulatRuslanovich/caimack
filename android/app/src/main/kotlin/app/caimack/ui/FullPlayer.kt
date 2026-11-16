@@ -179,18 +179,16 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
         val viewportHeight = maxHeight
         val portrait = maxWidth <= maxHeight
-        val sleeveSize = minOf((maxWidth - 64.dp) / 1.7f, (maxHeight - 24.dp) / 1.7f, 300.dp).coerceAtLeast(1.dp)
         val safeInsets = WindowInsets.safeDrawing.asPaddingValues()
         val safeTop = safeInsets.calculateTopPadding() + 12.dp
-        val metadataTop = viewportHeight / 2 + sleeveSize / 2 + 24.dp
         val artworkTop = safeTop + 48.dp
-        // Use the seekbar's bottom-anchored block and one-line metadata as a
+        // Use the seekbar's bottom-anchored block and two-line metadata as a
         // stable reference, so a longer title never shifts the artwork.
         val baselineTextHeight = with(LocalDensity.current) {
-            Type.display.lineHeight.toDp() + Type.body.lineHeight.toDp() + Type.tiny.lineHeight.toDp() * 2
+            Type.display.lineHeight.toDp() * 2 + Type.body.lineHeight.toDp() + Type.tiny.lineHeight.toDp() * 2
         }
         val baselineControlsHeight = baselineTextHeight + 48.dp + 68.dp + 48.dp + 24.dp
-        val artworkBottom = (viewportHeight - safeInsets.calculateBottomPadding() - 12.dp - baselineControlsHeight).coerceAtLeast(metadataTop)
+        val artworkBottom = (viewportHeight - safeInsets.calculateBottomPadding() - 12.dp - baselineControlsHeight).coerceAtLeast(artworkTop + 24.dp)
         PlayerSceneBackground(scene, Modifier.matchParentSize())
         if (portrait && panel == Panel.None) {
             PlayerArtwork(
@@ -204,7 +202,7 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
             val wide = !portrait
             // Centre the artwork in the space above the metadata, keeping the
             // lower block anchored to the seekbar as titles grow or scroll.
-            val controlsTop = metadataTop - safeTop
+            val controlsTop = artworkBottom - safeTop
             val controlsHeight = (maxHeight - controlsTop).coerceAtLeast(96.dp)
 
             val header = @Composable {
@@ -298,7 +296,7 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
                             tint = if (state.repeat == Player.REPEAT_MODE_OFF) palette.muted else palette.primary,
                         ) { haptic(PlayerHaptic.Button); player.cycleRepeat() }
                     }
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().testTag("full-player-footer"), verticalAlignment = Alignment.CenterVertically) {
                         PlaybackDevicesButton(Modifier.weight(1f))
                         Box(Modifier.semantics { selected = panel == Panel.Lyrics }) {
                             IconAction(Lucide.MicVocal, stringResource(R.string.lyrics_title), tint = if (panel == Panel.Lyrics) palette.primary else palette.muted) { panel = if (panel == Panel.Lyrics) Panel.None else Panel.Lyrics }
@@ -427,6 +425,7 @@ fun Record(
     sleeve: (@Composable (Modifier) -> Unit)? = null,
     vertical: Boolean = false,
     jacket: Modifier = Modifier,
+    aura: (@Composable (Modifier) -> Unit)? = null,
 ) {
     val motion = playerMotionEnabled()
     val slid by animateFloatAsState(if (out) RECORD_OUT else 0f, tween(if (motion) 650 else 0), label = "record-out")
@@ -444,6 +443,7 @@ fun Record(
         val slide = with(LocalDensity.current) { edge.toPx() }
         val shift = (slide * slid * if (vertical) CRATE_OUT / RECORD_OUT else 1f).roundToInt()
         Box(Modifier.fillMaxSize().padding(edge * 0.02f).offset { if (vertical) IntOffset(0, -shift) else IntOffset(shift, 0) }) {
+            aura?.invoke(Modifier.fillMaxSize())
             Box(Modifier.fillMaxSize().shadow(16.dp, CircleShape).graphicsLayer { rotationZ = angle.value + twist }.clip(CircleShape)) {
                 Canvas(Modifier.fillMaxSize()) {
                     val radius = size.minDimension / 2

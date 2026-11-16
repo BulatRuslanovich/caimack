@@ -20,6 +20,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -42,7 +43,7 @@ class FullPlayerTest {
     @Test fun changingTitleLengthKeepsArtworkStableAndHeaderCentered() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val container = (context.applicationContext as CaimackApp).container
-        val tracks = listOf("Коротко", "Очень длинное название концертной записи на берегу реки, которое занимает несколько строк и не должно сдвигать пластинку").mapIndexed { index, title ->
+        val tracks = listOf("Тепло твоих рук", "Очень длинное название концертной записи на берегу реки, которое занимает несколько строк и не должно сдвигать пластинку").mapIndexed { index, title ->
             Track(id = "layout-$index", title = title, artistId = "artist", artistName = "Artist", durationSeconds = 200)
         }
         val state = mutableStateOf(PlayerState(queue = tracks, playing = true))
@@ -60,16 +61,24 @@ class FullPlayerTest {
         assertEquals("Now playing is centered between equal actions", header.center.x, contextLabel.center.x, 1f)
         val scene = compose.onNodeWithTag("player-artwork-scene").fetchSemanticsNode().boundsInRoot
         val visuals = compose.onNodeWithTag("player-record-visuals").fetchSemanticsNode().boundsInRoot
-        assertTrue("The complete aura has horizontal breathing room", visuals.left > scene.left && visuals.right < scene.right)
-        assertTrue("The complete aura has vertical breathing room", visuals.top > scene.top && visuals.bottom < scene.bottom)
+        assertTrue("The sleeve and vinyl have horizontal breathing room", visuals.left > scene.left && visuals.right < scene.right)
+        assertTrue("The sleeve and vinyl have vertical breathing room", visuals.top > scene.top && visuals.bottom < scene.bottom)
         val before = compose.onNodeWithTag("player-record").fetchSemanticsNode().boundsInRoot
         val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        assertTrue("Artwork fills at least 58% of the portrait width", before.width >= root.width * 0.58f)
+        val aura = compose.onNodeWithTag("player-record-aura").fetchSemanticsNode().boundsInRoot
+        assertEquals("Aura follows the extended disc's spindle", before.left + before.width * (0.5f + RECORD_OUT), aura.center.x, 1.5f)
+        assertEquals("Aura is vertically centered on the disc", before.center.y, aura.center.y, 1.5f)
+        assertEquals("Aura uses the physical disc diameter", before.width * 0.96f, aura.width, 2f)
         assertEquals("The sleeve and extended disc are centered together", root.center.x, before.center.x + before.width * RECORD_OUT / 2, 1.5f)
         assertEquals("The artwork area starts below the header", header.bottom, scene.top, 1.5f)
         assertEquals("Artwork is centered in the area above the seekbar block", scene.center.y, before.center.y, 1.5f)
         val title = compose.onNodeWithText(tracks[0].title).fetchSemanticsNode().boundsInRoot
         assertTrue("The artwork area ends before the track metadata", scene.bottom <= title.top)
         assertTrue("The title belongs below the artwork", title.top > before.bottom)
+        val footer = compose.onNodeWithTag("full-player-footer").getUnclippedBoundsInRoot()
+        val controls = compose.onNodeWithTag("full-player-controls-region").getUnclippedBoundsInRoot()
+        assertTrue("The entire footer fits without scrolling for a two-line title", footer.bottom <= controls.bottom)
         File(context.getExternalFilesDir(null), "ux-bugs-player-short.png").outputStream().use {
             compose.onRoot().captureToImage().asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
         }
@@ -83,6 +92,9 @@ class FullPlayerTest {
         }
         compose.runOnIdle { state.value = state.value.copy(playing = false) }
         compose.mainClock.advanceTimeBy(1000)
+        val pausedCover = compose.onNodeWithTag("player-record").fetchSemanticsNode().boundsInRoot
+        val pausedAura = compose.onNodeWithTag("player-record-aura").fetchSemanticsNode().boundsInRoot
+        assertEquals("Aura returns with the retracted disc", pausedCover.center.x, pausedAura.center.x, 1.5f)
         compose.mainClock.autoAdvance = true
         compose.onNodeWithContentDescription(context.getString(R.string.player_next)).performScrollTo().assertIsDisplayed()
     }
