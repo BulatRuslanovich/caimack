@@ -4,3 +4,36 @@
   outline: 2px solid var(--foreground);
   outline-offset: 4px;
 }
+
+/* The persistent silhouette and dot survive monochrome palettes and hover. */
+.player-transport .player-mode {
+  position: relative;
+  color: var(--muted-foreground);
+}
+
+.player-transport .player-mode[aria-pressed="true"] {
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+.player-transport .player-mode[aria-pressed="true"]::after {
+  content: "";
+  position: absolute;
+  bottom: 3px;
+  left: calc(50% - 2px);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.player-transport .player-mode:active:not(:disabled) {
+  transform: scale(0.94);
+  box-shadow: inset 0 0 0 2px currentColor;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-transport .player-mode:active:not(:disabled) {
+    transform: none;
+  }
+}

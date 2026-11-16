@@ -153,6 +153,9 @@ fun CoverTone.color(palette: Palette, colorway: Colorway, alpha: Float = 1f): Co
     return oklch(lightness, min(chroma * 1.5, ceiling) * strength, hue, alpha)
 }
 
+/** Fullscreen artwork lighting has no dependency on the application colourway. */
+fun CoverTone.playerColor(): Color = oklch(0.56, min(chroma * 1.5, 0.16) * 0.5, hue)
+
 val LocalNowPlayingTone = compositionLocalOf { Color.Unspecified }
 internal val LocalNowPlayingCoverTone = compositionLocalOf<LoadedPlayerTone?> { null }
 

@@ -70,12 +70,13 @@ private fun LibraryCategory(label: String, active: Boolean, onClick: () -> Unit)
         contentAlignment = Alignment.Center,
     ) {
         Box(
-            Modifier.clip(CircleShape).background(if (active) palette.primary else palette.raised)
+            Modifier.clip(CircleShape).background(if (active) palette.selection else palette.raised)
+                .then(if (active) Modifier.border(1.dp, palette.primary, CircleShape) else Modifier)
                 .padding(horizontal = 12.dp, vertical = 6.dp),
             contentAlignment = Alignment.Center,
         ) {
             Text(label, style = Type.small.copy(fontWeight = FontWeight.Medium),
-                color = if (active) palette.onPrimary else palette.foreground)
+                color = if (active) palette.primary else palette.foreground)
         }
     }
 }

@@ -38,7 +38,7 @@ export function PlayerTransport({ size = "bar" }: { size?: "bar" | "full" }) {
       <Button
         variant="ghost"
         size={large ? "icon-lg" : "icon"}
-        className={cn(!large && "text-faint", shuffle && "text-primary")}
+        className="player-mode"
         onClick={toggleShuffle}
         aria-label={t("player.shuffle")}
         aria-pressed={shuffle}
@@ -74,7 +74,7 @@ export function PlayerTransport({ size = "bar" }: { size?: "bar" | "full" }) {
       <Button
         variant="ghost"
         size={large ? "icon-lg" : "icon"}
-        className={cn(!large && "text-faint", repeat !== "off" && "text-primary")}
+        className="player-mode"
         onClick={cycleRepeat}
         aria-label={repeatLabel}
         aria-pressed={repeat !== "off"}

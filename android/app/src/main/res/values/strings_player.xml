@@ -104,4 +104,9 @@
     <string name="player_delivery_network">Lower quality for a slow connection</string>
     <string name="player_delivery_download">Playing the downloaded AAC version</string>
     <string name="player_delivery_waiting">Waiting for the connection · resumes automatically</string>
+    <string name="player_shuffle_on">Shuffle on</string>
+    <string name="player_shuffle_off">Shuffle off</string>
+    <string name="player_repeat_off">Repeat off</string>
+    <string name="player_repeat_all">Repeat queue</string>
+    <string name="player_repeat_one">Repeat one track</string>
 </resources>

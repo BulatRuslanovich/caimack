@@ -19,10 +19,10 @@ export const DEFAULT_COLORWAY: Colorway = "coffee";
 
 export const THEME_COLORS: Record<Colorway, Record<Palette, string>> = {
   coffee: { dark: "#171819", light: "#eeefec" },
-  graphite: { dark: "#000000", light: "#f2f0eb" },
-  midnight: { dark: "#0e121a", light: "#eceff5" },
-  plum: { dark: "#161119", light: "#f5eef0" },
-  studio: { dark: "#0f1311", light: "#edf1ed" },
+  graphite: { dark: "#000000", light: "#f1f1ef" },
+  midnight: { dark: "#14171c", light: "#eff0f2" },
+  plum: { dark: "#19171b", light: "#f2eff0" },
+  studio: { dark: "#151a17", light: "#eff2ef" },
 };
 
 export const NO_FLASH_THEME_SCRIPT = `try {

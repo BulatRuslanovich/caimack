@@ -23,7 +23,7 @@ export function ShuffleButton({ tracks, compact = false }: { tracks: Track[]; co
       className={cn(
         compact && "max-sm:w-10 max-sm:px-0",
         shuffle &&
-          "border-primary bg-primary text-primary-foreground hover:border-primary hover:bg-primary/90",
+          "border-primary bg-primary-soft text-primary hover:border-primary hover:bg-primary-soft",
       )}
     >
       <ShuffleIcon size={16} />

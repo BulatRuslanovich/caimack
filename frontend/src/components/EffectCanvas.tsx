@@ -94,7 +94,7 @@ export function EffectCanvas({
     let disposed = false;
 
     const readPalette = () => {
-      light = document.documentElement.dataset.theme === "light";
+      light = getComputedStyle(canvas).colorScheme === "light";
       let fallback: Rgb = [188, 208, 232];
       if (paint) {
         paint.clearRect(0, 0, 24, 24);

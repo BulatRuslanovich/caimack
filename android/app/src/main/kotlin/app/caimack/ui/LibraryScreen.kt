@@ -467,7 +467,7 @@ internal fun LibraryFilters(filter: String, downloadedOnly: Boolean, onFilter: (
             shape = CircleShape, border = null,
             colors = FilterChipDefaults.filterChipColors(
                 containerColor = palette.raised, labelColor = palette.foreground,
-                selectedContainerColor = palette.primary, selectedLabelColor = palette.onPrimary,
+                selectedContainerColor = palette.selection, selectedLabelColor = palette.primary,
             ),
         )
     }
@@ -499,7 +499,7 @@ internal fun LibraryFilters(filter: String, downloadedOnly: Boolean, onFilter: (
                 border = null,
                 colors = FilterChipDefaults.filterChipColors(
                     containerColor = palette.raised, labelColor = palette.foreground,
-                    selectedContainerColor = palette.primary, selectedLabelColor = palette.onPrimary,
+                    selectedContainerColor = palette.selection, selectedLabelColor = palette.primary,
                 ),
             )
         }

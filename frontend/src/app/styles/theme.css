@@ -11,7 +11,7 @@
 
   --foreground: #f2eee7;
   --muted-foreground: #aaa9a4;
-  --faint-foreground: #93958f;
+  --faint-foreground: #a0a19b;
   --popover-foreground: var(--foreground);
   --accent-foreground: var(--foreground);
 
@@ -56,7 +56,7 @@
 
   --foreground: #252729;
   --muted-foreground: #5b625e;
-  --faint-foreground: #6a706b;
+  --faint-foreground: #646b65;
 
   --control-border: color-mix(in oklab, var(--foreground) 55%, transparent);
 

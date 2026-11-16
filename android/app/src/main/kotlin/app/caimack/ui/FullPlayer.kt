@@ -108,11 +108,8 @@ import kotlinx.coroutines.CancellationException
 private enum class Panel { None, Lyrics, Queue }
 @Composable
 fun FullPlayer(state: PlayerState, onClose: () -> Unit) {
-    CaimackTheme(dark = true, colorway = LocalColorway.current) {
-        val palette = LocalPalette.current.copy(foreground = Color(0xFFF5F5F5), muted = Color(0xFFD6D6D6), faint = Color(0xFFBCBCBC))
-        CompositionLocalProvider(LocalPalette provides palette) {
-            FullPlayerContent(state, onClose)
-        }
+    CaimackTheme(dark = true, palette = PlayerPalette) {
+        FullPlayerContent(state, onClose)
     }
 }
 
@@ -272,7 +269,10 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
                     }
                     }
                     Row(Modifier.fillMaxWidth().testTag("full-player-transport"), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        IconAction(Lucide.Shuffle, stringResource(R.string.player_shuffle), tint = if (state.shuffle) palette.primary else palette.muted) { haptic(PlayerHaptic.Button); player.toggleShuffle() }
+                        PlayerModeButton(Lucide.Shuffle, stringResource(R.string.player_shuffle), state.shuffle,
+                            stringResource(if (state.shuffle) R.string.player_shuffle_on else R.string.player_shuffle_off)) {
+                            haptic(PlayerHaptic.Button); player.toggleShuffle()
+                        }
                         IconAction(Lucide.SkipBack, stringResource(R.string.player_previous), size = 26) { haptic(PlayerHaptic.Skip); player.previous() }
                         Box(contentAlignment = Alignment.Center) {
                             Box(
@@ -290,10 +290,15 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
                             BufferingRing(state.buffering, Modifier.matchParentSize().requiredSize(78.dp).testTag("full-player-buffering"))
                         }
                         IconAction(Lucide.SkipForward, stringResource(R.string.player_next), size = 26) { haptic(PlayerHaptic.Skip); player.next() }
-                        IconAction(
+                        PlayerModeButton(
                             if (state.repeat == Player.REPEAT_MODE_ONE) Lucide.Repeat1 else Lucide.Repeat,
                             stringResource(R.string.player_repeat),
-                            tint = if (state.repeat == Player.REPEAT_MODE_OFF) palette.muted else palette.primary,
+                            active = state.repeat != Player.REPEAT_MODE_OFF,
+                            mode = stringResource(when (state.repeat) {
+                                Player.REPEAT_MODE_ONE -> R.string.player_repeat_one
+                                Player.REPEAT_MODE_ALL -> R.string.player_repeat_all
+                                else -> R.string.player_repeat_off
+                            }),
                         ) { haptic(PlayerHaptic.Button); player.cycleRepeat() }
                     }
                     Row(Modifier.fillMaxWidth().testTag("full-player-footer"), verticalAlignment = Alignment.CenterVertically) {
@@ -347,7 +352,7 @@ private fun PlayerArtwork(scene: PlayerScene, onScrub: (Long?) -> Unit, modifier
     val palette = LocalPalette.current
     PlayerSceneLayer(scene, modifier.testTag("player-artwork-scene")) { frame ->
         val frameTone = rememberPlayerCoverTone(frame.state.current?.let { trackCover(it) })
-        val auraColor = frameTone?.color(palette, LocalColorway.current) ?: palette.primary
+        val auraColor = frameTone?.playerColor() ?: palette.primary
         CompositionLocalProvider(LocalNowPlayingTone provides auraColor) {
             Deck(frame.state, onScrub, Modifier.fillMaxSize().padding(horizontal = horizontalInset))
         }
