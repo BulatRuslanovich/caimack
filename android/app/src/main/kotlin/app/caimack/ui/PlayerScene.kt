@@ -162,10 +162,16 @@ private fun sceneDirection(from: PlayerState, to: PlayerState): Int {
 }
 
 @Composable
-internal fun rememberPlayerScene(state: PlayerState): PlayerScene {
-    val loaded = rememberLoadedPlayerTone(state.current?.let { trackCover(it) })
-    val nextTone = rememberLoadedPlayerTone(state.next?.let { trackCover(it) })
-    val previousTone = rememberLoadedPlayerTone(state.previous?.let { trackCover(it) })
+internal fun rememberPlayerScene(
+    state: PlayerState,
+    transitionMs: Int = PlayerBackdropSettings.transitionMs,
+    distancePx: Int = LocalView.current.width,
+    waitForTone: Boolean = true,
+): PlayerScene {
+    // Text-only transitions do not decode or sample adjacent artwork.
+    val loaded = if (waitForTone) rememberLoadedPlayerTone(state.current?.let { trackCover(it) }) else null
+    val nextTone = if (waitForTone) rememberLoadedPlayerTone(state.next?.let { trackCover(it) }) else null
+    val previousTone = if (waitForTone) rememberLoadedPlayerTone(state.previous?.let { trackCover(it) }) else null
     val key = sceneKey(state)
     val scene = remember { PlayerScene(PlayerSceneFrame(key, state, playerBackdropSurface(loaded?.tone))) }
     val neighbours = buildMap {
@@ -176,9 +182,10 @@ internal fun rememberPlayerScene(state: PlayerState): PlayerScene {
             }
         }
     }
-    scene.duration = if (playerMotionEnabled()) PlayerBackdropSettings.transitionMs else 0
-    scene.distance = LocalView.current.width.coerceAtLeast(1)
+    scene.duration = if (playerMotionEnabled()) transitionMs else 0
+    scene.distance = distancePx.coerceAtLeast(1)
     val ready = loaded?.let { PlayerSceneFrame(key, state, playerBackdropSurface(it.tone)) }
+        ?: (if (!waitForTone) PlayerSceneFrame(key, state, scene.current.surface) else null)
         ?: scene.current.takeIf { it.key == key }?.copy(state = state)
     scene.update(key, ready, neighbours)
     LaunchedEffect(scene, scene.revision, scene.duration) { scene.animate() }

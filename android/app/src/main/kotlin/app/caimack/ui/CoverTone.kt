@@ -154,6 +154,7 @@ fun CoverTone.color(palette: Palette, colorway: Colorway, alpha: Float = 1f): Co
 }
 
 val LocalNowPlayingTone = compositionLocalOf { Color.Unspecified }
+internal val LocalNowPlayingCoverTone = compositionLocalOf<LoadedPlayerTone?> { null }
 
 private val tones by lazy { LruCache<String, Optional>(400) }
 

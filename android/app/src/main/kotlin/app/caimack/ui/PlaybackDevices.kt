@@ -11,6 +11,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -26,7 +29,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PlaybackDevicesButton(modifier: Modifier = Modifier, compact: Boolean = false) {
+fun PlaybackDevicesButton(modifier: Modifier = Modifier, compact: Boolean = false, iconTint: Color? = null) {
     val container = LocalContainer.current
     val context = LocalContext.current
     val palette = LocalPalette.current
@@ -47,10 +50,13 @@ fun PlaybackDevicesButton(modifier: Modifier = Modifier, compact: Boolean = fals
             finally { choosing = false }
         }
     }
-    Row(modifier.heightIn(min = 48.dp).clickable { open = true }.padding(horizontal = 8.dp),
+    if (compact) IconButton(onClick = { open = true }, modifier = modifier.size(48.dp).clip(CircleShape)) {
+        Icon(Lucide.MonitorSpeaker, title, tint = iconTint ?: if (state.selectedId != null) palette.primary else palette.muted,
+            modifier = Modifier.size(22.dp))
+    } else Row(modifier.heightIn(min = 48.dp).clickable { open = true }.padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Icon(Lucide.MonitorSpeaker, title, tint = if (state.selectedId != null) palette.primary else palette.muted, modifier = Modifier.size(18.dp))
-        if (!compact) Text(label, style = Type.tiny, color = if (state.selectedId != null) palette.primary else palette.muted,
+        Icon(Lucide.MonitorSpeaker, title, tint = iconTint ?: if (state.selectedId != null) palette.primary else palette.muted, modifier = Modifier.size(18.dp))
+        Text(label, style = Type.tiny, color = if (state.selectedId != null) palette.primary else palette.muted,
             maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
     if (open) ModalBottomSheet(onDismissRequest = { open = false }, containerColor = palette.card) {

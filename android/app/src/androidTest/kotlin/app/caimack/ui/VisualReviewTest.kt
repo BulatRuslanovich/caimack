@@ -26,6 +26,7 @@ import androidx.compose.ui.test.click
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
@@ -169,7 +170,7 @@ class VisualReviewTest {
         android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { it.readBytes() }
     }
 
-    private fun capture(name: String, settle: Boolean = true, seedPlayback: Boolean = true) {
+    private fun capture(name: String, settle: Boolean = true, seedPlayback: Boolean = true, componentTag: String? = null) {
         if (seedPlayback) compose.runOnIdle {
             (container.player.state as MutableStateFlow<PlayerState>).value = PlayerState(queue = screenshotTracks, index = 1)
         }
@@ -178,7 +179,8 @@ class VisualReviewTest {
         compose.waitForIdle()
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
         Thread.sleep(80) // Let the emulator compositor present the frame before the system screenshot.
-        val bitmap = checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+        val bitmap = componentTag?.let { compose.onNodeWithTag(it).captureToImage().asAndroidBitmap() }
+            ?: checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
         val values = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, "${InstrumentationRegistry.getArguments().getString("visualPrefix").orEmpty()}$name.png")
             put(MediaStore.Downloads.MIME_TYPE, "image/png")
@@ -480,6 +482,32 @@ class VisualReviewTest {
         compose.activityRule.scenario.recreate()
         compose.onNodeWithText(label(R.string.nav_home)).performClick()
         capture("parity-home-large-text")
+
+        compose.mainClock.autoAdvance = true
+        container.appearance.setColorway(Colorway.Graphite)
+        shell("settings put system font_scale 1.0")
+        compose.activityRule.scenario.recreate()
+        compose.runOnIdle {
+            container.player.play(listOf(screenshotTracks.first().copy(title = "Everlong", artistName = "Foo Fighters")), 0)
+        }
+        compose.waitUntil(10_000) { container.player.state.value.playing && !container.player.state.value.buffering }
+        compose.mainClock.advanceTimeBy(1000)
+        capture("mini-player-graphite-home", seedPlayback = false)
+        compose.onNodeWithTag("mini-player-save").performClick()
+        compose.waitUntil(5_000) { container.favorites.isFavorite(container.player.state.value.current!!) }
+        compose.onNodeWithTag("mini-player-save").assertIsSelected()
+        capture("mini-player-graphite", seedPlayback = false, componentTag = "mini-player")
+        compose.onNodeWithTag("mini-player-devices").performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(150)
+        capture("mini-player-devices-pressed", seedPlayback = false, componentTag = "mini-player")
+        compose.onNodeWithTag("mini-player-devices").performTouchInput { cancel() }
+        container.appearance.setTheme(Appearance.LIGHT)
+        compose.mainClock.advanceTimeBy(1000)
+        capture("mini-player-light", seedPlayback = false, componentTag = "mini-player")
+        container.appearance.setTheme(Appearance.DARK)
+        shell("settings put system font_scale 1.5")
+        compose.activityRule.scenario.recreate()
+        capture("mini-player-large-text", seedPlayback = false, componentTag = "mini-player")
     }
 
     @Test
