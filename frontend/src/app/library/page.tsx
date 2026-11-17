@@ -182,217 +182,228 @@ export default function LibraryPage() {
           ))}
         </nav>
       )}
-      <ToggleGroup aria-label={t("nav.mediaLibrary")}>
-        {filters.map(([value, label]) => (
-          <ToggleGroupButton key={value} active={filter === value} onClick={() => setFilter(value)}>
-            {label}
-          </ToggleGroupButton>
-        ))}
-      </ToggleGroup>
-      <div className="library-toolbar flex flex-wrap items-center justify-end gap-2.5">
-        <SortSelect
-          value={sort}
-          onChange={setSort}
-          label={t("collection.sort")}
-          options={{
-            manual: "collection.manual",
-            recent: "collection.recent",
-            name: "collection.name",
-          }}
-        />
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={t(grid ? "collection.list" : "collection.grid")}
-          onClick={() => setGrid(!grid)}
-        >
-          {grid ? <ListIcon /> : <Grid2X2Icon />}
-        </Button>
+      <div className="space-y-1">
+        <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 shadow-[inset_0_-1px_0_var(--border)]">
+          <ToggleGroup
+            aria-label={t("nav.mediaLibrary")}
+            className="min-w-0 shadow-none max-sm:w-full"
+          >
+            {filters.map(([value, label]) => (
+              <ToggleGroupButton
+                key={value}
+                active={filter === value}
+                onClick={() => setFilter(value)}
+              >
+                {label}
+              </ToggleGroupButton>
+            ))}
+          </ToggleGroup>
+          <div className="library-toolbar ml-auto flex shrink-0 items-center gap-2.5 max-sm:order-first">
+            <SortSelect
+              value={sort}
+              onChange={setSort}
+              label={t("collection.sort")}
+              options={{
+                manual: "collection.manual",
+                recent: "collection.recent",
+                name: "collection.name",
+              }}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={t(grid ? "collection.list" : "collection.grid")}
+              onClick={() => setGrid(!grid)}
+            >
+              {grid ? <ListIcon /> : <Grid2X2Icon />}
+            </Button>
+          </div>
+        </div>
+        <Query result={folderResult}>
+          {() => (
+            <Query result={result}>
+              {(items) => {
+                const shown = items
+                  .filter(
+                    (item) =>
+                      (q ? true : (item.folderId ?? null) === folderId) &&
+                      (filter === "all" || item.kind === filter) &&
+                      `${item.title} ${item.subtitle}`.toLocaleLowerCase().includes(q),
+                  )
+                  .sort((a, b) =>
+                    sort === "name"
+                      ? a.title.localeCompare(b.title)
+                      : Date.parse(b.savedAt) - Date.parse(a.savedAt),
+                  );
+                const shownFolders = folders
+                  .filter((folder) =>
+                    q ? folder.name.toLocaleLowerCase().includes(q) : folder.parentId === folderId,
+                  )
+                  .sort((a, b) =>
+                    sort === "name"
+                      ? a.name.localeCompare(b.name)
+                      : Date.parse(b.createdAt) - Date.parse(a.createdAt),
+                  );
+                const allKeys = [
+                  ...(folderId === null ? ["favorites"] : []),
+                  ...folders
+                    .filter((f) => f.parentId === folderId)
+                    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+                    .map((f) => `folder:${f.id}`),
+                  ...items
+                    .filter((i) => (i.folderId ?? null) === folderId)
+                    .sort((a, b) => Date.parse(b.savedAt) - Date.parse(a.savedAt))
+                    .map((i) => `${i.kind}:${i.id}`),
+                  ...(folderId === null ? ["downloads"] : []),
+                ];
+                const savedOrder = orderedKeys(allKeys, orderResult.data?.[folderId ?? "root"]);
+                const entries: LibraryDragEntry[] = [
+                  ...(favorites
+                    ? [
+                        {
+                          key: "favorites",
+                          id: "favorites",
+                          kind: "favorites",
+                          node: (
+                            <Card
+                              layout={grid ? "grid" : "list"}
+                              href="/favorites"
+                              title={t("nav.favorites")}
+                              subtitle={t("playlists.kind")}
+                              details={
+                                favoriteResult.data
+                                  ? t("count.tracks", { count: favoriteResult.data.total })
+                                  : undefined
+                              }
+                              cover={
+                                <div className="grid size-full place-items-center bg-primary-soft text-primary">
+                                  <HeartIcon size={32} />
+                                </div>
+                              }
+                            />
+                          ),
+                        },
+                      ]
+                    : []),
+                  ...shownFolders.map((folder) => ({
+                    key: `folder:${folder.id}`,
+                    id: folder.id,
+                    kind: "folder",
+                    node: (
+                      <Card
+                        layout={grid ? "grid" : "list"}
+                        onClick={() => openFolder(folder.id)}
+                        title={folder.name}
+                        subtitle={t("folders.items", {
+                          count:
+                            items.filter((item) => item.folderId === folder.id).length +
+                            folders.filter((child) => child.parentId === folder.id).length,
+                        })}
+                        cover={
+                          <div className="grid size-full place-items-center bg-raised text-primary">
+                            <FolderIcon size={32} />
+                          </div>
+                        }
+                        menu={<LibraryFolderMenu folder={folder} />}
+                      />
+                    ),
+                  })),
+                  ...shown.map((item) => ({
+                    key: `${item.kind}:${item.id}`,
+                    id: item.id,
+                    kind: item.kind,
+                    node: <SavedLibraryCard item={item} layout={grid ? "grid" : "list"} />,
+                  })),
+                ];
+                if (sort === "manual" && !q) {
+                  const ranks = new Map(savedOrder.map((key, index) => [key, index]));
+                  entries.sort(
+                    (a, b) => (ranks.get(a.key) ?? Infinity) - (ranks.get(b.key) ?? Infinity),
+                  );
+                }
+                return (
+                  <>
+                    <div className={grid ? undefined : "max-w-3xl"}>
+                      <LibraryDragList
+                        key={`${folderId}:${filter}:${grid}:${q}`}
+                        entries={entries}
+                        folders={folders}
+                        grid={grid}
+                        parent={currentFolder ? currentFolder.parentId : undefined}
+                        disabled={organize.isPending || !orderResult.data || !!q}
+                        onOrder={async (keys) => {
+                          const full =
+                            sort === "manual"
+                              ? savedOrder
+                              : orderedKeys(
+                                  allKeys,
+                                  entries.map((e) => e.key),
+                                );
+                          setSort("manual");
+                          await organize.mutateAsync({
+                            operation: "reorder",
+                            folderId,
+                            order: mergeVisibleOrder(full, keys),
+                          });
+                        }}
+                        onMove={async (entry, destination) => {
+                          if (entry.kind === "folder")
+                            await organize.mutateAsync({
+                              operation: "moveFolder",
+                              id: entry.id,
+                              folderId: destination,
+                            });
+                          else
+                            await organize.mutateAsync({
+                              operation: "moveItem",
+                              id: entry.id,
+                              kind: entry.kind as LibraryKind,
+                              folderId: destination,
+                            });
+                        }}
+                      />
+                    </div>
+                    {organize.isError && (
+                      <p role="alert" className="text-destructive">
+                        {t("folders.failed")}
+                      </p>
+                    )}
+                    {q && (
+                      <p className="text-sm text-muted-foreground">{t("collection.dragSearch")}</p>
+                    )}
+                    {shown.length === 0 && shownFolders.length === 0 && !favorites && (
+                      <EmptyState
+                        title={t(
+                          q
+                            ? "collection.noResults"
+                            : currentFolder
+                              ? "collection.empty"
+                              : filter === "album"
+                                ? "collection.emptyAlbums"
+                                : filter === "artist"
+                                  ? "collection.emptyArtists"
+                                  : filter === "playlist"
+                                    ? "collection.emptyPlaylists"
+                                    : "collection.empty",
+                        )}
+                        description={t(currentFolder ? "folders.emptyHint" : "collection.hint")}
+                        action={
+                          !currentFolder &&
+                          !q && (
+                            <Button asChild>
+                              <Link href="/tracks">{t("collection.catalog")}</Link>
+                            </Button>
+                          )
+                        }
+                      />
+                    )}
+                  </>
+                );
+              }}
+            </Query>
+          )}
+        </Query>
       </div>
-      <Query result={folderResult}>
-        {() => (
-          <Query result={result}>
-            {(items) => {
-              const shown = items
-                .filter(
-                  (item) =>
-                    (q ? true : (item.folderId ?? null) === folderId) &&
-                    (filter === "all" || item.kind === filter) &&
-                    `${item.title} ${item.subtitle}`.toLocaleLowerCase().includes(q),
-                )
-                .sort((a, b) =>
-                  sort === "name"
-                    ? a.title.localeCompare(b.title)
-                    : Date.parse(b.savedAt) - Date.parse(a.savedAt),
-                );
-              const shownFolders = folders
-                .filter((folder) =>
-                  q ? folder.name.toLocaleLowerCase().includes(q) : folder.parentId === folderId,
-                )
-                .sort((a, b) =>
-                  sort === "name"
-                    ? a.name.localeCompare(b.name)
-                    : Date.parse(b.createdAt) - Date.parse(a.createdAt),
-                );
-              const allKeys = [
-                ...(folderId === null ? ["favorites"] : []),
-                ...folders
-                  .filter((f) => f.parentId === folderId)
-                  .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
-                  .map((f) => `folder:${f.id}`),
-                ...items
-                  .filter((i) => (i.folderId ?? null) === folderId)
-                  .sort((a, b) => Date.parse(b.savedAt) - Date.parse(a.savedAt))
-                  .map((i) => `${i.kind}:${i.id}`),
-                ...(folderId === null ? ["downloads"] : []),
-              ];
-              const savedOrder = orderedKeys(allKeys, orderResult.data?.[folderId ?? "root"]);
-              const entries: LibraryDragEntry[] = [
-                ...(favorites
-                  ? [
-                      {
-                        key: "favorites",
-                        id: "favorites",
-                        kind: "favorites",
-                        node: (
-                          <Card
-                            layout={grid ? "grid" : "list"}
-                            href="/favorites"
-                            title={t("nav.favorites")}
-                            subtitle={t("playlists.kind")}
-                            details={
-                              favoriteResult.data
-                                ? t("count.tracks", { count: favoriteResult.data.total })
-                                : undefined
-                            }
-                            cover={
-                              <div className="grid size-full place-items-center bg-primary-soft text-primary">
-                                <HeartIcon size={32} />
-                              </div>
-                            }
-                          />
-                        ),
-                      },
-                    ]
-                  : []),
-                ...shownFolders.map((folder) => ({
-                  key: `folder:${folder.id}`,
-                  id: folder.id,
-                  kind: "folder",
-                  node: (
-                    <Card
-                      layout={grid ? "grid" : "list"}
-                      onClick={() => openFolder(folder.id)}
-                      title={folder.name}
-                      subtitle={t("folders.items", {
-                        count:
-                          items.filter((item) => item.folderId === folder.id).length +
-                          folders.filter((child) => child.parentId === folder.id).length,
-                      })}
-                      cover={
-                        <div className="grid size-full place-items-center bg-raised text-primary">
-                          <FolderIcon size={32} />
-                        </div>
-                      }
-                      menu={<LibraryFolderMenu folder={folder} />}
-                    />
-                  ),
-                })),
-                ...shown.map((item) => ({
-                  key: `${item.kind}:${item.id}`,
-                  id: item.id,
-                  kind: item.kind,
-                  node: <SavedLibraryCard item={item} layout={grid ? "grid" : "list"} />,
-                })),
-              ];
-              if (sort === "manual" && !q) {
-                const ranks = new Map(savedOrder.map((key, index) => [key, index]));
-                entries.sort(
-                  (a, b) => (ranks.get(a.key) ?? Infinity) - (ranks.get(b.key) ?? Infinity),
-                );
-              }
-              return (
-                <>
-                  <div className={grid ? undefined : "max-w-3xl"}>
-                    <LibraryDragList
-                      key={`${folderId}:${filter}:${grid}:${q}`}
-                      entries={entries}
-                      folders={folders}
-                      grid={grid}
-                      parent={currentFolder ? currentFolder.parentId : undefined}
-                      disabled={organize.isPending || !orderResult.data || !!q}
-                      onOrder={async (keys) => {
-                        const full =
-                          sort === "manual"
-                            ? savedOrder
-                            : orderedKeys(
-                                allKeys,
-                                entries.map((e) => e.key),
-                              );
-                        setSort("manual");
-                        await organize.mutateAsync({
-                          operation: "reorder",
-                          folderId,
-                          order: mergeVisibleOrder(full, keys),
-                        });
-                      }}
-                      onMove={async (entry, destination) => {
-                        if (entry.kind === "folder")
-                          await organize.mutateAsync({
-                            operation: "moveFolder",
-                            id: entry.id,
-                            folderId: destination,
-                          });
-                        else
-                          await organize.mutateAsync({
-                            operation: "moveItem",
-                            id: entry.id,
-                            kind: entry.kind as LibraryKind,
-                            folderId: destination,
-                          });
-                      }}
-                    />
-                  </div>
-                  {organize.isError && (
-                    <p role="alert" className="text-destructive">
-                      {t("folders.failed")}
-                    </p>
-                  )}
-                  {q && (
-                    <p className="text-sm text-muted-foreground">{t("collection.dragSearch")}</p>
-                  )}
-                  {shown.length === 0 && shownFolders.length === 0 && !favorites && (
-                    <EmptyState
-                      title={t(
-                        q
-                          ? "collection.noResults"
-                          : currentFolder
-                            ? "collection.empty"
-                            : filter === "album"
-                              ? "collection.emptyAlbums"
-                              : filter === "artist"
-                                ? "collection.emptyArtists"
-                                : filter === "playlist"
-                                  ? "collection.emptyPlaylists"
-                                  : "collection.empty",
-                      )}
-                      description={t(currentFolder ? "folders.emptyHint" : "collection.hint")}
-                      action={
-                        !currentFolder &&
-                        !q && (
-                          <Button asChild>
-                            <Link href="/tracks">{t("collection.catalog")}</Link>
-                          </Button>
-                        )
-                      }
-                    />
-                  )}
-                </>
-              );
-            }}
-          </Query>
-        )}
-      </Query>
       {creating && (
         <PlaylistDialog
           onClose={() => setCreating(false)}
