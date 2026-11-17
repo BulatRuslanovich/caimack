@@ -15,7 +15,6 @@ class VinylDeckProcessor extends AudioWorkletProcessor {
     this.channels = [];
     this.trackId = null;
     this.sourceRate = sampleRate;
-    this.fader = this.faderTarget = 1;
     this.reset();
     this.port.onmessage = ({ data }) => {
       switch (data.type) {
@@ -62,11 +61,6 @@ class VinylDeckProcessor extends AudioWorkletProcessor {
           this.motion.push({ time: this.motionTime, position: this.target, velocity });
           break;
         }
-        case "fader":
-          this.faderTarget = Number.isFinite(data.value)
-            ? Math.max(0, Math.min(1, (data.value - 0.02) / 0.06))
-            : 1;
-          break;
         case "end":
           this.held = false;
           break;
@@ -86,7 +80,6 @@ class VinylDeckProcessor extends AudioWorkletProcessor {
     this.reset();
     this.channels = [];
     this.trackId = null;
-    this.fader = this.faderTarget = 1;
   }
 
   clampPosition(position) {
@@ -122,7 +115,6 @@ class VinylDeckProcessor extends AudioWorkletProcessor {
     if (!output?.length) return true;
     const smooth = 1 - Math.exp(-1 / (sampleRate * 0.002));
     const positionSmooth = 1 - Math.exp(-1 / (sampleRate * POSITION_SMOOTH_SECONDS));
-    const cutSmooth = 1 - Math.exp(-1 / (sampleRate * 0.0008));
     for (let frame = 0; frame < output[0].length; frame++) {
       const before = this.position;
       let motionActive = false;
@@ -155,11 +147,10 @@ class VinylDeckProcessor extends AudioWorkletProcessor {
       const moving = motionActive && Math.abs(this.position - before) > 0.000001;
       this.envelope += ((moving ? 1 : 0) - this.envelope) * smooth;
       this.wet += ((this.held ? 1 : 0) - this.wet) * smooth;
-      this.fader += ((this.enabled ? this.faderTarget : 1) - this.fader) * cutSmooth;
       for (let channel = 0; channel < output.length; channel++) {
         const dry = input[channel]?.[frame] ?? input[0]?.[frame] ?? 0;
         const wet = this.sample(channel) * this.level * this.envelope;
-        output[channel][frame] = (dry * (1 - this.wet) + wet * this.wet) * this.fader;
+        output[channel][frame] = dry * (1 - this.wet) + wet * this.wet;
       }
     }
     return true;

@@ -3,17 +3,15 @@
 
 "use client";
 
-import { useT } from "@/contexts/I18nContext";
 import { usePlayerActions, usePlayerClock, usePlayerState } from "@/contexts/PlayerContext";
 import { cn } from "@/lib/cn";
 import { trackCoverUrl } from "@/lib/media";
 import { endVinylScratch, moveVinylScratch, startVinylScratch } from "@/lib/playback/equalizer";
 import { useConnect } from "@/lib/playback/useConnectPlayback";
 import { VINYL_TURN_SECONDS } from "@/lib/playback/vinylDeck";
-import { useTatarMafia } from "@/lib/tatarMafia";
 import type { Track } from "@/lib/types";
 import { useVisualizer } from "@/lib/visualizer";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { TrackCover } from "./Cover";
 import { RecordAura } from "./RecordAura";
 
@@ -52,9 +50,6 @@ export function Record({
   const getPosition = usePlayerClock();
   const { volume, muted } = usePlayerState();
   const connect = useConnect();
-  const tatarMafia = useTatarMafia();
-  const djMode = scratchable && tatarMafia && !connect.selectedId;
-  const t = useT();
   const visualizer = useVisualizer();
   const spinElement = useRef<HTMLDivElement>(null);
   const spin = useRef<Animation | null>(null);
@@ -63,7 +58,6 @@ export function Record({
   const scratchTime = useRef(0);
   const needlePosition = useRef(0);
   const audibleScratch = useRef(false);
-  const [scratching, setScratching] = useState(false);
 
   const endScratch = useCallback(() => {
     if (scratchAngle.current === null) return;
@@ -72,7 +66,6 @@ export function Record({
     audibleScratch.current = false;
     endVinylScratch();
     spin.current?.play();
-    setScratching(false);
     commitScrub();
   }, [commitScrub]);
 
@@ -87,7 +80,7 @@ export function Record({
       document.removeEventListener("visibilitychange", hidden);
       endScratch();
     };
-  }, [endScratch, track.id, djMode, scratchable]);
+  }, [endScratch, track.id, connect.selectedId, scratchable]);
 
   useEffect(() => {
     const animation = spinElement.current?.animate(
@@ -135,14 +128,12 @@ export function Record({
       className={cn("record", className)}
       data-out={out}
       data-scratchable={scratchable}
-      data-dj-scratching={djMode && scratching}
       data-axis={axis}
     >
       <div
         key={track.id}
         className="record-disc"
         aria-hidden="true"
-        title={djMode ? t("player.djHint") : undefined}
         onTouchStart={(event) => scratchable && event.stopPropagation()}
         onDragStart={(event) => scratchable && event.preventDefault()}
         onPointerDown={(event) => {
@@ -160,7 +151,6 @@ export function Record({
             !muted &&
             volume > 0 &&
             startVinylScratch(track.id, needlePosition.current);
-          setScratching(true);
           holdScrub();
         }}
         onPointerMove={(event) => {

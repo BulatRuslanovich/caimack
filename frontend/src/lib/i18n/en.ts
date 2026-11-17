@@ -761,23 +761,6 @@ export const en = {
   "settings.account": "Account",
   "settings.recommendations": "Recommendations",
   "settings.experimental": "Experimental",
-  "settings.tatarMafia": "Tatar Mafia mode",
-  "settings.tatarMafiaHint":
-    "Scratch the record in the full-screen player: drag it back and forth to bend the sound. Playback must be on this device. If you know, you know.",
-  "settings.tatarMafiaUnsupported":
-    "Scratch audio is unavailable in this browser. Try a desktop browser over HTTPS.",
-  "player.djHint": "Drag the record back and forth to scratch",
-  "player.djReady": "Deck ready",
-  "player.djLoading": "Preparing the record…",
-  "player.djUnavailable": "Deck unavailable for this file",
-  "player.djLimitHint":
-    "The deck supports browser-decodable files up to 48 MB and 10 minutes. Regular playback remains available.",
-  "player.djCrossfader": "Crossfader · sharp cut",
-  "player.djClosed": "Closed",
-  "player.djOpen": "Open",
-  "player.djCut": "Hold to cut the sound",
-  "player.djInstructions":
-    "One hand on the record, the other on Cut. Hold X to cut with the keyboard. Release the record to continue from the needle position.",
   "settings.yandexMusic": "Import from Yandex Music",
   "settings.yandexToken": "Yandex Music token",
   "settings.yandexTokenSave": "Save token",
@@ -1096,8 +1079,6 @@ export const en = {
   "queue.unpin": "Unpin queue",
   "search.source": "Search in",
   "search.source.library": "My library",
-  "settings.yandexIntro":
-    "Find tracks and albums in Yandex Music and add them to your library. Adding continues while you browse.",
   "settings.yandexTokenHint":
     "Use your Yandex Music account token. It is saved in this browser; you can remove it below.",
   "settings.yandexTokenRequired": "Enter a token to continue.",

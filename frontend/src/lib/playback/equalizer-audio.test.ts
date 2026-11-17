@@ -177,7 +177,6 @@ it("does not initialize Web Audio for scratching on unsupported browsers", async
   vi.stubGlobal("AudioWorkletNode", undefined);
   const eq = await import("./equalizer");
   eq.connectEqualizer([{} as HTMLMediaElement]);
-  expect(eq.vinylScratchSupported()).toBe(false);
   expect(await eq.prepareVinylScratch()).toBe(false);
   expect(AudioContext).not.toHaveBeenCalled();
 });

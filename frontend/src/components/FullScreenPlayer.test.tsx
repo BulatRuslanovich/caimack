@@ -31,7 +31,6 @@ vi.mock("@/contexts/PlayerContext", () => ({
 }));
 vi.mock("@/contexts/I18nContext", () => ({ useT: () => (key: string) => key }));
 vi.mock("@/lib/playback/useConnectPlayback", () => ({ useConnect: () => ({ selectedId: null }) }));
-vi.mock("@/lib/tatarMafia", () => ({ useTatarMafia: () => false }));
 vi.mock("@/lib/useIdle", () => ({ useIdle: () => false }));
 vi.mock("@/lib/playback/usePlaybackProgress", () => ({
   usePlaybackProgress: () => ({ position: 0, total: 200 }),

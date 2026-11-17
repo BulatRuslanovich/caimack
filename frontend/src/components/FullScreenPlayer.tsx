@@ -21,7 +21,6 @@ import { usePlaybackProgress } from "@/lib/playback/usePlaybackProgress";
 import { prepareVinylDeck, releaseVinylDeck } from "@/lib/playback/vinylDeck";
 import { reasonLabel } from "@/lib/recommendationReason";
 import { SEEK_STEP } from "@/lib/shortcuts";
-import { useTatarMafia } from "@/lib/tatarMafia";
 import type { Track } from "@/lib/types";
 import { useIdle } from "@/lib/useIdle";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
@@ -45,6 +44,7 @@ import { PlayerTransport } from "./PlayerTransport";
 import { PlayerPanelTransport } from "./PlayerPanelTransport";
 import { PlayerOptionsMenu } from "./PlayerOptionsMenu";
 import { PlayerVolume } from "./PlayerVolume";
+import { QueueList } from "./QueueList";
 import { RecordTransition } from "./RecordTransition";
 import { SleepTimerButton } from "./SleepTimerButton";
 import { StreamQuality } from "./StreamQuality";
@@ -58,10 +58,6 @@ const IDLE_MS = 2500;
 const SWIPE_CLOSE_PX = 120;
 
 // A cold panel chunk must suspend locally, keeping the fullscreen dialog mounted.
-const DJControls = dynamic(() => import("./DJControls").then((m) => m.DJControls), {
-  loading: () => null,
-});
-import { QueueList } from "./QueueList";
 const LyricsPane = dynamic(() => import("./LyricsPane").then((m) => m.LyricsPane), {
   loading: () => <Loading />,
 });
@@ -168,9 +164,7 @@ export function FullScreenPlayer(props: FullScreenPlayerProps) {
 
 function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayerProps) {
   const player = usePlayer();
-  const tatarMafia = useTatarMafia();
   const connect = useConnect();
-  const djMode = tatarMafia && !connect.selectedId;
   const t = useT();
   const [panel, setPanel] = useState<"art" | "queue" | "lyrics">("art");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -178,7 +172,7 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
   const track = player.currentTrack;
   const trackId = track?.id;
   const trackDuration = track?.durationSeconds;
-  const idle = useIdle(IDLE_MS, panel === "art" && !menuOpen && !optionsOpen && !djMode);
+  const idle = useIdle(IDLE_MS, panel === "art" && !menuOpen && !optionsOpen);
   const stage = useRef<HTMLDivElement>(null);
   const swipeFrom = useRef<number | null>(null);
 
@@ -391,8 +385,6 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
               <div
                 className={cn(
                   "flex min-h-0 flex-1 flex-col justify-center gap-6 max-lg:flex-none max-lg:pb-4",
-                  djMode &&
-                    "lg:overflow-x-hidden lg:overflow-y-auto lg:py-3 lg:[justify-content:safe_center]",
                   panel !== "art" && "max-lg:hidden lg:max-w-[50%] lg:flex-none lg:basis-1/2",
                 )}
               >
@@ -449,8 +441,6 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
 
                   <PlayerTransport size="full" />
                   {secondaryActions}
-
-                  {djMode && <DJControls key={track.id} track={track} />}
 
                   {player.nextTrack && (
                     <button

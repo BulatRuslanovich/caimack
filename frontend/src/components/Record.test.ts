@@ -5,7 +5,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Record } from "./Record";
 
 const mocks = vi.hoisted(() => ({
-  djMode: false,
   selectedId: null as string | null,
   muted: false,
   volume: 0.6,
@@ -20,11 +19,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock("react", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react")>()),
   useRef: (value: unknown) => ({ current: value }),
-  useState: (value: unknown) => [value, vi.fn()],
   useCallback: (callback: unknown) => callback,
   useEffect: () => {},
 }));
-vi.mock("@/contexts/I18nContext", () => ({ useT: () => (key: string) => key }));
 vi.mock("@/contexts/PlayerContext", () => ({
   usePlayerActions: () => ({
     scrubBy: mocks.scrubBy,
@@ -46,7 +43,6 @@ vi.mock("@/lib/playback/vinylDeck", () => ({
 vi.mock("@/lib/playback/useConnectPlayback", () => ({
   useConnect: () => ({ selectedId: mocks.selectedId }),
 }));
-vi.mock("@/lib/tatarMafia", () => ({ useTatarMafia: () => mocks.djMode }));
 vi.mock("@/lib/visualizer", () => ({ useVisualizer: () => false }));
 vi.mock("./Cover", () => ({ TrackCover: () => null }));
 vi.mock("./RecordAura", () => ({ RecordAura: () => null }));
@@ -79,7 +75,6 @@ function pointer(x: number, y: number, timeStamp: number) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.djMode = false;
   mocks.selectedId = null;
   mocks.muted = false;
   mocks.volume = 0.6;
@@ -87,7 +82,7 @@ beforeEach(() => {
 });
 
 describe("record scratching", () => {
-  it("plays the track in both directions at hand speed without enabling DJ mode", () => {
+  it("plays the track in both directions at hand speed by default", () => {
     const disc = record();
     disc.onPointerDown!(pointer(200, 100, 100));
     expect(mocks.start).toHaveBeenCalledWith("track", 30);
@@ -108,8 +103,7 @@ describe("record scratching", () => {
     expect(mocks.move).toHaveBeenCalledTimes(2);
   });
 
-  it.each([false, true])("plays at 1x at the visible platter speed (DJ mode: %s)", (djMode) => {
-    mocks.djMode = djMode;
+  it("plays at 1x at the visible platter speed", () => {
     const disc = record();
     disc.onPointerDown!(pointer(200, 100, 100));
     // A quarter turn in 450 ms matches the 1.8-second animation revolution.
