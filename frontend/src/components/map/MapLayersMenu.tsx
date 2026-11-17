@@ -49,15 +49,15 @@ export function MapLayersMenu({
         checked={layers.has(layer)}
         onCheckedChange={() => onToggle(layer)}
         onSelect={(event) => event.preventDefault()}
-        className="floating-item group min-h-11 gap-3"
+        className="floating-item map-layer-item group min-h-11 gap-3"
       >
         <Icon size={16} className="shrink-0 text-muted-foreground" />
         <span className="flex-1">{t(`map.layer.${layer}`)}</span>
         <span
           aria-hidden="true"
-          className="flex h-5 w-9 shrink-0 items-center rounded-full bg-border-strong p-0.5 transition-colors group-data-[state=checked]:bg-primary"
+          className="flex h-5 w-8 shrink-0 items-center rounded-full bg-border-strong p-0.5 transition-colors group-data-[state=checked]:bg-primary motion-reduce:transition-none"
         >
-          <span className="size-4 rounded-full bg-white shadow-sm transition-transform group-data-[state=checked]:translate-x-4" />
+          <span className="size-4 shrink-0 rounded-full bg-white shadow-sm transition-transform group-data-[state=checked]:translate-x-3 motion-reduce:transition-none" />
         </span>
       </CheckboxItem>
     );
@@ -75,10 +75,12 @@ export function MapLayersMenu({
           />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-64" aria-label={t("map.layers")}>
-        <DropdownMenuLabel>{t("map.layers")}</DropdownMenuLabel>
-        {MAP_LAYERS.filter((layer) => layer !== "motion").map(item)}
-        <DropdownMenuSeparator />
+      <DropdownMenuContent align="start" className="w-60 p-2" aria-label={t("map.layers")}>
+        <DropdownMenuLabel className="px-3 pt-1.5 pb-2.5">{t("map.layers")}</DropdownMenuLabel>
+        <div className="space-y-1">
+          {MAP_LAYERS.filter((layer) => layer !== "motion").map(item)}
+        </div>
+        <DropdownMenuSeparator className="mx-3 my-2" />
         {item("motion")}
       </DropdownMenuContent>
     </DropdownMenu>

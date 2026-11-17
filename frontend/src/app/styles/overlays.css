@@ -78,6 +78,16 @@
     opacity: 0.45;
   }
 
+  .map-layer-item[data-state="checked"] {
+    background: transparent;
+    color: var(--foreground);
+  }
+
+  .map-layer-item[data-highlighted] {
+    background: color-mix(in oklab, var(--foreground) 6%, transparent);
+    box-shadow: none;
+  }
+
   .floating-label {
     padding: 9px 12px 7px;
     color: var(--muted-foreground);
