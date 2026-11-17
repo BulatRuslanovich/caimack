@@ -3,9 +3,14 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use reco::map::{self, MapLayout};
+mod persistence;
+#[cfg(all(test, feature = "integration-tests"))]
+mod tests;
+
+use reco::map::MapLayout;
 use serde::Serialize;
 use serde_with::skip_serializing_none;
+use sqlx::PgPool;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
@@ -45,6 +50,7 @@ pub struct MapPointDto {
 pub struct LibraryMapDto {
     pub points: Vec<MapPointDto>,
     pub total_tracks: i64,
+    pub updating: bool,
 }
 
 struct PointTrack {
@@ -60,33 +66,31 @@ fn rounded(value: f32) -> f64 {
     (f64::from(value) * 10_000.0).round() / 10_000.0
 }
 
-async fn build(
-    pool: &ComputePool,
-    library: Arc<Library>,
-    previous: Option<Arc<MapLayout>>,
-) -> AppResult<Arc<MapLayout>> {
-    let started = std::time::Instant::now();
-    let layout = pool.run(move || map::layout(&library.snapshot, previous.as_deref())).await?;
-    tracing::info!(tracks = layout.len(), elapsed_ms = started.elapsed().as_millis() as u64, "Music map layout built");
-    Ok(Arc::new(layout))
-}
-
 impl MapCache {
-    async fn layout(&self, pool: &ComputePool, library: &Arc<Library>) -> AppResult<Arc<MapLayout>> {
+    async fn layout(
+        &self,
+        db: &PgPool,
+        pool: &ComputePool,
+        library: &Arc<Library>,
+    ) -> AppResult<(Arc<MapLayout>, bool)> {
+        // The index has not loaded yet; never replace a saved map with this startup placeholder.
+        if library.generation == 0 {
+            return Ok((Arc::default(), true));
+        }
         let mut state = self.0.lock().await;
         if let Some(layout) = &state.layout {
-            if state.generation == library.generation {
-                return Ok(Arc::clone(layout));
+            if state.generation >= library.generation {
+                return Ok((Arc::clone(layout), state.building));
             }
 
             if !layout.is_empty() {
                 let stale = Arc::clone(layout);
                 if !state.building {
                     state.building = true;
-                    let (cache, library, previous) = (self.clone(), Arc::clone(library), Arc::clone(&stale));
+                    let (cache, library, db) = (self.clone(), Arc::clone(library), db.clone());
                     let pool = pool.clone();
                     tokio::spawn(async move {
-                        let built = build(&pool, Arc::clone(&library), Some(previous)).await;
+                        let built = persistence::build(&db, &pool, Arc::clone(&library)).await;
                         let mut state = cache.0.lock().await;
                         state.building = false;
                         match built {
@@ -100,22 +104,21 @@ impl MapCache {
                         }
                     });
                 }
-                return Ok(stale);
+                return Ok((stale, true));
             }
         }
 
-        let previous = state.layout.clone().filter(|layout| !layout.is_empty());
-        let layout = build(pool, Arc::clone(library), previous).await?;
+        let layout = persistence::build(db, pool, Arc::clone(library)).await?;
         state.generation = library.generation;
         state.layout = Some(Arc::clone(&layout));
-        Ok(layout)
+        Ok((layout, false))
     }
 }
 
 impl Recommendations {
     pub async fn map(&self, user: Uuid) -> AppResult<LibraryMapDto> {
         let library = self.index.library();
-        let layout = self.map.layout(&self.compute, &library).await?;
+        let (layout, updating) = self.map.layout(&self.db, &self.compute, &library).await?;
 
         let tracks: HashMap<Uuid, PointTrack> = sqlx::query_as!(
             PointTrack,
@@ -157,7 +160,7 @@ impl Recommendations {
                     });
                 }
 
-                LibraryMapDto { points, total_tracks: i64::try_from(tracks.len()).unwrap_or(i64::MAX) }
+                LibraryMapDto { points, total_tracks: i64::try_from(tracks.len()).unwrap_or(i64::MAX), updating }
             })
             .await
     }

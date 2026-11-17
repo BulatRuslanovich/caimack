@@ -77,6 +77,7 @@ export interface MapPoint {
 export interface LibraryMap {
   points: MapPoint[];
   totalTracks: number;
+  updating?: boolean;
 }
 
 export interface Artist {
