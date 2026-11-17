@@ -25,6 +25,8 @@ import { RadioButton } from "@/components/RadioButton";
 import { ShuffleButton } from "@/components/ShuffleButton";
 import { Query } from "@/components/Query";
 import { TrackList } from "@/components/TrackList";
+import { isDesktop } from "@/desktop/api";
+import { DesktopCollectionDownload } from "@/desktop/offline";
 import { Button } from "@/components/ui/button";
 import { PencilIcon } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -82,6 +84,9 @@ export function ArtistPage() {
               <>
                 <PlayAllButton tracks={detail.tracks.items} name={detail.name} />
                 {detail.tracks.items.length > 1 && <ShuffleButton tracks={detail.tracks.items} />}
+                {isDesktop && (
+                  <DesktopCollectionDownload tracks={detail.tracks.items} artist={detail.id} />
+                )}
                 {detail.tracks.items.length > 0 && (
                   <RadioButton seed={topTracks[0] ?? detail.tracks.items[0]} />
                 )}

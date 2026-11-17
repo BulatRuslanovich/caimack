@@ -1,0 +1,7 @@
+/node_modules/
+/renderer/
+/release/
+/packaging/src/
+/packaging/pkg/
+/packaging/*.pkg.tar.*
+/packaging/caimack-*-linux-*.tar.xz

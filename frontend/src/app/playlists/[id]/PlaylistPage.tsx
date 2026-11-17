@@ -22,6 +22,8 @@ import { PlayAllButton } from "@/components/PlayAllButton";
 import { EmptyState } from "@/components/EmptyState";
 import { Query } from "@/components/Query";
 import { TrackList } from "@/components/TrackList";
+import { isDesktop } from "@/desktop/api";
+import { DesktopCollectionDownload } from "@/desktop/offline";
 import { useConfirm } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -126,6 +128,7 @@ export function PlaylistPage() {
               actions={
                 <>
                   <PlayAllButton tracks={detail.tracks} name={detail.name} />
+                  {isDesktop && <DesktopCollectionDownload tracks={detail.tracks} />}
                   <LibrarySaveButton kind="playlist" id={id} />
                   {isOwner && (
                     <DropdownMenu>

@@ -1,0 +1,19 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+@font-face {
+  font-family: Desktop Onest;
+  src: url("../../../android/app/src/main/res/font/onest_variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: Desktop Unbounded;
+  src: url("../../../android/app/src/main/res/font/unbounded_medium.ttf") format("truetype");
+  font-weight: 500;
+  font-display: swap;
+}
+
+:root {
+  --font-onest: "Desktop Onest";
+  --font-unbounded: "Desktop Unbounded";
+}

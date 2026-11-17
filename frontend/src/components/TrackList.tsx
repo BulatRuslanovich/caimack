@@ -3,6 +3,9 @@
 
 "use client";
 
+import { isDesktop, useDesktopUnavailable } from "@/desktop/api";
+import { DownloadBadge } from "@/desktop/offline";
+
 import { useT } from "@/contexts/I18nContext";
 import { useNowPlaying, usePlayerActions } from "@/contexts/PlayerContext";
 import { cn } from "@/lib/cn";
@@ -459,6 +462,10 @@ const TrackRowContent = memo(function TrackRowContent({
 }: TrackRowProps & { drag?: ReturnType<typeof useSortable> }) {
   const t = useT();
   const format = useFormat();
+  const unavailable = useDesktopUnavailable(track.id);
+  const play = () => {
+    if (!unavailable) onPlay(index);
+  };
 
   const showSpec = showAudioSpec && isLossless(track.codec);
 
@@ -470,13 +477,13 @@ const TrackRowContent = memo(function TrackRowContent({
       aria-rowindex={index + 2}
       data-striped={index % 2 === 0 || undefined}
       tabIndex={focused ? 0 : -1}
-      onDoubleClick={() => onPlay(index)}
+      onDoubleClick={play}
       onClick={(event) => {
         if (!window.matchMedia("(pointer: coarse)").matches) return;
         if ((event.target as HTMLElement).closest("a, button")) return;
 
         if (selectable) onToggleSelected?.(track.id, index, false);
-        else onPlay(index);
+        else play();
       }}
       onContextMenu={(event) => {
         event.preventDefault();
@@ -492,6 +499,7 @@ const TrackRowContent = memo(function TrackRowContent({
         "library-track-row group relative transition-colors outline-none",
         "hover:bg-card focus-within:bg-card focus-visible:bg-card focus-visible:inset-ring focus-visible:inset-ring-ring",
         isCurrent && "track-row-current bg-card",
+        unavailable && "opacity-55",
         drag?.isDragging && "z-10 opacity-90 shadow-pop",
       )}
     >
@@ -532,7 +540,8 @@ const TrackRowContent = memo(function TrackRowContent({
               variant="ghost"
               size="icon-sm"
               className="hidden text-foreground group-hover:grid active:scale-95 max-md:size-8 [@media(hover:none)]:grid"
-              onClick={() => onPlay(index)}
+              disabled={unavailable}
+              onClick={play}
               aria-label={
                 isPlaying
                   ? t("tracks.pauseNamed", { title: track.title })
@@ -548,8 +557,14 @@ const TrackRowContent = memo(function TrackRowContent({
       <span className="flex min-w-0 items-center gap-3" role="cell">
         {showCover && <TrackCover track={track} size={40} className="library-track-cover" />}
         <span className="flex min-w-0 flex-col">
-          <span className={cn("truncate text-body font-semibold", isCurrent && "text-primary")}>
-            {track.title}
+          <span
+            className={cn(
+              "flex min-w-0 items-center gap-1.5 text-body font-semibold",
+              isCurrent && "text-primary",
+            )}
+          >
+            <span className="truncate">{track.title}</span>
+            {isDesktop && <DownloadBadge id={track.id} />}
           </span>
           {(showArtist || showSpec) && (
             <span className="flex min-w-0 items-center gap-2">

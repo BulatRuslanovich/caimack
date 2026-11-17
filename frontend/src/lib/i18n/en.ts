@@ -44,6 +44,7 @@ export const en = {
   "connect.findDevices":
     "Open Caimack on another device and sign in to the same account. It will appear here.",
   "nav.home": "Home",
+  "nav.downloads": "Downloads",
   "nav.library": "Your library",
   "nav.main": "Main",
   "nav.tracks": "Tracks",

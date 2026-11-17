@@ -1,0 +1,30 @@
+# Maintainer: Caimack contributors
+# The desktop build populates pkgver and the archive checksum in the release copy.
+pkgname=caimack-desktop
+pkgver=1.1.2
+pkgrel=1
+pkgdesc='Desktop client for Caimack music libraries'
+arch=('x86_64')
+url='https://github.com/MX-Goliath/caimack'
+license=('AGPL-3.0-only')
+depends=('alsa-lib' 'at-spi2-core' 'dbus' 'glib2' 'gtk3' 'libdrm' 'libx11'
+         'libxcb' 'libxcomposite' 'libxdamage' 'libxext' 'libxfixes' 'libxkbcommon'
+         'libxrandr' 'mesa' 'nspr' 'nss')
+options=('!strip' '!debug')
+source=("caimack-desktop-${pkgver}-linux-x64.tar.xz")
+sha256sums=('GENERATED_BY_PREPARE_ARCH')
+
+package() {
+  local bundle="$srcdir/caimack-desktop-${pkgver}-linux-x64"
+  if [[ ! -x "$bundle/caimack" ]]; then
+    bundle="$srcdir"
+  fi
+
+  install -d "$pkgdir/opt/$pkgname" "$pkgdir/usr/bin"
+  cp -a "$bundle"/. "$pkgdir/opt/$pkgname/"
+  rm -f "$pkgdir/opt/$pkgname/caimack-desktop-${pkgver}-linux-x64.tar.xz"
+
+  ln -s "/opt/$pkgname/caimack" "$pkgdir/usr/bin/caimack"
+  install -Dm644 "$startdir/caimack.desktop" "$pkgdir/usr/share/applications/caimack.desktop"
+  install -Dm644 "$startdir/caimack.png" "$pkgdir/usr/share/icons/hicolor/512x512/apps/caimack.png"
+}

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Caimack
+Comment=Listen to your Caimack music library
+Exec=caimack
+Icon=caimack
+Terminal=false
+Type=Application
+Categories=AudioVideo;Audio;Player;

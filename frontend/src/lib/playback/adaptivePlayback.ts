@@ -6,6 +6,7 @@ import type { ErrorData, HlsConfig } from "hls.js";
 import { createSessionAwareLoader } from "@/lib/playback/hlsSessionLoader";
 import { fetchWithSession } from "@/lib/http";
 import { mediaUrl } from "@/lib/media";
+import { localSource } from "@/desktop/api";
 import type { AudioQuality } from "@/lib/types";
 
 type AdaptiveQuality = Exclude<AudioQuality, "Original">;
@@ -90,7 +91,8 @@ export class AdaptivePlayback {
 
     this.audio.pause();
 
-    const adaptive = adaptiveWanted(request);
+    const local = localSource(request.trackId);
+    const adaptive = local ? local === "hls" : adaptiveWanted(request);
     if (adaptive) this.hlsApi = await loadHls();
 
     const useHlsJs = this.hlsApi?.default.isSupported() === true;
