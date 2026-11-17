@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 //! Optional catalog-driven names. A committed journal precedes every filesystem change.
 use std::fs::{self, File, OpenOptions};

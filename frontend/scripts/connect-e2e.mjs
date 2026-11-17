@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 // Browser integration checks for the real React player. The deterministic API
 // fixture complements the Rust tests of the production HTTP/SSE protocol.

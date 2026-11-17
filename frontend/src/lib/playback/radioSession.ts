@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 import type { RadioSessionState } from "@/lib/playback/playerTypes";
 import type { QueueSignals, RecommendationReason, RecommendedTrack, Track } from "@/lib/types";

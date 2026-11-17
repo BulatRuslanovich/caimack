@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;

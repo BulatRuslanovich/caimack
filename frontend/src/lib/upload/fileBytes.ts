@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 export async function readBytes(file: Blob, from: number, length: number): Promise<Uint8Array> {
   if (length <= 0) return new Uint8Array(0);

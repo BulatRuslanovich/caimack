@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 //! Export portable artwork and lyric companions without invalidating audio analysis.
 use std::fs::{self, File, OpenOptions};

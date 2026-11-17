@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 const RENEW_AT = 2 / 3;
 const MINIMUM_MS = 30_000;
