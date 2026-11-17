@@ -1,14 +1,22 @@
 <resources>
     <string name="sync_title">Синхронизация медиатеки</string>
     <string name="sync_network_hint">Телефон и сервер должны быть в одной локальной сети, а адрес сервера — вести на локальный IP. Для публичного домена можно настроить локальную DNS-запись на роутере.</string>
-    <string name="sync_description">Вся библиотека, тексты, обложки, векторы и подготовленные сервером миксы на телефоне. Исходное качество аудио. Автоматически по локальной сети Wi-Fi или Ethernet, в том числе от батареи.</string>
+    <string name="sync_description">Медиатека, тексты и обложки на телефоне в исходном качестве аудио. Обновляется автоматически по локальной сети Wi-Fi или Ethernet, в том числе от батареи.</string>
     <string name="sync_enable">Синхронизировать эту библиотеку</string>
     <string name="sync_choose_folder">Выбрать папку музыки</string>
     <string name="sync_progress">Доступно: %1$d / %2$d треков</string>
     <string name="sync_pending">Действий ожидают отправки: %1$d</string>
     <string name="sync_rejected">Сервер отклонил изменений: %1$d. Журнал действий сохранён.</string>
     <string name="sync_last">Последняя полная синхронизация: %1$s</string>
-    <string name="sync_now">Синхронизировать / продолжить</string>
+    <string name="sync_now">Синхронизировать</string>
+    <string name="sync_resume">Продолжить</string>
+    <string name="sync_folder">Папка музыки</string>
+    <string name="sync_folder_storage">Память устройства</string>
+    <string name="sync_network_details">Требования к сети</string>
+    <string name="sync_status_running">Синхронизация…</string>
+    <string name="sync_status_ready">Всё синхронизировано</string>
+    <string name="sync_status_waiting">Ожидание синхронизации</string>
+    <string name="sync_status_attention">Требуется внимание</string>
     <string name="sync_pause">Приостановить</string>
     <string name="sync_paused">Синхронизация приостановлена</string>
     <string name="sync_sign_in_again">Войдите на сервер заново для продолжения синхронизации. Офлайн-медиатека остаётся доступной.</string>

@@ -199,7 +199,7 @@ fun MiniPlayer(state: PlayerState, onOpen: () -> Unit) {
                 } }
             }
             Row(Modifier.testTag("mini-player-controls"), verticalAlignment = Alignment.CenterVertically) {
-                PlaybackDevicesButton(Modifier.size(48.dp).testTag("mini-player-devices"), compact = true, iconTint = if (connect.selectedId != null) foreground else secondary)
+                PlaybackDevicesButton(Modifier.size(48.dp).testTag("mini-player-devices"), style = PlaybackDevicesStyle.Icon, iconTint = if (connect.selectedId != null) foreground else secondary)
                 Box(Modifier.size(48.dp).testTag("mini-player-save").clip(CircleShape)
                     .semantics {
                         selected = saved

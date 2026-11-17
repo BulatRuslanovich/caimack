@@ -4,6 +4,8 @@ package app.caimack.ui
 
 import android.os.SystemClock
 import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -15,6 +17,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -26,9 +30,15 @@ import app.caimack.playback.SleepTimerState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
+enum class PlaybackDevicesStyle { Icon, Inline, Settings }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PlaybackDevicesButton(modifier: Modifier = Modifier, compact: Boolean = false, iconTint: Color? = null) {
+fun PlaybackDevicesButton(
+    modifier: Modifier = Modifier,
+    style: PlaybackDevicesStyle = PlaybackDevicesStyle.Inline,
+    iconTint: Color? = null,
+) {
     val container = LocalContainer.current
     val context = LocalContext.current
     val palette = LocalPalette.current
@@ -49,14 +59,59 @@ fun PlaybackDevicesButton(modifier: Modifier = Modifier, compact: Boolean = fals
             finally { choosing = false }
         }
     }
-    if (compact) IconButton(onClick = { open = true }, modifier = modifier.size(48.dp).clip(CircleShape)) {
-        Icon(Lucide.MonitorSpeaker, title, tint = iconTint ?: if (state.selectedId != null) palette.primary else palette.muted,
-            modifier = Modifier.size(22.dp))
-    } else Row(modifier.heightIn(min = 48.dp).clickable { open = true }.padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Icon(Lucide.MonitorSpeaker, title, tint = iconTint ?: if (state.selectedId != null) palette.primary else palette.muted, modifier = Modifier.size(18.dp))
-        Text(label, style = Type.tiny, color = if (state.selectedId != null) palette.primary else palette.muted,
-            maxLines = 1, overflow = TextOverflow.Ellipsis)
+    when (style) {
+        PlaybackDevicesStyle.Icon -> IconButton(
+            onClick = { open = true },
+            modifier = modifier.size(48.dp).clip(CircleShape),
+        ) {
+            Icon(Lucide.MonitorSpeaker, title,
+                tint = iconTint ?: if (state.selectedId != null) palette.primary else palette.muted,
+                modifier = Modifier.size(22.dp))
+        }
+        PlaybackDevicesStyle.Inline -> Row(
+            modifier.heightIn(min = 48.dp).clip(Radius.row)
+                .clickable(role = Role.Button, onClickLabel = title) { open = true }
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(Lucide.MonitorSpeaker, title,
+                tint = iconTint ?: if (state.selectedId != null) palette.primary else palette.muted,
+                modifier = Modifier.size(18.dp))
+            Text(label, style = Type.tiny,
+                color = if (state.selectedId != null) palette.primary else palette.muted,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        PlaybackDevicesStyle.Settings -> Row(
+            modifier.fillMaxWidth().heightIn(min = 76.dp)
+                .clip(Radius.panel)
+                .background(palette.card)
+                .border(1.dp, palette.border, Radius.panel)
+                .clickable(role = Role.Button, onClickLabel = title) { open = true }
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            val unavailable = state.selectedId != null && !state.available
+            val tint = if (unavailable) palette.warning else palette.primary
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).background(palette.primarySoft),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Lucide.MonitorSpeaker, null, tint = tint, modifier = Modifier.size(22.dp))
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(title, style = Type.tiny, color = palette.muted)
+                Text(label, style = Type.small.copy(fontWeight = FontWeight.Medium),
+                    color = if (unavailable) palette.warning else palette.foreground,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            if (state.pending || choosing) {
+                CircularProgressIndicator(Modifier.size(18.dp), color = palette.primary, strokeWidth = 2.dp)
+            } else {
+                Icon(Lucide.ChevronRight, null, tint = palette.muted, modifier = Modifier.size(18.dp))
+            }
+        }
     }
     if (open) ModalBottomSheet(onDismissRequest = { open = false }, containerColor = palette.card) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

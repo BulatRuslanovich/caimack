@@ -168,7 +168,7 @@ fun SettingsScreen(category: SettingsCategory? = null) {
             }
             if (visible.any { it.section == R.string.settings_playback }) {
                 Panel(stringResource(R.string.settings_playback)) {
-                    PlaybackDevicesButton()
+                    PlaybackDevicesButton(style = PlaybackDevicesStyle.Settings)
                     if (SettingKey.Quality in visible) {
                         Choice(
                             stringResource(R.string.settings_quality),
