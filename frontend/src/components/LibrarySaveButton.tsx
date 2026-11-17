@@ -2,7 +2,8 @@
 "use client";
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleCheckIcon, CirclePlusIcon, EllipsisIcon, FolderInputIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
+import { Slot } from "@radix-ui/react-slot";
 import { LibraryMoveDialog } from "./LibraryOrganization";
 import { api } from "@/lib/api";
 import { queries } from "@/lib/queries";
@@ -113,22 +114,77 @@ export function LibraryItemMenu({
   title: string;
 }) {
   const t = useT();
+  const [activated, setActivated] = useState<"pointer" | "keyboard" | null>(null);
+  const trigger = (
+    <Button
+      variant="ghost"
+      size="icon"
+      aria-label={t("tracks.moreActions", { title })}
+      title={t("tracks.moreActions", { title })}
+    >
+      <EllipsisIcon size={18} />
+    </Button>
+  );
+  if (!activated) {
+    return (
+      <Slot
+        aria-haspopup="menu"
+        aria-expanded={false}
+        data-state="closed"
+        onClick={(event) => setActivated(event.detail === 0 ? "keyboard" : "pointer")}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            setActivated("keyboard");
+          }
+        }}
+      >
+        {trigger}
+      </Slot>
+    );
+  }
+  return (
+    <ActiveLibraryItemMenu
+      kind={kind}
+      id={id}
+      trigger={trigger}
+      initialKeyboardFocus={activated === "keyboard"}
+    />
+  );
+}
+
+function ActiveLibraryItemMenu({
+  kind,
+  id,
+  trigger,
+  initialKeyboardFocus,
+}: {
+  kind: LibraryKind;
+  id: string;
+  trigger: ReactElement;
+  initialKeyboardFocus: boolean;
+}) {
+  const t = useT();
+  const [open, setOpen] = useState(true);
+  const keyboardFocus = useRef(initialKeyboardFocus);
   const { saved, disabled, label, toggle, folderId } = useLibrarySave(kind, id);
   const [moving, setMoving] = useState(false);
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={t("tracks.moreActions", { title })}
-            title={t("tracks.moreActions", { title })}
-          >
-            <EllipsisIcon size={18} />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+        <DropdownMenuContent
+          onFocusCapture={(event) => {
+            if (!keyboardFocus.current || event.target !== event.currentTarget) return;
+            keyboardFocus.current = false;
+            const first = event.currentTarget.querySelector<HTMLElement>(
+              '[role="menuitem"]:not([data-disabled])',
+            );
+            if (first) {
+              first.focus();
+            }
+          }}
+        >
           {saved && (
             <DropdownMenuItem disabled={disabled} onSelect={() => setMoving(true)}>
               <FolderInputIcon size={16} />

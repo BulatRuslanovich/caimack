@@ -4,7 +4,7 @@
 import { HydrationBoundary } from "@tanstack/react-query";
 import { HomePage } from "@/components/home/HomePage";
 import { queries } from "@/lib/queries";
-import { prefetchOnServer } from "@/lib/server/prefetch";
+import { prefetchInitialPage as prefetchOnServer } from "@/lib/server/prefetch";
 
 export default async function Page() {
   const state = await prefetchOnServer((client) => client.prefetchQuery(queries.homeFeed()));

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Bulat Ruslanovich
 
-import Link from "next/link";
+import { PrefetchLink as Link } from "@/components/PrefetchLink";
 import { Fragment } from "react";
 import { creditsOf } from "@/lib/format";
 import type { Track } from "@/lib/types";

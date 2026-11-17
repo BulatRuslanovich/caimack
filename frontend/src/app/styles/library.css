@@ -79,7 +79,7 @@
   border-color: var(--library-edge);
 }
 
-.library-track-row:nth-child(even) {
+.library-track-row[data-striped] {
   background: color-mix(in oklab, var(--card) 24%, transparent);
 }
 

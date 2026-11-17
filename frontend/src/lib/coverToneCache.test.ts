@@ -99,11 +99,34 @@ describe("cover tone cache", () => {
   it("notifies active subscribers and removes unsubscribed listeners", async () => {
     const cache = createCoverToneCache(async () => ({ accent }));
     const notify = vi.fn();
-    const stop = cache.subscribe(notify);
+    const stop = cache.subscribe(["a", "b"], notify);
     await cache.load("a", "accent");
     expect(notify).toHaveBeenCalledTimes(1);
     stop();
     await cache.load("b", "accent");
     expect(notify).toHaveBeenCalledTimes(1);
+  });
+
+  it("notifies only consumers of the completed cover, not the whole collection", async () => {
+    const cache = createCoverToneCache(async () => ({ accent }));
+    const own = vi.fn(),
+      unrelated = vi.fn();
+    cache.subscribe(["a", "a"], own);
+    cache.subscribe(["b"], unrelated);
+    await cache.load("a", "accent");
+    expect(own).toHaveBeenCalledOnce();
+    expect(unrelated).not.toHaveBeenCalled();
+  });
+
+  it("does not evict subscribed covers and start a reload loop above the cache limit", async () => {
+    const sample = vi.fn(async () => ({ accent }));
+    const cache = createCoverToneCache(sample, 2);
+    const stops = ["a", "b", "c"].map((url) => cache.subscribe([url], () => {}));
+    for (const url of ["a", "b", "c", "a", "b", "c"]) await cache.load(url, "accent");
+    expect(sample).toHaveBeenCalledTimes(3);
+    expect(cache.get("a", "accent")).toBe(accent);
+    stops[0]();
+    expect(cache.get("a", "accent")).toBeUndefined();
+    expect(cache.get("b", "accent")).toBe(accent);
   });
 });

@@ -146,7 +146,6 @@ class VisualReviewTest {
             }
         }
         web.start()
-        container.connectionPreferences.setAllowLocalHttp(true)
         check(container.session.login(web.url("/").toString(), user.username, "visual-fixture") == null)
     }
 

@@ -151,6 +151,7 @@ export const queries = {
         api.albums({ page: pageParam, pageSize: CARD_PAGE_SIZE, recentFirst, q }, signal),
       initialPageParam: 1,
       getNextPageParam: (last) => (last.page < last.totalPages ? last.page + 1 : undefined),
+      placeholderData: keepPreviousData,
     }),
 
   artistsFeed: ({ q }: { q?: string } = {}) =>
@@ -160,6 +161,7 @@ export const queries = {
         api.artists({ page: pageParam, pageSize: CARD_PAGE_SIZE, q }, signal),
       initialPageParam: 1,
       getNextPageParam: (last) => (last.page < last.totalPages ? last.page + 1 : undefined),
+      placeholderData: keepPreviousData,
     }),
 
   artist: (id: string, page = 1) =>
@@ -275,6 +277,14 @@ export const queries = {
 
 export const navigationPrefetch: Record<string, (client: QueryClient) => Promise<void>> = {
   "/": (client) => client.prefetchQuery(queries.homeFeed()),
+  "/library": async (client) => {
+    await Promise.all([
+      client.prefetchQuery(queries.savedLibrary()),
+      client.prefetchQuery(queries.libraryFolders()),
+      client.prefetchQuery(queries.libraryOrder()),
+      client.prefetchQuery(queries.favorites({ page: 1, pageSize: 1 })),
+    ]);
+  },
   "/tracks": (client) =>
     client.prefetchQuery(
       queries.tracks({ page: 1, pageSize: TRACK_PAGE_SIZE, sort: "Title", q: undefined }),
@@ -282,6 +292,8 @@ export const navigationPrefetch: Record<string, (client: QueryClient) => Promise
   "/albums": (client) => client.prefetchInfiniteQuery(queries.albumsFeed()),
   "/artists": (client) => client.prefetchInfiniteQuery(queries.artistsFeed()),
   "/genres": (client) => client.prefetchQuery(queries.genres()),
+  "/search": (client) => client.prefetchQuery(queries.genres()),
+  "/map": (client) => client.prefetchQuery(queries.libraryMap()),
   "/favorites": (client) =>
     client.prefetchQuery(queries.favorites({ page: 1, pageSize: TRACK_PAGE_SIZE })),
   "/recently-played": (client) =>
@@ -289,10 +301,25 @@ export const navigationPrefetch: Record<string, (client: QueryClient) => Promise
   "/playlists": async (client) => {
     await Promise.all([
       client.prefetchQuery(queries.playlists()),
-      client.prefetchQuery(queries.libraryOverview()),
+      client.prefetchQuery(queries.publicPlaylists()),
     ]);
   },
 };
+
+export async function prefetchRouteData(client: QueryClient, href: string): Promise<void> {
+  const path = href.split(/[?#]/)[0];
+  if (navigationPrefetch[path]) return navigationPrefetch[path](client);
+  const detail = /^\/(albums|artists|playlists)\/([^/]+)$/.exec(path);
+  if (!detail) return;
+  const [, kind, id] = detail;
+  if (kind === "albums") await client.prefetchQuery(queries.album(id));
+  else if (kind === "playlists") await client.prefetchQuery(queries.playlist(id));
+  else
+    await Promise.all([
+      client.prefetchQuery(queries.artist(id)),
+      client.prefetchQuery(queries.artistTopTracks(id)),
+    ]);
+}
 
 export const invalidates = {
   library: [

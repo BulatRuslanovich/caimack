@@ -5,7 +5,7 @@ import { HydrationBoundary } from "@tanstack/react-query";
 import { RecentlyPlayedPage } from "@/app/recently-played/RecentlyPlayedPage";
 import { TRACK_PAGE_SIZE } from "@/lib/pageSizes";
 import { queries } from "@/lib/queries";
-import { prefetchOnServer } from "@/lib/server/prefetch";
+import { prefetchInitialPage as prefetchOnServer } from "@/lib/server/prefetch";
 
 export default async function Page() {
   const state = await prefetchOnServer((client) =>

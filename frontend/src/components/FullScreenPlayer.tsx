@@ -61,9 +61,7 @@ const SWIPE_CLOSE_PX = 120;
 const DJControls = dynamic(() => import("./DJControls").then((m) => m.DJControls), {
   loading: () => null,
 });
-const QueueList = dynamic(() => import("./QueueList").then((m) => m.QueueList), {
-  loading: () => <Loading />,
-});
+import { QueueList } from "./QueueList";
 const LyricsPane = dynamic(() => import("./LyricsPane").then((m) => m.LyricsPane), {
   loading: () => <Loading />,
 });

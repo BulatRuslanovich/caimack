@@ -1,11 +1,73 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { QueryClient, type QueryKey } from "@tanstack/react-query";
+import { InfiniteQueryObserver, QueryClient, type QueryKey } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { api } from "./api";
 import { ApiError } from "./http";
 import { WAVEFORM_VERSION } from "./waveform";
-import { invalidates, queries } from "./queries";
+import { invalidates, navigationPrefetch, queries } from "./queries";
+import { CARD_PAGE_SIZE } from "./pageSizes";
+import type { Album, Paged } from "./types";
+
+describe("library navigation cache", () => {
+  it("warms the saved library and reuses that data when returning to Saved", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { staleTime: 300_000 } } });
+    const saved = vi.spyOn(api, "savedLibrary").mockResolvedValue([]);
+    const folders = vi.spyOn(api, "libraryFolders").mockResolvedValue([]);
+    const order = vi.spyOn(api, "libraryOrder").mockResolvedValue({});
+    const favorites = vi
+      .spyOn(api, "favorites")
+      .mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 1, totalPages: 0 });
+    try {
+      await navigationPrefetch["/library"](client);
+      await Promise.all([
+        client.fetchQuery(queries.savedLibrary()),
+        client.fetchQuery(queries.libraryFolders()),
+        client.fetchQuery(queries.libraryOrder()),
+        client.fetchQuery(queries.favorites({ page: 1, pageSize: 1 })),
+      ]);
+      for (const request of [saved, folders, order, favorites])
+        expect(request).toHaveBeenCalledOnce();
+    } finally {
+      vi.restoreAllMocks();
+      client.clear();
+    }
+  });
+
+  it("keeps loaded album pages while fetching page one of a new filter", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { staleTime: 300_000 } } });
+    const cached = {
+      pages: [{ items: [], total: 120, page: 2, pageSize: CARD_PAGE_SIZE, totalPages: 2 }],
+      pageParams: [2],
+    };
+    client.setQueryData(queries.albumsFeed().queryKey, cached);
+    let complete!: (page: Paged<Album>) => void;
+    const request = vi.spyOn(api, "albums").mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve;
+        }),
+    );
+    const observer = new InfiniteQueryObserver(client, queries.albumsFeed());
+    const unsubscribe = observer.subscribe(() => {});
+    try {
+      observer.setOptions(queries.albumsFeed({ q: "new" }));
+      expect(observer.getCurrentResult().isPlaceholderData).toBe(true);
+      expect(observer.getCurrentResult().data).toBe(cached);
+      expect(request).toHaveBeenCalledWith(
+        { page: 1, pageSize: CARD_PAGE_SIZE, recentFirst: false, q: "new" },
+        expect.any(AbortSignal),
+      );
+      complete({ items: [], total: 0, page: 1, pageSize: CARD_PAGE_SIZE, totalPages: 0 });
+      await vi.waitFor(() => expect(observer.getCurrentResult().isPlaceholderData).toBe(false));
+      expect(observer.getCurrentResult().data?.pageParams).toEqual([1]);
+    } finally {
+      unsubscribe();
+      request.mockRestore();
+      client.clear();
+    }
+  });
+});
 
 describe("waveform analysis upgrades", () => {
   it.each(["not ready", "obsolete"])(

@@ -64,4 +64,11 @@ describe("query loading and retained content", () => {
     expect(markup).toContain("Saved music is empty");
     expect(markup).toContain("error.refresh");
   });
+
+  it("retains the same content structure while the next page is loading", () => {
+    const loaded = render().markup;
+    const loading = render({ isPlaceholderData: true }).markup;
+    expect(loading).toContain('aria-busy="true"');
+    expect(loading.replace(' aria-busy="true"', "")).toBe(loaded);
+  });
 });

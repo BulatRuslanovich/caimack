@@ -8,11 +8,13 @@ import { queries } from "@/lib/queries";
 import { prefetchOnServer } from "@/lib/server/prefetch";
 
 export default async function Page() {
-  const state = await prefetchOnServer((client) =>
-    Promise.all([
-      client.prefetchQuery(queries.tracks({ page: 1, pageSize: TRACK_PAGE_SIZE, sort: "Title" })),
-      client.prefetchQuery(queries.libraryOverview()),
-    ]),
+  const state = await prefetchOnServer(
+    (client) =>
+      Promise.all([
+        client.prefetchQuery(queries.tracks({ page: 1, pageSize: TRACK_PAGE_SIZE, sort: "Title" })),
+        client.prefetchQuery(queries.libraryOverview()),
+      ]),
+    { initialOnly: true },
   );
 
   return (
