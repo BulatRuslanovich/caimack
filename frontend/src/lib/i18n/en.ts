@@ -806,6 +806,82 @@ export const en = {
     other: "{count} already there",
   },
   "stats.title": "How recommendations perform",
+  "stats.intro":
+    "See what you keep listening to, how discoveries land, and what shapes your recommendations.",
+  "stats.refresh": "Refresh statistics",
+  "stats.period": "Statistics period",
+  "stats.periodDays": "{count} days",
+  "stats.autoRefresh": "Updates every 30 minutes",
+  "stats.updating": "Updating…",
+  "stats.emptyHint":
+    "Play your radio or a personalized mix. Your listening will appear here; try a longer period if you have listened before.",
+  "stats.listen": "Find something to play",
+  "stats.responseTitle": "Your response to recommendations",
+  "stats.responseCaption": "of graded listens heard almost in full",
+  "stats.noGrades": "Not enough listening to measure yet",
+  "stats.ratedSample": "Based on {count} graded listens",
+  "stats.outcomeNear": "Almost in full",
+  "stats.outcomeNearHint": "At least 80% actually heard",
+  "stats.outcomePartial": "At least half",
+  "stats.outcomePartialHint": "Between 50% and 80% actually heard",
+  "stats.outcomeEarly": "Skipped early",
+  "stats.outcomeEarlyHint": "Skipped before 20% and 30 seconds",
+  "stats.recommendationTime": "Time with recommendations",
+  "stats.totalTime": "Out of {total} of music",
+  "stats.recommendationShare": "Share of listening time",
+  "stats.shareHint": "Radio and personalized picks",
+  "stats.recommendationLikes": "Likes from recommendations",
+  "stats.likesHint": "Counted per source; a track may appear more than once",
+  "stats.howMeasured": "How to read these numbers",
+  "stats.measureIntro": "The percentages in Your response are based on three groups of listens:",
+  "stats.measureNear":
+    "You heard at least 80% of the song — for example, 4 minutes or more of a 5-minute track.",
+  "stats.measurePartial":
+    "You heard at least half but less than 80% of the song. For example, 3 minutes of a 5-minute track.",
+  "stats.measureEarly":
+    "You skipped before the 30-second mark and before one fifth of the song had played. Both conditions must apply.",
+  "stats.measureExample":
+    "For example, if 7 out of 10 counted listens were heard almost in full, the screen shows 70%.",
+  "stats.unratedNote": {
+    one: "{count} listen is excluded from the percentage calculation.",
+    other: "{count} listens are excluded from the percentage calculation.",
+  },
+  "stats.unratedReason":
+    "These listens either lack enough data, or ended before halfway without an early skip. They count as neither a near-complete listen nor an early skip.",
+  "stats.measureSeeks":
+    "Only time when the music actually played counts. Seeking to the end of a song does not count as listening to it.",
+  "stats.measureCaution":
+    "These numbers show how you listen. They cannot tell for certain whether you liked a track: sometimes you skip simply because of your mood.",
+  "stats.comparisonTitle": "What you finish listening to",
+  "stats.comparisonNote":
+    "Completed tracks as a share of completed and skipped plays. Ongoing listens are excluded; a dash means there are no ended plays.",
+  "stats.recommendedMusic": "Recommendations",
+  "stats.chosenMusic": "Other sources",
+  "stats.radioNote":
+    "How familiar picks and discoveries were received. The bar includes every suggestion, even those you never reached.",
+  "stats.radioExploreHint": "Picks that explore beyond your usual listening.",
+  "stats.radioRegularHint": "Picks closer to the radio’s musical direction.",
+  "stats.radioRateNote": "almost in full, among graded listens",
+  "stats.radioPending": "Not evaluated yet",
+  "stats.suggestedCount": "{count} suggested",
+  "stats.sourcesTitle": "Where your music comes from",
+  "stats.sourcesNote":
+    "Your six most-listened sources, ordered by actual listening time. Open the details for all sources and their metrics.",
+  "stats.sourceFilter": "Filter listening sources",
+  "stats.allSources": "All music",
+  "stats.onlyRecommended": "Recommendations only",
+  "stats.noRecommendedSources":
+    "No listening from recommendations in this period. Try your radio or a personalized mix.",
+  "stats.allMetrics": "All source metrics ({count})",
+  "stats.tableNote":
+    "Started includes the share of impressions that led to a start. Finished and early skips are shares of ended plays; ongoing listens are excluded. Some sources do not record impressions.",
+  "rules.note":
+    "These preferences apply to recommendations. Your library and favorites stay available.",
+  "rules.emptyTitle": "Nothing excluded",
+  "rules.emptyHint":
+    "In a track’s menu, open Recommendations to hide a track, take a month off, or hear an artist less often. You can undo those choices here.",
+  "rules.removeNamed": "Remove rule for {name}",
+  "rules.removeFailed": "Could not remove the rule. Try again.",
   "stats.listeningTitle": "Rated by listening",
   "stats.listeningNote": "Recommendations are graded automatically as you listen.",
   "stats.gradeZero": "0 · Skipped early",
@@ -847,9 +923,12 @@ export const en = {
   "source.radio:track": "Track radio",
   "source.radio:autoplay": "Autoplay",
   "source.queue": "Added to queue",
-  "source.album": "Album",
-  "source.artist": "Artist",
-  "source.playlist": "Playlist",
+  "source.album": "Album page",
+  "source.albums": "Album catalog",
+  "source.artist": "Artist page",
+  "source.artists": "Artist catalog",
+  "source.playlist": "Playlist page",
+  "source.playlists": "Playlist catalog",
   "source.favorites": "Liked songs",
   "source.history": "Recently played",
   "source.search": "Search",

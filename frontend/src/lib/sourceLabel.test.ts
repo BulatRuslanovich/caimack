@@ -18,6 +18,14 @@ describe("sourceLabel", () => {
     expect(sourceLabel("radio:previous", t)).toBe("source.radio");
   });
 
+  it.each(["albums", "artists", "playlists"])(
+    "translates the %s catalog separately from detail pages",
+    (source) => {
+      expect(sourceLabel(source, t)).toBe(`source.${source}`);
+      expect(sourceLabel(source.slice(0, -1), t)).toBe(`source.${source.slice(0, -1)}`);
+    },
+  );
+
   it("shows an unrecorded source as unknown and a strange one as is", () => {
     expect(sourceLabel(null, t)).toBe("source.unknown");
     expect(sourceLabel("mix:weird", t)).toBe("mix:weird");
