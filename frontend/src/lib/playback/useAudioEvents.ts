@@ -78,11 +78,15 @@ export function useAudioEvents({
       handleWaiting();
     },
     onStalled: (event) => fromActive(event) && handleWaiting(),
-    onPlay: (event) => fromActive(event) && setIsPlaying(true),
+    // Media events are queued: a source reload or quick pause/resume can make
+    // them stale before delivery. Echoing those events into playback intent
+    // makes the engine alternate play() and pause() indefinitely.
+    onPlay: (event) => fromActive(event) && !event.currentTarget.paused && setIsPlaying(true),
     onPause: (event) => {
       if (scrubRef.current !== null) return;
       if (
         fromActive(event) &&
+        event.currentTarget.paused &&
         event.currentTarget.dataset.sourceLoading !== "true" &&
         !event.currentTarget.error
       ) {
