@@ -106,6 +106,15 @@ function SettingsSections() {
               href={key === DEFAULT_SECTION ? "/settings" : `/settings?tab=${key}`}
               replace
               scroll={false}
+              prefetch={false}
+              onNavigate={(event) => {
+                event.preventDefault();
+                window.history.replaceState(
+                  null,
+                  "",
+                  key === DEFAULT_SECTION ? "/settings" : `/settings?tab=${key}`,
+                );
+              }}
               aria-current={section === key ? "page" : undefined}
             >
               <Icon size={18} aria-hidden="true" />

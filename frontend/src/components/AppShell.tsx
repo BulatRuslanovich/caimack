@@ -10,7 +10,6 @@ import { useLibraryDensity } from "@/lib/libraryDensity";
 import { isTypingTarget } from "@/lib/shortcuts";
 import { signConsole } from "@/lib/signature";
 import { useRecommendations } from "@/lib/useRecommendations";
-import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { LeanBack } from "./LeanBack";
@@ -22,7 +21,7 @@ import { SecretCat } from "./SecretCat";
 import { ShortcutsHelp } from "./ShortcutsHelp";
 import { Sidebar } from "./Sidebar";
 import { YandexImports } from "./yandex/YandexImports";
-const QueuePanel = dynamic(() => import("./QueuePanel").then((m) => m.QueuePanel), { ssr: false });
+import { QueuePanel } from "./QueuePanel";
 
 export function AppShell({ children }: { children: ReactNode }) {
   useLibraryDensity();

@@ -6,7 +6,7 @@
 import { cn } from "@/lib/cn";
 import type { Route } from "next";
 import { useQuery } from "@tanstack/react-query";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useMemo, type ReactNode } from "react";
 import type { SearchTab, SearchTabResult } from "@/lib/api";
 import { queries, SEARCH_MIN_LENGTH } from "@/lib/queries";
@@ -71,7 +71,6 @@ function isTab(value: string | null): value is SearchTab {
 
 function SearchView() {
   const t = useT();
-  const router = useRouter();
   const params = useSearchParams();
 
   const { isAdmin } = useAuth();
@@ -83,24 +82,25 @@ function SearchView() {
   const yandexTab = yandex && tabParam === YANDEX_TAB;
   const tab = isTab(tabParam) ? tabParam : null;
 
-  const navigate = useCallback(
-    (next: string, nextTab: Tab | null) => {
-      if (!next) {
-        router.replace(nextTab === YANDEX_TAB ? "/search?tab=yandex" : "/search");
-        return;
-      }
+  const navigate = useCallback((next: string, nextTab: Tab | null) => {
+    if (!next) {
+      window.history.replaceState(
+        null,
+        "",
+        nextTab === YANDEX_TAB ? "/search?tab=yandex" : "/search",
+      );
+      return;
+    }
 
-      const search = new URLSearchParams({ q: next });
-      if (nextTab) search.set("tab", nextTab);
+    const search = new URLSearchParams({ q: next });
+    if (nextTab) search.set("tab", nextTab);
 
-      router.replace(`/search?${search}`);
-    },
-    [router],
-  );
+    window.history.replaceState(null, "", `/search?${search}`);
+  }, []);
 
   const results = useQuery({
     ...queries.search(query),
-    enabled: !yandexTab && query.length >= SEARCH_MIN_LENGTH,
+    enabled: !yandexTab && tab === null && query.length >= SEARCH_MIN_LENGTH,
   });
 
   const previewTracks = useMemo(() => results.data?.tracks.slice(0, PREVIEW) ?? [], [results.data]);
