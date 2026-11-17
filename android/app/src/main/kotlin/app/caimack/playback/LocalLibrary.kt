@@ -10,6 +10,7 @@ data class LocalLibrary(
     val trackIds: Set<String> = emptySet(),
     val syncedTracks: List<Track> = emptyList(),
     val collections: Set<Pair<String, String>> = emptySet(),
+    val syncedBytes: Long = 0,
 )
 
 /** Build once per catalog change; rows only need constant-time membership lookups. */

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 "use client";
 
@@ -10,7 +9,6 @@ import { useLibraryDensity } from "@/lib/libraryDensity";
 import { isTypingTarget } from "@/lib/shortcuts";
 import { signConsole } from "@/lib/signature";
 import { useRecommendations } from "@/lib/useRecommendations";
-import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { LeanBack } from "./LeanBack";
@@ -22,7 +20,7 @@ import { SecretCat } from "./SecretCat";
 import { ShortcutsHelp } from "./ShortcutsHelp";
 import { Sidebar } from "./Sidebar";
 import { YandexImports } from "./yandex/YandexImports";
-const QueuePanel = dynamic(() => import("./QueuePanel").then((m) => m.QueuePanel), { ssr: false });
+import { QueuePanel } from "./QueuePanel";
 
 export function AppShell({ children }: { children: ReactNode }) {
   useLibraryDensity();
@@ -88,7 +86,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <main
         id="content"
         tabIndex={-1}
-        className="relative isolate overflow-y-auto overscroll-contain outline-none [grid-area:content]"
+        className="relative isolate overflow-y-auto overscroll-contain outline-none [grid-area:content] [scrollbar-gutter:stable]"
       >
         <div aria-hidden="true" className="ambient-glow" />
         <div className="mx-auto flex min-h-full max-w-[90rem] flex-col gap-11 px-10 pt-8 pb-12 max-lg:px-6 max-md:gap-8 max-md:px-4 max-md:pt-5 max-md:pb-8">

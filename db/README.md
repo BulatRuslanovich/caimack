@@ -82,3 +82,11 @@ are preserved; unknown or edited histories are rejected. Fresh databases and
 databases already using upstream numbering follow the normal migration path.
 Do not use `cargo sqlx migrate run` directly for this legacy upgrade, or run the
 old binary against a database after upgrading it.
+
+Migration 0013 adds `library_map_cache`, a shared projection cache keyed by layout
+version, audio model and window strategy. Run `caimack migrate` before starting
+the updated backend. Coordinates and vector fingerprints survive restarts;
+metadata and listening statistics do not invalidate the projection. Builders
+serialize through a transaction advisory lock and publish the saved map atomically.
+Verify with `SQLX_OFFLINE=true cargo test -p app --lib --features integration-tests
+recommendations::map` against the disposable local PostgreSQL server described above.

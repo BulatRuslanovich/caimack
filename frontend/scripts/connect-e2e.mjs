@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 // Browser integration checks for the real React player. The deterministic API
 // fixture complements the Rust tests of the production HTTP/SSE protocol.
@@ -485,6 +484,30 @@ try {
   await click(renderer.page, "Play First tone");
   await until(() => playing(renderer.page), "renderer audio started");
   console.log("Renderer started");
+  const mediaRace = await renderer.page.eval(`(async () => {
+    const audio = [...document.querySelectorAll('audio')].find(audio => !audio.paused);
+    const events = [];
+    const record = event => events.push(event.type);
+    audio.addEventListener('play', record);
+    audio.addEventListener('pause', record);
+    const before = audio.currentTime;
+    try {
+      // Both events are queued, but paused is already false when pause arrives.
+      audio.pause();
+      await audio.play();
+      await new Promise(resolve => setTimeout(resolve, 750));
+      return { events, paused: audio.paused, advanced: audio.currentTime > before,
+        displayedPlaying: navigator.mediaSession.playbackState === 'playing' };
+    } finally {
+      audio.removeEventListener('play', record);
+      audio.removeEventListener('pause', record);
+    }
+  })()`);
+  assert.deepEqual(mediaRace.events, ["pause", "play"], "media events must not feed back");
+  assert.equal(mediaRace.paused, false, "quick pause/resume keeps audio playing");
+  assert.equal(mediaRace.advanced, true, "playback position advances after the race");
+  assert.equal(mediaRace.displayedPlaying, true, "player state matches actual audio");
+  console.log("Queued pause/play regression passed");
   await until(
     async () => (await text(controller.page)).includes("First tone"),
     "controller mirrors the renderer",
@@ -800,6 +823,7 @@ try {
     JSON.stringify({
       passed: true,
       checks: [
+        "queued pause/play events settle without feedback",
         "discovery",
         "mirrored player",
         "silent controller",

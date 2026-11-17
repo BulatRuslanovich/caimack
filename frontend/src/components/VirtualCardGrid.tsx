@@ -1,15 +1,26 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 "use client";
 
 import { cn } from "@/lib/cn";
 import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
-export function VirtualCardGrid({ items, className }: { items: ReactNode[]; className?: string }) {
+export function VirtualCardGrid({
+  items,
+  className,
+  pinned = [],
+}: {
+  items: ReactNode[];
+  className?: string;
+  pinned?: number[];
+}) {
   const root = useRef<HTMLDivElement>(null);
   const [layout, setLayout] = useState({ columns: 1, estimate: 240, gap: 24, margin: 0 });
   const [focused, setFocused] = useState<number | null>(null);
+  const pinnedKey = pinned
+    .filter((index) => index >= 0)
+    .map((index) => Math.floor(index / layout.columns))
+    .join(",");
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const virtual = useVirtualizer({
@@ -19,14 +30,17 @@ export function VirtualCardGrid({ items, className }: { items: ReactNode[]; clas
     gap: layout.gap,
     scrollMargin: layout.margin,
     overscan: 3,
+    initialRect: { width: 1000, height: 800 },
     rangeExtractor: useCallback(
       (range) => {
         const indices = defaultRangeExtractor(range);
         if (focused !== null && focused < range.count && !indices.includes(focused))
           indices.push(focused);
+        for (const index of pinnedKey.split(",").filter(Boolean).map(Number))
+          if (index < range.count && !indices.includes(index)) indices.push(index);
         return indices.sort((a, b) => a - b);
       },
-      [focused],
+      [focused, pinnedKey],
     ),
   });
 

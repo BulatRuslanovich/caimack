@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 "use client";
 
@@ -7,8 +6,10 @@ import { useT } from "@/contexts/I18nContext";
 import { cn } from "@/lib/cn";
 import { ChevronRightIcon } from "lucide-react";
 import type { Route } from "next";
-import Link from "next/link";
-import { Children, lazy, Suspense, useMemo, type ReactNode, type Ref } from "react";
+import { PrefetchLink as Link } from "@/components/PrefetchLink";
+import { Children, useMemo, type ReactNode, type Ref } from "react";
+import { VirtualCardGrid } from "./VirtualCardGrid";
+import { VirtualList } from "./VirtualList";
 
 export function PageHeader({
   title,
@@ -105,18 +106,27 @@ export function Section<T extends string, U extends string>({
 }
 
 const cardGrid = "library-card-grid";
-const VirtualCardGrid = lazy(() =>
-  import("./VirtualCardGrid").then((m) => ({ default: m.VirtualCardGrid })),
-);
 
-export function CardGrid({ children, className }: { children: ReactNode; className?: string }) {
+export function CardGrid({
+  children,
+  className,
+  layout = "grid",
+  pinned = [],
+}: {
+  children: ReactNode;
+  className?: string;
+  layout?: "grid" | "list";
+  pinned?: number[];
+}) {
   const items = useMemo(() => Children.toArray(children), [children]);
-  const grid = <div className={cn(cardGrid, className)}>{children}</div>;
-  if (items.length > 180)
-    return (
-      <Suspense fallback={grid}>
-        <VirtualCardGrid items={items} className={className} />
-      </Suspense>
+  const grid = (
+    <div className={cn(layout === "grid" ? cardGrid : "space-y-1", className)}>{children}</div>
+  );
+  if (items.length > 100)
+    return layout === "grid" ? (
+      <VirtualCardGrid items={items} className={className} pinned={pinned} />
+    ) : (
+      <VirtualList items={items} estimate={86} gap={4} pinned={pinned} />
     );
   return grid;
 }

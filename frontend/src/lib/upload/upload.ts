@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 import { requestLocale, tr } from "@/lib/i18n";
 import { API_BASE, ApiError, GATEWAY_STATUSES, refreshSession } from "@/lib/http";

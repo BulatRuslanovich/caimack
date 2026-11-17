@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 "use client";
 
@@ -8,7 +7,7 @@ import { formatArtists } from "@/lib/format";
 import type { Track } from "@/lib/types";
 import { Slot } from "@radix-ui/react-slot";
 import { ChevronDownIcon } from "lucide-react";
-import { createContext, type ReactNode, useContext, useState } from "react";
+import { createContext, type ReactNode, useContext, useRef, useState } from "react";
 import { TrackCover } from "../Cover";
 import {
   DropdownMenuContent,
@@ -30,12 +29,33 @@ const sheetRow = cn(
   "sheet-menu-item hover:no-underline disabled:pointer-events-none disabled:text-faint",
 );
 
-export function MenuContent({ track, children }: { track: Track; children: ReactNode }) {
+export function MenuContent({
+  track,
+  children,
+  initialKeyboardFocus = false,
+}: {
+  track: Track;
+  children: ReactNode;
+  initialKeyboardFocus?: boolean;
+}) {
   const sheet = useContext(SheetMenu);
+  const keyboardFocus = useRef(initialKeyboardFocus);
 
   if (!sheet)
     return (
-      <DropdownMenuContent className="w-72">
+      <DropdownMenuContent
+        className="w-72"
+        onFocusCapture={(event) => {
+          if (!keyboardFocus.current || event.target !== event.currentTarget) return;
+          keyboardFocus.current = false;
+          const first = event.currentTarget.querySelector<HTMLElement>(
+            '[role="menuitem"]:not([data-disabled])',
+          );
+          if (first) {
+            first.focus();
+          }
+        }}
+      >
         <DropdownMenuLabel className="flex items-center gap-3 p-3">
           <TrackCover track={track} size={40} />
           <span className="flex min-w-0 flex-1 flex-col gap-1">

@@ -17,9 +17,13 @@
   max-width: 70rem;
 }
 
-.settings-navigation {
+.settings-sidebar {
   position: sticky;
   top: 1rem;
+  min-width: 0;
+}
+
+.settings-navigation {
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -366,8 +370,10 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 1.25rem;
   }
-  .settings-navigation {
+  .settings-sidebar {
     position: static;
+  }
+  .settings-navigation {
     flex-direction: row;
     overflow-x: auto;
     padding-bottom: 0.25rem;

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 package app.caimack.playback
 
@@ -61,6 +60,10 @@ class ListeningTracker(
         if (trackId.isEmpty()) return
         progress(type)
         trackId = ""
+    }
+
+    fun checkpoint() {
+        if (trackId.isNotEmpty() && listened > 0) progress("trackPlayed")
     }
 
     fun discard() {

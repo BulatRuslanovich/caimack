@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 "use client";
 
@@ -9,7 +8,7 @@ import { useT } from "@/contexts/I18nContext";
 import { Button } from "./ui/button";
 import { SearchIcon, XIcon } from "lucide-react";
 
-const DEBOUNCE_MS = 300;
+const DEBOUNCE_MS = 150;
 
 export function SearchField({
   value,
@@ -93,6 +92,14 @@ export function SearchField({
         autoFocus={autoFocus}
         onChange={(event) => setInput(event.target.value)}
         onKeyDown={(event) => {
+          if (
+            event.key === "Enter" &&
+            !event.nativeEvent.isComposing &&
+            input.trim() !== committed
+          ) {
+            event.preventDefault();
+            commit(input.trim());
+          }
           if (event.key === "Escape" && (input !== "" || onEmptyEscape)) {
             event.preventDefault();
             if (input !== "") clear();

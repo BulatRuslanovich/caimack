@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -21,12 +20,13 @@ const HALF_LIFE_DAYS: f64 = 45.0;
 
 const FAVORITE_SCORE: f64 = 1.5;
 
-pub const BROWSED_SOURCES: [&str; 11] = [
+pub const BROWSED_SOURCES: [&str; 12] = [
     "album",
     "artist",
     "playlist",
     "favorites",
     "history",
+    "listening",
     "tracks",
     "genre",
     "genres",

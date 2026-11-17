@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 //! Account-scoped discovery and acknowledged commands. Audio and listening telemetry
 //! are owned by the renderer; connecting a controller never claims playback.

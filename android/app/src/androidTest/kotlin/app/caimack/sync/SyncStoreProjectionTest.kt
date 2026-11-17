@@ -38,7 +38,7 @@ class SyncStoreProjectionTest {
             put("tracks", json.encodeToJsonElement(tracks))
             put("files", JsonArray(tracks.map { buildJsonObject { put("id", it.id) } }))
         }
-        fun audio(id: String) = SyncedFile("content://test/$id", "$id.mp3", "v1", "hash", 0, 0, 1)
+        fun audio(id: String) = SyncedFile("content://test/$id", "$id.mp3", "v1", "hash", 17, 3, 2_500_000_000L)
         try {
             val store = SyncStore(isolated, json, server)
             store.configure(Uri.parse("content://test/folder"), user)
@@ -46,11 +46,15 @@ class SyncStoreProjectionTest {
             store.accept(manifest(listOf(first, second)))
             store.updateIndex { it.copy(files = mapOf(first.id to audio(first.id))) }
             val initial = store.tracks()
+            assertEquals("Stored size includes audio payload and embedded metadata", 2_500_000_020L, store.audioBytes())
+            val restoredSize = SyncStore(isolated, json, server).apply { session(user) }
+            assertEquals("Existing indexes expose their size without downloading again", 2_500_000_020L, restoredSize.audioBytes())
             assertEquals(listOf("one"), initial.map { it.id })
             store.status.value = store.status.value.copy(bytes = 100)
             assertSame(initial, store.tracks())
             store.updateIndex { it.copy(files = it.files + (second.id to audio(second.id))) }
             assertEquals(listOf("one", "two"), store.tracks().map { it.id })
+            assertEquals(5_000_000_040L, store.audioBytes())
             assertSame(initial.single(), store.tracks().first())
             val edit = SyncAction(kind = "favorite", entityId = first.id, payload = buildJsonObject { put("value", true) })
             assertTrue(store.enqueue(edit))
@@ -71,7 +75,12 @@ class SyncStoreProjectionTest {
             assertEquals("Нет доступа — попробуйте позже", SyncStore(isolated, json, server).rejectionMessages())
             store.accept(manifest(listOf(first.copy(title = "Updated"), second)))
             assertEquals("Updated", store.tracks().first().title)
+            store.session(User("other", "Other account"))
+            assertEquals("Another account must not see the synchronized size", 0L, store.audioBytes())
+            store.session(user)
+            assertEquals(5_000_000_040L, store.audioBytes())
             store.updateIndex { it.copy(files = emptyMap()) }
+            assertEquals(0L, store.audioBytes())
             assertTrue(store.tracks().isEmpty())
             store.logout()
             assertTrue(store.tracks().isEmpty())

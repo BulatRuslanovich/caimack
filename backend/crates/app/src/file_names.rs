@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 //! Optional catalog-driven names. A committed journal precedes every filesystem change.
 use std::fs::{self, File, OpenOptions};
@@ -344,7 +343,7 @@ async fn finish(db: &PgPool, storage: &Storage, job: Job) -> anyhow::Result<()> 
     let moves = job.moves.0;
     tokio::task::spawn_blocking(move || remove_sources(&fs_storage, &moves)).await??;
     sqlx::query("UPDATE file_renames SET completed_at=now() WHERE id=$1").bind(job.id).execute(db).await?;
-    tracing::info!("Renamed {} to {} (track {})", job.source_path, job.target_path, job.track_id);
+    tracing::debug!(track_id = %job.track_id, source = %job.source_path, destination = %job.target_path, "Music file renamed");
     Ok(())
 }
 

@@ -2,15 +2,20 @@
 # Copyright (c) 2026 Bulat Ruslanovich
 
 import json
+import logging
 import multiprocessing
 import os
+from pathlib import Path
 import struct
+import subprocess
+import sys
 import threading
 import time
 import unittest
 import urllib.error
 import urllib.request
 from functools import partial
+from unittest.mock import patch
 
 import serve_mert as service
 
@@ -261,6 +266,42 @@ class SupervisorTests(unittest.TestCase):
             with self.subTest(options=options), self.assertRaises(ValueError):
                 service.ModelSupervisor(**options)
 
+    def test_idle_log_exposes_a_model_that_loaded_but_did_no_work(self):
+        supervisor = self.make_supervisor(idle_timeout=300)
+        self.wake(supervisor)
+        self.clock.now = 300
+        with self.assertLogs("mert", level="INFO") as logs:
+            supervisor.maintain()
+        stopped = next(
+            record
+            for record in logs.records
+            if "GPU worker stopped after idle" in record.getMessage()
+        )
+        self.assertEqual(stopped.fields["completed"], 0)
+        self.assertEqual(stopped.fields["idle_secs"], 300)
+        self.assertTrue(
+            any("check backend retry timing" in line for line in logs.output)
+        )
+
+    def test_loading_progress_is_periodic_and_includes_the_deadline(self):
+        supervisor = self.make_supervisor(model_factory=HangingModel, load_timeout=120)
+        with self.assertRaises(service.Unavailable):
+            supervisor.embed([[0.5]])
+        with self.assertLogs("mert", level="INFO") as logs:
+            self.clock.now = 30
+            supervisor.maintain()
+            self.clock.now = 31
+            supervisor.maintain()
+            self.clock.now = 60
+            supervisor.maintain()
+        progress = [
+            record.fields
+            for record in logs.records
+            if "still loading" in record.getMessage()
+        ]
+        self.assertEqual([record["elapsed_secs"] for record in progress], [30, 60])
+        self.assertEqual(progress[0]["load_timeout_secs"], 120)
+
 
 def packet(*windows):
     return struct.pack("<I", len(windows)) + b"".join(
@@ -344,6 +385,140 @@ class ProtocolTests(unittest.TestCase):
             server.server_close()
             thread.join(timeout=2)
             model.close()
+
+    def test_request_logs_correlate_responses_without_logging_secrets_or_pcm(self):
+        model = service.ModelSupervisor(model_factory=FakeModel)
+        self.addCleanup(model.close)
+        server = service.MertServer(("127.0.0.1", 0), model)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        logged = threading.Event()
+        original_event = service.event
+
+        def capture_event(level, message, **fields):
+            original_event(level, message, **fields)
+            if fields.get("status") == 404:
+                logged.set()
+
+        try:
+            base = f"http://127.0.0.1:{server.server_port}"
+            with self.assertLogs("mert", level="DEBUG") as logs, patch.object(
+                service, "event", side_effect=capture_event
+            ):
+                request = urllib.request.Request(
+                    base + "/secret-path?token=secret-query",
+                    headers={
+                        "Authorization": "Bearer secret-auth",
+                        "X-Request-Id": "secret-id",
+                    },
+                )
+                with self.assertRaises(urllib.error.HTTPError) as error:
+                    urllib.request.urlopen(request, timeout=2)
+                request_id = error.exception.headers["X-Request-Id"]
+                error.exception.close()
+                self.assertTrue(
+                    logged.wait(5),
+                    "HTTP outcome should be logged after sending the response",
+                )
+            record = next(
+                record for record in logs.records if record.fields.get("status") == 404
+            )
+            self.assertEqual(record.fields["request_id"], request_id)
+            self.assertEqual(record.fields["route"], "<unmatched>")
+            text = "\n".join(
+                service.LogFormatter(True).format(record) for record in logs.records
+            )
+            for secret in ("secret-path", "secret-query", "secret-auth", "secret-id"):
+                self.assertNotIn(secret, text)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+
+class LoggingTests(unittest.TestCase):
+    def test_failed_load_stage_is_retained_without_a_success_event(self):
+        token = service.LOAD_STAGE.set("imports")
+        try:
+            with self.assertLogs("mert", level="INFO") as logs:
+                with self.assertRaises(RuntimeError):
+                    with service.load_stage("checksum_verification"):
+                        raise RuntimeError("checksum mismatch")
+            self.assertEqual(service.LOAD_STAGE.get(), "checksum_verification")
+            self.assertEqual(len(logs.records), 1)
+            self.assertEqual(logs.records[0].fields["stage"], "checksum_verification")
+        finally:
+            service.LOAD_STAGE.reset(token)
+
+    def run_logging(self, code, **settings):
+        result = subprocess.run(
+            [sys.executable, "-c", "import serve_mert as s; " + code],
+            cwd=Path(service.__file__).parent,
+            env={
+                **os.environ,
+                "MERT_LOG_LEVEL": "DEBUG",
+                "LOG_FORMAT": "json",
+                **settings,
+            },
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=10,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "")
+        return result.stderr.splitlines()
+
+    def test_json_uses_stderr_and_keeps_exceptions_on_one_line(self):
+        lines = self.run_logging(
+            "s.configure_logging(); "
+            'exec(\'try:\\n raise RuntimeError("GPU unavailable")\\nexcept RuntimeError:\\n s.LOGGER.exception("Inference failed")\')'
+        )
+        self.assertEqual(len(lines), 1)
+        record = json.loads(lines[0])
+        self.assertEqual(record["level"], "ERROR")
+        self.assertTrue(record["timestamp"].endswith("+00:00"))
+        self.assertIn("GPU unavailable", record["fields"]["exception"])
+
+    def test_invalid_settings_fall_back_with_an_explanation(self):
+        lines = self.run_logging(
+            "s.configure_logging(); s.event(s.logging.INFO, 'Ready')",
+            MERT_LOG_LEVEL="verbose",
+            LOG_FORMAT="invalid",
+        )
+        self.assertEqual(len(lines), 3)
+        self.assertIn("Invalid MERT_LOG_LEVEL", lines[0])
+        self.assertIn("Invalid LOG_FORMAT", lines[1])
+        self.assertIn("Ready", lines[2])
+        self.assertNotIn("\x1b", "".join(lines))
+
+    def test_only_the_known_resume_download_warning_is_suppressed(self):
+        lines = self.run_logging(
+            "s.configure_logging(); "
+            "s.warnings.warn_explicit('`resume_download` is deprecated and will be removed', FutureWarning, 'file_download.py', 1, module='huggingface_hub.file_download'); "
+            "s.warnings.warn_explicit('different future warning', FutureWarning, 'file_download.py', 2, module='huggingface_hub.file_download')"
+        )
+        self.assertEqual(len(lines), 1)
+        self.assertIn(
+            "different future warning", json.loads(lines[0])["fields"]["message"]
+        )
+
+    def test_optional_cqt_warning_is_debug_only_when_cqt_is_disabled(self):
+        for enabled, level in [(False, "DEBUG"), (True, "WARNING")]:
+            with self.subTest(enabled=enabled), self.assertLogs(
+                "mert", level="DEBUG"
+            ) as logs:
+                output = service.ModelOutput(cqt_enabled=enabled)
+                output.write(
+                    "WARNING: feature_extractor_cqt requires the libray 'nnAudio'"
+                )
+                output.flush()
+            self.assertEqual(logs.records[0].levelname, level)
+        with self.assertLogs("mert", level="WARNING") as logs:
+            service.ModelOutput(False).write("unrecognized model diagnostic\n")
+        self.assertEqual(
+            logs.records[0].fields["output"], "unrecognized model diagnostic"
+        )
 
 
 if __name__ == "__main__":

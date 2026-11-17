@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 package app.caimack.widget
 
@@ -19,6 +18,8 @@ import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.drawable.Icon
+import android.os.Bundle
+import android.os.SystemClock
 import android.view.View
 import android.widget.RemoteViews
 import androidx.compose.ui.graphics.Color
@@ -47,11 +48,15 @@ import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.request.allowHardware
 import coil3.toBitmap
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class NowPlayingWidget : AppWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) = refresh(context)
+
+    override fun onAppWidgetOptionsChanged(context: Context, manager: AppWidgetManager, id: Int, options: Bundle) = refresh(context)
 
     companion object {
         internal const val PREFERENCES = "widget"
@@ -62,6 +67,7 @@ class NowPlayingWidget : AppWidgetProvider() {
         private const val ART_NAME = "art_name"
         internal const val LIKED = "liked"
         private const val PLAYING = "playing"
+        private const val REVERSE = "reverse"
         private const val POSITION = "position"
         private const val DURATION = "duration"
         private const val ART_WIDTH = 312
@@ -70,7 +76,13 @@ class NowPlayingWidget : AppWidgetProvider() {
 
         fun show(context: Context, track: Track?, isPlaying: Boolean, positionMs: Long = 0, durationMs: Long = 0) {
             val container = (context.applicationContext as CaimackApp).container
-            preferences(context).edit {
+            val stored = preferences(context)
+            val from = stored.getString(TRACK, null)
+            val changed = track != null && track.id != from
+            val reverse = changed && pendingNavigation?.isPrevious(from, track?.id, SystemClock.elapsedRealtime()) == true
+            if (changed) pendingNavigation = null
+            stored.edit {
+                if (changed) putBoolean(REVERSE, reverse)
                 putBoolean(PLAYING, isPlaying && track != null)
                 if (track != null) {
                     putString(TRACK, track.id)
@@ -86,6 +98,17 @@ class NowPlayingWidget : AppWidgetProvider() {
             refresh(context)
         }
 
+        internal fun navigation(context: Context, previous: Boolean) {
+            val player = (context.applicationContext as CaimackApp).container.player.state.value
+            pendingNavigation = WidgetTrackNavigation(
+                preferences(context).getString(TRACK, null),
+                if (previous) player.previous?.id else player.next?.id,
+                previous, SystemClock.elapsedRealtime(),
+            )
+        }
+
+        private var pendingNavigation: WidgetTrackNavigation? = null
+
         fun progress(context: Context, positionMs: Long, durationMs: Long) {
             val app = context.applicationContext
             val manager = AppWidgetManager.getInstance(app)
@@ -93,6 +116,9 @@ class NowPlayingWidget : AppWidgetProvider() {
             if (ids.isEmpty()) return
 
             preferences(app).edit { putLong(POSITION, positionMs); if (durationMs > 0) putLong(DURATION, durationMs) }
+            // The system merges partial updates into its cached full RemoteViews. Remove
+            // transition commands first, so a progress tick cannot replay an old animation.
+            settle()
             val views = RemoteViews(app.packageName, R.layout.widget_now_playing)
             views.setProgressBar(R.id.widget_progress, PROGRESS_MAX, fraction(positionMs, durationMs), false)
             manager.partiallyUpdateAppWidget(ids, views)
@@ -101,8 +127,12 @@ class NowPlayingWidget : AppWidgetProvider() {
         fun refresh(context: Context) {
             val app = context.applicationContext
             val manager = AppWidgetManager.getInstance(app)
-            val component = ComponentName(app, NowPlayingWidget::class.java)
-            if (manager.getAppWidgetIds(component).isEmpty()) return
+            val wide = ComponentName(app, NowPlayingWidget::class.java)
+            val square = ComponentName(app, RecordWidget::class.java)
+            val wideIds = manager.getAppWidgetIds(wide)
+            val hasWide = wideIds.isNotEmpty()
+            val hasSquare = manager.getAppWidgetIds(square).isNotEmpty()
+            if (!hasWide && !hasSquare) return
 
             val container = (app as CaimackApp).container
             val stored = Snapshot(preferences(app).all)
@@ -113,13 +143,62 @@ class NowPlayingWidget : AppWidgetProvider() {
                     catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
                     catch (_: Exception) { null }
                 }
-                val result = views(app, Look.of(app), stored, cover)
-                val publish: () -> Unit = { manager.updateAppWidget(component, result) }
+                val look = Look.of(app)
+                val frame = RecordFrame(
+                    stored.getString(TRACK, null),
+                    stored.getString(ART_NAME, null) ?: stored.getString(TITLE, null) ?: "Caimack",
+                    cover, stored.getBoolean(PLAYING, false),
+                )
+                val next = recordFrames.next(frame, frame.id)
+                val compactIds = wideIds.filter {
+                    manager.getAppWidgetOptions(it).getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 120) < 100
+                }.toIntArray()
+                val expandedIds = wideIds.filter { it !in compactIds }.toIntArray()
+                val bindArtwork = artwork(app, look, next, stored.getBoolean(REVERSE, false))
+                fun render(animate: Boolean): () -> Unit {
+                    val artwork: (RemoteViews) -> Unit = { bindArtwork(it, animate) }
+                    val compact = if (compactIds.isNotEmpty()) views(app, look, stored, R.layout.widget_now_playing_compact, cover, artwork) else null
+                    val expanded = if (expandedIds.isNotEmpty()) views(app, look, stored, R.layout.widget_now_playing, cover, artwork) else null
+                    val record = if (hasSquare) views(app, look, stored, R.layout.widget_record, cover, artwork) else null
+                    return {
+                        if (compact != null) manager.updateAppWidget(compactIds, compact)
+                        if (expanded != null) manager.updateAppWidget(expandedIds, expanded)
+                        if (record != null) manager.updateAppWidget(square, record)
+                    }
+                }
+                val changed = recordFrames.current?.let { old -> next.slot != recordFrames.slot || old.playing != frame.playing } == true
+                val still = render(false)
+                val animated = if (changed) render(true) else still
+                val publish: () -> Unit = {
+                    settleJob?.cancel()
+                    pendingSteady = null
+                    recordFrames = next
+                    animated()
+                    if (changed) {
+                        pendingSteady = still
+                        // One bounded update after the launcher finishes its native animation.
+                        // No frame timers, playback rotation, or periodic work for the square.
+                        settleJob = container.scope.launch { delay(600); settle() }
+                    }
+                }
                 publish
             }
         }
 
+        private var settleJob: Job? = null
+        private var pendingSteady: (() -> Unit)? = null
+
+        private fun settle() {
+            val publish = pendingSteady ?: return
+            pendingSteady = null
+            settleJob?.cancel()
+            settleJob = null
+            publish()
+        }
+
         private val latestUpdate = LatestWidgetUpdate()
+        private data class RecordFrame(val id: String?, val name: String, val cover: Bitmap?, val playing: Boolean)
+        private var recordFrames = WidgetRecordFrames<RecordFrame>()
         private class Snapshot(private val values: Map<String, *>) {
             fun getString(key: String, default: String?): String? = values[key] as? String ?: default
             fun getBoolean(key: String, default: Boolean) = values[key] as? Boolean ?: default
@@ -131,7 +210,8 @@ class NowPlayingWidget : AppWidgetProvider() {
         private fun fraction(position: Long, duration: Long) =
             if (duration <= 0) 0 else (position * PROGRESS_MAX / duration).toInt().coerceIn(0, PROGRESS_MAX)
 
-        private fun views(app: Context, look: Look, stored: Snapshot, cover: Bitmap?): RemoteViews {
+        private fun views(app: Context, look: Look, stored: Snapshot, layout: Int, cover: Bitmap?, artwork: (RemoteViews) -> Unit): RemoteViews {
+            val square = layout == R.layout.widget_record
             val context = Appearance.localized(app)
             val title = stored.getString(TITLE, null)
             val idle = title == null
@@ -144,12 +224,10 @@ class NowPlayingWidget : AppWidgetProvider() {
                     .let(::playerBackdropTone)?.let { CoverTone(it.hue, it.chroma) }
             }
 
-            return RemoteViews(context.packageName, R.layout.widget_now_playing).apply {
+            return RemoteViews(context.packageName, layout).apply {
                 tint(R.id.widget_root, "setBackgroundTintList", look) { it.card }
                 icon(R.id.widget_wash, look) { palette -> wash(tone?.color(palette, look.colorway)) }
-                icon(R.id.widget_art, look) { palette ->
-                    art(cover ?: coverPlaceholder(stored.getString(ART_NAME, null) ?: title ?: "Caimack", palette), palette)
-                }
+                artwork(this)
 
                 setTextViewText(R.id.widget_title, title ?: "Caimack")
                 colorInt(R.id.widget_title, "setTextColor", look) { it.foreground }
@@ -163,6 +241,23 @@ class NowPlayingWidget : AppWidgetProvider() {
                 )
                 setOnClickPendingIntent(R.id.widget_art, open)
                 setOnClickPendingIntent(R.id.widget_text, open)
+                if (square) {
+                    val label = context.getString(if (playing) R.string.widget_pause else R.string.widget_play)
+                    setContentDescription(R.id.widget_art, if (idle) context.getString(R.string.widget_idle) else "$label · $title")
+                    val toggle = if (idle) open else WidgetActions.pending(context, WidgetActions.TOGGLE)
+                    setOnClickPendingIntent(R.id.widget_root, toggle)
+                    setOnClickPendingIntent(R.id.widget_art, toggle)
+                    setOnClickPendingIntent(R.id.widget_text, toggle)
+                    colorInt(R.id.widget_previous, "setColorFilter", look) { it.foreground }
+                    colorInt(R.id.widget_secondary, "setColorFilter", look) { it.foreground }
+                    setViewVisibility(R.id.widget_previous, if (idle) View.INVISIBLE else View.VISIBLE)
+                    setViewVisibility(R.id.widget_secondary, if (idle) View.INVISIBLE else View.VISIBLE)
+                    if (!idle) {
+                        button(context, R.id.widget_previous, R.drawable.widget_previous, R.string.player_previous, WidgetActions.PREVIOUS)
+                        button(context, R.id.widget_secondary, R.drawable.widget_next, R.string.widget_next, WidgetActions.NEXT)
+                    }
+                    return@apply
+                }
 
                 tint(R.id.widget_primary, "setBackgroundTintList", look) { it.action }
                 colorInt(R.id.widget_primary, "setColorFilter", look) { it.onAction }
@@ -185,6 +280,8 @@ class NowPlayingWidget : AppWidgetProvider() {
                     return@apply
                 }
 
+                setViewVisibility(R.id.widget_primary, View.VISIBLE)
+                setViewVisibility(R.id.widget_secondary, View.VISIBLE)
                 button(context, R.id.widget_previous, R.drawable.widget_previous, R.string.player_previous, WidgetActions.PREVIOUS)
                 button(
                     context, R.id.widget_primary,
@@ -209,8 +306,7 @@ class NowPlayingWidget : AppWidgetProvider() {
         private fun RemoteViews.button(context: Context, id: Int, icon: Int, label: Int, action: String) {
             setImageViewResource(id, icon)
             setContentDescription(id, context.getString(label))
-            val intent = Intent(context, WidgetActions::class.java).setAction(action)
-            setOnClickPendingIntent(id, PendingIntent.getBroadcast(context, action.hashCode(), intent, PendingIntent.FLAG_IMMUTABLE))
+            setOnClickPendingIntent(id, WidgetActions.pending(context, action))
         }
 
         private fun RemoteViews.tint(id: Int, method: String, look: Look, pick: (Palette) -> Color) =
@@ -239,12 +335,81 @@ class NowPlayingWidget : AppWidgetProvider() {
         private const val WASH_WIDTH = 256
         private const val WASH_ALPHA = 0.4f
 
-        private fun art(cover: Bitmap?, palette: Palette): Bitmap {
-            val bitmap = Bitmap.createBitmap(ART_WIDTH, ART_HEIGHT, Bitmap.Config.ARGB_8888)
+        private fun artwork(context: Context, look: Look, frames: WidgetRecordFrames<RecordFrame>, reverse: Boolean): (RemoteViews, Boolean) -> Unit {
+            val previous = recordFrames
+            val iconsByFrame = mutableMapOf<RecordFrame, Array<Icon>>()
+            val layers = frames.frames.map { frame -> iconsByFrame.getOrPut(frame) {
+                val dayCover = frame.cover ?: coverPlaceholder(frame.name, look.day)
+                val nightCover = frame.cover ?: if (look.day === look.night) dayCover else coverPlaceholder(frame.name, look.night)
+                fun layer(palette: Palette, disc: Boolean) = Icon.createWithBitmap(art(
+                    if (palette === look.day) dayCover else nightCover, palette, disc,
+                ))
+                val daySleeve = layer(look.day, false)
+                val dayDisc = layer(look.day, true)
+                val nightSleeve = if (look.day === look.night) daySleeve else layer(look.night, false)
+                val nightDisc = if (look.day === look.night) dayDisc else layer(look.night, true)
+                arrayOf(daySleeve, nightSleeve, dayDisc, nightDisc)
+            } }
+            return { views, animate ->
+                // RemoteViews cannot change a ViewFlipper's animations at runtime. Recycle
+                // a nested layout with the requested direction and retain both record slots.
+                val layer = RemoteViews(context.packageName, if (reverse) R.layout.widget_record_reverse else R.layout.widget_record_forward)
+                frames.frames.forEachIndexed { index, frame ->
+                    val sleeve = if (index == 0) R.id.widget_sleeve_a else R.id.widget_sleeve_b
+                    val disc = if (index == 0) R.id.widget_disc_image_a else R.id.widget_disc_image_b
+                    val flipper = if (index == 0) R.id.widget_disc_a else R.id.widget_disc_b
+                    val icons = layers[index]
+                    layer.setIcon(sleeve, "setImageIcon", icons[0], icons[1])
+                    layer.setIcon(disc, "setImageIcon", icons[2], icons[3])
+                    val empty = if (index == 0) R.id.widget_disc_empty_a else R.id.widget_disc_empty_b
+                    // Selecting the same ViewFlipper child restarts its animation. Use visibility
+                    // for a steady state, and animate only a real play/pause transition.
+                    val old = previous.frames.getOrNull(index)
+                    if (animate && frames.slot == previous.slot && index == frames.slot && old != null && old.playing != frame.playing) {
+                        layer.setDisplayedChild(flipper, if (frame.playing) 1 else 0)
+                    } else {
+                        layer.setViewVisibility(empty, if (frame.playing) View.GONE else View.VISIBLE)
+                        layer.setViewVisibility(disc, if (frame.playing) View.VISIBLE else View.GONE)
+                    }
+                }
+                if (animate && previous.current != null && frames.slot != previous.slot) {
+                    // A direction change may inflate a fresh flipper. Restore its outgoing
+                    // child before starting the transition in either direction.
+                    layer.setViewVisibility(R.id.widget_record_a, if (previous.slot == 0) View.VISIBLE else View.GONE)
+                    layer.setViewVisibility(R.id.widget_record_b, if (previous.slot == 1) View.VISIBLE else View.GONE)
+                    layer.setDisplayedChild(R.id.widget_art_tracks, frames.slot)
+                    // ViewAnimator marks the outgoing child GONE. In a freshly inflated
+                    // direction layout it would then never be laid out (0×0), so its exit
+                    // animation has nothing to draw. INVISIBLE still participates in layout;
+                    // ViewGroup draws it while the exit animation runs, then hides it.
+                    layer.setViewVisibility(if (previous.slot == 0) R.id.widget_record_a else R.id.widget_record_b, View.INVISIBLE)
+                } else {
+                    layer.setViewVisibility(R.id.widget_record_a, if (frames.slot == 0) View.VISIBLE else View.GONE)
+                    layer.setViewVisibility(R.id.widget_record_b, if (frames.slot == 1) View.VISIBLE else View.GONE)
+                }
+                views.removeAllViews(R.id.widget_art)
+                views.addStableView(R.id.widget_art, layer, 0)
+            }
+        }
+
+        private fun art(cover: Bitmap?, palette: Palette, disc: Boolean): Bitmap {
+            val bitmap = Bitmap.createBitmap(ART_WIDTH, ART_HEIGHT, Bitmap.Config.ARGB_8888).apply {
+                // Remote ImageViews measure both layers from the same, sufficiently large
+                // intrinsic size before scaling them to the available widget space.
+                density = android.util.DisplayMetrics.DENSITY_DEFAULT
+            }
             val canvas = Canvas(bitmap)
             val edge = ART_HEIGHT - 16f
             val top = 8f
-            drawVinyl(canvas, edge * 0.86f, top + edge / 2, edge * 0.47f, cover, palette)
+            if (disc) {
+                val x = edge * 0.86f
+                val y = top + edge / 2
+                val radius = edge * 0.47f
+                // Keep the disc's shadow close enough to fit inside the sleeve when hidden.
+                canvas.clipPath(Path().apply { addCircle(x, y, radius + 4f, Path.Direction.CW) })
+                drawVinyl(canvas, x, y, radius, cover, palette)
+                return bitmap
+            }
 
             val sleeve = RectF(4f, top, 4f + edge, top + edge)
             canvas.drawRoundRect(sleeve, 10f, 10f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -283,8 +448,8 @@ class WidgetActions : BroadcastReceiver() {
 
         when (intent.action) {
             TOGGLE -> player.toggle()
-            NEXT -> player.next()
-            PREVIOUS -> player.previous()
+            NEXT -> { NowPlayingWidget.navigation(context, previous = false); player.next() }
+            PREVIOUS -> { NowPlayingWidget.navigation(context, previous = true); player.previous() }
             LIKE -> like(context)
             MY_RADIO, DAILY_MIX -> {
                 val done = goAsync()
@@ -332,6 +497,10 @@ class WidgetActions : BroadcastReceiver() {
     }
 
     companion object {
+        internal fun pending(context: Context, action: String): PendingIntent = PendingIntent.getBroadcast(
+            context, action.hashCode(), Intent(context, WidgetActions::class.java).setAction(action), PendingIntent.FLAG_IMMUTABLE,
+        )
+
         const val TOGGLE = "app.caimack.widget.TOGGLE"
         const val NEXT = "app.caimack.widget.NEXT"
         const val PREVIOUS = "app.caimack.widget.PREVIOUS"

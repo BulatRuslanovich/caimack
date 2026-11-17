@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 "use client";
 
 import { LibrarySaveButton } from "@/components/LibrarySaveButton";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
-import Link from "next/link";
+import { PrefetchLink as Link } from "@/components/PrefetchLink";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { coverUrl } from "@/lib/media";

@@ -2,8 +2,14 @@
 
 Recommendation quality is measured automatically from listening behavior.
 Open **Settings → Recommendations** in the web client and select a period.
-The listening summary shows counts for grades 0, 1 and 2, the mean grade out of 2,
-and the number of attempts without enough evidence to assign a grade.
+The overview shows the share of graded listens heard almost in full, with counts
+and percentages for early skips, partial listens and near-complete listens.
+Unrated attempts are excluded from those percentages. Expand **How to read these
+numbers** for plain-language definitions, a percentage example and the count of
+excluded listens. Internal grades are not shown as a user-facing score.
+Radio outcomes compare close matches and discoveries, including suggestions not
+reached or still pending. Sources are ranked by listening time; expand the source
+metrics for the full table. Statistics refresh every 30 minutes or on demand.
 
 | Grade | Evidence |
 | --- | --- |

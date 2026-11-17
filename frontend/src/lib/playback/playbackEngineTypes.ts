@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 import type { ComponentPropsWithoutRef, Dispatch, RefObject, SetStateAction } from "react";
 import type { AdaptivePlayback } from "@/lib/playback/adaptivePlayback";

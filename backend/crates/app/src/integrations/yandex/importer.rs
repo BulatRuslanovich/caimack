@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -10,6 +9,7 @@ use media::formats;
 use media::tags::AudioTags;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument;
 use uuid::Uuid;
 
 use super::client::{YandexClient, YandexTrack};
@@ -149,7 +149,7 @@ impl Importer {
             return Err(AppError::validation("{0}").arg(failure.reason));
         }
 
-        tracing::info!("Imported Yandex Music track {} ({})", track.id, file.codec);
+        tracing::debug!(provider_track_id = track.id, codec = file.codec, "Yandex Music track imported");
         Ok(Outcome::Added)
     }
 }
@@ -184,22 +184,26 @@ pub fn spawn(
                 job = jobs.recv() => job,
             };
             let Some(job) = job else { break };
-
+            let started = std::time::Instant::now();
             let outcome = tokio::select! {
                 () = cancel.cancelled() => break,
-                outcome = run(&importer, &job, &cancel) => outcome,
+                outcome = run(&importer, &job, &cancel).instrument(tracing::error_span!("yandex_import", job_id = %job.id, kind = ?job.kind)) => outcome,
             };
             match outcome {
                 Ok(()) => job.finish(),
                 Err(error @ AppError::Internal(_)) => {
-                    tracing::error!("Yandex Music import {} failed: {error:#}", job.id);
+                    tracing::error!(job_id = %job.id, error = ?error, "Yandex Music import failed");
                     job.fail(localized(&error, job.lang));
                 }
                 Err(error) => {
-                    tracing::info!("Yandex Music import {} stopped: {error}", job.id);
+                    tracing::warn!(job_id = %job.id, %error, "Yandex Music import stopped");
                     job.fail(localized(&error, job.lang));
                 }
             }
+            let status = job.dto();
+            tracing::info!(job_id = %job.id, outcome = ?status.status, total = status.total,
+                done = status.done, added = status.added, skipped = status.skipped, failed = status.failures.len(),
+                elapsed_secs = started.elapsed().as_secs(), "Yandex Music import finished");
         }
     })
 }
@@ -227,6 +231,8 @@ async fn run(importer: &Importer, job: &ImportJob, cancel: &CancellationToken) -
 
     let genres = yandex.genre_titles(&job.token).await?;
     job.start(title, tracks.len());
+    tracing::info!(total = tracks.len(), "Yandex Music import started");
+    let mut reported = std::time::Instant::now();
 
     for (index, track) in tracks.iter().enumerate() {
         if job.cancelled.is_cancelled() {
@@ -242,10 +248,25 @@ async fn run(importer: &Importer, job: &ImportJob, cancel: &CancellationToken) -
             Err(error) if is_token_problem(&error) => return Err(error),
             Err(error) => {
                 if let AppError::Internal(inner) = &error {
-                    tracing::error!("Importing Yandex Music track {} failed: {inner:#}", track.id);
+                    tracing::error!(provider_track_id = track.id, error = %format!("{inner:#}"), "Importing Yandex Music track failed");
+                } else {
+                    tracing::warn!(provider_track_id = track.id, %error, "Yandex Music track skipped after import failure");
                 }
                 job.track_failed(&name, localized(&error, job.lang));
             }
+        }
+
+        if reported.elapsed() >= Duration::from_secs(30) {
+            let status = job.dto();
+            tracing::info!(
+                total = status.total,
+                done = status.done,
+                added = status.added,
+                skipped = status.skipped,
+                failed = status.failures.len(),
+                "Yandex Music import progress"
+            );
+            reported = std::time::Instant::now();
         }
 
         if index + 1 < tracks.len() {

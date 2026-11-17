@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 pub fn normalize_key(value: &str) -> String {
     value.trim().to_lowercase().split(' ').filter(|part| !part.is_empty()).collect::<Vec<_>>().join(" ")

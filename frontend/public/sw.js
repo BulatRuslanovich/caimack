@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 const SHELL_CACHE = "caimack-shell-v1";
 const ASSET_CACHE = "caimack-assets-v2";

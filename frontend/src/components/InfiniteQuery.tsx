@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 "use client";
 
@@ -23,8 +22,16 @@ export function InfiniteQuery<T>({
   children: (items: T[]) => ReactNode;
 }) {
   const t = useT();
-  const { data, error, isPending, refetch, hasNextPage, isFetchingNextPage, fetchNextPage } =
-    result;
+  const {
+    data,
+    error,
+    isPending,
+    isPlaceholderData,
+    refetch,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = result;
   const items = useMemo(() => data?.pages.flatMap((page) => page.items) ?? [], [data]);
 
   if (error && data === undefined) {
@@ -53,9 +60,13 @@ export function InfiniteQuery<T>({
   return (
     <>
       {error && <RefreshError onRetry={() => void refetch()} />}
-      {children(items)}
+      <div className="contents" aria-busy={isPlaceholderData || undefined}>
+        {children(items)}
+      </div>
 
-      {hasNextPage && <LoadMore busy={isFetchingNextPage} onReach={() => void fetchNextPage()} />}
+      {hasNextPage && !isPlaceholderData && (
+        <LoadMore busy={isFetchingNextPage} onReach={() => void fetchNextPage()} />
+      )}
     </>
   );
 }

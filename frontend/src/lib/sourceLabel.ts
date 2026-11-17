@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 import type { Translate } from "@/contexts/I18nContext";
 import type { TranslationKey } from "@/lib/i18n";
@@ -25,10 +24,14 @@ const KNOWN = new Set([
   "radio:autoplay",
   "queue",
   "album",
+  "albums",
   "artist",
+  "artists",
   "playlist",
+  "playlists",
   "favorites",
   "history",
+  "listening",
   "search",
   "tracks",
   "genres",

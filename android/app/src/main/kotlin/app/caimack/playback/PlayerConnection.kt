@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 package app.caimack.playback
 
@@ -79,7 +78,11 @@ class PlayerConnection(
         current.value = local
     }
 
-    fun pauseLocal() = withController { it.pause() }
+    fun pauseLocal() = withController {
+        // The service pauses its local output when selection changes. Once its session
+        // points at ConnectMediaPlayer, a controller pause would stop the other device.
+        if (remoteSelected?.invoke() != true) it.pause()
+    }
 
     fun executeLocal(action: () -> Unit) {
         val routing = remoteRoute

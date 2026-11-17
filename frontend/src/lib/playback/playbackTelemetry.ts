@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 import { recordEvent } from "@/lib/events";
 import { sourceOf } from "@/lib/playback/playSource";
@@ -10,6 +9,7 @@ export interface ListeningTracker {
   accumulate(currentTime: number): void;
   reposition(currentTime: number): void;
   listenedSeconds(): number;
+  checkpoint(): void;
   finish(type: "trackCompleted" | "trackSkipped"): void;
   discard(): void;
 }
@@ -55,6 +55,9 @@ export function createListeningTracker(record = recordEvent): ListeningTracker {
       played = { ...IDLE };
     },
     listenedSeconds: () => Math.floor(played.seconds),
+    checkpoint() {
+      if (played.trackId && played.seconds > 0) progressEvent("trackPlayed");
+    },
     reposition(currentTime) {
       played.position = currentTime;
     },

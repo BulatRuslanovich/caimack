@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 "use client";
 
@@ -9,12 +8,13 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef } from "react";
 import {
   AudioLinesIcon,
+  ChartLineIcon,
   FlaskConicalIcon,
   PaletteIcon,
   RadioIcon,
   UserRoundIcon,
 } from "lucide-react";
-import { Copyright } from "@/components/Copyright";
+import { AppVersion } from "@/components/AppVersion";
 import { PageHeader } from "@/components/PageHeader";
 import { useAuth } from "@/contexts/AuthContext";
 import { useT } from "@/contexts/I18nContext";
@@ -23,6 +23,7 @@ import { Appearance } from "./Appearance";
 import { Playback } from "./Playback";
 import { Experimental } from "./Experimental";
 import { Account } from "./Account";
+import { ListeningStats } from "./ListeningStats";
 
 export default function SettingsPage() {
   const t = useT();
@@ -33,15 +34,20 @@ export default function SettingsPage() {
       <Suspense fallback={null}>
         <SettingsSections />
       </Suspense>
-      <p className="text-2xs text-faint mt-auto">Caimack v{process.env.APP_VERSION}</p>
-      <Copyright />
     </>
   );
 }
 
-type SettingsSection = "playback" | "appearance" | "recommendations" | "account" | "experimental";
+type SettingsSection =
+  "playback" | "appearance" | "listening" | "recommendations" | "account" | "experimental";
 
-const SECTIONS: SettingsSection[] = ["playback", "appearance", "recommendations", "account"];
+const SECTIONS: SettingsSection[] = [
+  "playback",
+  "appearance",
+  "listening",
+  "recommendations",
+  "account",
+];
 
 const ADMIN_SECTIONS: SettingsSection[] = [...SECTIONS, "experimental"];
 
@@ -50,6 +56,7 @@ const DEFAULT_SECTION: SettingsSection = "playback";
 const SECTION_ICONS = {
   playback: AudioLinesIcon,
   appearance: PaletteIcon,
+  listening: ChartLineIcon,
   recommendations: RadioIcon,
   account: UserRoundIcon,
   experimental: FlaskConicalIcon,
@@ -87,27 +94,39 @@ function SettingsSections() {
 
   return (
     <div className="settings-workspace">
-      <nav ref={navigation} aria-label={t("settings.title")} className="settings-navigation">
-        {sections.map((key) => {
-          const Icon = SECTION_ICONS[key];
-          return (
-            <Link
-              key={key}
-              href={key === DEFAULT_SECTION ? "/settings" : `/settings?tab=${key}`}
-              replace
-              scroll={false}
-              aria-current={section === key ? "page" : undefined}
-            >
-              <Icon size={18} aria-hidden="true" />
-              {t(`settings.${key}`)}
-            </Link>
-          );
-        })}
-      </nav>
+      <div className="settings-sidebar">
+        <nav ref={navigation} aria-label={t("settings.title")} className="settings-navigation">
+          {sections.map((key) => {
+            const Icon = SECTION_ICONS[key];
+            return (
+              <Link
+                key={key}
+                href={key === DEFAULT_SECTION ? "/settings" : `/settings?tab=${key}`}
+                replace
+                scroll={false}
+                prefetch={false}
+                onNavigate={(event) => {
+                  event.preventDefault();
+                  window.history.replaceState(
+                    null,
+                    "",
+                    key === DEFAULT_SECTION ? "/settings" : `/settings?tab=${key}`,
+                  );
+                }}
+              >
+                <Icon size={18} aria-hidden="true" />
+                {t(`settings.${key}`)}
+              </Link>
+            );
+          })}
+        </nav>
+        <AppVersion className="mt-4 px-3 text-left" />
+      </div>
 
       <div className="settings-content">
         {section === "playback" && <Playback />}
         {section === "appearance" && <Appearance />}
+        {section === "listening" && <ListeningStats />}
         {section === "recommendations" && <RecommendationStats />}
         {section === "account" && <Account />}
         {section === "experimental" && <Experimental />}

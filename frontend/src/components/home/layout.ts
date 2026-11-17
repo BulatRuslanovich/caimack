@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 export const capFourOnMobile = "max-md:[&>*:nth-child(n+5)]:hidden";
 export const capFiveOnMobile = "max-md:[&>*:nth-child(n+6)]:hidden";

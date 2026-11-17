@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { activateLocale } from "@/lib/i18n";
+import { en } from "@/lib/i18n/en";
 import type { Track, UploadResult } from "@/lib/types";
 import { uploadFiles } from "./upload";
 
@@ -57,6 +58,7 @@ async function upload(findUploaded?: (file: File) => Promise<Track | null>) {
 
 describe("uploadFiles", () => {
   beforeEach(() => {
+    activateLocale("en", en);
     vi.useFakeTimers();
     vi.stubGlobal("XMLHttpRequest", FakeXhr);
     FakeXhr.replies = [];
@@ -64,6 +66,7 @@ describe("uploadFiles", () => {
   });
 
   afterEach(() => {
+    activateLocale("en", undefined);
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
@@ -110,7 +113,7 @@ describe("uploadFiles", () => {
     const result = await upload();
 
     expect(result.uploaded).toEqual([]);
-    expect(result.failed).toHaveLength(1);
+    expect(result.failed).toEqual([{ fileName: "song.mp3", reason: en["upload.noConnection"] }]);
     expect(FakeXhr.sent).toBe(4);
   });
 });

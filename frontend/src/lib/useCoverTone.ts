@@ -1,9 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 "use client";
 
-import { useCallback, useEffect, useState, useSyncExternalStore, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+} from "react";
 import { createCoverToneCache, type CoverTones, type CoverToneKind } from "./coverToneCache";
 import { PLAYER_BACKDROP, playerBackdropTone } from "./visuals/playerBackdrop";
 import {
@@ -74,7 +80,7 @@ export function useCoverTone(
     source = `${path}?${params}`;
   }
   const tone = useSyncExternalStore(
-    cache.subscribe,
+    useCallback((listener) => cache.subscribe(source ? [source] : [], listener), [source]),
     () => {
       if (!source) return null;
       return cache.get(source, kind);
@@ -90,12 +96,13 @@ export function useCoverTone(
 }
 
 export function useVividTone(urls: (string | null | undefined)[]): CoverTone | null | undefined {
+  const key = JSON.stringify(urls.filter((url): url is string => Boolean(url)));
+  const sources = useMemo<string[]>(() => JSON.parse(key), [key]);
   const tone = useSyncExternalStore(
-    cache.subscribe,
+    useCallback((listener) => cache.subscribe(sources, listener), [sources]),
     () => {
       let best: CoverTone | null | undefined = null;
-      for (const url of urls) {
-        if (!url) continue;
+      for (const url of sources) {
         const tone = cache.get(url, "accent");
         if (tone === undefined) return undefined;
         if (tone && (!best || tone.chroma > best.chroma)) best = tone;
@@ -107,10 +114,10 @@ export function useVividTone(urls: (string | null | undefined)[]): CoverTone | n
 
   useEffect(() => {
     if (tone === undefined)
-      urls.forEach((url) => {
-        if (url) void cache.load(url, "accent");
+      sources.forEach((url) => {
+        void cache.load(url, "accent");
       });
-  }, [urls, tone]);
+  }, [sources, tone]);
 
   return tone;
 }

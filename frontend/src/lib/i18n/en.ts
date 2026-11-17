@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 import type { Phrase, PluralPhrase } from "./types";
 
@@ -666,6 +665,51 @@ export const en = {
   "nav.settings": "Settings",
 
   "settings.title": "Settings",
+  "listening.back": "Back",
+  "settings.listening": "Listening stats",
+  "source.listening": "Listening stats",
+  "listening.title": "Listening stats",
+  "listening.week": "Your week in music",
+  "listening.thisWeek": "This week",
+  "listening.minutes": "Minutes listened",
+  "listening.duration": "{minutes} minutes",
+  "listening.topArtist": "Top artist",
+  "listening.topSong": "Top song",
+  "listening.artists": "Top artists",
+  "listening.songs": "Top songs",
+  "listening.insights": "Your latest insights",
+  "listening.pastWeeks": "Past weeks",
+  "listening.more": "More weeks",
+  "listening.empty": "Your soundtrack starts here",
+  "listening.emptyHint": "Listen to music in Caimack to see your weekly stats here.",
+  "listening.noWeek": "No listening this week",
+  "listening.noWeekHint":
+    "Your past weeks are still here. Play something you love to start this week’s story.",
+  "listening.youArtists": {
+    one: "You listened to {count} artist this week",
+    other: "You listened to {count} artists this week",
+  },
+  "listening.youSongs": {
+    one: "You listened to {count} song this week",
+    other: "You listened to {count} songs this week",
+  },
+  "listening.youMinutes": "You listened for {minutes} minutes this week.",
+  "listening.artistsCount": "{count} artists",
+  "listening.songsCount": "{count} songs",
+  "listening.plays": "{count} plays",
+  "listening.topWeeks": { one: "{count} week in top 5", other: "{count} weeks in top 5" },
+  "listening.movedUp": "Moved up {count}",
+  "listening.movedDown": "Moved down {count}",
+  "listening.rank": "Rank {count}",
+  "listening.decade": "You were deep in the {decade}s",
+  "listening.decadeNote": "{share}% of your listening time was music from the {decade}s.",
+  "listening.artistShare": "{share}% of your music",
+  "listening.artistNote": "{artist} soundtracked {share}% of your listening time this week.",
+  "listening.variety": "A week full of music",
+  "listening.varietyNote": "{songs} songs. {artists} artists. All part of your week.",
+  "listening.days": "Your listening, day by day",
+  "listening.previous": "Last week: {minutes} minutes",
+  "listening.refresh": "Refresh stats",
   "app.sourceCode": "Source code",
   "settings.appearance": "Appearance",
   "settings.theme": "Theme",
@@ -716,23 +760,6 @@ export const en = {
   "settings.account": "Account",
   "settings.recommendations": "Recommendations",
   "settings.experimental": "Experimental",
-  "settings.tatarMafia": "Tatar Mafia mode",
-  "settings.tatarMafiaHint":
-    "Scratch the record in the full-screen player: drag it back and forth to bend the sound. Playback must be on this device. If you know, you know.",
-  "settings.tatarMafiaUnsupported":
-    "Scratch audio is unavailable in this browser. Try a desktop browser over HTTPS.",
-  "player.djHint": "Drag the record back and forth to scratch",
-  "player.djReady": "Deck ready",
-  "player.djLoading": "Preparing the record…",
-  "player.djUnavailable": "Deck unavailable for this file",
-  "player.djLimitHint":
-    "The deck supports browser-decodable files up to 48 MB and 10 minutes. Regular playback remains available.",
-  "player.djCrossfader": "Crossfader · sharp cut",
-  "player.djClosed": "Closed",
-  "player.djOpen": "Open",
-  "player.djCut": "Hold to cut the sound",
-  "player.djInstructions":
-    "One hand on the record, the other on Cut. Hold X to cut with the keyboard. Release the record to continue from the needle position.",
   "settings.yandexMusic": "Import from Yandex Music",
   "settings.yandexToken": "Yandex Music token",
   "settings.yandexTokenSave": "Save token",
@@ -761,6 +788,82 @@ export const en = {
     other: "{count} already there",
   },
   "stats.title": "How recommendations perform",
+  "stats.intro":
+    "See what you keep listening to, how discoveries land, and what shapes your recommendations.",
+  "stats.refresh": "Refresh statistics",
+  "stats.period": "Statistics period",
+  "stats.periodDays": "{count} days",
+  "stats.autoRefresh": "Updates every 30 minutes",
+  "stats.updating": "Updating…",
+  "stats.emptyHint":
+    "Play your radio or a personalized mix. Your listening will appear here; try a longer period if you have listened before.",
+  "stats.listen": "Find something to play",
+  "stats.responseTitle": "Your response to recommendations",
+  "stats.responseCaption": "of graded listens heard almost in full",
+  "stats.noGrades": "Not enough listening to measure yet",
+  "stats.ratedSample": "Based on {count} graded listens",
+  "stats.outcomeNear": "Almost in full",
+  "stats.outcomeNearHint": "At least 80% actually heard",
+  "stats.outcomePartial": "At least half",
+  "stats.outcomePartialHint": "Between 50% and 80% actually heard",
+  "stats.outcomeEarly": "Skipped early",
+  "stats.outcomeEarlyHint": "Skipped before 20% and 30 seconds",
+  "stats.recommendationTime": "Time with recommendations",
+  "stats.totalTime": "Out of {total} of music",
+  "stats.recommendationShare": "Share of listening time",
+  "stats.shareHint": "Radio and personalized picks",
+  "stats.recommendationLikes": "Likes from recommendations",
+  "stats.likesHint": "Counted per source; a track may appear more than once",
+  "stats.howMeasured": "How to read these numbers",
+  "stats.measureIntro": "The percentages in Your response are based on three groups of listens:",
+  "stats.measureNear":
+    "You heard at least 80% of the song — for example, 4 minutes or more of a 5-minute track.",
+  "stats.measurePartial":
+    "You heard at least half but less than 80% of the song. For example, 3 minutes of a 5-minute track.",
+  "stats.measureEarly":
+    "You skipped before the 30-second mark and before one fifth of the song had played. Both conditions must apply.",
+  "stats.measureExample":
+    "For example, if 7 out of 10 counted listens were heard almost in full, the screen shows 70%.",
+  "stats.unratedNote": {
+    one: "{count} listen is excluded from the percentage calculation.",
+    other: "{count} listens are excluded from the percentage calculation.",
+  },
+  "stats.unratedReason":
+    "These listens either lack enough data, or ended before halfway without an early skip. They count as neither a near-complete listen nor an early skip.",
+  "stats.measureSeeks":
+    "Only time when the music actually played counts. Seeking to the end of a song does not count as listening to it.",
+  "stats.measureCaution":
+    "These numbers show how you listen. They cannot tell for certain whether you liked a track: sometimes you skip simply because of your mood.",
+  "stats.comparisonTitle": "What you finish listening to",
+  "stats.comparisonNote":
+    "Completed tracks as a share of completed and skipped plays. Ongoing listens are excluded; a dash means there are no ended plays.",
+  "stats.recommendedMusic": "Recommendations",
+  "stats.chosenMusic": "Other sources",
+  "stats.radioNote":
+    "How familiar picks and discoveries were received. The bar includes every suggestion, even those you never reached.",
+  "stats.radioExploreHint": "Picks that explore beyond your usual listening.",
+  "stats.radioRegularHint": "Picks closer to the radio’s musical direction.",
+  "stats.radioRateNote": "almost in full, among graded listens",
+  "stats.radioPending": "Not evaluated yet",
+  "stats.suggestedCount": "{count} suggested",
+  "stats.sourcesTitle": "Where your music comes from",
+  "stats.sourcesNote":
+    "Your six most-listened sources, ordered by actual listening time. Open the details for all sources and their metrics.",
+  "stats.sourceFilter": "Filter listening sources",
+  "stats.allSources": "All music",
+  "stats.onlyRecommended": "Recommendations only",
+  "stats.noRecommendedSources":
+    "No listening from recommendations in this period. Try your radio or a personalized mix.",
+  "stats.allMetrics": "All source metrics ({count})",
+  "stats.tableNote":
+    "Started includes the share of impressions that led to a start. Finished and early skips are shares of ended plays; ongoing listens are excluded. Some sources do not record impressions.",
+  "rules.note":
+    "These preferences apply to recommendations. Your library and favorites stay available.",
+  "rules.emptyTitle": "Nothing excluded",
+  "rules.emptyHint":
+    "In a track’s menu, open Recommendations to hide a track, take a month off, or hear an artist less often. You can undo those choices here.",
+  "rules.removeNamed": "Remove rule for {name}",
+  "rules.removeFailed": "Could not remove the rule. Try again.",
   "stats.listeningTitle": "Rated by listening",
   "stats.listeningNote": "Recommendations are graded automatically as you listen.",
   "stats.gradeZero": "0 · Skipped early",
@@ -802,9 +905,12 @@ export const en = {
   "source.radio:track": "Track radio",
   "source.radio:autoplay": "Autoplay",
   "source.queue": "Added to queue",
-  "source.album": "Album",
-  "source.artist": "Artist",
-  "source.playlist": "Playlist",
+  "source.album": "Album page",
+  "source.albums": "Album catalog",
+  "source.artist": "Artist page",
+  "source.artists": "Artist catalog",
+  "source.playlist": "Playlist page",
+  "source.playlists": "Playlist catalog",
   "source.favorites": "Liked songs",
   "source.history": "Recently played",
   "source.search": "Search",
@@ -972,8 +1078,6 @@ export const en = {
   "queue.unpin": "Unpin queue",
   "search.source": "Search in",
   "search.source.library": "My library",
-  "settings.yandexIntro":
-    "Find tracks and albums in Yandex Music and add them to your library. Adding continues while you browse.",
   "settings.yandexTokenHint":
     "Use your Yandex Music account token. It is saved in this browser; you can remove it below.",
   "settings.yandexTokenRequired": "Enter a token to continue.",

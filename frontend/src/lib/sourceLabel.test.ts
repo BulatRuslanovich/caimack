@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 import { describe, expect, it } from "vitest";
 import type { Translate } from "@/contexts/I18nContext";
@@ -17,6 +16,14 @@ describe("sourceLabel", () => {
   it("groups historical radio variants", () => {
     expect(sourceLabel("radio:previous", t)).toBe("source.radio");
   });
+
+  it.each(["albums", "artists", "playlists"])(
+    "translates the %s catalog separately from detail pages",
+    (source) => {
+      expect(sourceLabel(source, t)).toBe(`source.${source}`);
+      expect(sourceLabel(source.slice(0, -1), t)).toBe(`source.${source.slice(0, -1)}`);
+    },
+  );
 
   it("shows an unrecorded source as unknown and a strange one as is", () => {
     expect(sourceLabel(null, t)).toBe("source.unknown");

@@ -1,14 +1,22 @@
 <resources>
     <string name="sync_title">Library synchronization</string>
     <string name="sync_network_hint">Your phone and server must be on the same local network, and the server address must resolve to a local IP. For a public domain, you can set up a local DNS entry on your router.</string>
-    <string name="sync_description">Keep the entire library, lyrics, artwork, vectors and server-prepared mixes on this phone. Original audio quality. Automatic sync over the local Wi-Fi or Ethernet network, including on battery.</string>
+    <string name="sync_description">Keep your library, lyrics and artwork on this phone in original audio quality. Updates automatically over local Wi-Fi or Ethernet, including on battery.</string>
     <string name="sync_enable">Synchronize this library</string>
     <string name="sync_choose_folder">Choose music folder</string>
     <string name="sync_progress">Available: %1$d / %2$d tracks</string>
     <string name="sync_pending">Actions waiting to upload: %1$d</string>
     <string name="sync_rejected">Server rejected %1$d changes. Your action log is retained.</string>
     <string name="sync_last">Last completed sync: %1$s</string>
-    <string name="sync_now">Sync now / resume</string>
+    <string name="sync_now">Sync now</string>
+    <string name="sync_resume">Resume</string>
+    <string name="sync_folder">Music folder</string>
+    <string name="sync_folder_storage">Device storage</string>
+    <string name="sync_network_details">Network requirements</string>
+    <string name="sync_status_running">Synchronizing…</string>
+    <string name="sync_status_ready">Up to date</string>
+    <string name="sync_status_waiting">Waiting to sync</string>
+    <string name="sync_status_attention">Needs attention</string>
     <string name="sync_pause">Pause</string>
     <string name="sync_paused">Synchronization paused</string>
     <string name="sync_sign_in_again">Sign in to the server again to resume synchronization. Your offline library is still available.</string>

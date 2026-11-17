@@ -73,11 +73,6 @@
   cursor: grabbing;
 }
 
-.record[data-dj-scratching="true"] .record-disc {
-  outline: 2px solid var(--primary);
-  outline-offset: 3px;
-}
-
 .record-label {
   position: absolute;
   inset: 34%;

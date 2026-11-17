@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 "use client";
 
 import { useRecommendations } from "@/lib/useRecommendations";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { LogOutIcon } from "lucide-react";
-import Link from "next/link";
+import { PrefetchLink as Link } from "@/components/PrefetchLink";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { isActivePath, libraryNav, primaryNav, serviceNav, type NavEntry } from "@/lib/navigation";

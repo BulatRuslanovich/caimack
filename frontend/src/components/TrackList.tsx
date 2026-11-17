@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 "use client";
 
@@ -18,7 +17,7 @@ import { type DragEndEvent } from "@dnd-kit/core";
 import { arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { EllipsisVerticalIcon, HeartIcon, MusicIcon, PauseIcon, PlayIcon } from "lucide-react";
-import Link from "next/link";
+import { PrefetchLink as Link } from "@/components/PrefetchLink";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArtistLinks } from "./ArtistLinks";
 import { TrackCover } from "./Cover";
@@ -26,6 +25,7 @@ import { EmptyState } from "./EmptyState";
 import { NowPlayingBars } from "./PlaybackIndicators";
 import { TrackMenu } from "./TrackMenu";
 import { DragHandle, VerticalSortable } from "./VerticalSortable";
+import { VirtualList, type VirtualListHandle } from "./VirtualList";
 import { Button } from "./ui/button";
 import { Caption } from "./ui/caption";
 import { Checkbox } from "./ui/checkbox";
@@ -99,6 +99,9 @@ export function TrackList({
   const [focused, setFocused] = useState(0);
   const [currentVisible, setCurrentVisible] = useState(true);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const viewport = useRef<VirtualListHandle>(null);
+  const pendingFocus = useRef(false);
+  const [dragging, setDragging] = useState<string | null>(null);
   const [columns, setColumns] = useState<"narrow" | "album" | "tempo" | "all">("all");
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
 
@@ -161,10 +164,21 @@ export function TrackList({
 
   const focusRow = (index: number) => {
     const clamped = Math.max(0, Math.min(index, tracks.length - 1));
+    pendingFocus.current = true;
+    viewport.current?.scrollToIndex(clamped);
     setFocused(clamped);
     bodyRef.current?.querySelector<HTMLElement>(`[data-row="${clamped}"]`)?.focus();
     return clamped;
   };
+
+  useLayoutEffect(() => {
+    if (!pendingFocus.current) return;
+    const row = bodyRef.current?.querySelector<HTMLElement>(`[data-row="${focused}"]`);
+    if (row) {
+      row.focus({ preventScroll: true });
+      pendingFocus.current = false;
+    }
+  });
 
   const onRowsKeyDown = (event: React.KeyboardEvent) => {
     const from = Number((event.target as HTMLElement).dataset.row);
@@ -177,6 +191,12 @@ export function TrackList({
       if (event.shiftKey && selection && to !== from) {
         selection.onToggle(tracks[to].id, to, true);
       }
+      return;
+    }
+
+    if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      focusRow(event.key === "Home" ? 0 : tracks.length - 1);
       return;
     }
 
@@ -268,6 +288,7 @@ export function TrackList({
       ref={bodyRef}
       className="library-track-list flex flex-col"
       role="table"
+      aria-rowcount={tracks.length + 1}
       aria-label={t("tracks.tableLabel")}
       onKeyDown={onRowsKeyDown}
     >
@@ -315,14 +336,34 @@ export function TrackList({
         </Caption>
       </div>
 
-      {rows}
+      {rows.length > 100 ? (
+        <VirtualList
+          ref={viewport}
+          items={rows}
+          role="rowgroup"
+          estimate={showCover ? 64 : 48}
+          pinned={[
+            focused,
+            playingIndex,
+            tracks.findIndex((track) => track.id === menuFor),
+            entries.findIndex((track) => queueEntryKey(track) === dragging),
+          ]}
+        />
+      ) : (
+        rows
+      )}
     </div>
   );
 
   return (
     <>
       {sortable ? (
-        <VerticalSortable items={entries.map(queueEntryKey)} onDragEnd={onDragEnd}>
+        <VerticalSortable
+          items={entries.map(queueEntryKey)}
+          onDragEnd={onDragEnd}
+          onActiveChange={setDragging}
+          constrainToScroll={rows.length > 100}
+        >
           {body}
         </VerticalSortable>
       ) : (
@@ -333,11 +374,12 @@ export function TrackList({
         <Button
           variant="secondary"
           className="fixed bottom-[calc(var(--player-height)+1.5rem)] left-1/2 z-40 -translate-x-1/2 shadow-pop max-md:bottom-[calc(var(--player-height)+var(--mobile-nav-height)+env(safe-area-inset-bottom)+1rem)]"
-          onClick={() =>
+          onClick={() => {
+            viewport.current?.scrollToIndex(playingIndex);
             bodyRef.current
               ?.querySelector(`[data-row="${playingIndex}"]`)
-              ?.scrollIntoView({ block: "center", behavior: smoothUnlessReduced() })
-          }
+              ?.scrollIntoView({ block: "center", behavior: smoothUnlessReduced() });
+          }}
         >
           {t("tracks.jumpToCurrent")}
         </Button>
@@ -376,8 +418,16 @@ interface TrackRowProps {
   onChanged?: () => void;
 }
 
-const TrackRow = memo(function TrackRow({
-  entryId,
+const TrackRow = memo(function TrackRow(props: TrackRowProps) {
+  return props.sortable ? <SortableTrackRow {...props} /> : <TrackRowContent {...props} />;
+});
+
+function SortableTrackRow(props: TrackRowProps) {
+  const drag = useSortable({ id: props.entryId });
+  return <TrackRowContent {...props} drag={drag} />;
+}
+
+const TrackRowContent = memo(function TrackRowContent({
   track,
   index,
   grid,
@@ -404,22 +454,20 @@ const TrackRow = memo(function TrackRow({
   onPlay,
   onToggleFavorite,
   onChanged,
-}: TrackRowProps) {
+  drag,
+}: TrackRowProps & { drag?: ReturnType<typeof useSortable> }) {
   const t = useT();
   const format = useFormat();
-
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: entryId,
-    disabled: !sortable,
-  });
 
   const showSpec = showAudioSpec && isLossless(track.codec);
 
   return (
     <div
-      ref={sortable ? setNodeRef : undefined}
+      ref={drag?.setNodeRef}
       role="row"
       data-row={index}
+      aria-rowindex={index + 2}
+      data-striped={index % 2 === 0 || undefined}
       tabIndex={focused ? 0 : -1}
       onDoubleClick={() => onPlay(index)}
       onClick={(event) => {
@@ -433,13 +481,17 @@ const TrackRow = memo(function TrackRow({
         event.preventDefault();
         onMenuOpenChange(track.id, true);
       }}
-      style={sortable ? { transform: CSS.Transform.toString(transform), transition } : undefined}
+      style={
+        drag
+          ? { transform: CSS.Transform.toString(drag.transform), transition: drag.transition }
+          : undefined
+      }
       className={cn(
         grid,
         "library-track-row group relative transition-colors outline-none",
         "hover:bg-card focus-within:bg-card focus-visible:bg-card focus-visible:inset-ring focus-visible:inset-ring-ring",
         isCurrent && "track-row-current bg-card",
-        isDragging && "z-10 opacity-90 shadow-pop",
+        drag?.isDragging && "z-10 opacity-90 shadow-pop",
       )}
     >
       <span className="flex items-center gap-1 text-sm text-faint tabular-nums" role="cell">
@@ -456,8 +508,8 @@ const TrackRow = memo(function TrackRow({
           <>
             {sortable && (
               <DragHandle
-                {...attributes}
-                {...listeners}
+                {...drag?.attributes}
+                {...drag?.listeners}
                 aria-label={t("tracks.reorderNamed", { title: track.title })}
               />
             )}

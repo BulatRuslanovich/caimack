@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 export type CoverTone = { hue: number; chroma: number };
 export type BackdropTone = CoverTone & { lightness: number };

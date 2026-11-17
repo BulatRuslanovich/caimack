@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 "use client";
 
@@ -48,7 +47,8 @@ export function TrackMenuBody({
   isFavorite,
   onToggleFavorite,
   onNavigate,
-}: Omit<TrackMenuProps, "open" | "trigger">) {
+  initialKeyboardFocus,
+}: Omit<TrackMenuProps, "open" | "trigger"> & { initialKeyboardFocus?: boolean }) {
   const {
     notify,
     isAdmin,
@@ -84,7 +84,7 @@ export function TrackMenuBody({
 
   return (
     <>
-      <MenuContent track={track}>
+      <MenuContent track={track} initialKeyboardFocus={initialKeyboardFocus}>
         <MenuItem
           onSelect={() => {
             player.playNext(track);

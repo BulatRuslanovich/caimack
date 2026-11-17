@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 use std::time::{Duration, Instant};
 
@@ -12,6 +11,7 @@ use media::loudness::Loudness;
 use media::mert;
 use sqlx::PgPool;
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::mert::MertClient;
@@ -22,6 +22,62 @@ const STARTUP_DELAY: Duration = Duration::from_secs(20);
 const POLL: Duration = Duration::from_secs(30);
 const BATCH: i64 = 16;
 const RETRY_FAILED_AFTER: chrono::Duration = chrono::Duration::days(7);
+const PROGRESS_INTERVAL: Duration = Duration::from_secs(30);
+
+struct Progress<'a> {
+    cancel: &'a CancellationToken,
+    started: Instant,
+    reported: Instant,
+    active: bool,
+    complete: bool,
+    processed: usize,
+    failed: usize,
+    embedded: usize,
+    deferred: usize,
+}
+
+impl Progress<'_> {
+    fn record(&mut self, outcome: &Outcome) {
+        self.processed += 1;
+        self.failed += usize::from(outcome.cues.is_none());
+        self.embedded += usize::from(matches!(&outcome.vector, Some(Ok(_))));
+        self.deferred += usize::from(outcome.embedding_unavailable);
+        if self.reported.elapsed() >= PROGRESS_INTERVAL {
+            tracing::info!(
+                processed = self.processed,
+                failed = self.failed,
+                embedded = self.embedded,
+                deferred = self.deferred,
+                elapsed_secs = self.started.elapsed().as_secs(),
+                "Track analysis progress"
+            );
+            self.reported = Instant::now();
+        }
+    }
+}
+
+impl Drop for Progress<'_> {
+    fn drop(&mut self) {
+        if self.active {
+            let outcome = if self.cancel.is_cancelled() {
+                "cancelled"
+            } else if self.complete {
+                "completed"
+            } else {
+                "interrupted"
+            };
+            tracing::info!(
+                outcome,
+                processed = self.processed,
+                failed = self.failed,
+                embedded = self.embedded,
+                deferred = self.deferred,
+                elapsed_secs = self.started.elapsed().as_secs(),
+                "Track analysis pass finished"
+            );
+        }
+    }
+}
 
 pub fn spawn(
     db: PgPool,
@@ -39,7 +95,8 @@ pub fn spawn(
             match run_pass(&db, &storage, embedder.as_ref(), &index, &cancel).await {
                 Ok(analysed) if analysed > 0 => index.request_reload(),
                 Ok(_) => {}
-                Err(error) => tracing::error!("Track analysis pass failed: {error:#}"),
+                Err(error) => tracing::error!(error = %format!("{error:#}"), retry_after_secs = POLL.as_secs(),
+                    "Track analysis pass failed; retrying later"),
             }
             tokio::select! {
                 () = cancel.cancelled() => return,
@@ -59,6 +116,17 @@ async fn run_pass(
     let mut embedder = embedder;
     let mut checked_service = false;
     let mut analysed = 0;
+    let mut progress = Progress {
+        cancel,
+        started: Instant::now(),
+        reported: Instant::now(),
+        active: false,
+        complete: false,
+        processed: 0,
+        failed: 0,
+        embedded: 0,
+        deferred: 0,
+    };
     loop {
         let retry_before = Utc::now() - RETRY_FAILED_AFTER;
         let batch = sqlx::query!(
@@ -87,7 +155,12 @@ async fn run_pass(
         .fetch_all(db)
         .await?;
         if batch.is_empty() {
+            progress.complete = true;
             return Ok(analysed);
+        }
+        if !progress.active {
+            progress.active = true;
+            tracing::info!(batch_size = batch.len(), embeddings_enabled = embedder.is_some(), "Track analysis started");
         }
 
         if !checked_service && batch.iter().any(|track| track.embed) {
@@ -95,7 +168,8 @@ async fn run_pass(
             if let Some(client) = embedder
                 && let Err(error) = client.ready().await
             {
-                tracing::warn!("MERT unavailable; continuing CPU analysis: {error:#}");
+                tracing::warn!(error = %format!("{error:#}"), retry_after_secs = POLL.as_secs(),
+                    "MERT unavailable; continuing CPU analysis and deferring embeddings");
                 embedder = None;
                 // Reselect CPU work so an embedding-only backlog cannot hide it.
                 continue;
@@ -129,42 +203,40 @@ async fn run_pass(
             let Some(source) = source else {
                 continue;
             };
-            let outcome =
-                analyze(storage, embedder, &source, f64::from(track.duration_seconds), track.embed, permit).await?;
+            let outcome = analyze(storage, embedder, &source, f64::from(track.duration_seconds), track.embed, permit)
+                .instrument(tracing::error_span!("track_analysis", track_id = %track.id, file = %source))
+                .await?;
             reading.rollback().await?;
             if outcome.embedding_unavailable {
                 embedder = None;
             }
             match save(db, track.id, &track.content_hash, &outcome).await {
                 Err(sqlx::Error::Database(error)) if error.is_foreign_key_violation() => {
-                    tracing::debug!("Track {} was deleted during analysis", track.id);
+                    tracing::debug!(track_id = %track.id, "Track deleted during analysis; discarding results");
                     continue;
                 }
                 other => other?,
             }
             analysed += 1;
+            progress.record(&outcome);
             tracing::debug!(
-                "Analysed track {} in {:.1} s: cues {}, loudness {}, key {}, fingerprint {}, embedding {}",
-                track.id,
-                started.elapsed().as_secs_f64(),
-                found(outcome.cues.is_some()),
-                found(outcome.loudness.is_some()),
-                found(outcome.key.is_some()),
-                found(outcome.fingerprint.is_some()),
-                match &outcome.vector {
+                track_id = %track.id,
+                elapsed_ms = started.elapsed().as_millis() as u64,
+                cues = outcome.cues.is_some(),
+                loudness = outcome.loudness.is_some(),
+                key = outcome.key.is_some(),
+                fingerprint = outcome.fingerprint.is_some(),
+                embedding = match &outcome.vector {
                     Some(Ok(_)) => "succeeded",
                     Some(Err(_)) => "failed",
                     None if outcome.embedding_unavailable => "deferred",
                     None => "kept",
-                }
+                },
+                "Track analysis saved"
             );
         }
         index.request_reload();
     }
-}
-
-fn found(present: bool) -> &'static str {
-    if present { "found" } else { "missing" }
 }
 
 struct Outcome {
@@ -199,10 +271,15 @@ async fn analyze(
     permit: tokio::sync::OwnedSemaphorePermit,
 ) -> anyhow::Result<Outcome> {
     let Some(source) = storage.existing(file_path) else {
-        tracing::warn!("Track at {file_path} cannot be analysed: the file is missing from storage");
+        tracing::warn!(
+            retry_after_days = RETRY_FAILED_AFTER.num_days(),
+            "Cannot analyse track: source file is missing; check the music folder mount"
+        );
         return Ok(Outcome::failed(embed, "source_missing"));
     };
+    let span = tracing::Span::current();
     let work = tokio::task::spawn_blocking(move || -> anyhow::Result<Analysis> {
+        let _entered = span.enter();
         let _permit = permit;
         media::analysis::analyze(&source, duration, embed)
     })
@@ -222,7 +299,8 @@ async fn analyze(
                         // Keep CPU results and the previous embedding. A cold
                         // start or outage must not trigger the seven-day delay
                         // for permanent per-track failures, or abort CPU work.
-                        tracing::warn!("MERT deferred for {file_path}: {error:#}");
+                        tracing::warn!(error = %format!("{error:#}"), retry_after_secs = POLL.as_secs(),
+                            "MERT request failed; keeping CPU results and retrying embeddings later");
                         embedding_unavailable = true;
                         None
                     }
@@ -238,11 +316,12 @@ async fn analyze(
             })
         }
         Ok(Err(error)) => {
-            tracing::warn!("Analysis of {file_path} failed: {error:#}");
+            tracing::warn!(error = %format!("{error:#}"), retry_after_days = RETRY_FAILED_AFTER.num_days(),
+                "Cannot decode track for analysis");
             Ok(Outcome::failed(embed, "decode_failed"))
         }
         Err(error) => {
-            tracing::error!("Analysis of {file_path} crashed: {error}");
+            tracing::error!(%error, "Track analysis blocking task crashed");
             Ok(Outcome::failed(embed, "decode_failed"))
         }
     }

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 "use client";
 
@@ -7,14 +6,11 @@ import { useT } from "@/contexts/I18nContext";
 import type { Track } from "@/lib/types";
 import { Slot } from "@radix-ui/react-slot";
 import { EllipsisVerticalIcon } from "lucide-react";
-import dynamic from "next/dynamic";
 import { type ReactElement, useState, useSyncExternalStore } from "react";
 import { Button } from "./ui/button";
 import { DropdownMenu, DropdownMenuTrigger } from "./ui/dropdown-menu";
 
-const TrackMenuBody = dynamic(() =>
-  import("./track-menu/TrackMenuBody").then((m) => m.TrackMenuBody),
-);
+import { TrackMenuBody } from "./track-menu/TrackMenuBody";
 
 export interface TrackMenuProps {
   track: Track;
@@ -42,6 +38,7 @@ import { SheetMenu } from "./track-menu/MenuPrimitives";
 export function TrackMenu({ open, onOpenChange, trigger, ...rest }: TrackMenuProps) {
   const t = useT();
   const [everOpened, setEverOpened] = useState(open);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const compact = useSyncExternalStore(
     subscribeCompact,
     () => window.matchMedia(COMPACT).matches,
@@ -60,6 +57,29 @@ export function TrackMenu({ open, onOpenChange, trigger, ...rest }: TrackMenuPro
     </Button>
   );
 
+  if (!compact && !everOpened && !open) {
+    return (
+      <Slot
+        aria-haspopup="menu"
+        aria-expanded={false}
+        data-state="closed"
+        onClick={(event) => {
+          setKeyboardOpen(event.detail === 0);
+          onOpenChange(true);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            setKeyboardOpen(true);
+            onOpenChange(true);
+          }
+        }}
+      >
+        {button}
+      </Slot>
+    );
+  }
+
   if (compact) {
     return (
       <SheetMenu.Provider value={{ open, onOpenChange }}>
@@ -73,7 +93,9 @@ export function TrackMenu({ open, onOpenChange, trigger, ...rest }: TrackMenuPro
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>{button}</DropdownMenuTrigger>
 
-      {everOpened && <TrackMenuBody {...rest} onOpenChange={onOpenChange} />}
+      {everOpened && (
+        <TrackMenuBody {...rest} onOpenChange={onOpenChange} initialKeyboardFocus={keyboardOpen} />
+      )}
     </DropdownMenu>
   );
 }

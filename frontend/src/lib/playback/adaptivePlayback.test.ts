@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 import { describe, expect, it, vi } from "vitest";
 import { AdaptivePlayback, adaptiveWanted } from "@/lib/playback/adaptivePlayback";

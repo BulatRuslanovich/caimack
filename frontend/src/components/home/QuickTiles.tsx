@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { HeartIcon, ListMusicIcon } from "lucide-react";
 import type { Route } from "next";
-import Link from "next/link";
+import { PrefetchLink as Link } from "@/components/PrefetchLink";
 import type { CSSProperties, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { PlaySource } from "@/lib/playback/playSource";

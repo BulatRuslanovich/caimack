@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 package app.caimack.playback
 
@@ -8,6 +7,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ListeningTrackerTest {
+    @Test
+    fun `checkpoint preserves partial time across pauses and later completion`() {
+        tracker.begin("song", 210)
+        for (second in 1..15) tracker.accumulate(second.toDouble())
+        tracker.checkpoint()
+        assertEquals(15, last("trackPlayed").listenedSeconds)
+        for (second in 16..25) tracker.accumulate(second.toDouble())
+        tracker.finish(ListeningTracker.COMPLETED)
+        assertEquals(25, last("trackCompleted").listenedSeconds)
+        tracker.checkpoint()
+        assertEquals(listOf("trackStarted", "trackPlayed", "trackCompleted"), types())
+    }
     @Test
     fun `an automatic radio return is not a deliberate replay`() {
         val recorded = mutableListOf<ListeningEvent>()

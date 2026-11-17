@@ -1,4 +1,4 @@
-.PHONY: db migrate model backend frontend test test-db fmt lint check sqlx apk
+.PHONY: db migrate model mert backend frontend test test-db fmt lint check sqlx apk
 
 db:
 	@docker start caimack-rust-dev-db >/dev/null 2>&1 || MSYS_NO_PATHCONV=1 docker run -d --name caimack-rust-dev-db \
@@ -12,6 +12,9 @@ migrate: db
 
 model:
 	docker compose run --rm mert --download-only
+
+mert:
+	docker compose -f docker-compose.dev.yml up -d mert
 
 backend: migrate
 	cd backend && cargo run

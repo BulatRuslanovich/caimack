@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<ViewFlipper xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_art_tracks"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:autoStart="false"
+    android:animateFirstView="true"
+    android:inAnimation="@anim/widget_track_in"
+    android:outAnimation="@anim/widget_track_out">
+    <include layout="@layout/widget_record_frames" />
+</ViewFlipper>

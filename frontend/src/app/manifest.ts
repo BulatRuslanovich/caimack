@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 import type { MetadataRoute } from "next";
 import { DEFAULT_COLORWAY, THEME_COLORS } from "@/lib/themeScript";

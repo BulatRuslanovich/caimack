@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { useSyncExternalStore } from "react";
 import { mediaUrl } from "@/lib/media";
 import { fetchWithSession } from "@/lib/http";
 import {
@@ -14,15 +13,7 @@ export const VINYL_TURN_SECONDS = 1.8;
 const MAX_FILE_BYTES = 48 * 1024 * 1024;
 const MAX_DURATION_SECONDS = 10 * 60;
 const DECODE_SAMPLE_RATE = 24_000;
-type DeckStatus = "idle" | "loading" | "ready" | "unavailable";
-let state: { trackId: string; status: DeckStatus } = { trackId: "", status: "idle" };
 let revision = 0;
-const listeners = new Set<() => void>();
-
-function publish(trackId: string, status: DeckStatus) {
-  state = { trackId, status };
-  for (const listener of listeners) listener();
-}
 
 export async function decodeVinylTrack(trackId: string, duration: number, signal: AbortSignal) {
   if (!Number.isFinite(duration) || duration <= 0 || duration > MAX_DURATION_SECONDS)
@@ -76,17 +67,14 @@ export async function prepareVinylDeck(
   const current = ++revision;
   enableVinylScratch(true);
   unloadVinylScratchTrack();
-  publish(trackId, "loading");
   try {
     if (!(await prepareVinylScratch())) throw new Error("Deck unavailable");
     signal.throwIfAborted();
     const audio = await decodeVinylTrack(trackId, duration, signal);
     if (current !== revision || signal.aborted) return;
-    if (!loadVinylScratchTrack(trackId, audio.channels, audio.sampleRate))
-      throw new Error("Deck unavailable");
-    publish(trackId, "ready");
+    loadVinylScratchTrack(trackId, audio.channels, audio.sampleRate);
   } catch {
-    if (current === revision && !signal.aborted) publish(trackId, "unavailable");
+    // Scratch audio is optional; ordinary playback stays available if preparation fails.
   }
 }
 
@@ -94,20 +82,4 @@ export function releaseVinylDeck(): void {
   revision++;
   unloadVinylScratchTrack();
   enableVinylScratch(false);
-  publish("", "idle");
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-}
-
-export function useVinylDeck(trackId: string): DeckStatus {
-  return useSyncExternalStore(
-    subscribe,
-    () => (state.trackId === trackId ? state.status : "idle"),
-    () => "idle",
-  );
 }

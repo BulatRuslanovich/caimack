@@ -84,6 +84,8 @@ services:
         condition: service_completed_successfully
     environment:
       HF_HOME: /models
+      MERT_LOG_LEVEL: ${MERT_LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
       MERT_IDLE_TIMEOUT_SECONDS: ${MERT_IDLE_TIMEOUT_SECONDS:-300}
       MERT_LOAD_TIMEOUT_SECONDS: ${MERT_LOAD_TIMEOUT_SECONDS:-1800}
       MERT_INFERENCE_TIMEOUT_SECONDS: ${MERT_INFERENCE_TIMEOUT_SECONDS:-90}
@@ -127,6 +129,7 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-music}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-music}
       RUST_LOG: ${RUST_LOG:-info}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
     healthcheck:
       disable: true
     networks: [internal]
@@ -162,6 +165,7 @@ services:
       RECOMMENDATIONS_ENABLED: "false"
       MERT_URL: http://mert:8090
       RUST_LOG: ${RUST_LOG:-info}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
     volumes:

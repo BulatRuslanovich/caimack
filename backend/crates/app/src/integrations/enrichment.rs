@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
@@ -323,19 +322,25 @@ pub fn spawn(
         let (enrichment, wake, cancel) = (enrichment.clone(), Arc::clone(&wake), cancel.clone());
         handles.push(tokio::spawn(async move {
             let mut next_seed = tokio::time::Instant::now() + BACKFILL_DELAY;
+            let mut progress = EnrichmentProgress::new(kind);
             loop {
+                progress.report_if_due();
                 if cancel.is_cancelled() { return; }
                 if tokio::time::Instant::now() >= next_seed {
                     let delay = match super::enrichment_jobs::seed(&enrichment.db, kind).await {
-                        Ok(500) => Duration::from_secs(5),
-                        Ok(_) => Duration::from_secs(86_400),
-                        Err(error) => { tracing::error!("Enrichment {kind} discovery failed: {error}"); Duration::from_secs(30) }
+                        Ok(queued) => {
+                            if queued > 0 {
+                                tracing::info!(kind, queued, "Discovered metadata enrichment jobs");
+                            }
+                            if queued == 500 { Duration::from_secs(5) } else { Duration::from_secs(86_400) }
+                        }
+                        Err(error) => { tracing::error!(kind, %error, retry_after_secs = 30, "Metadata enrichment discovery failed"); Duration::from_secs(30) }
                     };
                     next_seed = tokio::time::Instant::now() + delay;
                 }
                 let job = match super::enrichment_jobs::claim(&enrichment.db, kind).await {
                     Ok(job) => job,
-                    Err(error) => { tracing::error!("Enrichment {kind} claim failed: {error}"); None }
+                    Err(error) => { tracing::error!(kind, %error, "Cannot claim metadata enrichment job; retrying later"); None }
                 };
                 let Some(job) = job else {
                     tokio::select! {
@@ -357,23 +362,102 @@ pub fn spawn(
                 };
                 let skipped = matches!(result, Ok(Outcome::Skipped));
                 let (outcome, error) = match result {
-                    Ok(Outcome::Saved) => { tracing::info!("Enrichment {kind} {} saved", job.entity_id); ("saved", None) }
+                    Ok(Outcome::Saved) => ("saved", None),
                     Ok(Outcome::Skipped) => ("skipped", None),
                     Ok(Outcome::NotFound) => ("not_found", None),
                     Ok(Outcome::Instrumental) => ("instrumental", None),
                     Err(error) => {
-                        tracing::warn!("Enrichment {kind} {} failed; scheduling retry: {error:#}", job.entity_id);
+                        tracing::warn!(kind, entity_id = %job.entity_id, attempt = job.attempts,
+                            retry_after_secs = super::enrichment_jobs::retry_seconds(job.attempts, job.entity_id),
+                            error = %format!("{error:#}"), "Metadata enrichment failed; scheduling retry");
                         ("failed", Some(format!("{error:#}").chars().take(2000).collect()))
                     }
                 };
                 if let Err(error) = super::enrichment_jobs::finish(&enrichment.db, kind, &job, outcome, error).await {
-                    tracing::error!("Enrichment {kind} completion failed; lease will expire: {error}");
+                    tracing::error!(kind, entity_id = %job.entity_id, %error,
+                        "Cannot persist metadata enrichment outcome; job will retry when its lease expires");
+                } else {
+                    tracing::debug!(kind, entity_id = %job.entity_id, attempt = job.attempts, outcome,
+                        "Metadata enrichment job finished");
+                    progress.record(outcome);
                 }
                 if !skipped && kind != "lyrics" && pause(&cancel, ARTIST_PAUSE).await { return; }
             }
         }));
     }
     handles
+}
+
+struct EnrichmentProgress {
+    kind: &'static str,
+    reported: std::time::Instant,
+    processed: u64,
+    saved: u64,
+    failed: u64,
+    not_found: u64,
+    skipped: u64,
+    instrumental: u64,
+}
+
+impl EnrichmentProgress {
+    fn new(kind: &'static str) -> Self {
+        Self {
+            kind,
+            reported: std::time::Instant::now(),
+            processed: 0,
+            saved: 0,
+            failed: 0,
+            not_found: 0,
+            skipped: 0,
+            instrumental: 0,
+        }
+    }
+
+    fn record(&mut self, outcome: &str) {
+        self.processed += 1;
+        match outcome {
+            "saved" => self.saved += 1,
+            "failed" => self.failed += 1,
+            "not_found" => self.not_found += 1,
+            "instrumental" => self.instrumental += 1,
+            _ => self.skipped += 1,
+        }
+    }
+
+    fn report_if_due(&mut self) {
+        if self.reported.elapsed() >= Duration::from_secs(30) {
+            self.report();
+        }
+    }
+
+    fn report(&mut self) {
+        if self.processed > 0 {
+            tracing::info!(
+                kind = self.kind,
+                processed = self.processed,
+                saved = self.saved,
+                failed = self.failed,
+                not_found = self.not_found,
+                skipped = self.skipped,
+                instrumental = self.instrumental,
+                interval_secs = self.reported.elapsed().as_secs(),
+                "Metadata enrichment summary"
+            );
+            self.processed = 0;
+            self.saved = 0;
+            self.failed = 0;
+            self.not_found = 0;
+            self.skipped = 0;
+            self.instrumental = 0;
+        }
+        self.reported = std::time::Instant::now();
+    }
+}
+
+impl Drop for EnrichmentProgress {
+    fn drop(&mut self) {
+        self.report();
+    }
 }
 
 async fn pause(cancel: &CancellationToken, how_long: Duration) -> bool {

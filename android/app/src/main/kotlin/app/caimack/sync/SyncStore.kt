@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 package app.caimack.sync
 
@@ -51,7 +50,9 @@ data class SyncedFile(
     val payloadSize: Long,
     val metadataKey: String = "",
     val companions: List<String> = emptyList(),
-)
+) {
+    val sizeBytes: Long get() = prefixBytes + payloadSize + suffixBytes
+}
 
 @Serializable
 data class FileIndex(
@@ -357,6 +358,9 @@ class SyncStore(private val context: Context, val json: Json, private val server
     }
 
     fun audio(id: String): Uri? = if (active) index.files[id]?.uri?.let(Uri::parse) else null
+
+    /** Verified audio sizes are already indexed; no SAF traversal is needed for the UI. */
+    @Synchronized fun audioBytes(): Long = if (active) index.files.values.sumOf { it.sizeBytes } else 0L
 
     @Synchronized fun tracks(): List<app.caimack.api.Track> {
         if (!active) return emptyList()

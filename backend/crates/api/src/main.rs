@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 mod auth;
 mod client;
@@ -40,17 +39,30 @@ use tokio_util::sync::CancellationToken;
 
 use crate::state::AppState;
 
-fn main() -> anyhow::Result<()> {
-    let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
-    let result = runtime.block_on(run());
-    // An already-running blocking decoder cannot be aborted by dropping its future.
-    runtime.shutdown_timeout(std::time::Duration::from_secs(1));
-    result
+fn main() -> std::process::ExitCode {
+    if std::env::args().nth(1).as_deref() == Some("healthcheck") {
+        return if healthcheck::healthy() { std::process::ExitCode::SUCCESS } else { std::process::ExitCode::FAILURE };
+    }
+    let _ = dotenvy::dotenv();
+    logging::init();
+    let result = (|| -> anyhow::Result<()> {
+        let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
+        let result = runtime.block_on(run());
+        // An already-running blocking decoder cannot be aborted by dropping its future.
+        runtime.shutdown_timeout(std::time::Duration::from_secs(1));
+        result
+    })();
+    match result {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(error) => {
+            tracing::error!(error = %format!("{error:#}"), "Backend command failed");
+            std::process::ExitCode::FAILURE
+        }
+    }
 }
 
 async fn run() -> anyhow::Result<()> {
     match std::env::args().nth(1).as_deref() {
-        Some("healthcheck") => std::process::exit(if healthcheck::healthy() { 0 } else { 1 }),
         Some("migrate") => return migrate().await,
         Some("serve") | None => {}
         Some(other) => {
@@ -58,11 +70,11 @@ async fn run() -> anyhow::Result<()> {
         }
     }
 
-    let _ = dotenvy::dotenv();
-    logging::init();
-
-    let config = Arc::new(Config::from_env()?);
-    let db = app::db::connect(&config.database).await?;
+    let started = std::time::Instant::now();
+    tracing::info!(version = env!("CARGO_PKG_VERSION"), "Starting Caimack backend");
+    let config = Arc::new(Config::from_env().context("Could not load backend configuration")?);
+    let db =
+        app::db::connect(&config.database).await.context("Backend startup failed while connecting to PostgreSQL")?;
     app::schema::verify(&db).await?;
     app::owner::ensure_owner(&db, &config.owner).await?;
 
@@ -150,27 +162,38 @@ async fn run() -> anyhow::Result<()> {
     let listener = TcpListener::bind(config.listen_addr)
         .await
         .with_context(|| format!("Could not listen on {}", config.listen_addr))?;
-    tracing::info!("Listening on http://{}", config.listen_addr);
+    tracing::info!(
+        address = %listener.local_addr()?,
+        recommendations = config.recommendations_enabled,
+        heavy_job_limit = app::background::capacity(),
+        library_scan_interval_secs = config.library_scan_interval.map(|interval| interval.as_secs()),
+        rename_music_files = config.rename_music_files,
+        export_music_metadata = config.export_music_metadata,
+        worker_count = workers.len(),
+        elapsed_ms = started.elapsed().as_millis() as u64,
+        "Backend ready; accepting HTTP requests"
+    );
 
     let server = axum::serve(listener, routes::router(state).into_make_service_with_connect_info::<SocketAddr>())
         .with_graceful_shutdown(background.clone().cancelled_owned());
     lifecycle::serve(std::future::IntoFuture::into_future(server), workers, background, shutdown_signal()).await?;
-    tracing::info!("Stopped");
+    tracing::info!("Backend stopped");
     Ok(())
 }
 
 async fn migrate() -> anyhow::Result<()> {
-    let _ = dotenvy::dotenv();
-    logging::init();
-
+    let started = std::time::Instant::now();
+    tracing::info!("Applying database migrations");
     let db = app::db::connect(&DatabaseConfig::from_env()?).await?;
-    app::schema::migrate(&db).await
+    app::schema::migrate(&db).await?;
+    tracing::info!(elapsed_ms = started.elapsed().as_millis() as u64, "Database migrations complete");
+    Ok(())
 }
 
 async fn shutdown_signal() {
     let ctrl_c = async {
         if let Err(error) = tokio::signal::ctrl_c().await {
-            tracing::error!("Could not listen for Ctrl+C: {error}");
+            tracing::error!(%error, signal = "Ctrl+C", "Could not install shutdown signal handler");
             std::future::pending::<()>().await;
         }
     };
@@ -182,7 +205,7 @@ async fn shutdown_signal() {
                 signal.recv().await;
             }
             Err(error) => {
-                tracing::error!("Could not listen for SIGTERM: {error}");
+                tracing::error!(%error, signal = "SIGTERM", "Could not install shutdown signal handler");
                 std::future::pending::<()>().await;
             }
         }
@@ -192,9 +215,7 @@ async fn shutdown_signal() {
     let terminate = std::future::pending::<()>();
 
     tokio::select! {
-        () = ctrl_c => {}
-        () = terminate => {}
+        () = ctrl_c => tracing::info!(signal = "Ctrl+C", "Shutdown requested; draining requests and background jobs"),
+        () = terminate => tracing::info!(signal = "SIGTERM", "Shutdown requested; draining requests and background jobs"),
     }
-
-    tracing::info!("Shutting down");
 }

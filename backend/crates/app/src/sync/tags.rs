@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 //! Metadata envelopes let clients replace ID3/FLAC metadata without transferring
 //! the audio again. The reconstructed file is checked against its full SHA-256.

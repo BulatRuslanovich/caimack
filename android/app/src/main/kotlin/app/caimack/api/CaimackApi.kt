@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 package app.caimack.api
 
@@ -17,6 +16,9 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface CaimackApi {
+    @GET("api/me/listening-stats")
+    suspend fun listeningStats(): ListeningOverview
+
     @GET("api/me/library")
     suspend fun savedLibrary(): List<LibraryItem>
 
