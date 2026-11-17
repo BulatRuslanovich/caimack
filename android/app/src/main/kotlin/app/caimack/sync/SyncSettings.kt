@@ -18,6 +18,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.caimack.R
 import app.caimack.session.SessionState
 import app.caimack.ui.LocalContainer
+import app.caimack.ui.Toggle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -71,7 +72,7 @@ fun SyncSettings() {
         Text(stringResource(R.string.sync_network_hint), style = MaterialTheme.typography.bodySmall)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(stringResource(R.string.sync_enable), Modifier.weight(1f))
-            Switch(
+            Toggle(
                 checked = state.enabled,
                 onCheckedChange = { value ->
                     if (

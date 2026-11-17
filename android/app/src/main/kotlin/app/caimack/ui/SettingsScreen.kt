@@ -257,7 +257,7 @@ fun SettingsScreen(category: SettingsCategory? = null) {
                                 style = Type.body.copy(fontWeight = FontWeight.SemiBold),
                                 modifier = Modifier.weight(1f).padding(end = 12.dp),
                             )
-                            Toggle(recapReminder && notificationsAllowed, reminderChange)
+                            Toggle(recapReminder && notificationsAllowed, onCheckedChange = reminderChange)
                         }
                     }
 

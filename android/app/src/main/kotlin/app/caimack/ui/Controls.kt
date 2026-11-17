@@ -58,11 +58,18 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 
 @Composable
-fun Toggle(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+fun Toggle(
+    checked: Boolean,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onCheckedChange: (Boolean) -> Unit,
+) {
     val palette = LocalPalette.current
     Switch(
         checked = checked,
         onCheckedChange = onCheckedChange,
+        modifier = modifier,
+        enabled = enabled,
         colors = SwitchDefaults.colors(
             checkedTrackColor = palette.primary,
             checkedThumbColor = palette.onPrimary,

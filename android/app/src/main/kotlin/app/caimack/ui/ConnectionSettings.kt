@@ -41,7 +41,7 @@ internal fun LocalHttpSetting() {
                 Text(stringResource(R.string.settings_local_http), style = Type.small)
                 Text(stringResource(R.string.settings_local_http_hint), style = Type.tiny, color = LocalPalette.current.muted)
             }
-            Toggle(enabled, change)
+            Toggle(enabled, onCheckedChange = change)
         }
         if (enabled && !granted) {
             TextButton(onClick = { request { granted = true; container.refreshLibraryConnection(); container.refreshDownloadMetadata() } }) {
