@@ -166,6 +166,10 @@ fun SettingsScreen(category: SettingsCategory? = null) {
         Column(Modifier.weight(1f).verticalScroll(scroll).padding(bottom = 24.dp + LocalMiniPlayerInset.current)) {
             if (category == null && query.isBlank()) SettingsOverview()
             else if (visible.isEmpty()) Empty(stringResource(R.string.settings_search_empty))
+            if (SettingKey.Listening in visible) {
+                val navigate = LocalNavigate.current
+                LibraryEntry(stringResource(R.string.listening_title), stringResource(R.string.listening_intro), Lucide.ChartLine) { navigate(ListeningRoute()) }
+            }
             if (visible.any { it.section == R.string.settings_playback }) {
                 Panel(stringResource(R.string.settings_playback)) {
                     PlaybackDevicesButton()

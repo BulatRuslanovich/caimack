@@ -111,4 +111,6 @@
     <string name="player_repeat_off">Повтор выключен</string>
     <string name="player_repeat_all">Повтор очереди</string>
     <string name="player_repeat_one">Повтор одного трека</string>
+    <string name="widget_record_label">Caimack · Пластинка</string>
+    <string name="widget_record_description">Нажмите на пластинку для пуска или паузы; стрелки переключают треки</string>
 </resources>

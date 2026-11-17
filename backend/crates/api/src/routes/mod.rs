@@ -7,6 +7,7 @@ mod catalog;
 mod connect;
 mod integrations;
 mod library;
+mod listening;
 mod media;
 mod playback;
 mod recommendations;
@@ -35,6 +36,7 @@ pub fn router(state: AppState) -> Router {
         .merge(catalog::router())
         .merge(integrations::router())
         .merge(library::router())
+        .merge(listening::router())
         .merge(media::router())
         .merge(playback::router())
         .merge(connect::router())

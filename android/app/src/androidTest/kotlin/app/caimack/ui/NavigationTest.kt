@@ -63,6 +63,7 @@ class NavigationTest {
                         composable<AlbumsRoute> { Text("albums-screen", Modifier.testTag("albums")) }
                         composable<SettingsRoute> { Text("settings-screen", Modifier.testTag("settings")) }
                         composable<SettingsSectionRoute> { Text("settings-detail", Modifier.testTag("settings-detail")) }
+                        composable<ListeningRoute> { Text("listening-detail", Modifier.testTag("listening-detail")) }
                         composable<AlbumRoute> { Text("album-screen", Modifier.testTag("album")) }
                     }
                     BottomBar(nav)
@@ -166,6 +167,23 @@ class NavigationTest {
         compose.onNodeWithTag("settings-detail").assertIsDisplayed()
         tapTab(R.string.nav_home)
         compose.onNodeWithTag("home").assertIsDisplayed()
+        tapTab(R.string.nav_search)
+        tapTab(R.string.nav_home)
+        compose.onNodeWithTag("home").assertIsDisplayed()
+    }
+
+    @Test
+    fun homeClosesListeningDetailsAndTheirSettingsStack() {
+        start()
+        compose.runOnIdle {
+            nav.navigate(SettingsRoute)
+            nav.navigate(ListeningRoute())
+            nav.navigate(ListeningRoute("2026-11-09", "artists"))
+        }
+        compose.onNodeWithTag("listening-detail").assertIsDisplayed()
+        tapTab(R.string.nav_home)
+        compose.onNodeWithTag("home").assertIsDisplayed()
+        compose.runOnIdle { assertNull(nav.previousBackStackEntry) }
         tapTab(R.string.nav_search)
         tapTab(R.string.nav_home)
         compose.onNodeWithTag("home").assertIsDisplayed()

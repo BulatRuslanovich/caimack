@@ -35,11 +35,9 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHostState
@@ -94,6 +92,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object GenresRoute
 @Serializable data object RecentRoute
 @Serializable data object SettingsRoute
+@Serializable data class ListeningRoute(val week: String = "", val view: String = "overview")
 @Serializable data object DownloadsRoute
 @Serializable data object LibraryRoute
 @Serializable data class SettingsSectionRoute(val section: String)
@@ -124,7 +123,7 @@ private val tabs = listOf(
 
 internal fun NavController.openSection(route: Any) {
     // Settings belongs to the account, not to a tab's saved navigation history.
-    while (currentDestination?.let { it.hasRoute(SettingsRoute::class) || it.hasRoute(SettingsSectionRoute::class) } == true) {
+    while (currentDestination?.let { it.hasRoute(SettingsRoute::class) || it.hasRoute(SettingsSectionRoute::class) || it.hasRoute(ListeningRoute::class) } == true) {
         if (!popBackStack()) break
     }
     if (currentDestination?.hasRoute(route::class) == true) return
@@ -143,7 +142,7 @@ internal fun NavController.openSection(route: Any) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun App(user: User) {
     val palette = LocalPalette.current
@@ -151,7 +150,8 @@ fun App(user: User) {
     val nav = rememberNavController()
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
-    var account by remember { mutableStateOf(false) }
+    var account by rememberSaveable { mutableStateOf(false) }
+    val focus = LocalFocusManager.current
     var expanded by rememberSaveable { mutableStateOf(false) }
     val playback by container.player.state.collectAsStateWithLifecycle()
     val offlineLibrary by container.libraryCache.offline.collectAsStateWithLifecycle()
@@ -192,6 +192,8 @@ fun App(user: User) {
     }
 
     val navigate: (Any) -> Unit = { route ->
+        focus.clearFocus()
+        account = false
         expanded = false
         nav.navigate(route) { launchSingleTop = true }
     }
@@ -211,6 +213,18 @@ fun App(user: User) {
         LocalArtworkRevision provides artworkRevision,
         LocalArtworkResolver provides resolveArtwork,
     ) {
+    SettingsDrawer(
+        open = account,
+        onClose = { account = false },
+        menu = {
+            SettingsMenu(user, onClose = { focus.clearFocus(); account = false }, onSignOut = {
+                account = false
+                Remote.cache.clear()
+                container.player.stop()
+                scope.launch { container.session.logout() }
+            })
+        },
+    ) {
     PlayerScaffold(
         modifier = Modifier
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
@@ -229,7 +243,7 @@ fun App(user: User) {
         },
         topBar = {
             Column {
-                Header(nav, user, onBack = { nav.popBackStack() }) { account = true }
+                Header(nav, user, onBack = { nav.popBackStack() }) { focus.clearFocus(); account = true }
                 UpdateBanner(appUpdate, onDetails = { updateDetails = true }, onDismiss = { container.updates.dismiss() })
             }
         },
@@ -251,7 +265,10 @@ fun App(user: User) {
             composable<ArtistsRoute> { LibraryCatalogFrame(nav, ArtistsRoute) { ArtistsScreen(nav) } }
             composable<GenresRoute> { LibraryCatalogFrame(nav, GenresRoute) { GenresScreen(nav) } }
             composable<RecentRoute> { RecentScreen(play) }
-            composable<SettingsRoute> { SettingsScreen() }
+            composable<ListeningRoute> { entry ->
+                val route = entry.toRoute<ListeningRoute>()
+                ListeningScreen(route.week, route.view) { week, view -> nav.navigate(ListeningRoute(week, view)) }
+            }
             composable<DownloadsRoute> { DownloadsScreen(play) }
             composable<SettingsSectionRoute> { SettingsScreen(SettingsCategory.of(it.toRoute<SettingsSectionRoute>().section)) }
             composable<AlbumRoute> { AlbumScreen(it.toRoute<AlbumRoute>().id, nav, play) }
@@ -273,37 +290,10 @@ fun App(user: User) {
     }
     }
     }
+    }
 
     if (updateDetails) appUpdate.release?.let { UpdateDetails(it) { updateDetails = false } }
 
-    if (account) {
-        ModalBottomSheet(onDismissRequest = { account = false }, containerColor = palette.card) {
-            Column(Modifier.navigationBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp)) {
-                SheetRow(stringResource(R.string.settings_title), Lucide.Settings) {
-                    account = false
-                    nav.navigate(SettingsRoute) { launchSingleTop = true }
-                }
-                HorizontalDivider(Modifier.padding(vertical = 8.dp), color = palette.border)
-                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(32.dp).clip(CircleShape).background(palette.raised), contentAlignment = Alignment.Center) {
-                        Text(user.username.take(1).uppercase(), style = Type.tiny.copy(fontWeight = FontWeight.SemiBold))
-                    }
-                    Text(user.username, style = Type.small.copy(fontWeight = FontWeight.Medium), modifier = Modifier.weight(1f).padding(horizontal = 10.dp))
-                    Icon(
-                        Lucide.LogOut,
-                        stringResource(R.string.sign_out),
-                        tint = palette.muted,
-                        modifier = Modifier.clip(Radius.row).clickable {
-                            account = false
-                            Remote.cache.clear()
-                            container.player.stop()
-                            scope.launch { container.session.logout() }
-                        }.padding(8.dp),
-                    )
-                }
-            }
-        }
-    }
 }
 
 @Composable
@@ -322,8 +312,12 @@ internal fun SheetRow(label: String, icon: ImageVector, onClick: () -> Unit) {
 @Composable
 private fun Header(nav: NavController, user: User, onBack: () -> Unit, onAccount: () -> Unit) {
     val palette = LocalPalette.current
-    val destination = nav.currentBackStackEntryAsState().value?.destination
-    val isSettings = destination?.let { it.hasRoute(SettingsRoute::class) || it.hasRoute(SettingsSectionRoute::class) } == true
+    val entry = nav.currentBackStackEntryAsState().value
+    val destination = entry?.destination
+    val listening = entry?.takeIf { destination?.hasRoute(ListeningRoute::class) == true }?.toRoute<ListeningRoute>()
+    val settingsCategory = entry?.takeIf { destination?.hasRoute(SettingsSectionRoute::class) == true }
+        ?.toRoute<SettingsSectionRoute>()?.section?.let(SettingsCategory::of)
+    val isSettings = destination?.let { it.hasRoute(SettingsRoute::class) || it.hasRoute(SettingsSectionRoute::class) || it.hasRoute(ListeningRoute::class) } == true
     val showBack = isSettings || (tabs.none { destination?.hasRoute(it.type) == true } && destination != null)
 
     Column(Modifier.background(palette.background).statusBarsPadding()) {
@@ -337,8 +331,16 @@ private fun Header(nav: NavController, user: User, onBack: () -> Unit, onAccount
             }
             if (isSettings) {
                 Text(
-                    stringResource(R.string.settings_title),
-                    style = Type.title.copy(fontSize = 18.sp, letterSpacing = (-0.025).em),
+                    stringResource(when (listening?.view) {
+                        "minutes" -> R.string.listening_minutes
+                        "artists" -> R.string.listening_artists
+                        "songs" -> R.string.listening_songs
+                        "decade", "artistShare", "variety" -> R.string.listening_insights
+                        "overview" -> R.string.listening_header
+                        else -> settingsCategory?.title ?: R.string.settings_title
+                    }),
+                    style = if (listening != null) Type.body.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold) else Type.title.copy(fontSize = 18.sp, letterSpacing = (-0.025).em),
+                    textAlign = if (listening != null) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start,
                     modifier = Modifier.padding(start = 8.dp).weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -348,7 +350,9 @@ private fun Header(nav: NavController, user: User, onBack: () -> Unit, onAccount
                     BrandWordmark(palette.foreground, Modifier.width(127.dp).height(24.dp))
                 }
             }
-            Box(
+            if (listening != null) {
+                androidx.compose.foundation.layout.Spacer(Modifier.width(48.dp))
+            } else Box(
                 Modifier.size(48.dp).clip(CircleShape).clickable(onClickLabel = stringResource(R.string.nav_account), onClick = onAccount),
                 contentAlignment = Alignment.Center,
             ) {

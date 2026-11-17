@@ -9,6 +9,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef } from "react";
 import {
   AudioLinesIcon,
+  ChartLineIcon,
   FlaskConicalIcon,
   PaletteIcon,
   RadioIcon,
@@ -23,6 +24,7 @@ import { Appearance } from "./Appearance";
 import { Playback } from "./Playback";
 import { Experimental } from "./Experimental";
 import { Account } from "./Account";
+import { ListeningStats } from "./ListeningStats";
 
 export default function SettingsPage() {
   const t = useT();
@@ -39,9 +41,16 @@ export default function SettingsPage() {
   );
 }
 
-type SettingsSection = "playback" | "appearance" | "recommendations" | "account" | "experimental";
+type SettingsSection =
+  "playback" | "appearance" | "listening" | "recommendations" | "account" | "experimental";
 
-const SECTIONS: SettingsSection[] = ["playback", "appearance", "recommendations", "account"];
+const SECTIONS: SettingsSection[] = [
+  "playback",
+  "appearance",
+  "listening",
+  "recommendations",
+  "account",
+];
 
 const ADMIN_SECTIONS: SettingsSection[] = [...SECTIONS, "experimental"];
 
@@ -50,6 +59,7 @@ const DEFAULT_SECTION: SettingsSection = "playback";
 const SECTION_ICONS = {
   playback: AudioLinesIcon,
   appearance: PaletteIcon,
+  listening: ChartLineIcon,
   recommendations: RadioIcon,
   account: UserRoundIcon,
   experimental: FlaskConicalIcon,
@@ -108,6 +118,7 @@ function SettingsSections() {
       <div className="settings-content">
         {section === "playback" && <Playback />}
         {section === "appearance" && <Appearance />}
+        {section === "listening" && <ListeningStats />}
         {section === "recommendations" && <RecommendationStats />}
         {section === "account" && <Account />}
         {section === "experimental" && <Experimental />}

@@ -4,6 +4,7 @@
 pub mod admin;
 pub mod favorites;
 pub mod history;
+pub mod listening;
 pub mod playlists;
 pub mod settings;
 

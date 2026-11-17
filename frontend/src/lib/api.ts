@@ -6,6 +6,7 @@ import { fileForm, qs, request, requestFile } from "@/lib/http";
 import { markImageChanged } from "@/lib/media";
 import { WAVEFORM_VERSION } from "@/lib/waveform";
 import type {
+  ListeningOverview,
   LibraryItem,
   LibraryFolder,
   LibraryChange,
@@ -93,6 +94,10 @@ async function withoutImage(
 }
 
 export const api = {
+  listeningStats: async () => {
+    await flushEvents(EVENTS_FLUSH_WAIT_MS);
+    return request<ListeningOverview>("/me/listening-stats");
+  },
   savedLibrary: () => request<LibraryItem[]>("/me/library"),
   libraryOrder: () => request<Record<string, string[]>>("/me/library/order"),
   libraryFolders: () => request<LibraryFolder[]>("/me/library/folders"),

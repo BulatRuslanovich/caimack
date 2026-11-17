@@ -272,6 +272,42 @@ export interface Recap {
   newArtistPicks: Artist[];
 }
 
+export interface ListeningOverview {
+  updatedAt: string | null;
+  timeZone: string;
+  retentionDays: number;
+  weeks: ListeningWeek[];
+}
+
+export interface ListeningWeek {
+  startDate: string;
+  endDate: string;
+  current: boolean;
+  listenedSeconds: number;
+  plays: number;
+  distinctTracks: number;
+  distinctArtists: number;
+  previousListenedSeconds: number | null;
+  daySeconds: number[];
+  topTracks: {
+    track: Track;
+    plays: number;
+    listenedSeconds: number;
+    previousRank: number | null;
+    weeksInTop5: number;
+  }[];
+  topArtists: {
+    artist: Artist;
+    plays: number;
+    listenedSeconds: number;
+    previousRank: number | null;
+    weeksInTop5: number;
+  }[];
+  decade: number | null;
+  decadeShare: number | null;
+  artistShare: number | null;
+}
+
 export interface SourceStats {
   source?: string | null;
   recommended: boolean;

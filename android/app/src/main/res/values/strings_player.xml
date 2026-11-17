@@ -109,4 +109,6 @@
     <string name="player_repeat_off">Repeat off</string>
     <string name="player_repeat_all">Repeat queue</string>
     <string name="player_repeat_one">Repeat one track</string>
+    <string name="widget_record_label">Caimack · Record</string>
+    <string name="widget_record_description">Tap the record to play or pause; use the arrows to change tracks</string>
 </resources>

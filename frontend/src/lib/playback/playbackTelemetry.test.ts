@@ -44,6 +44,18 @@ beforeEach(() => {
   });
 });
 
+it("checkpoints partial listening on pause without ending the attempt", () => {
+  tracker.begin(song);
+  for (let second = 1; second <= 15; second++) tracker.accumulate(second);
+  tracker.checkpoint();
+  expect(lastOf("trackPlayed").listenedSeconds).toBe(15);
+  for (let second = 16; second <= 25; second++) tracker.accumulate(second);
+  tracker.finish("trackCompleted");
+  expect(lastOf("trackCompleted").listenedSeconds).toBe(25);
+  tracker.checkpoint();
+  expect(typesOf()).toEqual(["trackStarted", "trackPlayed", "trackCompleted"]);
+});
+
 describe("begin", () => {
   it("records the start", () => {
     tracker.begin(song);

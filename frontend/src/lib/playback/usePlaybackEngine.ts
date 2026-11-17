@@ -95,6 +95,19 @@ export function usePlaybackEngine({
 
   const trackerRef = useRef<ListeningTracker | null>(null);
   const tracker = (trackerRef.current ??= createListeningTracker());
+  useEffect(() => {
+    const checkpoint = () => tracker.checkpoint();
+    const hidden = () => {
+      if (document.visibilityState === "hidden") checkpoint();
+    };
+    window.addEventListener("pagehide", checkpoint);
+    document.addEventListener("visibilitychange", hidden);
+    return () => {
+      checkpoint();
+      window.removeEventListener("pagehide", checkpoint);
+      document.removeEventListener("visibilitychange", hidden);
+    };
+  }, [tracker]);
 
   const pendingSeekRef = useRef<number | null>(null);
   const positionRef = useRef(0);
@@ -502,10 +515,11 @@ export function usePlaybackEngine({
         })
         .catch(() => {});
     } else {
+      tracker.checkpoint();
       audio.pause();
       crossfader.pause();
     }
-  }, [isPlaying, currentTrack, notify, t, setIsPlaying, crossfader, recovery]);
+  }, [isPlaying, currentTrack, notify, t, setIsPlaying, crossfader, recovery, tracker]);
 
   useEffect(() => {
     endVinylScratch();
