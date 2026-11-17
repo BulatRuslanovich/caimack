@@ -110,23 +110,15 @@ export function Query<T>({
     );
   }
 
-  if (isPlaceholderData) {
-    return (
-      <>
-        <div
-          aria-busy="true"
-          className="contents [&>*]:opacity-85 [&>*]:transition-opacity [&>*]:duration-200 [&>*]:ease-brand"
-        >
-          {children(data)}
-        </div>
-      </>
-    );
-  }
-
   return (
     <>
       {error && <RefreshError onRetry={() => void refetch()} />}
-      {children(data)}
+      <div
+        aria-busy={isPlaceholderData || undefined}
+        className="contents aria-busy:[&>*]:opacity-85 [&>*]:transition-opacity [&>*]:duration-200 [&>*]:ease-brand"
+      >
+        {children(data)}
+      </div>
     </>
   );
 }

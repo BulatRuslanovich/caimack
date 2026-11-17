@@ -4,7 +4,7 @@
 import { HydrationBoundary } from "@tanstack/react-query";
 import { ArtistPage } from "@/app/artists/[id]/ArtistPage";
 import { queries } from "@/lib/queries";
-import { prefetchOnServer } from "@/lib/server/prefetch";
+import { prefetchInitialPage as prefetchOnServer } from "@/lib/server/prefetch";
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

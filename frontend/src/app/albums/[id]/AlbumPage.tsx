@@ -6,7 +6,7 @@
 import { LibrarySaveButton } from "@/components/LibrarySaveButton";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
-import Link from "next/link";
+import { PrefetchLink as Link } from "@/components/PrefetchLink";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { coverUrl } from "@/lib/media";

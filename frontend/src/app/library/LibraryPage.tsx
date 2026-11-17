@@ -12,7 +12,7 @@ import {
   ChevronRightIcon,
   SearchIcon,
 } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { LibraryDragList, type LibraryDragEntry } from "@/components/LibraryDragList";
 import { orderedKeys, mergeVisibleOrder } from "@/lib/libraryOrder";
 import { api } from "@/lib/api";
@@ -51,13 +51,19 @@ export default function LibraryPage() {
   const folderResult = useQuery({ ...queries.libraryFolders(), refetchInterval: 30_000 });
   const folders = folderResult.data ?? [];
   const orderResult = useQuery({ ...queries.libraryOrder(), refetchInterval: 30_000 });
-  const router = useRouter();
   const requestedFolder = useSearchParams().get("folder");
   const currentFolder = folders.find((folder) => folder.id === requestedFolder) ?? null;
   const folderId = currentFolder?.id ?? null;
   const organize = useOrganizeLibrary();
   const [creatingFolder, setCreatingFolder] = useState(false);
-  const openFolder = (id: string | null) => router.push(id ? `/library?folder=${id}` : "/library");
+  const openFolder = (id: string | null) => {
+    window.history.pushState(
+      null,
+      "",
+      id ? `/library?folder=${encodeURIComponent(id)}` : "/library",
+    );
+    document.getElementById("content")?.scrollTo({ top: 0 });
+  };
   const [filter, setFilter] = useState<LibraryKind | "all">("all");
   const [search, setSearch] = useState("");
   const [searchExpanded, setSearchExpanded] = useState(false);
@@ -325,7 +331,7 @@ export default function LibraryPage() {
                   <>
                     <div className={grid ? undefined : "max-w-3xl"}>
                       <LibraryDragList
-                        key={`${folderId}:${filter}:${grid}:${q}`}
+                        key={folderId ?? "root"}
                         entries={entries}
                         folders={folders}
                         grid={grid}

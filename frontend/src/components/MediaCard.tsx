@@ -5,8 +5,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Route } from "next";
-import Link from "next/link";
-import type { ReactNode } from "react";
+import { PrefetchLink as Link } from "@/components/PrefetchLink";
+import { memo, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { queries } from "@/lib/queries";
 import type { Album, Artist, LibraryItem, Playlist, Track } from "@/lib/types";
@@ -167,7 +167,13 @@ export function Card<T extends string>({
   );
 }
 
-export function SavedLibraryCard({ item, layout }: { item: LibraryItem; layout: "grid" | "list" }) {
+export const SavedLibraryCard = memo(function SavedLibraryCard({
+  item,
+  layout,
+}: {
+  item: LibraryItem;
+  layout: "grid" | "list";
+}) {
   const t = useT();
   const format = useFormat();
   const client = useQueryClient();
@@ -216,9 +222,9 @@ export function SavedLibraryCard({ item, layout }: { item: LibraryItem; layout: 
       menu={<LibraryItemMenu kind={item.kind} id={item.id} title={item.title} />}
     />
   );
-}
+});
 
-export function AlbumCard({ album }: { album: Album }) {
+export const AlbumCard = memo(function AlbumCard({ album }: { album: Album }) {
   const client = useQueryClient();
   const { currentAlbumId } = useNowPlaying();
   const detail = useQuery({ ...queries.album(album.id), enabled: currentAlbumId === album.id });
@@ -244,9 +250,15 @@ export function AlbumCard({ album }: { album: Album }) {
       }
     />
   );
-}
+});
 
-export function ArtistCard({ artist, bare = false }: { artist: Artist; bare?: boolean }) {
+export const ArtistCard = memo(function ArtistCard({
+  artist,
+  bare = false,
+}: {
+  artist: Artist;
+  bare?: boolean;
+}) {
   const t = useT();
   const client = useQueryClient();
   const prefetch = () => void client.prefetchQuery(queries.artist(artist.id));
@@ -267,9 +279,15 @@ export function ArtistCard({ artist, bare = false }: { artist: Artist; bare?: bo
       toneSrc={artistImageUrl({ artistId: artist.id, hasImage: artist.hasImage, variant: "thumb" })}
     />
   );
-}
+});
 
-export function PlaylistCard({ playlist, showOwner }: { playlist: Playlist; showOwner?: boolean }) {
+export const PlaylistCard = memo(function PlaylistCard({
+  playlist,
+  showOwner,
+}: {
+  playlist: Playlist;
+  showOwner?: boolean;
+}) {
   const t = useT();
   const format = useFormat();
   const client = useQueryClient();
@@ -307,7 +325,7 @@ export function PlaylistCard({ playlist, showOwner }: { playlist: Playlist; show
       }
     />
   );
-}
+});
 
 export function CardPlayButton({
   name,

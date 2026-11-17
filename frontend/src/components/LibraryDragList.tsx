@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 "use client";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -22,6 +22,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { canMoveFolder } from "@/lib/libraryFolders";
 import { librarySortingStrategy } from "@/lib/librarySorting";
+import { orderedKeys } from "@/lib/libraryOrder";
 import { folderDropPosition, libraryCollisionDetection } from "@/lib/libraryDrop";
 import type { LibraryFolder } from "@/lib/types";
 import { useT } from "@/contexts/I18nContext";
@@ -59,16 +60,21 @@ export function LibraryDragList({
     useSensor(TouchSensor, { activationConstraint: { delay: 320, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
-  const keys = pendingKeys ?? entries.map((entry) => entry.key);
-  const dragging = entries.find((entry) => entry.key === active);
+  const entryMap = useMemo(() => new Map(entries.map((entry) => [entry.key, entry])), [entries]);
+  const keys = useMemo(() => {
+    const visible = entries.map((entry) => entry.key);
+    // Filters can change while an optimistic reorder is waiting for the server.
+    return pendingKeys ? orderedKeys(visible, pendingKeys) : visible;
+  }, [entries, pendingKeys]);
+  const dragging = active ? entryMap.get(active) : undefined;
   const reset = () => {
     setActive(null);
     setDestination(null);
     setEdge(null);
   };
   const dropIntent = (event: DragOverEvent) => {
-    const source = entries.find((entry) => entry.key === event.active.id);
-    const target = entries.find((entry) => entry.key === event.over?.id);
+    const source = entryMap.get(String(event.active.id));
+    const target = event.over ? entryMap.get(String(event.over.id)) : undefined;
     let folder: string | null = null;
     let nextEdge: { key: string; after: boolean } | null = null;
     const position = event.over ? folderDropPosition(event.over.rect, pointerRef.current) : null;
@@ -96,7 +102,7 @@ export function LibraryDragList({
     setDestination(folder);
   };
   const content = keys.map((key) => {
-    const entry = entries.find((candidate) => candidate.key === key);
+    const entry = entryMap.get(key);
     return (
       entry && (
         <SortableEntry
@@ -139,7 +145,7 @@ export function LibraryDragList({
         };
         if (dragging && over) {
           if (folder) {
-            const target = entries.find((e) => e.key === folder);
+            const target = entryMap.get(folder);
             if (folder === "up" || target) {
               setMovedIntoFolder(true);
               settle(
@@ -179,7 +185,12 @@ export function LibraryDragList({
         />
       )}
       <SortableContext items={keys} strategy={librarySortingStrategy(keys)}>
-        {grid ? <CardGrid>{content}</CardGrid> : <div className="space-y-1">{content}</div>}
+        <CardGrid
+          layout={grid ? "grid" : "list"}
+          pinned={[keys.indexOf(active ?? ""), keys.indexOf(landed ?? "")]}
+        >
+          {content}
+        </CardGrid>
       </SortableContext>
       <DragOverlay
         dropAnimation={

@@ -6,7 +6,7 @@
 import { genreName } from "@/lib/format";
 import { useQuery } from "@tanstack/react-query";
 import type { Route } from "next";
-import Link from "next/link";
+import { PrefetchLink as Link } from "@/components/PrefetchLink";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { formatArtists } from "@/lib/format";
