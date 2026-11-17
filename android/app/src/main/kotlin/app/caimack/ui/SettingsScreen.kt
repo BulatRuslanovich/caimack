@@ -3,8 +3,6 @@
 
 package app.caimack.ui
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.shape.CircleShape
 import kotlin.math.abs
 import androidx.compose.ui.semantics.stateDescription
@@ -74,7 +72,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.caimack.R
-import app.caimack.BuildConfig
 import app.caimack.playback.RadioTile
 import app.caimack.api.SettingsChanges
 import kotlinx.coroutines.launch
@@ -424,7 +421,7 @@ fun SettingsScreen(category: SettingsCategory? = null) {
                     Text(stringResource(R.string.sign_out), color = palette.muted)
                 }
             }
-            SettingsAbout { sourceContext.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.SOURCE_URL))) }
+            SettingsAbout()
         }
     }
 }

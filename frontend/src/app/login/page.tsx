@@ -11,7 +11,7 @@ import { signInSchema, type SignInValues } from "@/lib/schemas";
 import { useAuth } from "@/contexts/AuthContext";
 import { useT } from "@/contexts/I18nContext";
 import { useToast } from "@/lib/useToast";
-import { Copyright } from "@/components/Copyright";
+import { AppVersion } from "@/components/AppVersion";
 import { BrandMark, BrandWordmark } from "@/components/Brand";
 import { LocaleSwitcher } from "@/components/LocaleSwitcher";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
@@ -88,7 +88,7 @@ export default function LoginPage() {
         </form>
       </div>
 
-      <Copyright className="absolute inset-x-0 bottom-4 text-center" />
+      <AppVersion className="absolute inset-x-0 bottom-4" />
     </div>
   );
 }

@@ -3,8 +3,6 @@
 
 package app.caimack.ui
 
-import android.content.Intent
-import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -31,7 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
@@ -43,7 +40,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
-import app.caimack.BuildConfig
 import app.caimack.R
 import app.caimack.api.User
 import kotlin.math.roundToInt
@@ -114,7 +110,6 @@ internal fun SettingsDrawer(
 @Composable
 internal fun SettingsMenu(user: User, onClose: () -> Unit, onSignOut: () -> Unit) {
     val palette = LocalPalette.current
-    val context = LocalContext.current
     var query by rememberSaveable { mutableStateOf("") }
     val scroll = rememberScrollState()
     LaunchedEffect(query) { scroll.scrollTo(0) }
@@ -132,7 +127,7 @@ internal fun SettingsMenu(user: User, onClose: () -> Unit, onSignOut: () -> Unit
         SearchInput(query, { query = it }, stringResource(R.string.settings_search), Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
         Column(Modifier.weight(1f).verticalScroll(scroll)) {
             SettingsOverview(query)
-            SettingsAbout { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.SOURCE_URL))) }
+            SettingsAbout()
         }
         HorizontalDivider(color = palette.border)
         TextButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).heightIn(min = 48.dp)) {

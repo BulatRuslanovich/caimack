@@ -13,7 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { useToast } from "@/lib/useToast";
 import { BrandMark, BrandWordmark } from "@/components/Brand";
-import { Copyright } from "@/components/Copyright";
+import { AppVersion } from "@/components/AppVersion";
 import { LocaleSwitcher } from "@/components/LocaleSwitcher";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { Loading } from "@/components/Loading";
@@ -122,7 +122,7 @@ export default function InvitePage() {
         )}
       </div>
 
-      <Copyright className="absolute inset-x-0 bottom-4 text-center" />
+      <AppVersion className="absolute inset-x-0 bottom-4" />
     </div>
   );
 }
