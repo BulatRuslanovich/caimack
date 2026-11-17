@@ -16,16 +16,35 @@ const BYTE_UNITS: TranslationKey[] = [
   "unit.terabyte",
 ];
 
+// Intl constructors load locale data. Share them across rows rather than
+// constructing two formatters for every date on every list render.
+const dateFormats = new Map<string, ReturnType<typeof createDateFormats>>();
+function createDateFormats(locale: string) {
+  return {
+    time: new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }),
+    weekday: new Intl.DateTimeFormat(locale, { weekday: "long" }),
+    date: new Intl.DateTimeFormat(locale, { day: "numeric", month: "short" }),
+    year: new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", year: "numeric" }),
+  };
+}
+function formatsFor(locale: string) {
+  let formats = dateFormats.get(locale);
+  if (!formats) {
+    formats = createDateFormats(locale);
+    dateFormats.set(locale, formats);
+  }
+  return formats;
+}
+
 export function useFormat() {
   const { locale, t } = useI18n();
 
   return useMemo(() => {
     const calendarDate = (date: Date) =>
-      date.toLocaleDateString(locale, {
-        day: "numeric",
-        month: "short",
-        year: date.getFullYear() === new Date().getFullYear() ? undefined : "numeric",
-      });
+      (date.getFullYear() === new Date().getFullYear()
+        ? formatsFor(locale).date
+        : formatsFor(locale).year
+      ).format(date);
 
     return {
       totalDuration(totalSeconds: number) {
@@ -63,7 +82,7 @@ export function useFormat() {
 
         if (days <= 0) return t("date.today");
         if (days === 1) return t("date.yesterday");
-        if (days < 7) return date.toLocaleDateString(locale, { weekday: "long" });
+        if (days < 7) return formatsFor(locale).weekday.format(date);
 
         return calendarDate(date);
       },
@@ -73,11 +92,11 @@ export function useFormat() {
         if (Number.isNaN(date.getTime())) return "";
 
         const days = calendarDaysAgo(date);
-        const time = date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+        const time = formatsFor(locale).time.format(date);
 
         if (days <= 0) return `${t("date.today")}, ${time}`;
         if (days === 1) return `${t("date.yesterday")}, ${time}`;
-        if (days < 7) return `${date.toLocaleDateString(locale, { weekday: "long" })}, ${time}`;
+        if (days < 7) return `${formatsFor(locale).weekday.format(date)}, ${time}`;
 
         return calendarDate(date);
       },
@@ -86,7 +105,7 @@ export function useFormat() {
         const date = new Date(isoDate);
         if (Number.isNaN(date.getTime())) return "";
 
-        return date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+        return formatsFor(locale).time.format(date);
       },
     };
   }, [locale, t]);
