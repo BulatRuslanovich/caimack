@@ -131,6 +131,11 @@ export async function fixture() {
         ? json(user, 200, { "Set-Cookie": cookies })
         : json({ detail: "Signed out" }, 401);
     }
+    if (
+      path === "/api/auth/me" &&
+      !request.headers.cookie?.includes("ms_access=fixture-token")
+    )
+      return response.writeHead(401).end();
     if (!request.headers.cookie?.includes("ms_access=fixture-token"))
       return json({ detail: "Signed out" }, 401);
     if (path === "/api/auth/me") return json(user);

@@ -284,7 +284,8 @@ export class Client {
       });
       const type = response.headers.get("content-type") ?? "";
       const valid =
-        type.includes("json") && [200, 401].includes(response.status);
+        response.status === 401 ||
+        (response.status === 200 && type.includes("json"));
       await response.body?.cancel();
       if (!valid)
         throw new Error("The address did not return a Caimack API response.");
