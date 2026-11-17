@@ -56,9 +56,10 @@ impl SoundAlikes {
             .await
             .map_err(|error| AppError::internal(anyhow::anyhow!("Comparing fingerprints crashed: {error}")))?;
         tracing::info!(
-            "Compared {count} recordings by sound: {} matches in {} ms",
-            found.len(),
-            started.elapsed().as_millis()
+            recordings = count,
+            matches = found.len(),
+            elapsed_ms = started.elapsed().as_millis() as u64,
+            "Duplicate recording comparison finished"
         );
 
         let found = Arc::new(found);
@@ -134,7 +135,9 @@ pub fn spawn(db: PgPool, index: EmbeddingIndex, cancel: CancellationToken) -> to
             match index.sound.refresh(&db).await {
                 Ok((_, true)) => index.request_reload(),
                 Ok(_) => {}
-                Err(error) => tracing::error!("Comparing recordings by sound failed: {error:#}"),
+                Err(error) => {
+                    tracing::error!(error = ?error, retry_after_secs = INTERVAL.as_secs(), "Duplicate recording comparison failed")
+                }
             }
         }
     })

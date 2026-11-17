@@ -68,7 +68,7 @@ async fn build(
 ) -> AppResult<Arc<MapLayout>> {
     let started = std::time::Instant::now();
     let layout = pool.run(move || map::layout(&library.snapshot, previous.as_deref())).await?;
-    tracing::info!("Library map laid out: {} tracks in {} ms", layout.len(), started.elapsed().as_millis());
+    tracing::info!(tracks = layout.len(), elapsed_ms = started.elapsed().as_millis() as u64, "Music map layout built");
     Ok(Arc::new(layout))
 }
 
@@ -95,7 +95,9 @@ impl MapCache {
                                 state.generation = library.generation;
                                 state.layout = Some(layout);
                             }
-                            Err(error) => tracing::error!("Library map layout failed: {error:#}"),
+                            Err(error) => {
+                                tracing::error!(error = ?error, "Cannot rebuild music map; keeping the previous layout")
+                            }
                         }
                     });
                 }

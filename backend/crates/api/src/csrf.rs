@@ -11,7 +11,6 @@ use crate::problem::ApiError;
 
 pub async fn reject_cross_origin(request: Request, next: Next) -> Response {
     if cross_origin(request.method(), request.headers()) {
-        tracing::warn!("Rejected a cross-site {} {}", request.method(), request.uri().path());
         return ApiError::http(AppError::forbidden("Cross-site requests are not allowed.")).into_response();
     }
     next.run(request).await

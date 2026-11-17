@@ -61,12 +61,22 @@ pub fn router(state: AppState) -> Router {
 async fn health(axum::extract::State(state): axum::extract::State<AppState>) -> impl IntoResponse {
     let available =
         tokio::time::timeout(std::time::Duration::from_secs(2), sqlx::query("SELECT 1").execute(&state.db)).await;
-    let (status, text) = if matches!(available, Ok(Ok(_))) {
-        (StatusCode::OK, "Healthy")
-    } else {
-        (StatusCode::SERVICE_UNAVAILABLE, "Database unavailable")
+    let (status, text, reason) = match available {
+        Ok(Ok(_)) => (StatusCode::OK, "Healthy", None),
+        Ok(Err(error)) => (StatusCode::SERVICE_UNAVAILABLE, "Database unavailable", Some(error.to_string())),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Database unavailable",
+            Some("Database health check timed out after 2 seconds".to_owned()),
+        ),
     };
-    (status, [(header::CONTENT_TYPE, "text/plain"), (header::CACHE_CONTROL, "no-store, no-cache")], text)
+    let mut response =
+        (status, [(header::CONTENT_TYPE, "text/plain"), (header::CACHE_CONTROL, "no-store, no-cache")], text)
+            .into_response();
+    if let Some(reason) = reason {
+        response.extensions_mut().insert(problem::Reason(reason));
+    }
+    response
 }
 
 async fn not_found() -> Response {

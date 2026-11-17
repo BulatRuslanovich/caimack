@@ -350,7 +350,7 @@ async fn finish(db: &PgPool, storage: &Storage, job: &Job) -> anyhow::Result<()>
         .execute(&mut *tx)
         .await?;
     tx.commit().await?;
-    tracing::info!("Exported artwork/lyrics beside {} (track {})", job.source_path, job.track_id);
+    tracing::debug!(track_id = %job.track_id, file = %job.source_path, "Artwork and lyrics exported");
     Ok(())
 }
 

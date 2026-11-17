@@ -71,11 +71,11 @@ impl Uploads {
             Err(error) => {
                 let reason = match error.message() {
                     Some(message) => {
-                        tracing::info!("Upload of {file_name} rejected: {error}");
+                        tracing::info!(file = file_name, user_id = %user, %error, "Audio upload rejected");
                         message.localized(lang)
                     }
                     None => {
-                        tracing::error!("Unexpected failure while uploading {file_name}: {error:#}");
+                        tracing::error!(file = file_name, user_id = %user, error = ?error, "Audio upload failed");
                         crate::i18n::localize("The file could not be processed.", &[], lang)
                     }
                 };
@@ -112,11 +112,9 @@ impl Uploads {
 
         let track = tracks::get(&self.db, user, saved.id).await?;
         tracing::info!(
-            "Uploaded {file_name} as track {}: {}, {:.1} MB in {:.1} s",
-            saved.id,
-            saved.codec,
-            stored.size_bytes as f64 / (1024.0 * 1024.0),
-            started.elapsed().as_secs_f64()
+            file = file_name, track_id = %saved.id, user_id = %user, codec = saved.codec,
+            size_bytes = stored.size_bytes, elapsed_ms = started.elapsed().as_millis() as u64,
+            "Audio upload completed"
         );
         Ok(track)
     }

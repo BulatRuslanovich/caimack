@@ -42,6 +42,7 @@ pub async fn require_user(State(state): State<AppState>, mut request: Request, n
         Err(error) => return ApiError::from(error).into_response(),
     }
 
+    tracing::Span::current().record("user_id", tracing::field::display(principal.user_id));
     request.extensions_mut().insert(principal);
     next.run(request).await
 }

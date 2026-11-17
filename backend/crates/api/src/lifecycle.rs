@@ -42,7 +42,10 @@ pub async fn serve(
     match drained {
         Ok(drained) => result.and(drained),
         Err(_) => {
-            tracing::warn!("Shutdown exceeded {} seconds; stopping remaining tasks", SHUTDOWN_TIMEOUT.as_secs());
+            tracing::warn!(
+                timeout_secs = SHUTDOWN_TIMEOUT.as_secs(),
+                "Graceful shutdown timed out; aborting remaining tasks"
+            );
             result
         }
     }

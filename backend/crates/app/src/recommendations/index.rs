@@ -147,7 +147,7 @@ pub fn spawn(db: PgPool, index: EmbeddingIndex, cancel: CancellationToken) -> to
                             let dismissed = match sound::dismissed(&db).await {
                                 Ok(dismissed) => Some(dismissed),
                                 Err(error) => {
-                                    tracing::error!("Loading dismissed duplicates failed: {error}");
+                                    tracing::error!(%error, "Cannot load dismissed duplicates; retaining available similarity data");
                                     None
                                 }
                             };
@@ -161,20 +161,26 @@ pub fn spawn(db: PgPool, index: EmbeddingIndex, cancel: CancellationToken) -> to
                             })
                             .await;
                             if let Err(error) = published {
-                                tracing::error!("Publishing the embedding index failed: {error}");
+                                tracing::error!(%error, "Embedding index publishing task failed; retrying on the next refresh");
                             } else {
                                 tracing::info!(
-                                    "Embedding index rebuilt: {count} tracks, {dimension} dimensions, {} ms",
-                                    started.elapsed().as_millis()
+                                    tracks = count,
+                                    dimension,
+                                    elapsed_ms = started.elapsed().as_millis() as u64,
+                                    "Recommendation index rebuilt"
                                 );
                                 last = Some(current);
                             }
                         }
-                        Err(error) => tracing::error!("Loading the embedding index failed: {error}"),
+                        Err(error) => {
+                            tracing::error!(error = %format!("{error:#}"), retry_after_secs = CHECK_EVERY.as_secs(), "Cannot rebuild recommendation index; keeping the previous index")
+                        }
                     }
                 }
                 Ok(_) => {}
-                Err(error) => tracing::error!("Checking the embedding index failed: {error}"),
+                Err(error) => {
+                    tracing::error!(%error, retry_after_secs = CHECK_EVERY.as_secs(), "Cannot check recommendation index for changes")
+                }
             }
             tokio::select! {
                 () = cancel.cancelled() => return,
