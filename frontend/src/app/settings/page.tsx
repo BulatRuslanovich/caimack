@@ -105,6 +105,7 @@ function SettingsSections() {
                 replace
                 scroll={false}
                 prefetch={false}
+                aria-current={section === key ? "page" : undefined}
                 onNavigate={(event) => {
                   event.preventDefault();
                   window.history.replaceState(
