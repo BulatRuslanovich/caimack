@@ -26,14 +26,13 @@ import {
   loadFullPlayer,
   preloadFullPlayer,
 } from "./FullPlayerLoader";
-import { PlaybackDevices } from "./PlaybackDevices";
+import { PlaybackDevices, PlaybackDeviceStatus } from "./PlaybackDevices";
 import { PlayPauseButton } from "./PlayPauseButton";
 import { PlayerTransport } from "./PlayerTransport";
 import { PlayerVolume } from "./PlayerVolume";
 import { Record } from "./Record";
 import { Seekbar } from "./Seekbar";
-import { SleepTimerButton } from "./SleepTimerButton";
-import { StreamQuality } from "./StreamQuality";
+import { PlayerOptionsMenu } from "./PlayerOptionsMenu";
 import { Button } from "./ui/button";
 
 const SWIPE_OPEN_PX = 40;
@@ -41,7 +40,7 @@ const SWIPE_OPEN_PX = 40;
 const SWIPE_SKIP_PX = 80;
 
 const shellClass =
-  "player-shell relative min-h-(--player-height) px-5 py-3 [grid-area:player] max-md:px-2.5 max-md:py-2";
+  "player-shell relative min-h-(--player-height) px-5 py-1.5 [grid-area:player] max-md:px-2.5 max-md:py-2";
 
 function ProgressRow({
   fallbackDuration,
@@ -261,7 +260,7 @@ export function Player() {
                 track={currentTrack}
                 className="truncate text-sm text-muted-foreground"
               />
-              <PlaybackDevices onlyRemote className="min-h-6 justify-start p-0" />
+              <PlaybackDeviceStatus />
               {reason && (
                 <span className="truncate text-2xs text-faint max-md:hidden">
                   {reasonLabel(reason, t)}
@@ -310,18 +309,14 @@ export function Player() {
           <div className="flex min-w-0 items-center justify-end gap-3 max-lg:gap-1 max-md:hidden">
             <div className="flex shrink-0 items-center gap-0.5">
               <PlaybackDevices compact />
-              <StreamQuality
-                track={currentTrack}
-                className="border-transparent font-medium text-faint max-xl:hidden"
-              />
-              <SleepTimerButton className={state.sleepTimer ? "text-primary" : "text-faint"} />
+              <PlayerOptionsMenu track={currentTrack} />
             </div>
 
             <div className="flex shrink-0 items-center gap-0.5">
               <Button
                 variant="ghost"
                 size="icon"
-                className={cn(currentTrack.isFavorite && "text-primary")}
+                className={cn("max-lg:hidden", currentTrack.isFavorite && "text-primary")}
                 onClick={likeCurrent}
                 aria-label={favoriteLabel}
                 aria-pressed={currentTrack.isFavorite}
@@ -353,6 +348,7 @@ export function Player() {
                 variant="ghost"
                 size="icon"
                 onClick={() => setExpanded(true)}
+                className="max-lg:hidden"
                 aria-label={t("player.openFull")}
                 onPointerEnter={preloadFullPlayer}
                 onFocus={preloadFullPlayer}

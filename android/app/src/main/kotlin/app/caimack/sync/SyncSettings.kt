@@ -69,6 +69,7 @@ fun SyncSettings() {
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
         Text(stringResource(R.string.sync_title), style = MaterialTheme.typography.titleMedium)
         Text(stringResource(R.string.sync_description), style = MaterialTheme.typography.bodyMedium)
+        Text(stringResource(R.string.sync_network_hint), style = MaterialTheme.typography.bodySmall)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(stringResource(R.string.sync_enable), Modifier.weight(1f))
             Switch(

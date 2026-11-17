@@ -13,6 +13,7 @@ import { Shelf } from "@/components/Shelf";
 import { PageToolbar, SortSelect } from "@/components/PageToolbar";
 import { InfiniteQuery } from "@/components/InfiniteQuery";
 import { useT } from "@/contexts/I18nContext";
+import { LibraryNavigation } from "@/components/LibraryNavigation";
 
 const sortKeys = { title: "sort.title", recent: "sort.dateAdded" } as const;
 
@@ -39,12 +40,13 @@ export function AlbumsPage() {
   const showShelf = alphabetical && recent.length > 0 && total > recent.length;
 
   return (
-    <div className="flex min-w-0 flex-col gap-8 [overflow-anchor:none] max-md:gap-6">
+    <div className="flex min-w-0 flex-col gap-6 [overflow-anchor:none] max-md:gap-5">
       <PageHeader
         title={t("nav.albums")}
         subtitle={albums.data ? t("count.albums", { count: total }) : undefined}
       />
 
+      <LibraryNavigation />
       <PageToolbar search={search} onSearch={setSearch} placeholder={t("filter.albums")}>
         <SortSelect value={sort} onChange={setSort} options={sortKeys} />
       </PageToolbar>

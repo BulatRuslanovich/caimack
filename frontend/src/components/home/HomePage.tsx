@@ -98,14 +98,13 @@ function Blocks({ blocks }: { blocks: HomeBlock[] }) {
     <div className="home-page [&_h2]:line-clamp-2 [&_h2]:whitespace-normal">
       <div className="home-listening-stage">
         <RadioHero tracks={radioTracks} />
+        {quick.length > 0 && <QuickTiles blocks={quick} />}
         <div className="home-daily-selection">
           {lead.map((block) => (
             <Block key={block.key} block={block} shown={shown} />
           ))}
         </div>
       </div>
-
-      {quick.length > 0 && <QuickTiles blocks={quick} />}
 
       <RecapBanner />
 

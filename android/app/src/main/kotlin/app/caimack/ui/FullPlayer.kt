@@ -12,6 +12,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -21,15 +23,19 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -44,6 +50,8 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -100,11 +108,8 @@ import kotlinx.coroutines.CancellationException
 private enum class Panel { None, Lyrics, Queue }
 @Composable
 fun FullPlayer(state: PlayerState, onClose: () -> Unit) {
-    CaimackTheme(dark = true, colorway = LocalColorway.current) {
-        val palette = LocalPalette.current.copy(foreground = Color(0xFFF5F5F5), muted = Color(0xFFD6D6D6), faint = Color(0xFFBCBCBC))
-        CompositionLocalProvider(LocalPalette provides palette) {
-            FullPlayerContent(state, onClose)
-        }
+    CaimackTheme(dark = true, palette = PlayerPalette) {
+        FullPlayerContent(state, onClose)
     }
 }
 
@@ -119,6 +124,7 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
     var panel by rememberSaveable { mutableStateOf(Panel.None) }
     var actions by remember { mutableStateOf(false) }
     var sleeping by remember { mutableStateOf(false) }
+    var options by remember { mutableStateOf(false) }
     val sleepTimer = displayedSleepTimer()
     container.favorites.state.collectAsState().value
     val liked = container.favorites.isFavorite(track)
@@ -158,7 +164,7 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
     val position = scrub ?: live
     val duration = state.durationMs.takeIf { it > 0 } ?: (track.durationSeconds * 1000L)
 
-    BackHandler(onBack = onClose)
+    BackHandler { if (panel != Panel.None) panel = Panel.None else onClose() }
 
     val view = LocalView.current
     DisposableEffect(view) {
@@ -167,23 +173,45 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
     }
 
     Surface(Modifier.fillMaxSize(), color = palette.background, contentColor = palette.foreground) {
-        Box(Modifier.fillMaxSize()) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+        val viewportHeight = maxHeight
+        val portrait = maxWidth <= maxHeight
+        val safeInsets = WindowInsets.safeDrawing.asPaddingValues()
+        val safeTop = safeInsets.calculateTopPadding() + 12.dp
+        val artworkTop = safeTop + 48.dp
+        // Use the seekbar's bottom-anchored block and two-line metadata as a
+        // stable reference, so a longer title never shifts the artwork.
+        val baselineTextHeight = with(LocalDensity.current) {
+            Type.display.lineHeight.toDp() * 2 + Type.body.lineHeight.toDp() + Type.tiny.lineHeight.toDp() * 2
+        }
+        val baselineControlsHeight = baselineTextHeight + 48.dp + 68.dp + 48.dp + 24.dp
+        val artworkBottom = (viewportHeight - safeInsets.calculateBottomPadding() - 12.dp - baselineControlsHeight).coerceAtLeast(artworkTop + 24.dp)
         PlayerSceneBackground(scene, Modifier.matchParentSize())
-        BoxWithConstraints(Modifier.safeDrawingPadding().padding(horizontal = 20.dp, vertical = 12.dp)) {
-            val wide = maxWidth > maxHeight
+        if (portrait && panel == Panel.None) {
+            PlayerArtwork(
+                scene,
+                { scrub = it },
+                Modifier.fillMaxWidth().height((artworkBottom - artworkTop).coerceAtLeast(1.dp)).offset(y = artworkTop),
+                horizontalInset = 20.dp,
+            )
+        }
+        BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 20.dp, vertical = 12.dp)) {
+            val wide = !portrait
+            // Centre the artwork in the space above the metadata, keeping the
+            // lower block anchored to the seekbar as titles grow or scroll.
+            val controlsTop = artworkBottom - safeTop
+            val controlsHeight = (maxHeight - controlsTop).coerceAtLeast(96.dp)
 
             val header = @Composable {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().testTag("full-player-header"), verticalAlignment = Alignment.CenterVertically) {
                     IconAction(Lucide.ChevronDown, stringResource(R.string.player_close_full), onClick = onClose)
-                    PlaybackDevicesButton(Modifier.weight(1f))
-                    IconAction(Lucide.Moon, stringResource(R.string.sleep_title), tint = if (sleepTimer != null) palette.primary else palette.foreground) {
-                        sleeping = true
-                    }
-                    IconAction(Lucide.MicVocal, stringResource(R.string.lyrics_title), tint = if (panel == Panel.Lyrics) palette.primary else palette.foreground) {
-                        panel = if (panel == Panel.Lyrics) Panel.None else Panel.Lyrics
-                    }
-                    IconAction(Lucide.ListVideo, stringResource(R.string.queue_title), tint = if (panel == Panel.Queue) palette.primary else palette.foreground) {
-                        panel = if (panel == Panel.Queue) Panel.None else Panel.Queue
+                    Text(stringResource(R.string.player_now_playing), style = Type.small, color = palette.muted, modifier = Modifier.weight(1f).testTag("full-player-context"), textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Box {
+                        IconAction(Lucide.EllipsisVertical, stringResource(R.string.menu_more)) { options = true }
+                        DropdownMenu(options, onDismissRequest = { options = false }) {
+                            DropdownMenuItem(text = { Text(stringResource(R.string.menu_more)) }, onClick = { options = false; actions = true })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.sleep_title)) }, leadingIcon = { Icon(Lucide.Moon, null, tint = if (sleepTimer != null) palette.primary else palette.muted) }, onClick = { options = false; sleeping = true })
+                        }
                     }
                 }
             }
@@ -191,28 +219,26 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
             val stage: @Composable (Modifier) -> Unit = { modifier ->
                 Box(modifier) {
                     when (panel) {
-                        Panel.None -> PlayerSceneLayer(scene, Modifier.fillMaxSize().testTag("player-artwork-scene")) { frame ->
-                            Deck(frame.state, onScrub = { scrub = it }, modifier = Modifier.fillMaxSize())
-                        }
+                        Panel.None -> PlayerArtwork(scene, { scrub = it }, Modifier.fillMaxSize())
                         Panel.Lyrics -> LyricsPanel(track, position, state.playing)
                         Panel.Queue -> QueuePanel(state, undoable)
                     }
                 }
             }
 
-            val controls = @Composable {
-                val titleHeight = with(LocalDensity.current) { (Type.display.lineHeight * if (wide) 1 else 3).toDp() }
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            val controls: @Composable (Modifier) -> Unit = { modifier ->
+                Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.Bottom)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            // Keep the deck's available height independent of title wrapping/font choice.
-                            Box(Modifier.fillMaxWidth().height(titleHeight), contentAlignment = Alignment.BottomStart) {
-                                Text(track.title, style = displayStyle(track.title), maxLines = if (wide) 1 else 3, overflow = TextOverflow.Ellipsis)
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            if (panel == Panel.None) {
+                                Text(track.title, style = displayStyle(track.title))
+                            } else {
+                                Text(track.title, style = Type.body, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
                             Text(artistsOf(track), style = Type.body, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            note?.let { RadioNoteLine(it) }
+                            if (panel == Panel.None) note?.let { RadioNoteLine(it) }
                             val delivery by container.playbackDelivery.collectAsStateWithLifecycle()
-                            delivery?.takeIf { it.trackId == track.id }?.let { stream ->
+                            delivery?.takeIf { it.trackId == track.id && panel == Panel.None }?.let { stream ->
                                 val label = when {
                                     !stream.adaptive -> stringResource(R.string.player_delivery_original)
                                     stream.bitrateKbps != null -> stringResource(R.string.player_delivery_aac, stream.bitrateKbps)
@@ -233,17 +259,20 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
                             stringResource(if (liked) R.string.menu_unlike else R.string.menu_like),
                             tint = if (liked) palette.primary else palette.muted,
                         ) { haptic(PlayerHaptic.Favorite); container.favorites.toggle(track) }
-                        IconAction(Lucide.EllipsisVertical, stringResource(R.string.menu_more), tint = palette.muted) { actions = true }
                     }
-                    Spacer(Modifier.height(8.dp))
+                    if (panel != Panel.Queue) {
                     Seekbar(position, duration, peaks) { player.seekTo(it) }
                     Row {
                         Text(clock(position), style = Type.tiny, color = palette.muted)
                         Spacer(Modifier.weight(1f))
                         Text(clock(duration), style = Type.tiny, color = palette.muted)
                     }
+                    }
                     Row(Modifier.fillMaxWidth().testTag("full-player-transport"), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        IconAction(Lucide.Shuffle, stringResource(R.string.player_shuffle), tint = if (state.shuffle) palette.primary else palette.muted) { haptic(PlayerHaptic.Button); player.toggleShuffle() }
+                        PlayerModeButton(Lucide.Shuffle, stringResource(R.string.player_shuffle), state.shuffle,
+                            stringResource(if (state.shuffle) R.string.player_shuffle_on else R.string.player_shuffle_off)) {
+                            haptic(PlayerHaptic.Button); player.toggleShuffle()
+                        }
                         IconAction(Lucide.SkipBack, stringResource(R.string.player_previous), size = 26) { haptic(PlayerHaptic.Skip); player.previous() }
                         Box(contentAlignment = Alignment.Center) {
                             Box(
@@ -261,11 +290,25 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
                             BufferingRing(state.buffering, Modifier.matchParentSize().requiredSize(78.dp).testTag("full-player-buffering"))
                         }
                         IconAction(Lucide.SkipForward, stringResource(R.string.player_next), size = 26) { haptic(PlayerHaptic.Skip); player.next() }
-                        IconAction(
+                        PlayerModeButton(
                             if (state.repeat == Player.REPEAT_MODE_ONE) Lucide.Repeat1 else Lucide.Repeat,
                             stringResource(R.string.player_repeat),
-                            tint = if (state.repeat == Player.REPEAT_MODE_OFF) palette.muted else palette.primary,
+                            active = state.repeat != Player.REPEAT_MODE_OFF,
+                            mode = stringResource(when (state.repeat) {
+                                Player.REPEAT_MODE_ONE -> R.string.player_repeat_one
+                                Player.REPEAT_MODE_ALL -> R.string.player_repeat_all
+                                else -> R.string.player_repeat_off
+                            }),
                         ) { haptic(PlayerHaptic.Button); player.cycleRepeat() }
+                    }
+                    Row(Modifier.fillMaxWidth().testTag("full-player-footer"), verticalAlignment = Alignment.CenterVertically) {
+                        PlaybackDevicesButton(Modifier.weight(1f))
+                        Box(Modifier.semantics { selected = panel == Panel.Lyrics }) {
+                            IconAction(Lucide.MicVocal, stringResource(R.string.lyrics_title), tint = if (panel == Panel.Lyrics) palette.primary else palette.muted) { panel = if (panel == Panel.Lyrics) Panel.None else Panel.Lyrics }
+                        }
+                        Box(Modifier.semantics { selected = panel == Panel.Queue }) {
+                            IconAction(Lucide.ListVideo, stringResource(R.string.queue_title), tint = if (panel == Panel.Queue) palette.primary else palette.muted) { panel = if (panel == Panel.Queue) Panel.None else Panel.Queue }
+                        }
                     }
                 }
             }
@@ -275,15 +318,25 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
                     stage(Modifier.weight(1f).fillMaxHeight())
                     Column(Modifier.weight(1f).fillMaxHeight()) {
                         header()
-                        Spacer(Modifier.weight(1f))
-                        controls()
+                        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                            Spacer(Modifier.height(16.dp))
+                            controls(Modifier)
+                        }
+                    }
+                }
+            } else if (panel == Panel.None) {
+                Column(Modifier.fillMaxSize()) {
+                    header()
+                    Spacer(Modifier.weight(1f))
+                    Box(Modifier.fillMaxWidth().height(controlsHeight).testTag("full-player-controls-region").verticalScroll(rememberScrollState())) {
+                        controls(Modifier.fillMaxWidth().heightIn(min = controlsHeight))
                     }
                 }
             } else {
                 Column {
                     header()
                     stage(Modifier.weight(1f).fillMaxWidth())
-                    controls()
+                    controls(Modifier)
                 }
             }
         }
@@ -293,6 +346,19 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
         }
     }
 }
+
+@Composable
+private fun PlayerArtwork(scene: PlayerScene, onScrub: (Long?) -> Unit, modifier: Modifier, horizontalInset: Dp = 0.dp) {
+    val palette = LocalPalette.current
+    PlayerSceneLayer(scene, modifier.testTag("player-artwork-scene")) { frame ->
+        val frameTone = rememberPlayerCoverTone(frame.state.current?.let { trackCover(it) })
+        val auraColor = frameTone?.playerColor() ?: palette.primary
+        CompositionLocalProvider(LocalNowPlayingTone provides auraColor) {
+            Deck(frame.state, onScrub, Modifier.fillMaxSize().padding(horizontal = horizontalInset))
+        }
+    }
+}
+
 @Composable
 private fun Seekbar(positionMs: Long, durationMs: Long, peaks: List<Int>?, onSeek: (Long) -> Unit) {
     val haptic = rememberPlayerHaptics()
@@ -364,6 +430,7 @@ fun Record(
     sleeve: (@Composable (Modifier) -> Unit)? = null,
     vertical: Boolean = false,
     jacket: Modifier = Modifier,
+    aura: (@Composable (Modifier) -> Unit)? = null,
 ) {
     val motion = playerMotionEnabled()
     val slid by animateFloatAsState(if (out) RECORD_OUT else 0f, tween(if (motion) 650 else 0), label = "record-out")
@@ -381,6 +448,7 @@ fun Record(
         val slide = with(LocalDensity.current) { edge.toPx() }
         val shift = (slide * slid * if (vertical) CRATE_OUT / RECORD_OUT else 1f).roundToInt()
         Box(Modifier.fillMaxSize().padding(edge * 0.02f).offset { if (vertical) IntOffset(0, -shift) else IntOffset(shift, 0) }) {
+            aura?.invoke(Modifier.fillMaxSize())
             Box(Modifier.fillMaxSize().shadow(16.dp, CircleShape).graphicsLayer { rotationZ = angle.value + twist }.clip(CircleShape)) {
                 Canvas(Modifier.fillMaxSize()) {
                     val radius = size.minDimension / 2

@@ -25,7 +25,7 @@ export function QueueViewport({
     count: rows.length,
     enabled: windowed,
     getScrollElement: () => list.current,
-    estimateSize: () => 54,
+    estimateSize: () => 72,
     getItemKey: (index) => rows[index].key,
     overscan: 12,
     gap: 2,
@@ -49,7 +49,7 @@ export function QueueViewport({
   return (
     <ol
       ref={list}
-      className="relative min-h-0 overflow-y-auto"
+      className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain"
       onFocusCapture={(event) =>
         setFocused(
           (event.target as HTMLElement).closest<HTMLElement>("[data-entry]")?.dataset.entry ?? null,

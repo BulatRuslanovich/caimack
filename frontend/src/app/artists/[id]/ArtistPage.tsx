@@ -57,7 +57,7 @@ export function ArtistPage() {
   return (
     <Query result={artist}>
       {(detail) => (
-        <>
+        <div className="flex min-w-0 flex-col gap-6">
           <DetailHeader
             kind={t("artists.kind")}
             title={detail.name}
@@ -107,6 +107,13 @@ export function ArtistPage() {
             </Section>
           )}
 
+          {!showTop && (
+            <Section title={t("nav.tracks")}>
+              <TrackList tracks={detail.tracks.items} showArtist={false} />
+              <Pagination result={detail.tracks} onChange={setPage} />
+            </Section>
+          )}
+
           {detail.albums.length > 0 &&
             (detail.albums.length < GRID_THRESHOLD ? (
               <Shelf title={t("artists.discography")}>
@@ -124,10 +131,12 @@ export function ArtistPage() {
               </Section>
             ))}
 
-          <Section title={t("nav.tracks")}>
-            <TrackList tracks={detail.tracks.items} showArtist={false} />
-            <Pagination result={detail.tracks} onChange={setPage} />
-          </Section>
+          {showTop && (
+            <Section title={t("nav.tracks")}>
+              <TrackList tracks={detail.tracks.items} showArtist={false} />
+              <Pagination result={detail.tracks} onChange={setPage} />
+            </Section>
+          )}
 
           {editing && (
             <EditArtistDialog
@@ -136,7 +145,7 @@ export function ArtistPage() {
               onSaved={() => invalidate("library")}
             />
           )}
-        </>
+        </div>
       )}
     </Query>
   );

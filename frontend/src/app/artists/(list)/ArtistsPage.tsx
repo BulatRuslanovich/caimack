@@ -13,6 +13,7 @@ import { Shelf } from "@/components/Shelf";
 import { PageToolbar } from "@/components/PageToolbar";
 import { InfiniteQuery } from "@/components/InfiniteQuery";
 import { useT } from "@/contexts/I18nContext";
+import { LibraryNavigation } from "@/components/LibraryNavigation";
 
 export function ArtistsPage() {
   const t = useT();
@@ -28,12 +29,13 @@ export function ArtistsPage() {
   const showShelf = !search && recent.length > 0 && total > recent.length;
 
   return (
-    <>
+    <div className="flex min-w-0 flex-col gap-6 max-md:gap-5">
       <PageHeader
         title={t("nav.artists")}
         subtitle={artists.data ? t("count.artists", { count: total }) : undefined}
       />
 
+      <LibraryNavigation />
       <PageToolbar search={search} onSearch={setSearch} placeholder={t("filter.artists")} />
 
       {showShelf && (
@@ -62,6 +64,6 @@ export function ArtistsPage() {
           </Section>
         )}
       </InfiniteQuery>
-    </>
+    </div>
   );
 }

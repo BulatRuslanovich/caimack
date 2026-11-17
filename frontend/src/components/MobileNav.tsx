@@ -8,7 +8,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
-import { isActivePath, libraryTabs, mobileNav, serviceNav } from "@/lib/navigation";
+import { catalogNav, isActivePath, libraryTabs, mobileNav, serviceNav } from "@/lib/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUpload } from "@/contexts/UploadContext";
 import { useT } from "@/contexts/I18nContext";
@@ -104,7 +104,13 @@ export function LibraryChips() {
     strip.current.scrollLeft += offset - (strip.current.clientWidth - active.offsetWidth) / 2;
   }, [pathname]);
 
-  if (pathname === "/library" || !inLibrary(pathname)) return null;
+  if (
+    pathname === "/library" ||
+    /^\/(albums|artists|playlists)\//.test(pathname) ||
+    catalogNav.some((entry) => entry.href === pathname) ||
+    !inLibrary(pathname)
+  )
+    return null;
 
   return (
     <nav

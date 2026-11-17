@@ -114,17 +114,29 @@ fun <T : Any> Load(
             .onFailure {
                 if (it is CancellationException) throw it
                 Log.w("Caimack", "Loading $key failed", it)
-                failed = value == null
+                failed = true
             }
     }
 
     val shown = value
     when {
-        shown != null -> if (isEmpty(shown)) empty() else content(shown)
+        shown != null -> if (failed) Column {
+            RefreshFailure { attempt++ }
+            if (isEmpty(shown)) empty() else content(shown)
+        } else if (isEmpty(shown)) empty() else content(shown)
         failed -> Failure { attempt++ }
         else -> Box(Modifier.fillMaxWidth().padding(vertical = 64.dp), contentAlignment = Alignment.Center) {
             RecordLoading(44.dp)
         }
+    }
+}
+
+@Composable
+private fun RefreshFailure(retry: () -> Unit) {
+    val palette = LocalPalette.current
+    Column(Modifier.fillMaxWidth().background(palette.card).padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Text(stringResource(R.string.error_refresh), style = Type.small, color = palette.muted)
+        TextButton(onClick = retry) { Text(stringResource(R.string.action_try_again)) }
     }
 }
 suspend fun <T> withNetworkRetries(load: suspend () -> T): T {

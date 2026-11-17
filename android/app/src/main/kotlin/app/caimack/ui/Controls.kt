@@ -51,6 +51,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -173,6 +175,7 @@ fun Chip(
             .clip(CircleShape)
             .background(if (active) palette.primarySoft else palette.raised)
             .then(if (active) Modifier.border(1.dp, palette.primary, CircleShape) else Modifier)
+            .semantics { selected = active }
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,

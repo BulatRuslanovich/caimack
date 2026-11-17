@@ -63,7 +63,7 @@ export function Card<T extends string>({
       <span
         title={title}
         className={cn(
-          "line-clamp-2 text-sm leading-snug font-medium",
+          "line-clamp-2 text-body font-medium wrap-anywhere",
           current && "text-primary",
           !list && menu && "pr-10",
         )}

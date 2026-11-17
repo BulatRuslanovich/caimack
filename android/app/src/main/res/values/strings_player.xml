@@ -8,6 +8,13 @@
     <string name="player_repeat">Repeat</string>
     <string name="action_pause">Pause</string>
     <string name="queue_title">Queue</string>
+    <string name="player_now_playing">Now playing</string>
+    <string name="queue_edit">Edit queue</string>
+    <string name="queue_move_up">Move up</string>
+    <string name="queue_move_down">Move down</string>
+    <string name="queue_more">Queue actions: %1$s</string>
+    <string name="queue_current_playing">Current track, playing</string>
+    <string name="queue_current_paused">Current track, paused</string>
     <string name="queue_empty">The queue is empty.</string>
     <string name="lyrics_title">Lyrics</string>
     <string name="lyrics_none">No lyrics for this track.</string>
@@ -15,6 +22,10 @@
     <string name="player_playing_on">Paused — now playing on %1$s.</string>
     <string name="downloads_title">Downloads</string>
     <string name="downloads_add">Download</string>
+    <string name="downloads_cancel">Cancel download</string>
+    <string name="downloads_retry">Retry download</string>
+    <string name="downloads_queued">Added to downloads</string>
+    <string name="downloads_failed">Could not start the download. Check your connection and try again.</string>
     <string name="downloads_available">Available offline</string>
     <string name="downloads_remove">Remove download</string>
     <string name="downloads_remove_all">Remove all</string>
@@ -95,4 +106,9 @@
     <string name="player_delivery_waiting">Waiting for the connection · resumes automatically</string>
     <string name="widget_record_label">Caimack · Record</string>
     <string name="widget_record_description">Tap the record to play or pause; use the arrows to change tracks</string>
+    <string name="player_shuffle_on">Shuffle on</string>
+    <string name="player_shuffle_off">Shuffle off</string>
+    <string name="player_repeat_off">Repeat off</string>
+    <string name="player_repeat_all">Repeat queue</string>
+    <string name="player_repeat_one">Repeat one track</string>
 </resources>

@@ -34,7 +34,7 @@ export function DetailHeader({
   );
 
   return (
-    <header className="grid grid-cols-[auto_minmax(0,1fr)] items-end gap-8 pt-2 [--art:clamp(15rem,20vw,18rem)] max-md:grid-cols-1 max-md:gap-5 max-md:[--art:14rem]">
+    <header className="grid grid-cols-[auto_minmax(0,1fr)] items-end gap-8 pt-2 [--art:clamp(15rem,20vw,18rem)] max-md:grid-cols-1 max-md:gap-4 max-md:[--art:12rem]">
       <ArtBackdrop src={backdrop} mode="header" />
 
       <div
@@ -48,7 +48,14 @@ export function DetailHeader({
       </div>
 
       <div className="flex min-w-0 flex-col gap-3">
-        <h1 className={cn(displayTitleClass(title), "text-balance")}>{title}</h1>
+        <h1
+          className={cn(
+            displayTitleClass(title),
+            "text-balance max-md:text-[clamp(1.75rem,7.7vw,2rem)] max-md:leading-tight",
+          )}
+        >
+          {title}
+        </h1>
         {description && (
           <p className="max-w-[62ch] text-muted-foreground max-md:text-sm">{description}</p>
         )}

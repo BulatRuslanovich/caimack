@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -36,6 +37,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.pluralStringResource
@@ -91,7 +93,7 @@ fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit) {
         )
 
         if (query.length < MIN_LENGTH) {
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp + LocalMiniPlayerInset.current)) {
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 24.dp, bottom = 24.dp + LocalMiniPlayerInset.current)) {
                 RecentSearches { recent ->
                     input = recent
                     query = recent
@@ -209,14 +211,28 @@ private data class TopRow(val title: String, val subtitle: String, val url: Stri
 @Composable
 private fun BrowseGenres(open: (Any) -> Unit) {
     val container = LocalContainer.current
-    Load("genres", { container.api.genres() }, isEmpty = { it.isEmpty() }) { genres ->
+    Load("genres", { container.api.genres() }, isEmpty = { it.isEmpty() }, empty = { Empty(stringResource(R.string.search_browse_empty), stringResource(R.string.search_browse_empty_hint)) }) { genres ->
+        val palette = LocalPalette.current
+        val columns = if (LocalDensity.current.fontScale >= 1.6f) 1 else 2
         Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(stringResource(R.string.search_browse_genres), style = Type.section)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                previewGenres(genres).forEach { genre -> Chip(genreTitle(genre.name), false) { open(GenreRoute(genre.id, genre.name)) } }
+            previewGenres(genres).chunked(columns).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    row.forEach { genre ->
+                        Column(Modifier.weight(1f).heightIn(min = 112.dp).clip(Radius.row).background(palette.card)
+                            .clickable { open(GenreRoute(genre.id, genre.name)) }.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text(genreTitle(genre.name), style = Type.body.copy(fontWeight = FontWeight.SemiBold))
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(pluralStringResource(R.plurals.count_tracks, genre.trackCount, genre.trackCount), style = Type.tiny, color = palette.muted, modifier = Modifier.weight(1f))
+                                Cover(genre.coverAlbumIds.firstOrNull()?.let { container.media.cover(it, null, true, small = true) }, genre.name, Modifier.size(48.dp))
+                            }
+                        }
+                    }
+                    if (columns == 2 && row.size == 1) Box(Modifier.weight(1f))
+                }
             }
             androidx.compose.material3.TextButton(onClick = { open(GenresRoute) }) {
-                Text(stringResource(R.string.action_see_all), color = LocalPalette.current.primary)
+                Text(stringResource(R.string.search_all_genres), color = LocalPalette.current.primary)
             }
         }
     }

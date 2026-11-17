@@ -36,12 +36,14 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { PlayerBackdrop } from "./ArtBackdrop";
 import { ArtworkScene } from "./ArtworkScene";
 import { ArtistLinks } from "./ArtistLinks";
 import { PlayerEffectsBackdrop } from "./PlayerEffectsBackdrop";
 import { PlayerTransport } from "./PlayerTransport";
+import { PlayerPanelTransport } from "./PlayerPanelTransport";
+import { PlayerOptionsMenu } from "./PlayerOptionsMenu";
 import { PlayerVolume } from "./PlayerVolume";
 import { RecordTransition } from "./RecordTransition";
 import { SleepTimerButton } from "./SleepTimerButton";
@@ -49,15 +51,25 @@ import { StreamQuality } from "./StreamQuality";
 import { TrackMenu } from "./TrackMenu";
 import { Button } from "./ui/button";
 import { WaveformSeekbar } from "./WaveformSeekbar";
+import { Loading } from "./Loading";
 
 const IDLE_MS = 2500;
 
 const SWIPE_CLOSE_PX = 120;
 
-const DJControls = dynamic(() => import("./DJControls").then((m) => m.DJControls));
-const QueueList = dynamic(() => import("./QueueList").then((m) => m.QueueList));
-const LyricsPane = dynamic(() => import("./LyricsPane").then((m) => m.LyricsPane));
-const ShareCardDialog = dynamic(() => import("./ShareCardDialog").then((m) => m.ShareCardDialog));
+// A cold panel chunk must suspend locally, keeping the fullscreen dialog mounted.
+const DJControls = dynamic(() => import("./DJControls").then((m) => m.DJControls), {
+  loading: () => null,
+});
+const QueueList = dynamic(() => import("./QueueList").then((m) => m.QueueList), {
+  loading: () => <Loading />,
+});
+const LyricsPane = dynamic(() => import("./LyricsPane").then((m) => m.LyricsPane), {
+  loading: () => <Loading />,
+});
+const ShareCardDialog = dynamic(() => import("./ShareCardDialog").then((m) => m.ShareCardDialog), {
+  loading: () => null,
+});
 
 function FullScreenProgress({ track, chrome }: { track: Track; chrome: string }) {
   const t = useT();
@@ -164,10 +176,11 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
   const t = useT();
   const [panel, setPanel] = useState<"art" | "queue" | "lyrics">("art");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const track = player.currentTrack;
   const trackId = track?.id;
   const trackDuration = track?.durationSeconds;
-  const idle = useIdle(IDLE_MS, panel === "art" && !menuOpen && !djMode);
+  const idle = useIdle(IDLE_MS, panel === "art" && !menuOpen && !optionsOpen && !djMode);
   const stage = useRef<HTMLDivElement>(null);
   const swipeFrom = useRef<number | null>(null);
 
@@ -204,6 +217,29 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
   if (!track) return null;
 
   const reason = player.radioSession?.reasons[track.id];
+  const secondaryActions = (
+    <div className="flex items-center justify-between gap-2 lg:hidden">
+      <PlaybackDevices compact />
+      <Button
+        variant="ghost"
+        size="icon-lg"
+        aria-label={panel === "lyrics" ? t("lyrics.hide") : t("lyrics.show")}
+        aria-pressed={panel === "lyrics"}
+        onClick={() => setPanel(panel === "lyrics" ? "art" : "lyrics")}
+      >
+        <MicVocalIcon size={22} />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-lg"
+        aria-label={t("queue.label")}
+        aria-pressed={panel === "queue"}
+        onClick={() => setPanel(panel === "queue" ? "art" : "queue")}
+      >
+        <ListVideoIcon size={22} />
+      </Button>
+    </div>
+  );
 
   return (
     <DialogPrimitive.Root open onOpenChange={(next) => !next && onClose()}>
@@ -213,8 +249,20 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
             data-player-fullscreen="true"
             data-aura-host
             onTouchStart={(event) => {
+              const target = event.target as Element;
+              const interactive = target.closest(
+                "button, a, input, select, textarea, [role='slider'], [role='menu']",
+              );
               const atTop = (stage.current?.scrollTop ?? 0) === 0;
-              swipeFrom.current = panel === "art" && atTop ? event.touches[0].clientY : null;
+              const insidePlayer =
+                target.closest("[data-player-fullscreen]") === event.currentTarget;
+              swipeFrom.current =
+                panel === "art" && atTop && !interactive && insidePlayer
+                  ? event.touches[0].clientY
+                  : null;
+            }}
+            onTouchCancel={() => {
+              swipeFrom.current = null;
             }}
             onTouchEnd={(event) => {
               const from = swipeFrom.current;
@@ -247,11 +295,33 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
                 <ChevronDownIcon size={22} />
               </Button>
 
-              <span className="text-sm text-muted-foreground max-sm:hidden">
+              <span className="min-w-0 truncate text-sm text-muted-foreground">
                 {t("player.nowPlaying")}
               </span>
 
-              <div className="flex items-center gap-1 justify-self-end max-sm:gap-0 max-sm:[&_button]:size-10">
+              <div className="hidden justify-self-end max-lg:block">
+                <PlayerOptionsMenu track={track} onOpenChange={setOptionsOpen}>
+                  {(close) => (
+                    <>
+                      <div className="flex min-h-12 items-center justify-between gap-3">
+                        <span>{t("share.card")}</span>
+                        <ShareCardButton track={track} />
+                      </div>
+                      <Button
+                        variant="ghost"
+                        className="h-auto min-h-11 whitespace-normal py-3"
+                        onClick={() => {
+                          close();
+                          setMenuOpen(true);
+                        }}
+                      >
+                        {t("tracks.moreActions", { title: track.title })}
+                      </Button>
+                    </>
+                  )}
+                </PlayerOptionsMenu>
+              </div>
+              <div className="flex items-center gap-1 justify-self-end max-lg:hidden">
                 <PlaybackDevices compact />
                 <StreamQuality track={track} className="mr-1 max-sm:hidden" />
 
@@ -300,7 +370,10 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
 
             <div
               ref={stage}
-              className="relative z-1 flex min-h-0 flex-1 gap-[clamp(2rem,5vw,5rem)] max-lg:-mx-5 max-lg:flex-col max-lg:overflow-x-hidden max-lg:overflow-y-auto max-lg:px-5"
+              className={cn(
+                "relative z-1 flex min-h-0 flex-1 gap-[clamp(2rem,5vw,5rem)] max-lg:-mx-5 max-lg:flex-col max-lg:overflow-x-hidden max-lg:px-5",
+                panel === "art" ? "max-lg:overflow-y-auto" : "max-lg:gap-0 max-lg:overflow-hidden",
+              )}
             >
               {panel === "art" && (
                 <div className="flex min-h-0 flex-[1.2] items-center justify-end pr-[min(40%,20vh)] max-lg:flex-[1_0_auto] max-lg:justify-center max-lg:pt-[calc(min(76vw,22rem)*0.22+1rem)] max-lg:pr-0">
@@ -334,7 +407,7 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
                   <div className="flex min-w-0 items-start gap-3">
                     <div className="flex min-w-0 flex-1 flex-col gap-2">
                       <h2
-                        className={cn("line-clamp-3 text-balance", displayTitleClass(track.title))}
+                        className={cn("text-balance wrap-anywhere", displayTitleClass(track.title))}
                       >
                         {track.title}
                       </h2>
@@ -377,6 +450,7 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
                   <FullScreenProgress track={track} chrome={chrome} />
 
                   <PlayerTransport size="full" />
+                  {secondaryActions}
 
                   {djMode && <DJControls key={track.id} track={track} />}
 
@@ -396,23 +470,26 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
                   )}
 
                   <div className={cn("flex items-center gap-2", chrome)}>
-                    <TrackMenu
-                      track={track}
-                      open={menuOpen}
-                      onOpenChange={setMenuOpen}
-                      onNavigate={onClose}
-                      isFavorite={track.isFavorite}
-                      onToggleFavorite={onToggleFavorite}
-                      trigger={
-                        <Button
-                          variant="ghost"
-                          size="icon-lg"
-                          aria-label={t("tracks.moreActions", { title: track.title })}
-                        >
-                          <EllipsisVerticalIcon />
-                        </Button>
-                      }
-                    />
+                    <Suspense fallback={null}>
+                      <TrackMenu
+                        track={track}
+                        open={menuOpen}
+                        onOpenChange={setMenuOpen}
+                        onNavigate={onClose}
+                        isFavorite={track.isFavorite}
+                        onToggleFavorite={onToggleFavorite}
+                        trigger={
+                          <Button
+                            variant="ghost"
+                            size="icon-lg"
+                            className="max-lg:hidden"
+                            aria-label={t("tracks.moreActions", { title: track.title })}
+                          >
+                            <EllipsisVerticalIcon />
+                          </Button>
+                        }
+                      />
+                    </Suspense>
 
                     <div className="ml-auto flex w-[12.5rem] max-w-[50%] items-center gap-2 pointer-coarse:hidden">
                       <PlayerVolume size="icon-lg" />
@@ -438,6 +515,13 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
                 </div>
               )}
             </div>
+
+            {panel !== "art" && (
+              <div className="relative z-1 -mx-5 shrink-0 border-t border-border bg-background/95 px-5 pt-2 lg:hidden">
+                <PlayerPanelTransport onShowArtwork={() => setPanel("art")} />
+                {secondaryActions}
+              </div>
+            )}
           </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>

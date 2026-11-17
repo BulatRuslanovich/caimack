@@ -66,7 +66,9 @@ internal fun rememberLoadedPlayerTone(url: String?): LoadedPlayerTone? {
         coroutineContext.ensureActive()
         value = LoadedPlayerTone(source, tone).also { playerTones.put(source, it) }
     }
-    return loaded?.takeIf { it.url == source }
+    // produceState retains its old value until its keyed coroutine starts. A back
+    // swipe must be able to use an already cached cover colour in that same frame.
+    return source?.let { playerTones.get(it) } ?: loaded?.takeIf { it.url == source }
 }
 
 /** Same cached cover selection as fullscreen; UI lightness follows its theme. */

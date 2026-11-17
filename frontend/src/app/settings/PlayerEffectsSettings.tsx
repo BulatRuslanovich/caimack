@@ -104,10 +104,12 @@ export function PlayerEffectsSettings() {
           id={`${intensityId}-sensitivity`}
           label={t("effects.sensitivity")}
           value={state.sensitivity}
-          disabled={state.effect === "off"}
+          disabled={state.effect === "off" || state.effect === "lava"}
           onChange={(sensitivity) => setPlayerEffects({ sensitivity })}
         />
-        <p className="text-xs text-muted-foreground">{t("effects.sensitivityHint")}</p>
+        <p className="text-xs text-muted-foreground">
+          {t(state.effect === "lava" ? "effects.lavaHint" : "effects.sensitivityHint")}
+        </p>
       </div>
     </div>
   );

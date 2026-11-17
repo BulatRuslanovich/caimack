@@ -16,7 +16,16 @@ import { useToast } from "@/lib/useToast";
 import { type DragEndEvent } from "@dnd-kit/core";
 import { defaultAnimateLayoutChanges, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ChevronRightIcon, ListMusicIcon, ListVideoIcon, Trash2Icon } from "lucide-react";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  ChevronRightIcon,
+  EllipsisVerticalIcon,
+  ListMusicIcon,
+  ListVideoIcon,
+  PauseIcon,
+  Trash2Icon,
+} from "lucide-react";
 import dynamic from "next/dynamic";
 import { memo, useCallback, useEffect, useState } from "react";
 import { TrackCover } from "./Cover";
@@ -24,6 +33,12 @@ import { EmptyState } from "./EmptyState";
 import { NowPlayingBars } from "./PlaybackIndicators";
 import { Button } from "./ui/button";
 import { Switch } from "./ui/switch";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 import { ToggleGroup, ToggleGroupButton } from "./ui/toggle-group";
 import { DragHandle, VerticalSortable } from "./VerticalSortable";
 
@@ -41,6 +56,7 @@ export function QueueList() {
   const invalidate = useInvalidate();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [landed, setLanded] = useState<string | null>(null);
   const [pending, setPending] = useState<{ source: Track[]; queue: Track[] } | null>(null);
   const waiting = pending !== null && sameQueueEntryOrder(player.queue, pending.source);
@@ -83,19 +99,22 @@ export function QueueList() {
     notify(message, "info", { label: t("action.undo"), run: () => player.restoreQueue(snapshot) });
   };
 
+  const move = (from: number, to: number) => {
+    if (waiting || from < 0 || to < 0 || to >= player.queue.length || from === to) return;
+    const next = [...player.queue];
+    next.splice(to, 0, ...next.splice(from, 1));
+    setLanded(queueEntryKey(player.queue[from]));
+    setPending({ source: player.queue, queue: next });
+    player.moveInQueue(from, to);
+  };
+
   const onDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-
-    const from = player.queue.findIndex((track) => queueEntryKey(track) === active.id);
-    const to = player.queue.findIndex((track) => queueEntryKey(track) === over.id);
-    if (from < 0 || to < 0) return;
-
-    const next = [...player.queue];
-    next.splice(to, 0, ...next.splice(from, 1));
-    setLanded(String(active.id));
-    setPending({ source: player.queue, queue: next });
-    player.moveInQueue(from, to);
+    move(
+      player.queue.findIndex((track) => queueEntryKey(track) === active.id),
+      player.queue.findIndex((track) => queueEntryKey(track) === over.id),
+    );
   };
 
   const sourceIndices = new Map(player.queue.map((track, index) => [queueEntryKey(track), index]));
@@ -125,18 +144,28 @@ export function QueueList() {
 
   return (
     <>
-      <div className="mb-1.5 flex items-center justify-between gap-2 px-0.5 pt-1 pb-2.5">
+      <div className="mb-1.5 flex shrink-0 flex-wrap items-center justify-between gap-2 px-0.5 pt-1 pb-2.5">
         <span className="min-w-0 truncate text-sm text-muted-foreground">
           {t("count.tracks", { count: player.queue.length })}
         </span>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <SaveQueueButton onSave={saveAsPlaylist} />
 
           <Button
             variant="text"
             size="auto"
-            className="text-sm"
+            className="min-h-10 text-sm"
+            aria-pressed={editing}
+            onClick={() => setEditing((value) => !value)}
+          >
+            {editing ? t("queue.finishEditing") : t("queue.edit")}
+          </Button>
+
+          <Button
+            variant="text"
+            size="auto"
+            className="min-h-10 text-sm"
             onClick={() => {
               const snapshot = player.snapshotQueue();
               player.clearQueue();
@@ -149,7 +178,7 @@ export function QueueList() {
       </div>
 
       {recommendations && (
-        <label className="mb-2 flex items-center justify-between gap-3 px-0.5 text-sm text-muted-foreground">
+        <label className="mb-2 flex shrink-0 items-center justify-between gap-3 px-0.5 text-sm text-muted-foreground">
           {t("queue.autoplay")}
           <Switch checked={player.autoplay} onCheckedChange={player.setAutoplay} />
         </label>
@@ -212,6 +241,10 @@ export function QueueList() {
                   isPlaying={index === currentIndex && player.isPlaying}
                   landed={queueEntryKey(track) === landed}
                   disabled={waiting}
+                  editing={editing}
+                  canMoveDown={
+                    (sourceIndices.get(queueEntryKey(track)) ?? -1) < player.queue.length - 1
+                  }
                   section={
                     index === radioStart && radioStart < player.queue.length
                       ? radioLabel
@@ -227,6 +260,7 @@ export function QueueList() {
                   signals={player.radioSession?.signals?.[track.id]}
                   onPlay={player.jumpTo}
                   onRemove={remove}
+                  onMove={move}
                 />
               ),
             };
@@ -283,11 +317,14 @@ const QueueRow = memo(function QueueRow({
   isPlaying,
   landed,
   disabled,
+  editing,
+  canMoveDown,
   section,
   reason,
   signals,
   onPlay,
   onRemove,
+  onMove,
 }: {
   track: Track;
   index: number;
@@ -295,16 +332,19 @@ const QueueRow = memo(function QueueRow({
   isPlaying: boolean;
   landed: boolean;
   disabled: boolean;
+  editing: boolean;
+  canMoveDown: boolean;
   section?: string;
   reason?: RecommendationReason;
   signals?: QueueSignals;
   onPlay: (index: number) => void;
   onRemove: (index: number, track: Track) => void;
+  onMove: (from: number, to: number) => void;
 }) {
   const t = useT();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: queueEntryKey(track),
-    disabled,
+    disabled: disabled || !editing,
     animateLayoutChanges: (args) => !landed && defaultAnimateLayoutChanges(args),
   });
 
@@ -321,33 +361,38 @@ const QueueRow = memo(function QueueRow({
         data-current={isCurrent ? "true" : undefined}
         style={{ transform: CSS.Transform.toString(transform), transition }}
         className={cn(
-          "queue-row group flex items-center gap-1 rounded-md hover:bg-card",
+          "queue-row group relative flex min-h-16 items-center gap-1 rounded-md hover:bg-card",
           isDragging && "z-10 opacity-90 shadow-pop",
         )}
       >
-        <DragHandle
-          {...attributes}
-          {...listeners}
-          aria-label={t("tracks.reorderNamed", { title: track.title })}
-          className="ml-1"
-        />
+        {editing && (
+          <DragHandle
+            {...attributes}
+            {...listeners}
+            aria-label={t("tracks.reorderNamed", { title: track.title })}
+            disabled={disabled}
+            className="ml-1 flex min-h-11 w-8 shrink-0 items-center justify-center opacity-100"
+          />
+        )}
 
         <button
           type="button"
           onClick={() => onPlay(index)}
           aria-current={isCurrent}
-          className="flex min-w-0 flex-1 items-center gap-2.5 p-1.5 text-left"
+          className="flex min-h-16 min-w-0 flex-1 items-center gap-2.5 rounded-sm p-2 text-left focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
         >
           <span className="relative shrink-0">
-            <TrackCover track={track} size={36} />
-            {isPlaying && (
+            <TrackCover track={track} size={40} />
+            {isCurrent && (
               <span className="absolute inset-0 grid place-items-center rounded-xs bg-black/55 text-white">
-                <NowPlayingBars />
+                {isPlaying ? <NowPlayingBars /> : <PauseIcon size={18} aria-hidden="true" />}
               </span>
             )}
           </span>
           <span className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate text-sm font-semibold">{track.title}</span>
+            <span className="line-clamp-2 text-sm leading-5 font-semibold wrap-anywhere">
+              {track.title}
+            </span>
             <span className="library-secondary truncate text-[0.8125rem] leading-5">
               {formatArtists(track)}
             </span>
@@ -362,20 +407,56 @@ const QueueRow = memo(function QueueRow({
               </span>
             )}
           </span>
-          <span className="text-xs text-muted-foreground tabular-nums">
+          <span className="text-xs text-muted-foreground tabular-nums max-sm:hidden">
             {formatDuration(track.durationSeconds)}
           </span>
         </button>
 
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="mr-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100"
-          onClick={() => onRemove(index, track)}
-          aria-label={t("queue.removeNamed", { title: track.title })}
-        >
-          <Trash2Icon size={16} />
-        </Button>
+        {editing ? (
+          <Button
+            variant="ghost"
+            size="icon-lg"
+            className="mr-1 shrink-0"
+            disabled={disabled}
+            onClick={() => onRemove(index, track)}
+            aria-label={t("queue.removeNamed", { title: track.title })}
+          >
+            <Trash2Icon size={16} />
+          </Button>
+        ) : (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-lg"
+                className="mr-1 shrink-0"
+                aria-label={t("tracks.moreActions", { title: track.title })}
+              >
+                <EllipsisVerticalIcon size={20} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem
+                disabled={disabled || index <= 0}
+                onSelect={() => onMove(index, index - 1)}
+              >
+                <ArrowUpIcon />
+                {t("queue.moveUp")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={disabled || !canMoveDown}
+                onSelect={() => onMove(index, index + 1)}
+              >
+                <ArrowDownIcon />
+                {t("queue.moveDown")}
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={disabled} onSelect={() => onRemove(index, track)}>
+                <Trash2Icon />
+                {t("queue.removeNamed", { title: track.title })}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
     </>
   );

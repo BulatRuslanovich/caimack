@@ -9,12 +9,13 @@ import { useState } from "react";
 import { queries } from "@/lib/queries";
 import { useInvalidate } from "@/lib/useInvalidate";
 import { PlaylistCard } from "@/components/MediaCard";
-import { CardGrid, PageHeader } from "@/components/PageHeader";
+import { CardGrid, CardGridSkeleton, PageHeader } from "@/components/PageHeader";
 import { Query } from "@/components/Query";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupButton } from "@/components/ui/toggle-group";
 import { ListMusicIcon, PlusIcon } from "lucide-react";
 import { useT } from "@/contexts/I18nContext";
+import { LibraryNavigation } from "@/components/LibraryNavigation";
 
 const PlaylistDialog = dynamic(() =>
   import("@/components/PlaylistDialog").then((m) => m.PlaylistDialog),
@@ -40,7 +41,7 @@ export function PlaylistsPage() {
   );
 
   return (
-    <>
+    <div className="flex min-w-0 flex-col gap-6 max-md:gap-5">
       <PageHeader
         title={t("nav.playlists")}
         subtitle={
@@ -49,6 +50,7 @@ export function PlaylistsPage() {
         actions={newButton}
       />
 
+      <LibraryNavigation />
       <ToggleGroup aria-label={t("playlists.tabs")}>
         {(["mine", "public"] as const).map((value) => (
           <ToggleGroupButton key={value} active={tab === value} onClick={() => setTab(value)}>
@@ -59,6 +61,7 @@ export function PlaylistsPage() {
 
       <Query
         result={playlists}
+        skeleton={<CardGridSkeleton />}
         empty={
           tab === "public"
             ? {
@@ -104,6 +107,6 @@ export function PlaylistsPage() {
           }}
         />
       )}
-    </>
+    </div>
   );
 }

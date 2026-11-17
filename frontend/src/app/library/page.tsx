@@ -41,6 +41,7 @@ import { ToggleGroup, ToggleGroupButton } from "@/components/ui/toggle-group";
 import { EmptyState } from "@/components/EmptyState";
 import { PlaylistDialog } from "@/components/PlaylistDialog";
 import { Button } from "@/components/ui/button";
+import { LibraryNavigation } from "@/components/LibraryNavigation";
 
 export default function LibraryPage() {
   const t = useT();
@@ -136,6 +137,9 @@ export default function LibraryPage() {
             </div>
           }
         />
+        <div className="mt-5">
+          <LibraryNavigation saved />
+        </div>
         <div
           id="library-search"
           className="library-search-panel"
@@ -309,44 +313,46 @@ export default function LibraryPage() {
               }
               return (
                 <>
-                  <LibraryDragList
-                    key={`${folderId}:${filter}:${grid}:${q}`}
-                    entries={entries}
-                    folders={folders}
-                    grid={grid}
-                    parent={currentFolder ? currentFolder.parentId : undefined}
-                    disabled={organize.isPending || !orderResult.data || !!q}
-                    onOrder={async (keys) => {
-                      const full =
-                        sort === "manual"
-                          ? savedOrder
-                          : orderedKeys(
-                              allKeys,
-                              entries.map((e) => e.key),
-                            );
-                      setSort("manual");
-                      await organize.mutateAsync({
-                        operation: "reorder",
-                        folderId,
-                        order: mergeVisibleOrder(full, keys),
-                      });
-                    }}
-                    onMove={async (entry, destination) => {
-                      if (entry.kind === "folder")
+                  <div className={grid ? undefined : "max-w-3xl"}>
+                    <LibraryDragList
+                      key={`${folderId}:${filter}:${grid}:${q}`}
+                      entries={entries}
+                      folders={folders}
+                      grid={grid}
+                      parent={currentFolder ? currentFolder.parentId : undefined}
+                      disabled={organize.isPending || !orderResult.data || !!q}
+                      onOrder={async (keys) => {
+                        const full =
+                          sort === "manual"
+                            ? savedOrder
+                            : orderedKeys(
+                                allKeys,
+                                entries.map((e) => e.key),
+                              );
+                        setSort("manual");
                         await organize.mutateAsync({
-                          operation: "moveFolder",
-                          id: entry.id,
-                          folderId: destination,
+                          operation: "reorder",
+                          folderId,
+                          order: mergeVisibleOrder(full, keys),
                         });
-                      else
-                        await organize.mutateAsync({
-                          operation: "moveItem",
-                          id: entry.id,
-                          kind: entry.kind as LibraryKind,
-                          folderId: destination,
-                        });
-                    }}
-                  />
+                      }}
+                      onMove={async (entry, destination) => {
+                        if (entry.kind === "folder")
+                          await organize.mutateAsync({
+                            operation: "moveFolder",
+                            id: entry.id,
+                            folderId: destination,
+                          });
+                        else
+                          await organize.mutateAsync({
+                            operation: "moveItem",
+                            id: entry.id,
+                            kind: entry.kind as LibraryKind,
+                            folderId: destination,
+                          });
+                      }}
+                    />
+                  </div>
                   {organize.isError && (
                     <p role="alert" className="text-destructive">
                       {t("folders.failed")}
@@ -357,8 +363,28 @@ export default function LibraryPage() {
                   )}
                   {shown.length === 0 && shownFolders.length === 0 && !favorites && (
                     <EmptyState
-                      title={t(q ? "collection.noResults" : "collection.empty")}
+                      title={t(
+                        q
+                          ? "collection.noResults"
+                          : currentFolder
+                            ? "collection.empty"
+                            : filter === "album"
+                              ? "collection.emptyAlbums"
+                              : filter === "artist"
+                                ? "collection.emptyArtists"
+                                : filter === "playlist"
+                                  ? "collection.emptyPlaylists"
+                                  : "collection.empty",
+                      )}
                       description={t(currentFolder ? "folders.emptyHint" : "collection.hint")}
+                      action={
+                        !currentFolder &&
+                        !q && (
+                          <Button asChild>
+                            <Link href="/tracks">{t("collection.catalog")}</Link>
+                          </Button>
+                        )
+                      }
                     />
                   )}
                 </>
@@ -367,17 +393,6 @@ export default function LibraryPage() {
           </Query>
         )}
       </Query>
-      <nav aria-label={t("collection.catalog")} className="border-t border-border pt-4">
-        <p className="mb-3 text-sm text-muted-foreground">{t("collection.catalog")}</p>
-        <div className="flex flex-wrap gap-4">
-          <Link href="/tracks">{t("nav.tracks")}</Link>
-          <Link href="/albums">{t("nav.albums")}</Link>
-          <Link href="/artists">{t("nav.artists")}</Link>
-          <Link href="/playlists">{t("nav.playlists")}</Link>
-          <Link href="/genres">{t("nav.genres")}</Link>
-          <Link href="/recently-played">{t("nav.recentlyPlayed")}</Link>
-        </div>
-      </nav>
       {creating && (
         <PlaylistDialog
           onClose={() => setCreating(false)}

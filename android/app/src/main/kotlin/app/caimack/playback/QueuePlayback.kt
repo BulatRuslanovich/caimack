@@ -83,6 +83,14 @@ internal class QueuePlayback(private val player: ExoPlayer, private val random: 
     fun jumpTo(index: Int) {
         if (index !in 0 until player.mediaItemCount) return
         val current = player.currentMediaItemIndex
+        // A swipe follows the existing neighbours. Reinserting the previous
+        // entry at the current slot turns A -> B -> C into A -> C -> B, so the
+        // next back swipe returns to C forever instead of reaching A.
+        if (index == player.previousMediaItemIndex || index == player.nextMediaItemIndex) {
+            player.seekTo(index, 0)
+            player.play()
+            return
+        }
         val destination = when {
             index == current -> index
             current < 0 -> 0

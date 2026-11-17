@@ -9,7 +9,7 @@ const EDGE = 192;
 const FRAME_MS = 50;
 const TAU = Math.PI * 2;
 
-export function LavaBackdrop({ src }: { src: string | null }) {
+export function LavaBackdrop({ src, frozen = false }: { src: string | null; frozen?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -78,7 +78,7 @@ export function LavaBackdrop({ src }: { src: string | null }) {
       timer = undefined;
       if (document.hidden) return;
       draw();
-      if (ready && !reduced.matches) {
+      if (ready && !reduced.matches && !frozen) {
         last = performance.now();
         timer = setTimeout(tick, FRAME_MS);
       }
@@ -149,7 +149,7 @@ export function LavaBackdrop({ src }: { src: string | null }) {
       reduced.removeEventListener("change", sync);
       document.removeEventListener("visibilitychange", sync);
     };
-  }, [src]);
+  }, [src, frozen]);
 
   return <canvas ref={ref} width={192} height={108} className="lava-backdrop" aria-hidden="true" />;
 }

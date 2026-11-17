@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Bulat Ruslanovich
 
-import { PLAYER_EFFECTS, type PlayerEffect } from "@/lib/playerEffects";
+import { REACTIVE_PLAYER_EFFECTS, type ReactivePlayerEffect } from "@/lib/playerEffects";
 import type { AudioMotionFrame } from "./audioMotion";
 import { MOTION_BANDS } from "./audioMotion";
 import { createEffectLayout } from "./effectLayout";
@@ -14,7 +14,7 @@ import { fragment, vertex } from "./effectShaders";
 import { softBand } from "./softBand";
 
 export interface EffectFrame extends AudioMotionFrame {
-  effect: PlayerEffect;
+  effect: ReactivePlayerEffect;
   delta: number;
   intensity: number;
   palette: EffectPalette;
@@ -155,7 +155,7 @@ export function createEffectsRenderer(
       ] as const)
         gl.uniform1f(u[key], frame[key]);
       gl.uniform1f(u.light, frame.light ? 1 : 0);
-      gl.uniform1i(u.effect, PLAYER_EFFECTS.indexOf(frame.effect));
+      gl.uniform1i(u.effect, REACTIVE_PLAYER_EFFECTS.indexOf(frame.effect));
       frame.palette.forEach((color, i) =>
         gl.uniform3f(
           u[["primary", "secondary", "accent"][i]],

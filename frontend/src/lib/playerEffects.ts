@@ -3,7 +3,8 @@
 import { useSyncExternalStore } from "react";
 import { readStoredJson, writeStoredJson } from "@/lib/storage";
 
-export const PLAYER_EFFECTS = ["aurora", "glass"] as const;
+export const REACTIVE_PLAYER_EFFECTS = ["aurora", "glass"] as const;
+export const PLAYER_EFFECTS = [...REACTIVE_PLAYER_EFFECTS, "lava"] as const;
 export const PLAYER_EFFECT_LEVELS = [0, 35, 65, 85, 100] as const;
 
 export function playerEffectLevel(value: number): number {
@@ -18,6 +19,7 @@ function snapLevel(value: number): number {
   return PLAYER_EFFECT_LEVELS[playerEffectLevel(value) - 1];
 }
 export type PlayerEffect = (typeof PLAYER_EFFECTS)[number];
+export type ReactivePlayerEffect = (typeof REACTIVE_PLAYER_EFFECTS)[number];
 export type PlayerEffectChoice = PlayerEffect | "off";
 export interface PlayerEffectsState {
   effect: PlayerEffectChoice;

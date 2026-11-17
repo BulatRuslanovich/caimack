@@ -36,6 +36,7 @@ import { useTrackDisplay } from "@/lib/trackDisplay";
 import { Button } from "@/components/ui/button";
 import { CheckIcon } from "lucide-react";
 import { useConfirm } from "@/components/ui/alert-dialog";
+import { LibraryNavigation } from "@/components/LibraryNavigation";
 
 const sortKeys: Record<TrackSort, TranslationKey> = {
   Title: "sort.title",
@@ -113,7 +114,7 @@ export function TracksPage() {
   }, [selecting, stopSelecting]);
 
   return (
-    <>
+    <div className="flex min-w-0 flex-col gap-6 max-md:gap-5">
       <PageHeader
         title={t("nav.tracks")}
         subtitle={
@@ -141,6 +142,7 @@ export function TracksPage() {
         }
       />
 
+      <LibraryNavigation />
       <PageToolbar search={search} onSearch={setSearch} placeholder={t("filter.tracks")}>
         <SortSelect value={sort} onChange={setSort} options={sortKeys} />
         <Select value={tempo} onValueChange={setTempo}>
@@ -206,7 +208,7 @@ export function TracksPage() {
       </Query>
 
       {confirmDialog}
-    </>
+    </div>
   );
 }
 

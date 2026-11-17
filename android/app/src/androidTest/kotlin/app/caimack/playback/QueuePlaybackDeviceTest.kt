@@ -82,6 +82,29 @@ class QueuePlaybackDeviceTest {
         }
     }
 
+    @Test fun repeatedBackSwipesWalkTheWholeHistoryWithoutAlternatingTwoSongs() {
+        for (shuffle in listOf(false, true)) withPlayer { player, queue ->
+            player.shuffleModeEnabled = shuffle
+            player.setMediaItems(preserveQueue(items()), 6, 0)
+            val before = ids(player)
+            for (expected in 5 downTo 0) {
+                queue.jumpTo(player.previousMediaItemIndex)
+                assertEquals(expected, player.currentMediaItemIndex)
+                assertEquals(before[expected], player.currentMediaItem?.mediaId)
+                assertEquals("Navigating backwards must preserve history and upcoming songs", before, ids(player))
+                assertVisibleOrder(player)
+            }
+            assertEquals(C.INDEX_UNSET, player.previousMediaItemIndex)
+            player.repeatMode = Player.REPEAT_MODE_ALL
+            queue.jumpTo(player.previousMediaItemIndex)
+            assertEquals(before.last(), player.currentMediaItem?.mediaId)
+            assertEquals(before, ids(player))
+            queue.jumpTo(player.nextMediaItemIndex)
+            assertEquals(before.first(), player.currentMediaItem?.mediaId)
+            assertEquals(before, ids(player))
+        }
+    }
+
     @Test fun shuffleRebuildsTheWholeQueueIncludingItsOldHistory() = withPlayer { player, _ ->
         player.setMediaItems(preserveQueue(items()), 3, 2_000)
         val before = ids(player)

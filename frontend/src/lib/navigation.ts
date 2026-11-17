@@ -45,9 +45,11 @@ const recent: NavEntry = {
 
 const library: NavEntry = { href: "/library", labelKey: "nav.mediaLibrary", icon: LibraryBigIcon };
 
-export const primaryNav: NavEntry[] = [home, search, library, tracks, playlists];
+export const primaryNav: NavEntry[] = [home, search, library];
 
-export const libraryNav: NavEntry[] = [favorites, albums, artists, genres, map, recent];
+export const libraryNav: NavEntry[] = [favorites, recent, map];
+
+export const catalogNav: NavEntry[] = [tracks, albums, artists, playlists, genres];
 
 export const mobileNav: NavEntry[] = [home, search, library];
 

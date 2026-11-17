@@ -16,6 +16,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -47,6 +48,7 @@ data class Palette(
     val sleeves: List<Color>,
     val dark: Boolean,
 ) {
+    val selection: Color get() = primarySoft.compositeOver(card)
     val cabinet: Color get() = lerp(card, raised, if (dark) 0.3f else 0.18f)
     val cabinetEdge: Color get() = foreground.copy(alpha = if (dark) 0.09f else 0.11f)
     val border = foreground.copy(alpha = 0.12f)
@@ -73,7 +75,7 @@ private val CoffeeDark = Palette(
     accent = Color(0xFF414547),
     foreground = Color(0xFFF2EEE7),
     muted = Color(0xFFAAA9A4),
-    faint = Color(0xFF93958F),
+    faint = Color(0xFFA0A19B),
     primary = Color(0xFFD3B278),
     onPrimary = Color(0xFF201E1A),
     primarySoft = Color(0x1FD3B278),
@@ -97,7 +99,7 @@ private val CoffeeLight = Palette(
     accent = Color(0xFFE0E3DD),
     foreground = Color(0xFF252729),
     muted = Color(0xFF5B625E),
-    faint = Color(0xFF6A706B),
+    faint = Color(0xFF646B65),
     primary = Color(0xFF7C5A24),
     onPrimary = Color(0xFFFFFAF0),
     primarySoft = Color(0x177C5A24),
@@ -116,16 +118,16 @@ private val CoffeeLight = Palette(
 private val GraphiteDark = Palette(
     background = Color(0xFF000000),
     card = Color(0xFF101010),
-    popover = Color(0xFF191919),
-    raised = Color(0xFF242424),
-    accent = Color(0xFF333334),
-    foreground = Color(0xFFF2EFE9),
-    muted = Color(0xFFAAA6A0),
-    faint = Color(0xFF97938C),
+    popover = Color(0xFF202020),
+    raised = Color(0xFF282828),
+    accent = Color(0xFF363636),
+    foreground = Color(0xFFF2F2F2),
+    muted = Color(0xFFADADAD),
+    faint = Color(0xFFA0A0A0),
     primary = Color(0xFFEEEEEE),
     onPrimary = Color(0xFF000000),
     primarySoft = Color(0x24EEEEEE),
-    action = Color(0xFFF2EFE9),
+    action = Color(0xFFF2F2F2),
     onAction = Color(0xFF000000),
     destructive = Color(0xFFFF6680),
     warning = Color(0xFFF2C14E),
@@ -138,19 +140,19 @@ private val GraphiteDark = Palette(
 )
 
 private val GraphiteLight = Palette(
-    background = Color(0xFFF2F0EB),
-    card = Color(0xFFFBFAF7),
+    background = Color(0xFFF1F1EF),
+    card = Color(0xFFFAFAF9),
     popover = Color(0xFFFFFFFF),
     raised = Color(0xFFFFFFFF),
-    accent = Color(0xFFE4E0D8),
+    accent = Color(0xFFE2E2DF),
     foreground = Color(0xFF191919),
-    muted = Color(0xFF55524C),
-    faint = Color(0xFF6A665F),
-    primary = Color(0xFFC23E17),
+    muted = Color(0xFF575754),
+    faint = Color(0xFF656562),
+    primary = Color(0xFF363636),
     onPrimary = Color(0xFFFFFFFF),
-    primarySoft = Color(0x1CC23E17),
+    primarySoft = Color(0x1A363636),
     action = Color(0xFF191919),
-    onAction = Color(0xFFFBFAF7),
+    onAction = Color(0xFFFAFAF9),
     destructive = Color(0xFFB0203A),
     warning = Color(0xFF875F00),
     success = Color(0xFF2B7546),
@@ -162,19 +164,19 @@ private val GraphiteLight = Palette(
 )
 
 private val MidnightDark = Palette(
-    background = Color(0xFF0E121A),
-    card = Color(0xFF161C27),
-    popover = Color(0xFF1D2431),
-    raised = Color(0xFF232B39),
-    accent = Color(0xFF2B3445),
-    foreground = Color(0xFFE9EDF5),
-    muted = Color(0xFFA3ADC0),
-    faint = Color(0xFF8892A6),
-    primary = Color(0xFF79A7FF),
-    onPrimary = Color(0xFF0E121A),
-    primarySoft = Color(0x2479A7FF),
-    action = Color(0xFFE9EDF5),
-    onAction = Color(0xFF0E121A),
+    background = Color(0xFF14171C),
+    card = Color(0xFF22272E),
+    popover = Color(0xFF2C323B),
+    raised = Color(0xFF343C46),
+    accent = Color(0xFF424C58),
+    foreground = Color(0xFFEDF0F4),
+    muted = Color(0xFFB0B5BD),
+    faint = Color(0xFFA6ADB7),
+    primary = Color(0xFF94B5ED),
+    onPrimary = Color(0xFF171B22),
+    primarySoft = Color(0x1F94B5ED),
+    action = Color(0xFFEDF0F4),
+    onAction = Color(0xFF171B22),
     destructive = Color(0xFFFF7B7B),
     warning = Color(0xFFF0C060),
     success = Color(0xFF7CCF9A),
@@ -186,19 +188,19 @@ private val MidnightDark = Palette(
 )
 
 private val MidnightLight = Palette(
-    background = Color(0xFFECEFF5),
-    card = Color(0xFFF7F8FB),
+    background = Color(0xFFEFF0F2),
+    card = Color(0xFFFAFBFC),
     popover = Color(0xFFFFFFFF),
     raised = Color(0xFFFFFFFF),
-    accent = Color(0xFFDBE1EB),
-    foreground = Color(0xFF111827),
-    muted = Color(0xFF475266),
-    faint = Color(0xFF5C677D),
-    primary = Color(0xFF285BC4),
+    accent = Color(0xFFDFE3E8),
+    foreground = Color(0xFF20242B),
+    muted = Color(0xFF59616B),
+    faint = Color(0xFF646D78),
+    primary = Color(0xFF365F9E),
     onPrimary = Color(0xFFFFFFFF),
-    primarySoft = Color(0x1C285BC4),
-    action = Color(0xFF111827),
-    onAction = Color(0xFFF7F8FB),
+    primarySoft = Color(0x1A365F9E),
+    action = Color(0xFF242A33),
+    onAction = Color(0xFFFAFBFC),
     destructive = Color(0xFFB42318),
     warning = Color(0xFF8A5A00),
     success = Color(0xFF26734A),
@@ -210,19 +212,19 @@ private val MidnightLight = Palette(
 )
 
 private val PlumDark = Palette(
-    background = Color(0xFF161119),
-    card = Color(0xFF201923),
-    popover = Color(0xFF29212E),
-    raised = Color(0xFF2F2635),
-    accent = Color(0xFF382E3F),
-    foreground = Color(0xFFF4EAEF),
-    muted = Color(0xFFB9A9B6),
-    faint = Color(0xFF9E8F9B),
-    primary = Color(0xFFDF92FF),
-    onPrimary = Color(0xFF1D0F12),
-    primarySoft = Color(0x24DF92FF),
-    action = Color(0xFFF4EAEF),
-    onAction = Color(0xFF161119),
+    background = Color(0xFF19171B),
+    card = Color(0xFF28242A),
+    popover = Color(0xFF332D35),
+    raised = Color(0xFF3D3540),
+    accent = Color(0xFF4C4350),
+    foreground = Color(0xFFF3EDF0),
+    muted = Color(0xFFB8B0B5),
+    faint = Color(0xFFAFA5AC),
+    primary = Color(0xFFC5A4D3),
+    onPrimary = Color(0xFF261D2A),
+    primarySoft = Color(0x1FC5A4D3),
+    action = Color(0xFFF0D6C5),
+    onAction = Color(0xFF291D18),
     destructive = Color(0xFFFF6B86),
     warning = Color(0xFFF3C35A),
     success = Color(0xFF8FD19E),
@@ -234,19 +236,19 @@ private val PlumDark = Palette(
 )
 
 private val PlumLight = Palette(
-    background = Color(0xFFF5EEF0),
-    card = Color(0xFFFCF8F9),
+    background = Color(0xFFF2EFF0),
+    card = Color(0xFFFCFAFB),
     popover = Color(0xFFFFFFFF),
     raised = Color(0xFFFFFFFF),
-    accent = Color(0xFFEAD9DF),
-    foreground = Color(0xFF24161F),
-    muted = Color(0xFF5D4956),
-    faint = Color(0xFF735F6C),
-    primary = Color(0xFF8540AC),
+    accent = Color(0xFFE4DDE1),
+    foreground = Color(0xFF2B232A),
+    muted = Color(0xFF655B63),
+    faint = Color(0xFF756A72),
+    primary = Color(0xFF775486),
     onPrimary = Color(0xFFFFFFFF),
-    primarySoft = Color(0x1C8540AC),
-    action = Color(0xFF24161F),
-    onAction = Color(0xFFFCF8F9),
+    primarySoft = Color(0x1A775486),
+    action = Color(0xFF8A4D31),
+    onAction = Color(0xFFFFF7F0),
     destructive = Color(0xFFB0203A),
     warning = Color(0xFF875F00),
     success = Color(0xFF2B7546),
@@ -258,22 +260,22 @@ private val PlumLight = Palette(
 )
 
 private val StudioDark = Palette(
-    background = Color(0xFF0F1311),
-    card = Color(0xFF171C19),
-    popover = Color(0xFF1E2521),
-    raised = Color(0xFF242C27),
-    accent = Color(0xFF2C352F),
-    foreground = Color(0xFFE9F0EA),
-    muted = Color(0xFFA3B0A6),
-    faint = Color(0xFF88958B),
-    primary = Color(0xFFC5EF5C),
-    onPrimary = Color(0xFF0F1311),
-    primarySoft = Color(0x24C5EF5C),
-    action = Color(0xFFE9F0EA),
-    onAction = Color(0xFF0F1311),
+    background = Color(0xFF151A17),
+    card = Color(0xFF242B26),
+    popover = Color(0xFF2D3730),
+    raised = Color(0xFF354139),
+    accent = Color(0xFF435147),
+    foreground = Color(0xFFEDF1ED),
+    muted = Color(0xFFAEB8B0),
+    faint = Color(0xFFABB5AD),
+    primary = Color(0xFFBBD589),
+    onPrimary = Color(0xFF1C2614),
+    primarySoft = Color(0x1ABBD589),
+    action = Color(0xFFEDF1ED),
+    onAction = Color(0xFF151A17),
     destructive = Color(0xFFFF7A6B),
     warning = Color(0xFFF2C14E),
-    success = Color(0xFFC5EF5C),
+    success = Color(0xFF82C6AE),
     sleeves = listOf(
         Color(0xFF3B2724), Color(0xFF2F3A24), Color(0xFF1F3436),
         Color(0xFF3B3622), Color(0xFF3A2C22), Color(0xFF2B2C40),
@@ -282,22 +284,22 @@ private val StudioDark = Palette(
 )
 
 private val StudioLight = Palette(
-    background = Color(0xFFEDF1ED),
-    card = Color(0xFFF8FAF8),
+    background = Color(0xFFEFF2EF),
+    card = Color(0xFFFAFCF9),
     popover = Color(0xFFFFFFFF),
     raised = Color(0xFFFFFFFF),
-    accent = Color(0xFFDBE4DD),
-    foreground = Color(0xFF121A15),
-    muted = Color(0xFF4A594F),
-    faint = Color(0xFF5E6E63),
-    primary = Color(0xFF3C7A10),
+    accent = Color(0xFFDFE6DC),
+    foreground = Color(0xFF202820),
+    muted = Color(0xFF576357),
+    faint = Color(0xFF657065),
+    primary = Color(0xFF4E6D29),
     onPrimary = Color(0xFFFFFFFF),
-    primarySoft = Color(0x1C3C7A10),
-    action = Color(0xFF121A15),
-    onAction = Color(0xFFF8FAF8),
+    primarySoft = Color(0x174E6D29),
+    action = Color(0xFF252E26),
+    onAction = Color(0xFFFAFCF9),
     destructive = Color(0xFFB42318),
     warning = Color(0xFF875F00),
-    success = Color(0xFF3C7A10),
+    success = Color(0xFF23745B),
     sleeves = listOf(
         Color(0xFFE5CDC6), Color(0xFFD4E0C6), Color(0xFFC4DADB),
         Color(0xFFE5DEC0), Color(0xFFE5D1C3), Color(0xFFD2D3E6),
@@ -312,6 +314,19 @@ fun paletteOf(colorway: Colorway, dark: Boolean): Palette = when (colorway) {
     Colorway.Plum -> if (dark) PlumDark else PlumLight
     Colorway.Studio -> if (dark) StudioDark else StudioLight
 }
+
+/** The cover supplies the stage colour; library palette and light mode never tint its controls. */
+val PlayerPalette = Palette(
+    background = Color(0xFF171819), card = Color(0xFF232527), popover = Color(0xFF2D3032),
+    raised = Color(0xFF343739), accent = Color(0xFF414547),
+    foreground = Color(0xFFF5F5F5), muted = Color(0xFFD6D6D6), faint = Color(0xFFBCBCBC),
+    primary = Color(0xFFF5F5F5), onPrimary = Color(0xFF171819),
+    primarySoft = Color(0x24F5F5F5),
+    action = Color(0xFFF5F5F5), onAction = Color(0xFF171819),
+    destructive = Color(0xFFFF6680), warning = Color(0xFFF2C14E), success = Color(0xFF6FCF97),
+    sleeves = listOf(Color(0xFF282828), Color(0xFF343434), Color(0xFF404040)),
+    dark = true,
+)
 
 object Radius {
     val cover = RoundedCornerShape(2.dp)
@@ -338,7 +353,7 @@ object Type {
     )
     val title = TextStyle(
         fontFamily = Unbounded, fontWeight = FontWeight.Medium,
-        fontSize = 22.sp, lineHeight = 25.sp, letterSpacing = (-0.015).em,
+        fontSize = 24.sp, lineHeight = 32.sp, letterSpacing = (-0.015).em,
     )
     val section = TextStyle(
         fontFamily = Onest, fontWeight = FontWeight.SemiBold,
@@ -360,10 +375,9 @@ val LocalPalette = staticCompositionLocalOf { CoffeeDark }
 fun CaimackTheme(
     dark: Boolean = isSystemInDarkTheme(),
     colorway: Colorway = Colorway.Coffee,
+    palette: Palette = paletteOf(colorway, dark),
     content: @Composable () -> Unit,
 ) {
-    val palette = paletteOf(colorway, dark)
-
     val base = if (dark) darkColorScheme() else lightColorScheme()
     val colors = base.copy(
         primary = palette.action,

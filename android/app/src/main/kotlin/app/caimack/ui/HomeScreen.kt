@@ -32,6 +32,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -328,7 +329,13 @@ private fun QuickTiles(blocks: List<HomeBlock>, nav: NavController, play: (List<
     }
 
     Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        tiles.take(MOBILE_QUICK).forEach { it() }
+        val columns = if (LocalDensity.current.fontScale >= 1.3f) 1 else 2
+        tiles.take(MOBILE_QUICK).chunked(columns).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { tile -> Box(Modifier.weight(1f)) { tile() } }
+                if (columns == 2 && row.size == 1) Box(Modifier.weight(1f))
+            }
+        }
     }
 }
 
@@ -343,11 +350,12 @@ private fun Tile(label: String, sublabel: String, onClick: () -> Unit, toneUrl: 
             .clip(Radius.tile)
             .background(palette.card)
             .background(Brush.horizontalGradient(0f to tone.copy(alpha = tone.alpha * 0.3f), 0.55f to Color.Transparent))
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(56.dp)) { art() }
-        Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+        Box(Modifier.size(48.dp)) { art() }
+        Column(Modifier.weight(1f).padding(horizontal = 8.dp, vertical = 4.dp)) {
             Text(label, style = Type.small.copy(fontWeight = FontWeight.Medium), maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(sublabel, style = Type.tiny, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }

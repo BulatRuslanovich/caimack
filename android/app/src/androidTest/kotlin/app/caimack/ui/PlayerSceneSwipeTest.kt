@@ -61,6 +61,10 @@ class PlayerSceneSwipeTest {
         val oldRoute = player.remoteRoute
         val oldSelected = player.remoteSelected
         val oldEffects = container.appearance.playerEffects.value
+        val oldLocalHttp = container.connectionPreferences.allowLocalHttp.value
+        check(context.packageName.endsWith(".uitest"))
+        container.connectionPreferences.setAllowLocalHttp(true)
+        if (android.os.Build.VERSION.SDK_INT >= 37) InstrumentationRegistry.getInstrumentation().uiAutomation.grantRuntimePermission(context.packageName, "android.permission.ACCESS_LOCAL_NETWORK")
         runBlocking { container.server.remember(web.url("/").toString()) }
         container.appearance.setPlayerEffects(true)
         val queue = images.keys.map { Track(it, it, "artist", "Artist", albumId = it, hasCover = true, durationSeconds = 200) }
@@ -105,6 +109,7 @@ class PlayerSceneSwipeTest {
             player.remoteSelected = oldSelected
             player.showLocal()
             container.appearance.setPlayerEffects(oldEffects)
+            container.connectionPreferences.setAllowLocalHttp(oldLocalHttp)
             runBlocking {
                 if (oldServer != null) container.server.remember(oldServer.toString())
                 else { container.preferences.edit { it.remove(stringPreferencesKey("server")) }; container.server.restore() }
@@ -201,6 +206,56 @@ class PlayerSceneSwipeTest {
         assertEquals(0f, x("swipe-art-0:blue"), 0.5f)
     }
 
+    @Test fun backwardsSwipeAndItsCancellationKeepThePreviousColourOnTheLeft() = withScene {
+        compose.runOnIdle { state = stateAt(1) }
+        compose.mainClock.advanceTimeBy(1200)
+        assertEquals("1:red", scene.current.key)
+        val previousSurface = scene.frames.single().surface
+        fun startBack(distance: Float) {
+            compose.onRoot().performTouchInput {
+                down(center)
+                advanceEventTime(500)
+                moveBy(Offset(width * distance, 0f))
+                advanceEventTime(500)
+            }
+            compose.mainClock.advanceTimeByFrame()
+            aligned()
+            assertEquals("0:blue", scene.preview?.key)
+            assertTrue("The previous cover must carry its own cached colour", scene.preview!!.surface != previousSurface)
+            assertTrue("The previous background enters from the left", scene.position("0:blue") < 0)
+        }
+        startBack(0.06f)
+        compose.onRoot().performTouchInput { up() }
+        repeat(5) {
+            compose.mainClock.advanceTimeBy(32)
+            aligned()
+            if (scene.preview != null) assertTrue(scene.position("0:blue") < 0)
+        }
+        compose.mainClock.advanceTimeBy(400)
+        assertEquals("1:red", scene.current.key)
+        assertEquals(previousSurface, scene.current.surface)
+        assertEquals(0, jumps)
+        startBack(0.30f)
+        val before = x("swipe-art-1:red")
+        compose.onRoot().performTouchInput { up() }
+        repeat(20) {
+            if (scene.current.key != "0:blue") {
+                compose.mainClock.advanceTimeByFrame()
+                Thread.sleep(8)
+            }
+        }
+        assertEquals("0:blue", scene.current.key)
+        assertEquals(before, x("swipe-art-1:red"), 1f)
+        repeat(16) {
+            compose.mainClock.advanceTimeBy(80)
+            aligned()
+        }
+        assertEquals(1, jumps)
+        assertEquals(0f, x("swipe-art-0:blue"), 0.5f)
+        assertTrue(scene.current.surface != previousSurface)
+        capture("backwards-settled")
+    }
+
     @Test fun rapidTrackChangesKeepTwoFramesAndOnlyTheLatestPendingDestination() = withScene {
         compose.runOnIdle { state = stateAt(1) }
         compose.mainClock.advanceTimeBy(240)
@@ -221,5 +276,57 @@ class PlayerSceneSwipeTest {
         assertEquals("2:green", scene.current.key)
         assertFalse(scene.isRunning)
         assertEquals(1, scene.frames.size)
+    }
+
+    @Test fun shuffleAndRadioQueueChangesDoNotAnimateOrRemountThePlayingTrack() = withScene {
+        val key = scene.current.key
+        val revision = scene.revision
+        val record = compose.onNodeWithTag("player-record").fetchSemanticsNode().boundsInRoot
+        val original = state.queue
+        fun unchanged() {
+            aligned()
+            assertEquals(key, scene.current.key)
+            assertEquals(revision, scene.revision)
+            assertEquals(1, scene.frames.size)
+            assertFalse(scene.isRunning)
+            assertEquals(0f, scene.position(key), 0.5f)
+            assertEquals(record, compose.onNodeWithTag("player-record").fetchSemanticsNode().boundsInRoot)
+        }
+        compose.runOnIdle { state = stateAt(2, listOf(original[1], original[2], original[0])) }
+        compose.mainClock.advanceTimeByFrame()
+        unchanged()
+        assertEquals(2, scene.current.state.index)
+        compose.runOnIdle { state = stateAt(0, listOf(original[0], original[2])) }
+        compose.mainClock.advanceTimeByFrame()
+        unchanged()
+        assertEquals(0, scene.current.state.index)
+        // The retained scene must use the new radio neighbours for its next swipe.
+        compose.onRoot().performTouchInput { swipe(center, center + Offset(-width * 0.30f, 0f), 300) }
+        repeat(20) {
+            compose.mainClock.advanceTimeBy(80)
+            Thread.sleep(8)
+        }
+        aligned()
+        assertEquals("green", scene.current.state.current?.id)
+        assertEquals(1, jumps)
+    }
+
+    @Test fun repeatedOccurrencesAfterShuffleDoNotCreateTwoLayersWithTheSameKey() = withScene {
+        val revision = scene.revision
+        val original = state.queue
+        compose.runOnIdle { state = stateAt(2, listOf(original[0], original[1], original[0])) }
+        compose.mainClock.advanceTimeByFrame()
+        compose.onRoot().performTouchInput { swipe(center, center + Offset(-width * 0.30f, 0f), 300) }
+        repeat(20) {
+            compose.mainClock.advanceTimeBy(80)
+            Thread.sleep(8)
+        }
+        aligned()
+        assertEquals(0, scene.current.state.index)
+        assertEquals("blue", scene.current.state.current?.id)
+        assertEquals(revision, scene.revision)
+        assertEquals(1, scene.frames.size)
+        assertFalse(scene.isRunning)
+        assertEquals(1, jumps)
     }
 }

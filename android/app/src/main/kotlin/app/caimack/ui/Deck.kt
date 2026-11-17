@@ -14,11 +14,13 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
 import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -79,15 +81,15 @@ private const val FLING_DP_PER_SECOND = 800
 private const val SKIP_ACK_TIMEOUT_MS = 1_500L
 
 @Composable
-fun Deck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Modifier = Modifier) {
+fun Deck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Modifier = Modifier, alignment: Alignment = Alignment.Center) {
     val track = state.current ?: return
     // The new song and its neutral position must be installed in the same composition.
     // Resetting the old offset in an effect briefly puts the next neighbour in the centre.
-    key(track.id, state.index) { TrackDeck(state, onScrub, modifier.testTag("player-deck")) }
+    key(track.id) { TrackDeck(state, onScrub, modifier.testTag("player-deck"), alignment) }
 }
 
 @Composable
-private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Modifier) {
+private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Modifier, alignment: Alignment) {
     val haptic = rememberPlayerHaptics()
     val track = state.current ?: return
     val player = LocalContainer.current.player
@@ -102,9 +104,10 @@ private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Mo
     var scratching by remember { mutableStateOf(false) }
     var twist by remember(track.id) { mutableFloatStateOf(0f) }
     val layout = remember { DeckLayout() }
+    val extension by animateFloatAsState(if (state.playing || scratching) 1f else 0f, tween(if (motion) 650 else 0), label = "deck-centering")
 
 
-    Box(
+    BoxWithConstraints(
         modifier
             .onGloballyPositioned { layout.deck = it }
             .pointerInput(Unit) {
@@ -231,35 +234,38 @@ private fun TrackDeck(state: PlayerState, onScrub: (Long?) -> Unit, modifier: Mo
                     }
                 }
             },
-        contentAlignment = Alignment.Center,
+        contentAlignment = alignment,
     ) {
-        Box(
-            Modifier
-                .fillMaxWidth(0.68f)
-                .widthIn(max = 300.dp)
-                .offset(x = (-48).dp)
-                .aspectRatio(1f)
-                .testTag("player-record")
-                .onGloballyPositioned { layout.record = it },
-        ) {
-            val offset = swipe.value
-            if (offset != 0f) {
-                val gap = with(LocalDensity.current) { 24.dp.toPx() }
-                val step = (layout.record?.size?.width ?: 0) * (1 + RECORD_OUT) + gap
-                state.previous?.takeIf { offset > 0 }?.let { Neighbour(it, offset - step) }
-                state.next?.takeIf { offset < 0 }?.let { Neighbour(it, offset + step) }
+        // Size the sleeve around the extended record's footprint. The soft aura
+        // can use the scene's side insets instead of shrinking the artwork.
+        val sleeveSize = minOf((maxWidth - 8.dp) / (1 + RECORD_OUT), (maxHeight - 24.dp) / 1.4f, 320.dp).coerceAtLeast(1.dp)
+        Box(Modifier.size(width = sleeveSize * (1 + RECORD_OUT), height = sleeveSize * 1.4f).testTag("player-record-visuals"), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier
+                    .size(sleeveSize)
+                    .offset { IntOffset((-sleeveSize.toPx() * RECORD_OUT * 0.5f * extension).roundToInt(), 0) }
+                    .aspectRatio(1f)
+                    .testTag("player-record")
+                    .onGloballyPositioned { layout.record = it },
+            ) {
+                val offset = swipe.value
+                if (offset != 0f) {
+                    val gap = with(LocalDensity.current) { 24.dp.toPx() }
+                    val step = (layout.record?.size?.width ?: 0) * (1 + RECORD_OUT) + gap
+                    state.previous?.takeIf { offset > 0 }?.let { Neighbour(it, offset - step) }
+                    state.next?.takeIf { offset < 0 }?.let { Neighbour(it, offset + step) }
+                }
+
+                Record(
+                    track,
+                    spinning = state.playing && !state.buffering,
+                    out = (state.playing || scratching) && (sceneGesture != null || !swiping),
+                    twist = twist,
+                    modifier = Modifier.fillMaxSize().offset { IntOffset(swipe.value.roundToInt(), 0) },
+                    jacket = if (sceneGesture == null || sceneGesture.sharedCover) Modifier.nowPlayingCover(LocalFullPlayerVisibility.current) else Modifier,
+                    aura = { BeatGlow(track, state.playing && !state.buffering, it) },
+                )
             }
-
-            BeatGlow(track, state.playing && !state.buffering, Modifier.fillMaxSize().offset { IntOffset(swipe.value.roundToInt(), 0) })
-
-            Record(
-                track,
-                spinning = state.playing && !state.buffering,
-                out = (state.playing || scratching) && !swiping,
-                twist = twist,
-                modifier = Modifier.fillMaxSize().offset { IntOffset(swipe.value.roundToInt(), 0) },
-                jacket = if (sceneGesture == null || sceneGesture.sharedCover) Modifier.nowPlayingCover(LocalFullPlayerVisibility.current) else Modifier,
-            )
         }
     }
 }
@@ -295,34 +301,43 @@ private fun BeatGlow(track: Track, playing: Boolean, modifier: Modifier) {
         }
     }
 
-    Canvas(modifier) {
+    Canvas(modifier.testTag("player-record-aura")) {
         if (opacity < 0.01f) return@Canvas
-        val centre = Offset(size.width * (RECORD_OUT + 0.5f), size.height / 2)
-        val disc = size.width * 0.5f
-        val radius = disc * (1.6f + 0.1f * pulse)
-        drawCircle(Brush.radialGradient(listOf(light.copy(alpha = opacity * (0.07f + 0.035f * pulse)),
-            Color.Transparent), centre, radius), radius, centre)
-        // Slow broken orbits; the wider bass arc follows the track BPM when available.
+        // This canvas shares the disc's padding and animated offset in Record.
+        // Keep the light at the rim so it emerges from behind the vinyl.
+        val centre = center
+        val disc = size.minDimension * 0.5f
+        val radius = disc * (1.26f + 0.02f * pulse)
+        drawCircle(Brush.radialGradient(
+            0f to Color.Transparent,
+            0.64f to Color.Transparent,
+            0.78f to light.copy(alpha = opacity * (0.12f + 0.045f * pulse)),
+            0.88f to light.copy(alpha = opacity * (0.045f + 0.015f * pulse)),
+            1f to Color.Transparent,
+            center = centre,
+            radius = radius,
+        ), radius, centre)
+        // Fine arcs echo the grooves, close to the edge of the physical record.
         repeat(3) { ring ->
-            val r = disc * (1.12f + ring * 0.15f + pulse * 0.025f)
+            val r = disc * (1.035f + ring * 0.07f + pulse * 0.015f)
             val direction = if (ring == 1) -1 else 1
             val start = phase * (2.5f + ring) * direction + ring * 108f
             repeat(2) { segment ->
-                drawArc(light.copy(alpha = opacity * (0.16f - ring * 0.03f)), start + segment * 180f,
+                drawArc(light.copy(alpha = opacity * (0.18f - ring * 0.04f)), start + segment * 180f,
                     64f + ring * 12f, false, Offset(centre.x - r, centre.y - r), Size(r * 2, r * 2),
-                    style = Stroke((0.8f + (2 - ring) * 0.25f).dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
+                    style = Stroke((0.65f + (2 - ring) * 0.15f).dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
             }
         }
         if (pulse > 0.02f) {
-            val r = disc * (1.08f + (1 - pulse) * 0.48f)
+            val r = disc * (1.025f + (1 - pulse) * 0.22f)
             drawArc(light.copy(alpha = opacity * pulse * 0.15f), -58f, 116f, false,
-                Offset(centre.x - r, centre.y - r), Size(r * 2, r * 2), style = Stroke(2.dp.toPx()))
+                Offset(centre.x - r, centre.y - r), Size(r * 2, r * 2), style = Stroke(1.2.dp.toPx()))
         }
         repeat(3) { glint ->
             val angle = (phase * (3.0 + glint) + glint * 123) * Math.PI / 180
-            val r = disc * (1.15f + glint * 0.12f)
+            val r = disc * (1.06f + glint * 0.055f)
             val shimmer = (0.5 + 0.5 * kotlin.math.sin(phase * 0.8 + glint * 2)).toFloat()
-            drawCircle(light.copy(alpha = opacity * shimmer * 0.35f), (0.8f + shimmer * 0.5f).dp.toPx(),
+            drawCircle(light.copy(alpha = opacity * shimmer * 0.28f), (0.65f + shimmer * 0.35f).dp.toPx(),
                 centre + Offset(kotlin.math.cos(angle).toFloat() * r, kotlin.math.sin(angle).toFloat() * r))
         }
     }

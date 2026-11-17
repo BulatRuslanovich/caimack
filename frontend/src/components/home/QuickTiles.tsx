@@ -54,7 +54,7 @@ export function QuickTiles({ blocks }: { blocks: HomeBlock[] }) {
     <div
       ref={ref}
       className={cn(
-        "home-quick-access grid gap-2 max-md:grid-cols-1",
+        "home-quick-access grid gap-2",
         "grid-cols-[repeat(var(--per-row),minmax(0,1fr))] max-lg:grid-cols-2",
         capFourOnMobile,
       )}

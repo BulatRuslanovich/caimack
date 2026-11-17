@@ -52,7 +52,7 @@ listening history and the recommendations.
   <tr>
     <td width="50%" valign="top">
       <h3>A player with character</h3>
-      <p>Cover colours, a spinning record and synced lyrics give the music a place on screen.
+      <p>Cover colours, a spinning record and synchronized lyrics give the music a place on screen.
       Albums flow without gaps, and carefully timed transitions keep the queue
       moving naturally.</p>
     </td>
@@ -66,9 +66,20 @@ listening history and the recommendations.
 
 One Docker Compose setup brings up the app, database and HTTPS. No external account is required.
 
+### Your library, your way
+
+Save albums, artists and playlists to your personal library in the web and Android clients.
+Organize them in nested folders, reorder items and switch between list and grid views.
+Favourites and recently played music stay close at hand, alongside the full server catalog.
+
+Lyrics follow the playback clock, with word or syllable highlighting when the source provides
+that timing. Automatic lookup checks multiple providers and verifies the recording before
+accepting a match; plain lyrics remain available when synchronized text cannot be found.
+See [lyrics lookup and synchronization](docs/lyrics.md).
+
 ## A look around
 
-A few screens from the live web client, in **OLED Black** and **Coffee**.
+A few screens from the current web client using a live demo library, in **OLED Black** and **Coffee**.
 The home screen above brings together personal radio, a daily mix and new additions to the library.
 
 <p align="center">
@@ -89,7 +100,7 @@ The web app is a PWA with its own mobile layout. There is also a native Android 
 background playback, offline downloads and Android Auto.
 
 [Individual downloads](docs/android-downloads.md) retain catalog metadata and
-artwork for offline browsing. The fork also supports opt-in
+artwork for offline browsing. Android also supports opt-in
 [HTTP connections to a local server](docs/android-local-http.md).
 
 Android also supports opt-in [full library synchronization](docs/android-library-sync.md)
@@ -99,7 +110,8 @@ playlist edits are merged back when the phone returns.
 
 The normal player can also control another signed-in web or Android device.
 Choose an output from the player's device button; playback controls, the queue
-and progress follow that device. See [playback devices](docs/playback-connect.md).
+and progress follow that device. Sign in to the same account on both devices and keep
+the receiving client open and connected. Choose **This device** to bring playback back.
 
 <p align="center">
   <img src="docs/screenshots/mobile-oled.webp" alt="Mobile web player in OLED Black with album artwork, waveform and playback controls" width="320">
@@ -223,7 +235,7 @@ flowchart LR
 
 | Part        | What it does                                                                                                                                                                                                                                                                                                            |
 | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `backend/`  | Rust API (axum, sqlx). Workers transcode uploads to HLS, analyse cue points and tempo, send audio fragments to the local MERT GPU service, and look up lyrics (LRCLIB) and artist photos (Deezer). Recommendations and the library map use an in-memory embedding snapshot; sound duplicate detection uses Chromaprint. |
+| `backend/`  | Rust API (axum, sqlx). Workers transcode uploads to HLS, analyse cue points and tempo, send audio fragments to the optional local MERT GPU service, and look up lyrics across multiple providers and artist photos via Deezer. Recommendations and the library map use an in-memory embedding snapshot; sound duplicate detection uses Chromaprint. |
 | `frontend/` | Next.js app with TanStack Query and hls.js. A service worker caches the shell, artwork and stream segments.                                                                                                                                                                                                             |
 | `android/`  | Kotlin client using Jetpack Compose and Media3: background playback, downloads, Android Auto and a quick-settings radio tile.                                                                                                                                                                                           |
 | `db/`       | The database schema as numbered SQL migrations, applied by `caimack migrate` (the `migrate` service in Compose); the server only checks that the schema is current. See [db/README.md](db/README.md).                                                                                                                   |
@@ -233,7 +245,7 @@ flowchart LR
 
 ## Development
 
-You'll need Rust 1.94+, ffmpeg on `PATH`, Node.js, Docker and, for the Android client, the Android SDK.
+You'll need Rust 1.94+, ffmpeg on `PATH`, Node.js 20.9+ with npm, Docker and, for the Android client, the Android SDK.
 
 ```bash
 cp backend/.env.example backend/.env   # then set JWT_SIGNING_KEY and OWNER_PASSWORD
@@ -259,8 +271,24 @@ clients with a backend that requires this field so history recording continues t
 To work on the frontend against another backend, point the dev proxy at it:
 
 ```bash
-cd frontend && BACKEND_INTERNAL_URL=https://music.example.com npm run dev
+cd frontend
+npm ci
+BACKEND_INTERNAL_URL=https://music.example.com npm run dev
 ```
+
+In PowerShell, set the variable before starting the server:
+
+```powershell
+cd frontend
+npm ci
+$env:BACKEND_INTERNAL_URL = "https://music.example.com"
+npm run dev
+```
+
+Open `http://localhost:3000` and sign in with an account on that server. The development
+server proxies `/api/*` to the configured backend; no local database or Rust process is
+needed for this workflow. Requests use real server data, so library edits and playback
+history are saved to that account. The proxy is only enabled in development.
 
 ### Releases
 
@@ -341,4 +369,4 @@ for signing, update sources and bot secrets.
 
 ## License
 
-AGPL-3.0-only — see [LICENSE](LICENSE) and [LICENSING.md](LICENSING.md).
+AGPL-3.0-only — see [LICENSE](LICENSE)

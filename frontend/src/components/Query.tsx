@@ -27,6 +27,11 @@ export function LoadError({ message, onRetry }: { message: string; onRetry?: () 
   );
 }
 
+export function RefreshError({ onRetry }: { onRetry: () => void }) {
+  const t = useT();
+  return <LoadError message={t("error.refresh")} onRetry={onRetry} />;
+}
+
 const SKELETON_ROWS = 6;
 
 interface EmptyCopy {
@@ -51,11 +56,13 @@ export function Query<T>({
   result,
   empty,
   isEmpty = looksEmpty,
+  skeleton,
   children,
 }: {
   result: UseQueryResult<T>;
   empty?: EmptyCopy;
   isEmpty?: (data: T) => boolean;
+  skeleton?: ReactNode;
   children: (data: T) => ReactNode;
 }) {
   const t = useT();
@@ -72,42 +79,54 @@ export function Query<T>({
 
   if (isPending) {
     return (
-      <div role="status" aria-label={t("common.loading")} className="flex flex-col gap-1">
-        {Array.from({ length: SKELETON_ROWS }, (_, row) => (
-          <div key={row} className="flex items-center gap-3 px-2.5 py-2">
-            <span className="size-10 shrink-0 animate-pulse rounded-xs bg-raised" />
-            <span className="flex flex-1 flex-col gap-2">
-              <span className="h-3 w-2/5 animate-pulse rounded-sm bg-raised" />
-              <span className="h-3 w-1/4 animate-pulse rounded-sm bg-raised" />
-            </span>
-          </div>
-        ))}
-      </div>
+      skeleton ?? (
+        <div role="status" aria-label={t("common.loading")} className="flex flex-col gap-1">
+          {Array.from({ length: SKELETON_ROWS }, (_, row) => (
+            <div key={row} className="flex items-center gap-3 px-2.5 py-2">
+              <span className="size-10 shrink-0 animate-pulse rounded-xs bg-raised" />
+              <span className="flex flex-1 flex-col gap-2">
+                <span className="h-3 w-2/5 animate-pulse rounded-sm bg-raised" />
+                <span className="h-3 w-1/4 animate-pulse rounded-sm bg-raised" />
+              </span>
+            </div>
+          ))}
+        </div>
+      )
     );
   }
   if (data === undefined) return null;
 
   if (empty && isEmpty(data)) {
     return (
-      <EmptyState
-        icon={empty.icon}
-        title={empty.title}
-        description={empty.description}
-        action={empty.action}
-      />
+      <>
+        {error && <RefreshError onRetry={() => void refetch()} />}
+        <EmptyState
+          icon={empty.icon}
+          title={empty.title}
+          description={empty.description}
+          action={empty.action}
+        />
+      </>
     );
   }
 
   if (isPlaceholderData) {
     return (
-      <div
-        aria-busy="true"
-        className="contents [&>*]:opacity-85 [&>*]:transition-opacity [&>*]:duration-200 [&>*]:ease-brand"
-      >
-        {children(data)}
-      </div>
+      <>
+        <div
+          aria-busy="true"
+          className="contents [&>*]:opacity-85 [&>*]:transition-opacity [&>*]:duration-200 [&>*]:ease-brand"
+        >
+          {children(data)}
+        </div>
+      </>
     );
   }
 
-  return <>{children(data)}</>;
+  return (
+    <>
+      {error && <RefreshError onRetry={() => void refetch()} />}
+      {children(data)}
+    </>
+  );
 }

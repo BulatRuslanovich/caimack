@@ -136,7 +136,6 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
     BackHandler(searchExpanded && search.isBlank() && !imeVisible) {
         focus.clearFocus(); search = ""; searchExpanded = false
     }
-    var catalog by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val query = search.trim()
     val downloadsTitle = stringResource(R.string.downloads_title)
@@ -193,6 +192,7 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
                 }
             }
         }
+        LibraryScopeSelector(nav, saved = true)
         AnimatedVisibility(searchExpanded,
             enter = expandVertically(tween(220)) + fadeIn(tween(160)),
             exit = shrinkVertically(tween(180)) + fadeOut(tween(120)),
@@ -219,17 +219,10 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
         LibraryFilters(filter, downloadedOnly, { filter = it }, { downloadedOnly = it })
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = { sort = when (sort) { "manual" -> "recent"; "recent" -> "name"; else -> "manual" } }, modifier = Modifier.weight(1f)) { Text(stringResource(when (sort) { "name" -> R.string.collection_name; "recent" -> R.string.collection_recent; else -> R.string.collection_manual }), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-            Box {
-                IconButton(onClick = { catalog = true }) { Icon(Lucide.LibraryBig, stringResource(R.string.collection_catalog)) }
-                DropdownMenu(expanded = catalog, onDismissRequest = { catalog = false }) {
-                    listOf(
-                        R.string.nav_tracks to TracksRoute, R.string.nav_albums to AlbumsRoute,
-                        R.string.nav_artists to ArtistsRoute, R.string.nav_playlists to PlaylistsRoute,
-                        R.string.nav_genres to GenresRoute, R.string.nav_recently_played to RecentRoute,
-                    ).forEach { (label, route) ->
-                        DropdownMenuItem(text = { Text(stringResource(label)) }, onClick = { catalog = false; nav.navigate(route) })
-                    }
-                }
+            TextButton(onClick = { nav.navigate(RecentRoute) }) {
+                Icon(Lucide.History, null, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(stringResource(R.string.nav_recently_played))
             }
             IconButton(onClick = { grid = !grid }) { Icon(if (grid) Lucide.List else Lucide.LayoutGrid, stringResource(if (grid) R.string.collection_list else R.string.collection_grid)) }
         }
@@ -312,7 +305,14 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
                 },
                 empty = {
                     if (showFavorites) Text(stringResource(R.string.collection_hint), style = Type.small, color = LocalPalette.current.muted, modifier = Modifier.padding(24.dp))
-                    else Empty(stringResource(if (query.isNotEmpty()) R.string.collection_no_results else R.string.collection_empty), stringResource(if (currentFolder != null) R.string.folders_empty_hint else R.string.collection_hint))
+                    else Empty(stringResource(when {
+                        query.isNotEmpty() -> R.string.collection_no_results
+                        currentFolder != null -> R.string.collection_empty
+                        filter == "album" -> R.string.collection_empty_albums
+                        filter == "artist" -> R.string.collection_empty_artists
+                        filter == "playlist" -> R.string.collection_empty_playlists
+                        else -> R.string.collection_empty
+                    }), stringResource(if (currentFolder != null) R.string.folders_empty_hint else R.string.collection_hint))
                 },
             ) { key ->
                 when (key) {
@@ -467,7 +467,7 @@ internal fun LibraryFilters(filter: String, downloadedOnly: Boolean, onFilter: (
             shape = CircleShape, border = null,
             colors = FilterChipDefaults.filterChipColors(
                 containerColor = palette.raised, labelColor = palette.foreground,
-                selectedContainerColor = palette.primary, selectedLabelColor = palette.onPrimary,
+                selectedContainerColor = palette.selection, selectedLabelColor = palette.primary,
             ),
         )
     }
@@ -499,7 +499,7 @@ internal fun LibraryFilters(filter: String, downloadedOnly: Boolean, onFilter: (
                 border = null,
                 colors = FilterChipDefaults.filterChipColors(
                     containerColor = palette.raised, labelColor = palette.foreground,
-                    selectedContainerColor = palette.primary, selectedLabelColor = palette.onPrimary,
+                    selectedContainerColor = palette.selection, selectedLabelColor = palette.primary,
                 ),
             )
         }

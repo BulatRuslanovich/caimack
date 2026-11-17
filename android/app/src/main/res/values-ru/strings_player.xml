@@ -8,6 +8,13 @@
     <string name="player_repeat">Повтор</string>
     <string name="action_pause">Пауза</string>
     <string name="queue_title">Очередь</string>
+    <string name="player_now_playing">Сейчас играет</string>
+    <string name="queue_edit">Изменить очередь</string>
+    <string name="queue_move_up">Переместить выше</string>
+    <string name="queue_move_down">Переместить ниже</string>
+    <string name="queue_more">Действия в очереди: %1$s</string>
+    <string name="queue_current_playing">Текущий трек, воспроизведение</string>
+    <string name="queue_current_paused">Текущий трек, пауза</string>
     <string name="queue_empty">Очередь пуста.</string>
     <string name="lyrics_title">Текст</string>
     <string name="lyrics_none">Для этого трека текста нет.</string>
@@ -15,6 +22,10 @@
     <string name="player_playing_on">Пауза — теперь играет на %1$s.</string>
     <string name="downloads_title">Загрузки</string>
     <string name="downloads_add">Скачать</string>
+    <string name="downloads_cancel">Отменить загрузку</string>
+    <string name="downloads_retry">Повторить загрузку</string>
+    <string name="downloads_queued">Добавлено в загрузки</string>
+    <string name="downloads_failed">Не удалось начать загрузку. Проверьте соединение и повторите.</string>
     <string name="downloads_available">Доступно без сети</string>
     <string name="downloads_remove">Удалить загрузку</string>
     <string name="downloads_remove_all">Удалить все</string>
@@ -97,4 +108,9 @@
     <string name="player_delivery_waiting">Ждём соединение · продолжим автоматически</string>
     <string name="widget_record_label">Caimack · Пластинка</string>
     <string name="widget_record_description">Нажмите на пластинку для пуска или паузы; стрелки переключают треки</string>
+    <string name="player_shuffle_on">Перемешивание включено</string>
+    <string name="player_shuffle_off">Перемешивание выключено</string>
+    <string name="player_repeat_off">Повтор выключен</string>
+    <string name="player_repeat_all">Повтор очереди</string>
+    <string name="player_repeat_one">Повтор одного трека</string>
 </resources>

@@ -12,6 +12,30 @@ public, loopback and multicast addresses, and never falls back to cellular or a
 VPN connection. A VPN configured to prevent local access must allow the server
 or be disconnected. Android 17 additionally requires local-network permission.
 
+### A public domain on the home Wi-Fi
+
+Joining the same Wi-Fi does not change where a domain points. If the domain
+still resolves to a public IP, synchronization rejects it, even if the router
+routes that connection back to the home server.
+
+For a home PC/NAS, add a local DNS override on the router or home DNS server:
+the existing Caimack hostname should resolve to that machine's LAN IP. The phone
+must use that DNS server. The local HTTPS endpoint must serve that hostname with
+a trusted certificate. The app can then keep its existing server address and
+account binding. All returned A/AAAA addresses must be local; a remaining public
+IPv6 answer also prevents synchronization.
+
+Alternatively, sign in using the local IP and the actual listening port. If that
+endpoint uses HTTP, enable **Allow HTTP on the local network** in connection
+settings. A different server URL has its own offline binding; the app currently
+has no separate LAN address just for synchronization.
+
+The default Docker/Caddy deployment redirects HTTP to HTTPS and serves the
+configured public hostname. Opening `http://<LAN-IP>` can therefore redirect to
+`https://<LAN-IP>`, which does not match the domain certificate. Allowing local
+HTTP does not bypass that redirect or certificate verification. Use the domain
+with a local DNS override, or explicitly configure a separate local endpoint.
+
 Automatic jobs are persisted across reboot and scheduled every 15 minutes, with
 an additional attempt after joining a local network or recording an action.
 Charging is not required. Android can defer background jobs in Doze or under
@@ -43,6 +67,16 @@ private catalog, image cache, file ownership index and action journal so browsin
 searching, lyrics and playback work without a server after restarting the app.
 Vectors are exported as data; the Android client does not run MERT or recommendation
 algorithms.
+
+Vector exports stream from the local server into a temporary document with a
+fixed-size buffer. Their size does not create a corresponding JSON tree, string
+or byte array in the Android heap. The previous complete export and its version
+remain current if a transfer is interrupted. Catalog JSON is also read and
+written through streams. Track lists and other browsing metadata remain decoded;
+lyrics and waveforms are retained as encoded per-track JSON and decoded only for
+the requested track. Loading a new snapshot or restoring it after a restart does
+not build hundreds of thousands of lyric-line maps and waveform-number objects.
+The persisted and exported catalog keeps the same JSON format.
 
 While synchronization is active for the signed-in account, manual download
 buttons and per-track download badges are hidden, and new manual/background
@@ -172,6 +206,20 @@ Server integration tests cover concurrent retries, timestamps, account/server
 binding, rejected actions, merged playlist changes and separate audio/tag
 versions. Android unit tests cover offline catalog contracts and network address
 restrictions.
+
+`SnapshotJsonDeviceTest` generates a catalog of 2,500 tracks with 400,000 timed
+lyric lines and 600,000 waveform peaks. It checks retained heap usage below
+96 MiB, unchanged JSON export, offline detail reads and restoration from the
+private snapshot. `SyncStreamingDeviceTest` also covers a vector export larger
+than 100 MiB and interrupted-transfer recovery. These tests use an isolated app
+package and a fixture documents provider; no real account or music folder is
+required:
+
+```sh
+cd android
+./gradlew :app:connectedDebugAndroidTest -PcaimackIsolatedUiTests=true \
+  '-Pandroid.testInstrumentationRunnerArguments.class=app.caimack.sync.SnapshotJsonDeviceTest'
+```
 
 For the physical-device test, connect an Android 13+ phone through adb, join
 Wi-Fi and grant a music folder through the app. The test uses a separate random

@@ -154,7 +154,7 @@ export function Sidebar() {
       >
         <NavGroup entries={primaryNav} />
         <NavGroup
-          label={t("nav.library")}
+          label={t("nav.quickAccess")}
           entries={libraryNav.filter((entry) => entry.href !== "/map" || recommendations)}
         />
         <div className="mt-auto flex flex-col gap-1">
