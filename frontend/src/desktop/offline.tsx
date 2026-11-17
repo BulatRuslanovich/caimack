@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CheckIcon, DownloadIcon, FolderOpenIcon, RefreshCwIcon } from "lucide-react";
+import {
+  CircleArrowDownIcon,
+  DownloadIcon,
+  FolderOpenIcon,
+  RefreshCwIcon,
+  XIcon,
+} from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { BrandMark, BrandWordmark } from "@/components/Brand";
 import { EmptyState } from "@/components/EmptyState";
@@ -13,13 +19,13 @@ import { usePlayerActions } from "@/contexts/PlayerContext";
 import { useToast } from "@/lib/useToast";
 import type { Locale } from "@/lib/i18n";
 import type { Track } from "@/lib/types";
+import { formatDuration } from "@/lib/format";
 import {
   desktopRequest,
   isDesktop,
   refreshDesktop,
   useDesktopStatus,
-  useDesktopSyncEnabled,
-  useDesktopTrack,
+  useDesktopDownloaded,
   type DesktopStatus,
   type Transfer,
 } from "./api";
@@ -31,20 +37,23 @@ function useCopy() {
   return (en: string, ru: string) => (locale === "ru" ? ru : en);
 }
 
-type Command = { path: string; body?: unknown };
+type Command = { path: string; body?: unknown } | { removeIds: string[] };
 
 function useDesktopCommand() {
   const { notifyError } = useToast();
   const client = useQueryClient();
   return useMutation({
     meta: { handlesError: true },
-    mutationFn: ({ path, body = {} }: Command) => desktopRequest(path, body),
-    onSuccess: async () => {
-      await refreshDesktop();
+    mutationFn: (command: Command) => {
+      if ("removeIds" in command) {
+        return Promise.all(command.removeIds.map((id) => desktopRequest("/downloads/" + id, {})));
+      }
+      return desktopRequest(command.path, command.body ?? {});
     },
     onError: (error) => notifyError(error),
-    onSettled: (_value, _error, command) => {
-      if (command.path.startsWith("/sync")) void client.invalidateQueries();
+    onSettled: async (_value, _error, command) => {
+      await refreshDesktop().catch(() => {});
+      if ("path" in command && command.path.startsWith("/sync")) void client.invalidateQueries();
     },
   });
 }
@@ -145,11 +154,11 @@ export function DesktopTrackDownload({ track }: { track: Track }) {
   if (!status || status.sync.enabled) return null;
   const transfer = status.downloads.find((item) => item.track.id === track.id);
   const add = !transfer || transfer.status === "failed";
+  if (!status.online && add) return null;
   return (
     <MenuItem
       disabled={command.isPending}
-      onSelect={(event) => {
-        event.preventDefault();
+      onSelect={() => {
         command.mutate(
           add
             ? { path: "/downloads", body: { tracks: [track] } }
@@ -157,7 +166,13 @@ export function DesktopTrackDownload({ track }: { track: Track }) {
         );
       }}
     >
-      {transfer?.status === "complete" ? <CheckIcon size={16} /> : <DownloadIcon size={16} />}
+      {transfer?.status === "complete" ? (
+        <CircleArrowDownIcon size={16} className="text-primary" />
+      ) : add ? (
+        <DownloadIcon size={16} />
+      ) : (
+        <XIcon size={16} />
+      )}
       {transferLabel(copy, transfer)}
     </MenuItem>
   );
@@ -166,42 +181,97 @@ export function DesktopTrackDownload({ track }: { track: Track }) {
 export function DesktopCollectionDownload({
   tracks,
   artist,
+  total = tracks.length,
 }: {
   tracks: Track[];
   artist?: string;
+  total?: number;
 }) {
   const copy = useCopy();
   const status = useDesktopStatus();
   const command = useDesktopCommand();
-  if (!isDesktop || !status || status.sync.enabled || !tracks.length) return null;
-  const complete = !artist && tracks.every((track) => !!status.localTracks[track.id]);
+  if (!isDesktop || !status?.online || status.sync.enabled || !total) return null;
+  const ids = new Set(tracks.map((track) => track.id));
+  const transfers = status.downloads.filter(
+    ({ track, status }) =>
+      status !== "failed" &&
+      (ids.has(track.id) ||
+        (!!artist &&
+          (track.artistId === artist || track.artists?.some((credit) => credit.id === artist)))),
+  );
+  const pending = transfers.some((item) => item.status !== "complete");
+  const complete = !pending && transfers.length >= total;
+  const progress = transfers.reduce((sum, item) => sum + transferProgress(item), 0) / total;
   const label = complete
-    ? copy("Downloaded", "Скачано")
-    : copy("Download collection", "Скачать подборку");
+    ? copy("Remove collection downloads", "Удалить загрузки коллекции")
+    : pending
+      ? copy("Cancel collection download", "Отменить загрузку коллекции")
+      : copy("Download collection", "Скачать коллекцию");
   return (
     <Button
       type="button"
-      variant="secondary"
-      size="icon"
+      variant="ghost"
+      size="icon-lg"
+      className={complete ? "text-primary" : "text-muted-foreground"}
+      data-collection-download={complete ? "complete" : pending ? "pending" : "available"}
       aria-label={label}
       title={label}
-      disabled={complete || command.isPending}
-      onClick={() => command.mutate({ path: "/downloads", body: artist ? { artist } : { tracks } })}
+      disabled={command.isPending}
+      onClick={() =>
+        command.mutate(
+          complete || pending
+            ? { removeIds: transfers.map((item) => item.track.id) }
+            : { path: "/downloads", body: artist ? { artist } : { tracks } },
+        )
+      }
     >
-      {complete ? <CheckIcon size={16} /> : <DownloadIcon size={16} />}
+      {complete ? (
+        <CircleArrowDownIcon size={22} />
+      ) : pending ? (
+        <DownloadProgress progress={progress} />
+      ) : (
+        <DownloadIcon size={22} />
+      )}
     </Button>
   );
 }
 
 export function DownloadBadge({ id }: { id: string }) {
   const copy = useCopy();
-  const local = useDesktopTrack(id);
-  const syncEnabled = useDesktopSyncEnabled();
-  return local && !syncEnabled ? (
-    <span title={copy("Downloaded", "Скачано")}>
-      <DownloadIcon size={12} />
+  const downloaded = useDesktopDownloaded(id);
+  const label = copy("Available offline", "Доступно без сети");
+  return (
+    <span
+      className="grid size-3.5 shrink-0 place-items-center text-primary"
+      title={downloaded ? label : undefined}
+      aria-hidden={!downloaded}
+      data-download-badge={downloaded || undefined}
+    >
+      {downloaded && (
+        <CircleArrowDownIcon size={14} aria-hidden={false} role="img" aria-label={label} />
+      )}
     </span>
-  ) : null;
+  );
+}
+
+function transferProgress(transfer: Transfer) {
+  return transfer.status === "complete"
+    ? 1
+    : transfer.total
+      ? Math.min(1, transfer.bytes / transfer.total)
+      : 0;
+}
+
+function DownloadProgress({ progress }: { progress: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="grid size-5 shrink-0 place-items-center rounded-full [mask-image:radial-gradient(circle,transparent_52%,black_56%)]"
+      style={{
+        background: `conic-gradient(var(--primary) ${Math.round(progress * 100)}%, var(--raised) 0)`,
+      }}
+    />
+  );
 }
 
 const size = (bytes: number) => (bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0);
@@ -217,7 +287,7 @@ function DownloadRow({
 }) {
   const copy = useCopy();
   const command = useDesktopCommand();
-  const { track, status, bytes, total, error } = transfer;
+  const { track, status, bytes, error } = transfer;
   const add = status === "failed";
   return (
     <li className="flex items-center gap-3 rounded-md bg-card p-3">
@@ -231,17 +301,21 @@ function DownloadRow({
           {track.title}
         </button>
         <span className="truncate text-sm text-muted-foreground">{track.artistName}</span>
-        {status === "running" && (
-          <progress max={total ?? undefined} value={total ? bytes : undefined} />
-        )}
         {error && <span className="text-xs text-destructive">{error}</span>}
       </div>
       <span className="text-xs text-muted-foreground">
         {size(bytes)} {copy("MiB", "МиБ")}
       </span>
+      <span className="text-sm text-muted-foreground tabular-nums">
+        {formatDuration(track.durationSeconds)}
+      </span>
+      <DownloadBadge id={track.id} />
       <Button
-        variant="secondary"
-        size="sm"
+        variant="ghost"
+        size="icon-lg"
+        className="shrink-0 text-muted-foreground"
+        aria-label={transferLabel(copy, transfer)}
+        title={transferLabel(copy, transfer)}
         disabled={command.isPending || (syncEnabled && add)}
         onClick={() =>
           command.mutate(
@@ -251,7 +325,13 @@ function DownloadRow({
           )
         }
       >
-        {transferLabel(copy, transfer)}
+        {add ? (
+          <DownloadIcon size={18} />
+        ) : status === "complete" ? (
+          <XIcon size={18} />
+        ) : (
+          <DownloadProgress progress={transferProgress(transfer)} />
+        )}
       </Button>
     </li>
   );

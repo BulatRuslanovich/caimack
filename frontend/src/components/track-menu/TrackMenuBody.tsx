@@ -106,6 +106,8 @@ export function TrackMenuBody({
           <ListVideoIcon size={16} /> {t("menu.addToQueue")}
         </MenuItem>
 
+        {isDesktop && <DesktopTrackDownload track={track} />}
+
         {recommendations && (
           <MenuItem disabled={radio.isPending} onSelect={stayOpen(() => radio.mutate())}>
             <RadioIcon size={16} /> {radio.isPending ? t("menu.radioStarting") : t("menu.radio")}
@@ -195,9 +197,7 @@ export function TrackMenuBody({
           </MenuItem>
         )}
 
-        {isDesktop ? (
-          <DesktopTrackDownload track={track} />
-        ) : (
+        {!isDesktop && (
           <MenuItem disabled={download.isPending} onSelect={stayOpen(() => download.mutate())}>
             <DownloadIcon size={16} />{" "}
             {download.isPending ? t("menu.downloading") : t("menu.download")}

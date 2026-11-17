@@ -8,7 +8,7 @@ import { dirname, join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { fixture, track } from "./server.mjs";
+import { albumId, fixture, track } from "./server.mjs";
 
 const require = createRequire(import.meta.url);
 const desktop = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -215,15 +215,50 @@ try {
     () => evaluate("!!document.querySelector('a[href=\"/downloads\"]')"),
     "downloads navigation",
   );
+  await evaluate(`history.pushState(null, "", "/albums/${albumId}")`);
+  await until(
+    () =>
+      evaluate(
+        "!!document.querySelector('[data-collection-download=\"available\"]')",
+      ),
+    "album download action",
+  );
   assert.equal(
-    (await request("/desktop/downloads", { tracks: [track] })).status,
-    200,
+    await evaluate(`(() => {
+    const download = document.querySelector("[data-collection-download]");
+    const playback = download.closest("header").querySelector(".lucide-play").closest("button");
+    return download.parentElement !== playback.parentElement &&
+      download.getBoundingClientRect().left > playback.getBoundingClientRect().right &&
+      !!download.querySelector(".lucide-download");
+  })()`),
+    true,
+  );
+  await evaluate(
+    'document.querySelector("[data-collection-download]").click()',
   );
   await until(
     async () =>
       (await request("/desktop/status")).body.downloads[0]?.status ===
       "complete",
     "song download",
+  );
+  await until(
+    () =>
+      evaluate(
+        "!!document.querySelector('[data-collection-download=\"complete\"] .lucide-circle-arrow-down')",
+      ),
+    "downloaded album icon",
+  );
+  assert.equal(
+    await evaluate(`(() => {
+    const badge = document.querySelector("[data-download-badge]");
+    const duration = badge.closest("[role=row]").querySelector("[data-track-duration]");
+    const menu = badge.parentElement.querySelector("button");
+    return !!badge.querySelector(".lucide-circle-arrow-down") &&
+      duration.getBoundingClientRect().right <= badge.getBoundingClientRect().left &&
+      badge.getBoundingClientRect().right <= menu.getBoundingClientRect().left;
+  })()`),
+    true,
   );
   const lyrics = await request("/api/tracks/" + track.id + "/lyrics");
   assert.equal(lyrics.body.plain, "hello");

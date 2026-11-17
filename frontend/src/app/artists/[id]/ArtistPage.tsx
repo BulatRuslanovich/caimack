@@ -84,13 +84,21 @@ export function ArtistPage() {
               <>
                 <PlayAllButton tracks={detail.tracks.items} name={detail.name} />
                 {detail.tracks.items.length > 1 && <ShuffleButton tracks={detail.tracks.items} />}
-                {isDesktop && (
-                  <DesktopCollectionDownload tracks={detail.tracks.items} artist={detail.id} />
-                )}
                 {detail.tracks.items.length > 0 && (
                   <RadioButton seed={topTracks[0] ?? detail.tracks.items[0]} />
                 )}
+              </>
+            }
+            trailingActions={
+              <>
                 <LibrarySaveButton kind="artist" id={id} />
+                {isDesktop && (
+                  <DesktopCollectionDownload
+                    tracks={detail.tracks.items}
+                    artist={detail.id}
+                    total={detail.tracks.total}
+                  />
+                )}
                 {isAdmin && (
                   <Button
                     variant="ghost"

@@ -114,9 +114,13 @@ export function AlbumPage() {
               <>
                 <PlayAllButton tracks={detail.tracks} name={detail.title} />
                 {detail.tracks.length > 1 && <ShuffleButton tracks={detail.tracks} />}
-                {isDesktop && <DesktopCollectionDownload tracks={detail.tracks} />}
                 {detail.tracks.length > 0 && <RadioButton seed={detail.tracks[0]} />}
+              </>
+            }
+            trailingActions={
+              <>
                 <LibrarySaveButton kind="album" id={id} />
+                {isDesktop && <DesktopCollectionDownload tracks={detail.tracks} />}
                 {isAdmin && (
                   <Button
                     variant="ghost"

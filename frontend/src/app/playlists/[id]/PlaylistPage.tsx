@@ -125,11 +125,11 @@ export function PlaylistPage() {
                   <Badge key="public">{t("playlists.publicBadge")}</Badge>
                 ),
               ]}
-              actions={
+              actions={<PlayAllButton tracks={detail.tracks} name={detail.name} />}
+              trailingActions={
                 <>
-                  <PlayAllButton tracks={detail.tracks} name={detail.name} />
-                  {isDesktop && <DesktopCollectionDownload tracks={detail.tracks} />}
                   <LibrarySaveButton kind="playlist" id={id} />
+                  {isDesktop && <DesktopCollectionDownload tracks={detail.tracks} />}
                   {isOwner && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>

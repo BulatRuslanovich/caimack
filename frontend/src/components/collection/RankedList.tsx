@@ -9,6 +9,8 @@ import { formatArtists, formatDuration } from "@/lib/format";
 import type { Track } from "@/lib/types";
 import { usePlayback } from "@/lib/playback/usePlayback";
 import { TrackCover } from "@/components/Cover";
+import { isDesktop } from "@/desktop/runtime";
+import { DownloadBadge } from "@/desktop/offline";
 
 export function RankedList({
   tracks,
@@ -94,8 +96,9 @@ export function RankedList({
                 </span>
               </span>
 
-              <span className="text-sm text-faint tabular-nums">
+              <span className="flex items-center gap-2 text-sm text-faint tabular-nums">
                 {formatDuration(track.durationSeconds)}
+                {isDesktop && <DownloadBadge id={track.id} />}
               </span>
             </button>
           </li>

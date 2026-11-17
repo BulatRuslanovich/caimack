@@ -64,6 +64,7 @@ let serialized = "";
 let timer: ReturnType<typeof setTimeout> | null = null;
 let pending: Promise<DesktopStatus> | null = null;
 const listeners = new Set<() => void>();
+let downloadedTracks = new Set<string>();
 
 export function refreshDesktop(): Promise<DesktopStatus> {
   pending ??= desktopRequest<DesktopStatus>("/status")
@@ -74,6 +75,9 @@ export function refreshDesktop(): Promise<DesktopStatus> {
         const synced = status && next.sync.lastAt && status.sync.lastAt !== next.sync.lastAt;
         const signedOut = status?.user && !next.user;
         status = next;
+        downloadedTracks = new Set(
+          next.downloads.filter((item) => item.status === "complete").map((item) => item.track.id),
+        );
         serialized = json;
         listeners.forEach((listener) => listener());
         if (reconnected || synced) window.dispatchEvent(new Event("caimack:refetch"));
@@ -116,18 +120,10 @@ export function useDesktopStatus() {
   );
 }
 
-export function useDesktopTrack(id: string) {
+export function useDesktopDownloaded(id: string) {
   return useSyncExternalStore(
     subscribe,
-    () => status?.localTracks[id] ?? null,
-    () => null,
-  );
-}
-
-export function useDesktopSyncEnabled() {
-  return useSyncExternalStore(
-    subscribe,
-    () => status?.sync.enabled ?? false,
+    () => !status?.sync.enabled && downloadedTracks.has(id),
     () => false,
   );
 }

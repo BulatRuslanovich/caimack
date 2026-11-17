@@ -8,6 +8,7 @@ export const user = {
   username: "tester",
   isAdmin: false,
 };
+export const albumId = "eeeeeee5-0000-4000-8000-000000000005";
 export const track = {
   id: "ccccccc3-0000-4000-8000-000000000003",
   title: "Offline Track",
@@ -158,6 +159,17 @@ export async function fixture() {
       });
     if (path === "/api/tracks")
       return json(pagina(state.present ? [currentTrack()] : []));
+    if (path === "/api/albums/" + albumId)
+      return json({
+        id: albumId,
+        title: "Test Album",
+        artistId: track.artistId,
+        artistName: track.artistName,
+        hasCover: false,
+        durationSeconds: track.durationSeconds,
+        tracks: [currentTrack()],
+      });
+    if (path === "/api/albums") return json(pagina([]));
     if (path === "/api/favorites")
       return json(pagina(state.favorite ? [currentTrack()] : []));
     if (path === "/api/sync/snapshot")

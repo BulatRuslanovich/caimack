@@ -14,6 +14,8 @@ import { DetailHeader } from "@/components/DetailHeader";
 import { PlayAllButton } from "@/components/PlayAllButton";
 import { Query } from "@/components/Query";
 import { ShuffleButton } from "@/components/ShuffleButton";
+import { isDesktop } from "@/desktop/runtime";
+import { DesktopCollectionDownload } from "@/desktop/offline";
 import { TrackList } from "@/components/TrackList";
 import { useT } from "@/contexts/I18nContext";
 import { Section } from "@/components/PageHeader";
@@ -60,6 +62,11 @@ function Mix({ kind }: { kind: HomeMixSlug }) {
                   <PlayAllButton tracks={data.tracks} name={title} />
                   <ShuffleButton tracks={data.tracks} />
                 </>
+              ) : undefined
+            }
+            trailingActions={
+              isDesktop && data.tracks.length > 0 ? (
+                <DesktopCollectionDownload tracks={data.tracks} />
               ) : undefined
             }
           />
