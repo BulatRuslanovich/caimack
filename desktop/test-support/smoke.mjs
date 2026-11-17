@@ -167,16 +167,26 @@ try {
     () => evaluate("!!document.querySelector('input[type=url]')"),
     "connection screen",
   );
-  assert.equal(
-    (
-      await request("/desktop/connection", {
-        server: server.origin,
-        allowHttp: true,
-      })
-    ).status,
-    200,
+  const setup = await evaluate(`(() => {
+    const main = document.querySelector("main");
+    const logo = main.querySelector("svg");
+    const button = main.querySelector("button").getBoundingClientRect();
+    return {
+      layout: getComputedStyle(main).display,
+      logoWidth: logo.getBoundingClientRect().width,
+      submitInView: button.width > 0 && button.top >= 0 && button.bottom <= innerHeight,
+    };
+  })()`);
+  assert.equal(setup.layout, "grid");
+  assert.ok(
+    setup.logoWidth > 0 && setup.logoWidth <= 64,
+    "The setup logo must fit the form",
   );
-  await evaluate("location.reload()");
+  assert.ok(setup.submitInView, "The connection button must be visible");
+  await evaluate("document.querySelector('input[type=url]').focus()");
+  await command("Input.insertText", { text: server.origin });
+  await evaluate("document.querySelector('input[type=checkbox]').click()");
+  await evaluate("document.querySelector('form button').click()");
   await until(
     () => evaluate("!!document.querySelector('#username')"),
     "login screen",
@@ -194,6 +204,12 @@ try {
   await until(
     () => evaluate("!!document.querySelector('.app-shell aside')"),
     "web layout",
+  );
+  assert.equal(
+    await evaluate(
+      "getComputedStyle(document.querySelector('.app-shell')).display",
+    ),
+    "grid",
   );
   await until(
     () => evaluate("!!document.querySelector('a[href=\"/downloads\"]')"),

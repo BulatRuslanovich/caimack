@@ -98,6 +98,7 @@ export function ConnectionForm({ locale, initial }: { locale: Locale; initial?: 
         </p>
       )}
       <Button
+        type="submit"
         variant="primary"
         disabled={
           busy || (!!initial && server === initial.server && allowHttp === initial.allowHttp)
