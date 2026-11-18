@@ -53,6 +53,7 @@ export async function fixture() {
     streamRequests: [],
     actions: new Map(),
     interrupted: false,
+    streamGate: null,
     loseReceipt: false,
     wave: wave(),
   };
@@ -107,12 +108,17 @@ export async function fixture() {
         });
         response.end(buffer.subarray(Number(start)));
       } else {
+        const gate = list === state.streamRequests && state.streamGate;
         response.writeHead(200, {
           ETag: etag,
           "Content-Type": type,
-          "Content-Length": buffer.length,
+          ...(!gate?.unknownSize && { "Content-Length": buffer.length }),
         });
-        if (state.interrupted && list === state.streamRequests) {
+        if (gate) {
+          state.streamGate = null;
+          response.write(buffer.subarray(0, 4096));
+          void gate.release.then(() => response.end(buffer.subarray(4096)));
+        } else if (state.interrupted && list === state.streamRequests) {
           state.interrupted = false;
           response.write(buffer.subarray(0, 4096));
           setTimeout(() => response.destroy(), 100);

@@ -199,13 +199,22 @@ export function DesktopCollectionDownload({
         (!!artist &&
           (track.artistId === artist || track.artists?.some((credit) => credit.id === artist)))),
   );
-  const pending = transfers.some((item) => item.status !== "complete");
+  const starting =
+    command.isPending &&
+    command.variables &&
+    "path" in command.variables &&
+    command.variables.path === "/downloads";
+  const pending = starting || transfers.some((item) => item.status !== "complete");
   const complete = !pending && transfers.length >= total;
-  const progress = transfers.reduce((sum, item) => sum + transferProgress(item), 0) / total;
+  const progress = transfers.some((item) => item.status === "running" && !item.total)
+    ? null
+    : transfers.reduce((sum, item) => sum + (transferProgress(item) ?? 0), 0) / total;
   const label = complete
     ? copy("Remove collection downloads", "Удалить загрузки коллекции")
     : pending
-      ? copy("Cancel collection download", "Отменить загрузку коллекции")
+      ? starting
+        ? copy("Starting collection download", "Запуск загрузки коллекции")
+        : copy("Cancel collection download", "Отменить загрузку коллекции")
       : copy("Download collection", "Скачать коллекцию");
   return (
     <Button
@@ -259,18 +268,33 @@ function transferProgress(transfer: Transfer) {
     ? 1
     : transfer.total
       ? Math.min(1, transfer.bytes / transfer.total)
-      : 0;
+      : null;
 }
 
-function DownloadProgress({ progress }: { progress: number }) {
+function DownloadProgress({ progress }: { progress: number | null }) {
+  const indeterminate = progress === null || progress <= 0;
   return (
-    <span
+    <svg
       aria-hidden="true"
-      className="grid size-5 shrink-0 place-items-center rounded-full [mask-image:radial-gradient(circle,transparent_52%,black_56%)]"
-      style={{
-        background: `conic-gradient(var(--primary) ${Math.round(progress * 100)}%, var(--raised) 0)`,
-      }}
-    />
+      viewBox="0 0 24 24"
+      fill="none"
+      strokeWidth="2.5"
+      className={indeterminate ? "size-[22px] motion-safe:animate-spin" : "size-[22px]"}
+      data-download-progress={indeterminate ? "indeterminate" : "determinate"}
+    >
+      <circle cx="12" cy="12" r="9" className="stroke-raised" />
+      <circle
+        cx="12"
+        cy="12"
+        r="9"
+        pathLength="1"
+        transform="rotate(-90 12 12)"
+        strokeLinecap="round"
+        strokeDasharray={indeterminate ? "0.24 0.76" : "1"}
+        strokeDashoffset={indeterminate ? 0 : 1 - Math.min(1, progress)}
+        className="stroke-primary motion-safe:transition-[stroke-dashoffset] motion-safe:duration-300"
+      />
+    </svg>
   );
 }
 

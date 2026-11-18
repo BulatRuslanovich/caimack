@@ -233,9 +233,31 @@ try {
   })()`),
     true,
   );
+  await command("Emulation.setEmulatedMedia", {
+    features: [{ name: "prefers-reduced-motion", value: "no-preference" }],
+  });
+  const transfer = Promise.withResolvers();
+  server.state.streamGate = { release: transfer.promise, unknownSize: true };
   await evaluate(
     'document.querySelector("[data-collection-download]").click()',
   );
+  await until(async () => {
+    const download = (await request("/desktop/status")).body.downloads[0];
+    return (
+      download?.status === "running" &&
+      download.bytes > 0 &&
+      download.total === null
+    );
+  }, "streaming audio without a content length");
+  await until(
+    () =>
+      evaluate(`(() => {
+    const progress = document.querySelector('[data-collection-download="pending"] [data-download-progress="indeterminate"]');
+    return progress && getComputedStyle(progress).animationName !== "none";
+  })()`),
+    "animated album download indicator",
+  );
+  transfer.resolve();
   await until(
     async () =>
       (await request("/desktop/status")).body.downloads[0]?.status ===
@@ -259,6 +281,38 @@ try {
       badge.getBoundingClientRect().right <= menu.getBoundingClientRect().left;
   })()`),
     true,
+  );
+  await evaluate(
+    'document.querySelector("[data-collection-download]").click()',
+  );
+  await until(
+    () =>
+      evaluate(
+        "!!document.querySelector('[data-collection-download=\"available\"]')",
+      ),
+    "removing the first album download",
+  );
+  const knownTransfer = Promise.withResolvers();
+  server.state.streamGate = { release: knownTransfer.promise };
+  await evaluate(
+    'document.querySelector("[data-collection-download]").click()',
+  );
+  await until(
+    () =>
+      evaluate(`(() => {
+    const arc = document.querySelector('[data-collection-download="pending"] [data-download-progress="determinate"] circle[pathLength]');
+    const offset = Number(arc?.getAttribute("stroke-dashoffset"));
+    return arc && offset > 0 && offset < 1 && getComputedStyle(arc).transitionProperty === "stroke-dashoffset";
+  })()`),
+    "animated byte progress for an album download",
+  );
+  knownTransfer.resolve();
+  await until(
+    () =>
+      evaluate(
+        "!!document.querySelector('[data-collection-download=\"complete\"]')",
+      ),
+    "completing the second album download",
   );
   const lyrics = await request("/api/tracks/" + track.id + "/lyrics");
   assert.equal(lyrics.body.plain, "hello");
