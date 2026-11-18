@@ -2,7 +2,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import Link from "next/link";
 import {
   Grid2X2Icon,
   ListIcon,
@@ -42,6 +41,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { PlaylistDialog } from "@/components/PlaylistDialog";
 import { Button } from "@/components/ui/button";
 import { LibraryNavigation } from "@/components/LibraryNavigation";
+import { PrefetchLink } from "@/components/PrefetchLink";
 
 export default function LibraryPage() {
   const t = useT();
@@ -397,7 +397,7 @@ export default function LibraryPage() {
                           !currentFolder &&
                           !q && (
                             <Button asChild>
-                              <Link href="/tracks">{t("collection.catalog")}</Link>
+                              <PrefetchLink href="/tracks">{t("collection.catalog")}</PrefetchLink>
                             </Button>
                           )
                         }

@@ -30,12 +30,12 @@ export interface NavEntry {
 
 const home: NavEntry = { href: "/", labelKey: "nav.home", icon: HouseIcon };
 const search: NavEntry = { href: "/search", labelKey: "nav.search", icon: SearchIcon };
-const tracks: NavEntry = { href: "/tracks", labelKey: "nav.tracks", icon: AudioLinesIcon };
-const playlists: NavEntry = { href: "/playlists", labelKey: "nav.playlists", icon: ListMusicIcon };
+const tracks = { href: "/tracks", labelKey: "nav.tracks", icon: AudioLinesIcon } as const;
+const playlists = { href: "/playlists", labelKey: "nav.playlists", icon: ListMusicIcon } as const;
 const favorites: NavEntry = { href: "/favorites", labelKey: "nav.favorites", icon: HeartIcon };
-const albums: NavEntry = { href: "/albums", labelKey: "nav.albums", icon: Disc3Icon };
-const artists: NavEntry = { href: "/artists", labelKey: "nav.artists", icon: UsersRoundIcon };
-const genres: NavEntry = { href: "/genres", labelKey: "nav.genres", icon: TagsIcon };
+const albums = { href: "/albums", labelKey: "nav.albums", icon: Disc3Icon } as const;
+const artists = { href: "/artists", labelKey: "nav.artists", icon: UsersRoundIcon } as const;
+const genres = { href: "/genres", labelKey: "nav.genres", icon: TagsIcon } as const;
 const map: NavEntry = { href: "/map", labelKey: "nav.map", icon: MapIcon };
 const recent: NavEntry = {
   href: "/recently-played",
@@ -43,13 +43,19 @@ const recent: NavEntry = {
   icon: HistoryIcon,
 };
 
-const library: NavEntry = { href: "/library", labelKey: "nav.mediaLibrary", icon: LibraryBigIcon };
+const library = { href: "/library", labelKey: "nav.mediaLibrary", icon: LibraryBigIcon } as const;
 
 export const primaryNav: NavEntry[] = [home, search, library];
 
 export const libraryNav: NavEntry[] = [favorites, recent, map];
 
-export const catalogNav: NavEntry[] = [tracks, albums, artists, playlists, genres];
+export const catalogNav = [tracks, albums, artists, playlists, genres] satisfies NavEntry[];
+
+export type LibraryBrowsePath = typeof library.href | (typeof catalogNav)[number]["href"];
+
+export function isLibraryBrowsePath(pathname: string): pathname is LibraryBrowsePath {
+  return pathname === library.href || catalogNav.some(({ href }) => href === pathname);
+}
 
 export const mobileNav: NavEntry[] = [home, search, library];
 

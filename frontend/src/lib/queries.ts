@@ -5,6 +5,7 @@ import { api, type SearchTab } from "@/lib/api";
 import { ApiError } from "@/lib/http";
 import { WAVEFORM_VERSION } from "@/lib/waveform";
 import { CARD_PAGE_SIZE, TRACK_PAGE_SIZE } from "@/lib/pageSizes";
+import type { LibraryBrowsePath } from "@/lib/navigation";
 import type {
   ArtistDetail,
   HomeMixSlug,
@@ -275,23 +276,45 @@ export const queries = {
     }),
 };
 
+const libraryViewData: Record<LibraryBrowsePath, (client: QueryClient) => Promise<unknown>> = {
+  "/library": (client) =>
+    Promise.all([
+      client.ensureQueryData(queries.savedLibrary()),
+      client.ensureQueryData(queries.libraryFolders()),
+    ]),
+  "/tracks": (client) =>
+    client.ensureQueryData(queries.tracks({ page: 1, pageSize: TRACK_PAGE_SIZE, sort: "Title" })),
+  "/albums": (client) => client.ensureInfiniteQueryData(queries.albumsFeed()),
+  "/artists": (client) => client.ensureInfiniteQueryData(queries.artistsFeed()),
+  "/genres": (client) => client.ensureQueryData(queries.genres()),
+  "/playlists": (client) => client.ensureQueryData(queries.playlists()),
+};
+
+export function prepareLibraryView(client: QueryClient, pathname: LibraryBrowsePath) {
+  return libraryViewData[pathname](client);
+}
+
+async function prefetchLibraryView(
+  client: QueryClient,
+  pathname: LibraryBrowsePath,
+): Promise<void> {
+  // The query cache reports errors. Prefetch callers can keep working when a read fails.
+  await prepareLibraryView(client, pathname).catch(() => {});
+}
+
 export const navigationPrefetch: Record<string, (client: QueryClient) => Promise<void>> = {
   "/": (client) => client.prefetchQuery(queries.homeFeed()),
   "/library": async (client) => {
     await Promise.all([
-      client.prefetchQuery(queries.savedLibrary()),
-      client.prefetchQuery(queries.libraryFolders()),
+      prefetchLibraryView(client, "/library"),
       client.prefetchQuery(queries.libraryOrder()),
       client.prefetchQuery(queries.favorites({ page: 1, pageSize: 1 })),
     ]);
   },
-  "/tracks": (client) =>
-    client.prefetchQuery(
-      queries.tracks({ page: 1, pageSize: TRACK_PAGE_SIZE, sort: "Title", q: undefined }),
-    ),
-  "/albums": (client) => client.prefetchInfiniteQuery(queries.albumsFeed()),
-  "/artists": (client) => client.prefetchInfiniteQuery(queries.artistsFeed()),
-  "/genres": (client) => client.prefetchQuery(queries.genres()),
+  "/tracks": (client) => prefetchLibraryView(client, "/tracks"),
+  "/albums": (client) => prefetchLibraryView(client, "/albums"),
+  "/artists": (client) => prefetchLibraryView(client, "/artists"),
+  "/genres": (client) => prefetchLibraryView(client, "/genres"),
   "/search": (client) => client.prefetchQuery(queries.genres()),
   "/map": (client) => client.prefetchQuery(queries.libraryMap()),
   "/favorites": (client) =>
@@ -300,7 +323,7 @@ export const navigationPrefetch: Record<string, (client: QueryClient) => Promise
     client.prefetchQuery(queries.recentlyPlayed({ page: 1, pageSize: TRACK_PAGE_SIZE })),
   "/playlists": async (client) => {
     await Promise.all([
-      client.prefetchQuery(queries.playlists()),
+      prefetchLibraryView(client, "/playlists"),
       client.prefetchQuery(queries.publicPlaylists()),
     ]);
   },

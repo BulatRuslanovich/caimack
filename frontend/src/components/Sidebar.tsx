@@ -4,13 +4,19 @@
 "use client";
 
 import { useRecommendations } from "@/lib/useRecommendations";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { LogOutIcon } from "lucide-react";
 import { PrefetchLink as Link } from "@/components/PrefetchLink";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
-import { isActivePath, libraryNav, primaryNav, serviceNav, type NavEntry } from "@/lib/navigation";
-import { navigationPrefetch } from "@/lib/queries";
+import {
+  isActivePath,
+  isLibraryBrowsePath,
+  libraryNav,
+  primaryNav,
+  serviceNav,
+  type NavEntry,
+} from "@/lib/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUpload } from "@/contexts/UploadContext";
 import { useT } from "@/contexts/I18nContext";
@@ -28,19 +34,17 @@ export function NavLink({
   compact?: boolean;
 }) {
   const t = useT();
-  const client = useQueryClient();
-  const active = isActivePath(usePathname(), entry.href);
+  const pathname = usePathname();
+  const active =
+    isActivePath(pathname, entry.href) ||
+    (entry.href === "/library" && isLibraryBrowsePath(pathname));
   const Icon = entry.icon;
-
-  const prefetch = () => void navigationPrefetch[entry.href]?.(client);
 
   return (
     <Link
       href={entry.href}
       aria-current={active ? "page" : undefined}
       onClick={onNavigate}
-      onMouseEnter={prefetch}
-      onFocus={prefetch}
       className={cn(
         "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors duration-150 ease-brand hover:bg-raised hover:text-foreground hover:no-underline",
         compact && "py-1.5 text-[0.8125rem] text-faint",

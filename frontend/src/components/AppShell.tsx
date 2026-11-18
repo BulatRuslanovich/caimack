@@ -5,6 +5,7 @@
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useT } from "@/contexts/I18nContext";
+import { LibraryNavigationProvider } from "@/contexts/LibraryNavigationContext";
 import { usePlayerUi } from "@/contexts/PlayerUiContext";
 import { useLibraryDensity } from "@/lib/libraryDensity";
 import { isTypingTarget } from "@/lib/shortcuts";
@@ -69,7 +70,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   if (!user) return null;
 
-  return (
+  const shell = (
     <div
       data-queue-docked={queueDocked}
       className="app-shell grid h-dvh grid-cols-[var(--sidebar-width)_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] [grid-template-areas:'sidebar_content''player_player'] max-md:grid-cols-1 max-md:grid-rows-[auto_minmax(0,1fr)_auto_auto] max-md:[grid-template-areas:'mobile-header''content''player''nav']"
@@ -111,4 +112,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       <YandexImports />
     </div>
   );
+
+  return <LibraryNavigationProvider>{shell}</LibraryNavigationProvider>;
 }
