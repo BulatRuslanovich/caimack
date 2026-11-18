@@ -70,7 +70,8 @@
   transition:
     --tone-h 900ms var(--ease),
     --tone-c 900ms var(--ease),
-    --tone-a 900ms var(--ease);
+    --tone-a 900ms var(--ease),
+    --cover-palette-seed var(--cover-palette-duration, 0ms) var(--ease);
 }
 
 [data-tone] {

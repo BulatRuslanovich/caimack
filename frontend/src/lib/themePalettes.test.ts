@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
-import { THEME_COLORS } from "./themeScript";
+import { runInNewContext } from "node:vm";
+import { describe, expect, it, vi } from "vitest";
+import {
+  COLORWAY_STORAGE_KEY,
+  NO_FLASH_THEME_SCRIPT,
+  THEME_COLORS,
+  THEME_STORAGE_KEY,
+} from "./themeScript";
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 const css = read("../app/styles/theme.css") + read("../app/styles/colorways.css");
@@ -28,7 +34,24 @@ const contrast = (a: number[], b: number[]) => {
 };
 
 describe("shared application palettes", () => {
-  it("covers all ten theme variants", () => expect(palettes).toHaveLength(10));
+  it("covers all ten fixed theme variants", () => expect(palettes).toHaveLength(10));
+  it.each(["dark", "light"] as const)(
+    "restores the cover palette in %s mode before art loads",
+    (theme) => {
+      const dataset = {};
+      const setAttribute = vi.fn();
+      const preferences = new Map([
+        [COLORWAY_STORAGE_KEY, "cover"],
+        [THEME_STORAGE_KEY, theme],
+      ]);
+      runInNewContext(NO_FLASH_THEME_SCRIPT, {
+        document: { documentElement: { dataset }, querySelector: () => ({ setAttribute }) },
+        localStorage: { getItem: (key: string) => preferences.get(key) ?? null },
+      });
+      expect(dataset).toEqual({ theme, colorway: "cover" });
+      expect(setAttribute).toHaveBeenCalledWith("content", THEME_COLORS.coffee[theme]);
+    },
+  );
   for (const { name, mode, tokens, body } of palettes) {
     it(`${name} ${mode}: readable content, selected labels and actions`, () => {
       for (const surface of ["background", "card", "popover", "surface-raised"])

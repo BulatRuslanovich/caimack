@@ -349,7 +349,12 @@ fun SettingsScreen(category: SettingsCategory? = null) {
                             stringResource(R.string.settings_help_colorway),
                             colorway.key,
                             Colorway.entries.map { option ->
-                                Option(option.key, stringResource(colorwayName(option)), preview = { ColorwaySwatch(paletteOf(option, dark)) })
+                                val preview = if (option == Colorway.Cover) {
+                                    coverPalette(dark, CoverPalettePreview)
+                                } else {
+                                    paletteOf(option, dark)
+                                }
+                                Option(option.key, stringResource(colorwayName(option)), preview = { ColorwaySwatch(preview) })
                             },
                         ) { container.appearance.setColorway(Colorway.of(it)) }
                     }
@@ -496,6 +501,7 @@ private fun colorwayName(colorway: Colorway) = when (colorway) {
     Colorway.Midnight -> R.string.settings_colorway_midnight
     Colorway.Plum -> R.string.settings_colorway_plum
     Colorway.Studio -> R.string.settings_colorway_studio
+    Colorway.Cover -> R.string.settings_colorway_cover
 }
 
 @Composable

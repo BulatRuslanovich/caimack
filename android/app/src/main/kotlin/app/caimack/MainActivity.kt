@@ -68,17 +68,18 @@ class MainActivity : ComponentActivity() {
                 onDispose {}
             }
 
-            CaimackTheme(dark = dark, colorway = colorway) {
-                CompositionLocalProvider(LocalContainer provides container) {
-                    Surface(Modifier.fillMaxSize()) {
-                        when (val current = state) {
-                            SessionState.Restoring -> Unit
-                            is SessionState.SignedOut -> LoginScreen(
+            CompositionLocalProvider(LocalContainer provides container) {
+                val current = state
+                if (current is SessionState.SignedIn) {
+                    App(current.user, dark, colorway)
+                } else {
+                    CaimackTheme(dark = dark, colorway = colorway) {
+                        Surface(Modifier.fillMaxSize()) {
+                            if (current is SessionState.SignedOut) LoginScreen(
                                 session = container.session,
                                 lastAddress = address?.toString()?.trimEnd('/').orEmpty(),
                                 expired = current.expired,
                             )
-                            is SessionState.SignedIn -> App(current.user)
                         }
                     }
                 }
