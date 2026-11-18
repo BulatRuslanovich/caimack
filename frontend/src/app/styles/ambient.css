@@ -61,6 +61,7 @@
   background: var(--primary);
 }
 
-:root[data-colorway="graphite"][data-theme="dark"] .ambient-glow {
+:root[data-colorway="graphite"][data-theme="dark"] .ambient-glow,
+:root[data-colorway="cover"] .ambient-glow {
   display: none;
 }

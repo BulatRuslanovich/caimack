@@ -24,6 +24,7 @@
     <string name="settings_colorway_midnight">Полночь</string>
     <string name="settings_colorway_plum">Слива и персик</string>
     <string name="settings_colorway_studio">Хвоя и лайм</string>
+    <string name="settings_colorway_cover">По обложке трека</string>
     <string name="settings_language">Язык</string>
     <string name="settings_tile">Плитка в шторке</string>
     <string name="settings_tile_add">Добавить</string>
@@ -52,7 +53,7 @@
     <string name="recap_reminder_channel">Итоги месяца</string>
     <string name="recap_reminder_title">Итоги за %1$s готовы</string>
     <string name="recap_reminder_text">Посмотрите, что звучало чаще всего</string>
-    <string name="settings_help_coverTone">Добавляет в интерфейс цвета обложки текущего трека.</string>
+    <string name="settings_help_coverTone">Подсвечивает интерфейс оттенком обложки текущего трека.</string>
     <string name="settings_help_quality">Предпочитаемое качество. При медленном соединении оригинал может временно смениться на AAC. Фактическое качество видно в плеере; скачанные треки играют с устройства.</string>
     <string name="settings_help_smartTransitions">Подбирает переход между треками с учётом их звучания.</string>
     <string name="settings_help_colorway">Меняет палитру фона, поверхностей и акцентных элементов.</string>

@@ -8,7 +8,13 @@ import { PrefetchLink as Link } from "@/components/PrefetchLink";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
-import { catalogNav, isActivePath, libraryTabs, mobileNav, serviceNav } from "@/lib/navigation";
+import {
+  isActivePath,
+  isLibraryBrowsePath,
+  libraryTabs,
+  mobileNav,
+  serviceNav,
+} from "@/lib/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUpload } from "@/contexts/UploadContext";
 import { useT } from "@/contexts/I18nContext";
@@ -105,9 +111,8 @@ export function LibraryChips() {
   }, [pathname]);
 
   if (
-    pathname === "/library" ||
+    isLibraryBrowsePath(pathname) ||
     /^\/(albums|artists|playlists)\//.test(pathname) ||
-    catalogNav.some((entry) => entry.href === pathname) ||
     !inLibrary(pathname)
   )
     return null;

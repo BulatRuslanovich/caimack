@@ -20,7 +20,7 @@ internal enum class SettingKey(val section: Int, vararg val terms: Int) {
     MusicHaptics(R.string.settings_playback, R.string.settings_music_haptics, R.string.settings_music_haptics_hint),
     Equalizer(R.string.settings_equalizer, R.string.settings_equalizer, R.string.settings_help_equalizer, R.string.settings_equalizer_flat, R.string.settings_equalizer_bass, R.string.settings_equalizer_vocal, R.string.settings_equalizer_treble),
     Theme(R.string.settings_appearance, R.string.settings_theme, R.string.settings_help_theme, R.string.settings_theme_system, R.string.settings_theme_dark, R.string.settings_theme_light),
-    Palette(R.string.settings_appearance, R.string.settings_colorway, R.string.settings_help_colorway, R.string.settings_colorway_coffee, R.string.settings_colorway_graphite, R.string.settings_colorway_midnight, R.string.settings_colorway_plum, R.string.settings_colorway_studio),
+    Palette(R.string.settings_appearance, R.string.settings_colorway, R.string.settings_help_colorway, R.string.settings_colorway_coffee, R.string.settings_colorway_graphite, R.string.settings_colorway_midnight, R.string.settings_colorway_plum, R.string.settings_colorway_studio, R.string.settings_colorway_cover),
     Density(R.string.settings_appearance, R.string.settings_library_density, R.string.settings_density_compact, R.string.settings_density_comfortable, R.string.settings_density_spacious),
     PlayerEffects(R.string.settings_appearance, R.string.settings_player_effects, R.string.settings_help_player_effects),
     Cover(R.string.settings_appearance, R.string.settings_cover_tone, R.string.settings_help_coverTone),

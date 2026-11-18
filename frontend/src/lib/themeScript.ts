@@ -11,18 +11,21 @@ export const PALETTES = ["dark", "light"] as const;
 
 export type Palette = (typeof PALETTES)[number];
 
-export const COLORWAYS = ["coffee", "graphite", "midnight", "plum", "studio"] as const;
+export const COLORWAYS = ["coffee", "graphite", "midnight", "plum", "studio", "cover"] as const;
 
 export type Colorway = (typeof COLORWAYS)[number];
 
 export const DEFAULT_COLORWAY: Colorway = "coffee";
 
+const COFFEE_COLORS = { dark: "#171819", light: "#eeefec" };
+
 export const THEME_COLORS: Record<Colorway, Record<Palette, string>> = {
-  coffee: { dark: "#171819", light: "#eeefec" },
+  coffee: COFFEE_COLORS,
   graphite: { dark: "#000000", light: "#f1f1ef" },
   midnight: { dark: "#14171c", light: "#eff0f2" },
   plum: { dark: "#19171b", light: "#f2eff0" },
   studio: { dark: "#151a17", light: "#eff2ef" },
+  cover: COFFEE_COLORS,
 };
 
 export const NO_FLASH_THEME_SCRIPT = `try {

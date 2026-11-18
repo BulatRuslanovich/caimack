@@ -1,6 +1,54 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 /* Copyright (c) 2026 Bulat Ruslanovich */
 
+@property --cover-palette-seed {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #5f8cef;
+}
+
+:root[data-cover-palette="changing"] {
+  --cover-palette-duration: 320ms;
+}
+
+[data-colorway-preview="cover"] {
+  --cover-palette-seed: initial;
+}
+
+:root[data-colorway="cover"][data-cover-palette],
+[data-colorway-preview="cover"][data-theme-preview="dark"] {
+  --card: color-mix(in srgb, #1b1b1b 85%, var(--cover-palette-seed));
+  --popover: color-mix(in srgb, #252525 84%, var(--cover-palette-seed));
+  --surface-raised: color-mix(in srgb, #2b2b2b 83%, var(--cover-palette-seed));
+  --accent: color-mix(in srgb, #343434 80%, var(--cover-palette-seed));
+  --foreground: #f5f5f5;
+  --muted-foreground: #c9c9c9;
+  --faint-foreground: #bcbcbc;
+  --primary: color-mix(in srgb, white 52%, var(--cover-palette-seed));
+  --primary-foreground: #171717;
+  --primary-soft: color-mix(in srgb, var(--primary) 12%, transparent);
+  --action: color-mix(in srgb, white 71%, var(--cover-palette-seed));
+  --action-hover: color-mix(in srgb, white 83%, var(--cover-palette-seed));
+  --action-foreground: var(--primary-foreground);
+}
+
+:root[data-colorway="cover"][data-cover-palette][data-theme="light"],
+[data-colorway-preview="cover"][data-theme-preview="light"] {
+  --card: color-mix(in srgb, white 92%, var(--cover-palette-seed));
+  --popover: color-mix(in srgb, white 96%, var(--cover-palette-seed));
+  --surface-raised: color-mix(in srgb, white 95%, var(--cover-palette-seed));
+  --accent: color-mix(in srgb, #ececec 85%, var(--cover-palette-seed));
+  --foreground: #242424;
+  --muted-foreground: #494949;
+  --faint-foreground: #555555;
+  --primary: color-mix(in srgb, black 53%, var(--cover-palette-seed));
+  --primary-foreground: #fafafa;
+  --primary-soft: color-mix(in srgb, var(--primary) 9%, transparent);
+  --action: color-mix(in srgb, black 62%, var(--cover-palette-seed));
+  --action-hover: color-mix(in srgb, black 71%, var(--cover-palette-seed));
+  --action-foreground: var(--primary-foreground);
+}
+
 :root[data-colorway="graphite"],
 [data-colorway-preview="graphite"][data-theme-preview="dark"] {
   --background: #000000;
