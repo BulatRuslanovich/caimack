@@ -24,6 +24,7 @@
     <string name="settings_colorway_midnight">Midnight Blue</string>
     <string name="settings_colorway_plum">Plum Violet</string>
     <string name="settings_colorway_studio">Studio: Pine &amp; Lime</string>
+    <string name="settings_colorway_cover">From track artwork</string>
     <string name="settings_language">Language</string>
     <string name="language_english" translatable="false">English</string>
     <string name="language_russian" translatable="false">Русский</string>
@@ -61,7 +62,7 @@
     <string name="settings_help_theme">Use light, dark or your system appearance.</string>
     <string name="settings_help_colorway">Change the colours of backgrounds, surfaces and accents.</string>
     <string name="settings_help_language">Change the interface language.</string>
-    <string name="settings_help_coverTone">Tint the interface with colours from the current cover.</string>
+    <string name="settings_help_coverTone">Show highlights that pick up the colours of the current cover.</string>
     <string name="settings_library_density">Library density</string>
     <string name="settings_density_compact">Compact</string>
     <string name="settings_density_comfortable">Comfortable</string>

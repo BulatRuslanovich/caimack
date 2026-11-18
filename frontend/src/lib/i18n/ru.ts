@@ -770,6 +770,7 @@ export const ru: Dictionary = {
   "settings.colorway.midnight": "Полночь",
   "settings.colorway.plum": "Слива и персик",
   "settings.colorway.studio": "Xвоя и лайм",
+  "settings.colorway.cover": "По обложке трека",
   "settings.language": "Язык",
   "settings.playback": "Воспроизведение",
   "settings.quality": "Качество звука",
@@ -1125,7 +1126,7 @@ export const ru: Dictionary = {
   "map.layer.links": "Связи",
   "map.layer.nebula": "Туманности",
   "map.layer.motion": "Анимация",
-  "settings.help.coverTone": "Добавляет в интерфейс цвета обложки текущего трека.",
+  "settings.help.coverTone": "Подсвечивает интерфейс оттенком обложки текущего трека.",
   "settings.help.quality":
     "При медленном соединении плеер может снизить качество. Фактическое качество видно в плеере.",
   "settings.help.smartTransitions": "Подбирает переход между треками с учётом их звучания.",

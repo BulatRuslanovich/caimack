@@ -46,7 +46,6 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: THEME_COLORS[DEFAULT_COLORWAY].dark,
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -67,6 +66,11 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       suppressHydrationWarning
     >
       <head>
+        <meta
+          name="theme-color"
+          content={THEME_COLORS[DEFAULT_COLORWAY].dark}
+          suppressHydrationWarning
+        />
         <script dangerouslySetInnerHTML={{ __html: NO_FLASH_THEME_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: EARLY_FETCH_SCRIPT }} />
       </head>

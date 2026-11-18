@@ -5,6 +5,7 @@
 
 import { useSyncExternalStore } from "react";
 import { readStored, writeStored } from "@/lib/storage";
+import type { CoverTone } from "./coverTone";
 import {
   COLORWAY_STORAGE_KEY,
   COLORWAYS,
@@ -16,6 +17,7 @@ import {
   type Colorway,
   type Palette,
 } from "./themeScript";
+import { backdropRgb } from "./visuals/playerBackdrop";
 
 export const THEME_CHOICES = ["system", ...PALETTES] as const;
 
@@ -28,6 +30,8 @@ let choice: ThemeChoice | null = null;
 let colorway: Colorway | null = null;
 
 let coverTone: boolean | null = null;
+
+let coverPaletteSeed: ReturnType<typeof backdropRgb> | null = null;
 
 const listeners = new Set<() => void>();
 
@@ -48,14 +52,15 @@ function resolve(value: ThemeChoice): Palette {
 function apply(): void {
   const palette = resolve(getChoice());
   const root = document.documentElement;
+  const activeColorway = getColorway();
 
   root.dataset.theme = palette;
-  root.dataset.colorway = getColorway();
+  root.dataset.colorway = activeColorway;
   if (getCoverTone()) delete root.dataset.coverTone;
   else root.dataset.coverTone = "off";
   document
     .querySelector('meta[name="theme-color"]')
-    ?.setAttribute("content", THEME_COLORS[getColorway()][palette]);
+    ?.setAttribute("content", THEME_COLORS[activeColorway][palette]);
 }
 
 function notify(): void {
@@ -131,6 +136,22 @@ export function setCoverTone(next: boolean): void {
   writeStored(COVER_TONE_STORAGE_KEY, next ? null : "off");
 
   notify();
+}
+
+export function setCoverPaletteTone(tone: CoverTone | null): void {
+  const seed =
+    tone && backdropRgb({ ...tone, lightness: 0.66, chroma: Math.min(tone.chroma * 1.4, 0.22) });
+  if (seed?.join(" ") === coverPaletteSeed?.join(" ")) return;
+
+  const root = document.documentElement;
+  if (seed) {
+    root.dataset.coverPalette = coverPaletteSeed ? "changing" : "ready";
+    root.style.setProperty("--cover-palette-seed", `rgb(${seed.join(" ")})`);
+  } else {
+    delete root.dataset.coverPalette;
+    root.style.removeProperty("--cover-palette-seed");
+  }
+  coverPaletteSeed = seed;
 }
 
 export function useTheme(): Palette {
