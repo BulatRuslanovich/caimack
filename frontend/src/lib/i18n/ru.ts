@@ -45,6 +45,7 @@ export const ru: Dictionary = {
   "connect.findDevices":
     "Откройте Caimack на другом устройстве и войдите в тот же аккаунт. Оно появится здесь.",
   "nav.home": "Главная",
+  "nav.downloads": "Загрузки",
   "nav.library": "Ваша библиотека",
   "nav.main": "Основное",
   "nav.tracks": "Треки",

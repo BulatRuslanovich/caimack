@@ -3,6 +3,9 @@
 
 "use client";
 
+import { isDesktop } from "@/desktop/runtime";
+import { DownloadBadge } from "@/desktop/offline";
+
 import { useT } from "@/contexts/I18nContext";
 import { usePlayer } from "@/contexts/PlayerContext";
 import { api } from "@/lib/api";
@@ -412,6 +415,7 @@ const QueueRow = memo(function QueueRow({
           </span>
         </button>
 
+        {isDesktop && <DownloadBadge id={track.id} />}
         {editing ? (
           <Button
             variant="ghost"

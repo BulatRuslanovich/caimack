@@ -5,6 +5,8 @@
 
 import { useRecommendations } from "@/lib/useRecommendations";
 import Link from "next/link";
+import type { Route } from "next";
+import { isDesktop } from "@/desktop/api";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef } from "react";
 import {
@@ -35,6 +37,11 @@ export default function SettingsPage() {
       <Suspense fallback={null}>
         <SettingsSections />
       </Suspense>
+      {isDesktop && (
+        <Link href={"/downloads" as Route} className="text-sm text-primary">
+          {t("nav.downloads")}
+        </Link>
+      )}
       <p className="text-2xs text-faint mt-auto">Caimack v{process.env.APP_VERSION}</p>
       <Copyright />
     </>

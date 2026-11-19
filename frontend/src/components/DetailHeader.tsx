@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { displayTitleClass } from "@/lib/format";
 import { ArtBackdrop } from "./ArtBackdrop";
+import { isDesktop } from "@/desktop/runtime";
 
 export function DetailHeader({
   kind,
@@ -15,6 +16,7 @@ export function DetailHeader({
   facts = [],
   description,
   actions,
+  trailingActions,
   round = false,
   record = false,
   backdrop = null,
@@ -25,6 +27,7 @@ export function DetailHeader({
   facts?: ReactNode[];
   description?: ReactNode;
   actions?: ReactNode;
+  trailingActions?: ReactNode;
   round?: boolean;
   record?: boolean;
   backdrop?: string | null;
@@ -66,10 +69,18 @@ export function DetailHeader({
             ))}
           </p>
         )}
-        {actions && (
-          <div className="mt-2 flex flex-wrap items-center gap-2.5 max-sm:gap-2 max-sm:[&_button]:px-3">
-            {actions}
+        {isDesktop && trailingActions ? (
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-5 gap-y-2.5">
+            <div className="flex flex-wrap items-center gap-2.5">{actions}</div>
+            <div className="ml-auto flex items-center gap-1">{trailingActions}</div>
           </div>
+        ) : (
+          (actions || trailingActions) && (
+            <div className="mt-2 flex flex-wrap items-center gap-2.5 max-sm:gap-2 max-sm:[&_button]:px-3">
+              {actions}
+              {trailingActions}
+            </div>
+          )
         )}
       </div>
     </header>

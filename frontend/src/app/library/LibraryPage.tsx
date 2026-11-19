@@ -2,11 +2,14 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import type { Route } from "next";
+import { isDesktop } from "@/desktop/api";
 import {
   Grid2X2Icon,
   ListIcon,
   PlusIcon,
   HeartIcon,
+  DownloadIcon,
   FolderIcon,
   ChevronRightIcon,
   SearchIcon,
@@ -263,6 +266,10 @@ export default function LibraryPage() {
                   ...(folderId === null ? ["downloads"] : []),
                 ];
                 const savedOrder = orderedKeys(allKeys, orderResult.data?.[folderId ?? "root"]);
+                const showDownloads =
+                  isDesktop &&
+                  folderId === null &&
+                  t("nav.downloads").toLocaleLowerCase().includes(q);
                 const entries: LibraryDragEntry[] = [
                   ...(favorites
                     ? [
@@ -284,6 +291,28 @@ export default function LibraryPage() {
                               cover={
                                 <div className="grid size-full place-items-center bg-primary-soft text-primary">
                                   <HeartIcon size={32} />
+                                </div>
+                              }
+                            />
+                          ),
+                        },
+                      ]
+                    : []),
+                  ...(showDownloads
+                    ? [
+                        {
+                          key: "downloads",
+                          id: "downloads",
+                          kind: "downloads",
+                          node: (
+                            <Card
+                              layout={grid ? "grid" : "list"}
+                              href={"/downloads" as Route}
+                              title={t("nav.downloads")}
+                              subtitle=""
+                              cover={
+                                <div className="grid size-full place-items-center bg-primary-soft text-primary">
+                                  <DownloadIcon size={32} />
                                 </div>
                               }
                             />
@@ -377,32 +406,37 @@ export default function LibraryPage() {
                     {q && (
                       <p className="text-sm text-muted-foreground">{t("collection.dragSearch")}</p>
                     )}
-                    {shown.length === 0 && shownFolders.length === 0 && !favorites && (
-                      <EmptyState
-                        title={t(
-                          q
-                            ? "collection.noResults"
-                            : currentFolder
-                              ? "collection.empty"
-                              : filter === "album"
-                                ? "collection.emptyAlbums"
-                                : filter === "artist"
-                                  ? "collection.emptyArtists"
-                                  : filter === "playlist"
-                                    ? "collection.emptyPlaylists"
-                                    : "collection.empty",
-                        )}
-                        description={t(currentFolder ? "folders.emptyHint" : "collection.hint")}
-                        action={
-                          !currentFolder &&
-                          !q && (
-                            <Button asChild>
-                              <PrefetchLink href="/tracks">{t("collection.catalog")}</PrefetchLink>
-                            </Button>
-                          )
-                        }
-                      />
-                    )}
+                    {shown.length === 0 &&
+                      shownFolders.length === 0 &&
+                      !favorites &&
+                      !showDownloads && (
+                        <EmptyState
+                          title={t(
+                            q
+                              ? "collection.noResults"
+                              : currentFolder
+                                ? "collection.empty"
+                                : filter === "album"
+                                  ? "collection.emptyAlbums"
+                                  : filter === "artist"
+                                    ? "collection.emptyArtists"
+                                    : filter === "playlist"
+                                      ? "collection.emptyPlaylists"
+                                      : "collection.empty",
+                          )}
+                          description={t(currentFolder ? "folders.emptyHint" : "collection.hint")}
+                          action={
+                            !currentFolder &&
+                            !q && (
+                              <Button asChild>
+                                <PrefetchLink href="/tracks">
+                                  {t("collection.catalog")}
+                                </PrefetchLink>
+                              </Button>
+                            )
+                          }
+                        />
+                      )}
                   </>
                 );
               }}

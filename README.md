@@ -238,6 +238,7 @@ flowchart LR
 | `backend/`  | Rust API (axum, sqlx). Workers transcode uploads to HLS, analyse cue points and tempo, send audio fragments to the optional local MERT GPU service, and look up lyrics across multiple providers and artist photos via Deezer. Recommendations and the library map use an in-memory embedding snapshot; sound duplicate detection uses Chromaprint. |
 | `frontend/` | Next.js app with TanStack Query and hls.js. A service worker caches the shell, artwork and stream segments.                                                                                                                                                                                                             |
 | `android/`  | Kotlin client using Jetpack Compose and Media3: background playback, downloads, Android Auto and a quick-settings radio tile.                                                                                                                                                                                           |
+| `desktop/`  | Electron client for Windows and Linux with the web interface and Android-compatible offline downloads and library synchronization. See the [desktop guide](docs/desktop.md). |
 | `db/`       | The database schema as numbered SQL migrations, applied by `caimack migrate` (the `migrate` service in Compose); the server only checks that the schema is current. See [db/README.md](db/README.md).                                                                                                                   |
 | `deploy/`   | Caddyfile for the reverse proxy.                                                                                                                                                                                                                                                                                        |
 
@@ -299,9 +300,9 @@ node scripts/release.mjs 1.0.1 --check  # preview without changing files
 node scripts/release.mjs 1.0.1          # update versions, commit, tag v1.0.1
 ```
 
-The first release is `1.0.0`. The script synchronizes the frontend package and npm lockfile,
-Rust workspace and Cargo lockfile. Android reads the frontend package version; both clients
-show their build version in Settings. Versions use `X.Y.Z`, with each component from 0 to 99.
+The first release is `1.0.0`. The script synchronizes the frontend and desktop
+packages and npm lockfiles, and the Rust workspace and Cargo lockfile. Android reads
+the frontend package version. Versions use `X.Y.Z`, with each component from 0 to 99.
 Android uses an offset for its numeric version code so `1.0.0` updates the earlier `2.4.0` builds.
 Existing tags are never overwritten. Commit application changes before running the script.
 If the requested version is already set and has no tag, the script tags the current commit.

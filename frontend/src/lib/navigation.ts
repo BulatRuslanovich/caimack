@@ -7,6 +7,7 @@ import {
   AudioLinesIcon,
   CopyIcon,
   Disc3Icon,
+  DownloadIcon,
   HeartIcon,
   HistoryIcon,
   HouseIcon,
@@ -21,6 +22,7 @@ import {
   UsersRoundIcon,
   type LucideIcon,
 } from "lucide-react";
+import { isDesktop } from "@/desktop/runtime";
 
 export interface NavEntry {
   href: Route;
@@ -47,7 +49,11 @@ const library = { href: "/library", labelKey: "nav.mediaLibrary", icon: LibraryB
 
 export const primaryNav: NavEntry[] = [home, search, library];
 
-export const libraryNav: NavEntry[] = [favorites, recent, map];
+const downloads: NavEntry[] = isDesktop
+  ? [{ href: "/downloads" as Route, labelKey: "nav.downloads", icon: DownloadIcon }]
+  : [];
+
+export const libraryNav: NavEntry[] = [favorites, recent, ...downloads, map];
 
 export const catalogNav = [tracks, albums, artists, playlists, genres] satisfies NavEntry[];
 
@@ -67,6 +73,7 @@ export const libraryTabs: NavEntry[] = [
   tracks,
   favorites,
   recent,
+  ...downloads,
   genres,
   map,
 ];

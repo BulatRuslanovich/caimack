@@ -3,6 +3,9 @@
 
 "use client";
 
+import { isDesktop, useDesktopUnavailable } from "@/desktop/api";
+import { DownloadBadge } from "@/desktop/offline";
+
 import { useT } from "@/contexts/I18nContext";
 import { useNowPlaying, usePlayerActions } from "@/contexts/PlayerContext";
 import { cn } from "@/lib/cn";
@@ -54,14 +57,15 @@ interface TrackListProps {
 }
 
 const ROW_COLUMNS = {
-  "album+date": "grid-cols-[2rem_minmax(0,1.65fr)_minmax(0,1fr)_7rem_4.5rem_3.5rem]",
-  album: "grid-cols-[2rem_minmax(0,1.65fr)_minmax(0,1fr)_4.5rem_3.5rem]",
-  date: "grid-cols-[2rem_minmax(0,1fr)_7rem_4.5rem_3.5rem]",
-  plain: "grid-cols-[2rem_minmax(0,1fr)_4.5rem_3.5rem]",
-  "album+date+tempo": "grid-cols-[2rem_minmax(0,1.65fr)_minmax(0,1fr)_7rem_6rem_4.5rem_3.5rem]",
-  "album+tempo": "grid-cols-[2rem_minmax(0,1.65fr)_minmax(0,1fr)_6rem_4.5rem_3.5rem]",
-  "date+tempo": "grid-cols-[2rem_minmax(0,1fr)_7rem_6rem_4.5rem_3.5rem]",
-  tempo: "grid-cols-[2rem_minmax(0,1fr)_6rem_4.5rem_3.5rem]",
+  "album+date": "grid-cols-[2rem_minmax(0,1.65fr)_minmax(0,1fr)_7rem_var(--track-first)_3.5rem]",
+  album: "grid-cols-[2rem_minmax(0,1.65fr)_minmax(0,1fr)_var(--track-first)_3.5rem]",
+  date: "grid-cols-[2rem_minmax(0,1fr)_7rem_var(--track-first)_3.5rem]",
+  plain: "grid-cols-[2rem_minmax(0,1fr)_var(--track-first)_3.5rem]",
+  "album+date+tempo":
+    "grid-cols-[2rem_minmax(0,1.65fr)_minmax(0,1fr)_7rem_6rem_var(--track-first)_3.5rem]",
+  "album+tempo": "grid-cols-[2rem_minmax(0,1.65fr)_minmax(0,1fr)_6rem_var(--track-first)_3.5rem]",
+  "date+tempo": "grid-cols-[2rem_minmax(0,1fr)_7rem_6rem_var(--track-first)_3.5rem]",
+  tempo: "grid-cols-[2rem_minmax(0,1fr)_6rem_var(--track-first)_3.5rem]",
 } as const;
 
 const revealOnRow =
@@ -73,7 +77,11 @@ const rowBase =
 function rowGridFor(showAlbum: boolean, showDate: boolean, showTempoKey: boolean): string {
   const parts = [showAlbum && "album", showDate && "date", showTempoKey && "tempo"].filter(Boolean);
   const key = (parts.join("+") || "plain") as keyof typeof ROW_COLUMNS;
-  return cn(rowBase, ROW_COLUMNS[key]);
+  return cn(
+    rowBase,
+    ROW_COLUMNS[key],
+    isDesktop ? "[--track-first:5.5rem]" : "[--track-first:4.5rem]",
+  );
 }
 
 export function TrackList({
@@ -331,10 +339,11 @@ export function TrackList({
             {t("column.tempoKey")}
           </Caption>
         )}
-        <span role="columnheader" aria-label={t("column.actions")} />
+        {!isDesktop && <span role="columnheader" aria-label={t("column.actions")} />}
         <Caption role="columnheader" className="text-right max-[380px]:hidden">
           {t("column.duration")}
         </Caption>
+        {isDesktop && <span role="columnheader" aria-label={t("column.actions")} />}
       </div>
 
       {rows.length > 100 ? (
@@ -459,8 +468,34 @@ const TrackRowContent = memo(function TrackRowContent({
 }: TrackRowProps & { drag?: ReturnType<typeof useSortable> }) {
   const t = useT();
   const format = useFormat();
+  const unavailable = useDesktopUnavailable(track.id);
+  const play = () => {
+    if (!unavailable) onPlay(index);
+  };
 
   const showSpec = showAudioSpec && isLossless(track.codec);
+  const favorite = (
+    <Button
+      variant="ghost"
+      size="icon"
+      className={cn("max-md:hidden", isFavorite ? "text-primary" : !isCurrent && revealOnRow)}
+      onClick={() => onToggleFavorite(track, isFavorite)}
+      aria-label={isFavorite ? t("tracks.removeFromFavorites") : t("tracks.addToFavorites")}
+      aria-pressed={isFavorite}
+    >
+      <HeartIcon size={16} className={isFavorite ? "fill-current" : undefined} />
+    </Button>
+  );
+  const duration = (
+    <span
+      className="flex items-center justify-end gap-1 text-right text-sm text-muted-foreground tabular-nums max-[380px]:hidden"
+      role="cell"
+      data-track-duration
+    >
+      {isDesktop && favorite}
+      {formatDuration(track.durationSeconds)}
+    </span>
+  );
 
   return (
     <div
@@ -470,13 +505,13 @@ const TrackRowContent = memo(function TrackRowContent({
       aria-rowindex={index + 2}
       data-striped={index % 2 === 0 || undefined}
       tabIndex={focused ? 0 : -1}
-      onDoubleClick={() => onPlay(index)}
+      onDoubleClick={play}
       onClick={(event) => {
         if (!window.matchMedia("(pointer: coarse)").matches) return;
         if ((event.target as HTMLElement).closest("a, button")) return;
 
         if (selectable) onToggleSelected?.(track.id, index, false);
-        else onPlay(index);
+        else play();
       }}
       onContextMenu={(event) => {
         event.preventDefault();
@@ -492,6 +527,7 @@ const TrackRowContent = memo(function TrackRowContent({
         "library-track-row group relative transition-colors outline-none",
         "hover:bg-card focus-within:bg-card focus-visible:bg-card focus-visible:inset-ring focus-visible:inset-ring-ring",
         isCurrent && "track-row-current bg-card",
+        unavailable && "opacity-55",
         drag?.isDragging && "z-10 opacity-90 shadow-pop",
       )}
     >
@@ -532,7 +568,8 @@ const TrackRowContent = memo(function TrackRowContent({
               variant="ghost"
               size="icon-sm"
               className="hidden text-foreground group-hover:grid active:scale-95 max-md:size-8 [@media(hover:none)]:grid"
-              onClick={() => onPlay(index)}
+              disabled={unavailable}
+              onClick={play}
               aria-label={
                 isPlaying
                   ? t("tracks.pauseNamed", { title: track.title })
@@ -587,17 +624,9 @@ const TrackRowContent = memo(function TrackRowContent({
 
       {showTempoKey && <TempoKeyCell track={track} />}
 
+      {isDesktop && duration}
       <span role="cell" className="flex items-center justify-end gap-0.5">
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn("max-md:hidden", isFavorite ? "text-primary" : !isCurrent && revealOnRow)}
-          onClick={() => onToggleFavorite(track, isFavorite)}
-          aria-label={isFavorite ? t("tracks.removeFromFavorites") : t("tracks.addToFavorites")}
-          aria-pressed={isFavorite}
-        >
-          <HeartIcon size={16} className={isFavorite ? "fill-current" : undefined} />
-        </Button>
+        {isDesktop ? <DownloadBadge id={track.id} /> : favorite}
 
         <TrackMenu
           track={track}
@@ -612,21 +641,16 @@ const TrackRowContent = memo(function TrackRowContent({
             <Button
               variant="ghost"
               size="icon"
-              className={cn(!isCurrent && revealOnRow)}
+              className={cn(!isDesktop && !isCurrent && revealOnRow)}
               aria-label={t("tracks.moreActions", { title: track.title })}
             >
-              <EllipsisVerticalIcon size={16} />
+              <EllipsisVerticalIcon size={isDesktop ? 18 : 16} />
             </Button>
           }
         />
       </span>
 
-      <span
-        className="text-right text-sm text-muted-foreground tabular-nums max-[380px]:hidden"
-        role="cell"
-      >
-        {formatDuration(track.durationSeconds)}
-      </span>
+      {!isDesktop && duration}
     </div>
   );
 });

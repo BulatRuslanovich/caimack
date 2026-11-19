@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Bulat Ruslanovich
 
 import { deviceId, flushEvents } from "@/lib/events";
+import { isDesktop } from "@/desktop/runtime";
 import { fileForm, qs, request, requestFile } from "@/lib/http";
 import { markImageChanged } from "@/lib/media";
 import { WAVEFORM_VERSION } from "@/lib/waveform";
@@ -137,7 +138,7 @@ export const api = {
   login: (username: string, password: string, deviceName?: string) =>
     request<User>("/auth/login", {
       method: "POST",
-      body: { username, password, deviceName },
+      body: { username, password, deviceName, ...(isDesktop && { longLived: true }) },
       sessionless: true,
     }),
   logout: () => request<void>("/auth/logout", { method: "POST" }),

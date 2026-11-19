@@ -25,6 +25,7 @@ export async function clearStreamCache(): Promise<void> {
 }
 
 export function cacheAppShell(): Promise<void> {
+  if (process.env.NEXT_PUBLIC_CAIMACK_DESKTOP === "1") return Promise.resolve();
   if (typeof window === "undefined" || !("caches" in window) || !("serviceWorker" in navigator)) {
     return Promise.resolve();
   }
@@ -73,6 +74,7 @@ function deleteBrowserDatabase(name: string): Promise<void> {
 const STREAM_WORKER_URL = process.env.NODE_ENV === "production" ? "/sw.js" : "/sw.js?dev";
 
 export function registerStreamWorker(): void {
+  if (process.env.NEXT_PUBLIC_CAIMACK_DESKTOP === "1") return;
   if ("serviceWorker" in navigator) {
     void navigator.serviceWorker.register(STREAM_WORKER_URL, { scope: "/" }).catch(() => {});
   }

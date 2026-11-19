@@ -4,7 +4,8 @@
 "use client";
 
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { isDesktop } from "@/desktop/api";
 import { useT } from "@/contexts/I18nContext";
 import { useToast } from "@/lib/useToast";
 
@@ -40,6 +41,13 @@ export function QueryProvider({ children }: { children: ReactNode }) {
         },
       }),
   );
+
+  useEffect(() => {
+    if (!isDesktop) return;
+    const refresh = () => void client.invalidateQueries();
+    window.addEventListener("caimack:refetch", refresh);
+    return () => window.removeEventListener("caimack:refetch", refresh);
+  }, [client]);
 
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }

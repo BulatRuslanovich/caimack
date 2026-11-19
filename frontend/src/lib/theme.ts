@@ -63,6 +63,10 @@ function apply(): void {
     ?.setAttribute("content", THEME_COLORS[activeColorway][palette]);
 }
 
+export function initializeTheme(): void {
+  apply();
+}
+
 function notify(): void {
   listeners.forEach((listener) => listener());
 }

@@ -11,9 +11,9 @@ test("release synchronizes manifests, commits, tags, and rejects unsafe inputs",
   const run = (...args) => spawnSync(process.execPath, ["scripts/release.mjs", ...args], { cwd: dir, encoding: "utf8" });
   
   try {
-    for (const folder of ["scripts", "frontend", "backend"]) mkdirSync(join(dir, folder));
+    for (const folder of ["scripts", "frontend", "desktop", "backend"]) mkdirSync(join(dir, folder));
 
-    for (const path of ["scripts/release.mjs", "frontend/package.json", "frontend/package-lock.json", "backend/Cargo.toml", "backend/Cargo.lock"]) {
+    for (const path of ["scripts/release.mjs", "frontend/package.json", "frontend/package-lock.json", "desktop/package.json", "desktop/package-lock.json", "backend/Cargo.toml", "backend/Cargo.lock"]) {
       copyFileSync(new URL(`../${path}`, import.meta.url), join(dir, path));
     }
 
@@ -35,6 +35,8 @@ test("release synchronizes manifests, commits, tags, and rejects unsafe inputs",
 
     assert.equal(lock.version, "1.0.0");
     assert.equal(lock.packages[""].version, "1.0.0");
+    assert.equal(JSON.parse(readFileSync(join(dir, "desktop/package.json"))).version, "1.0.0");
+    assert.equal(JSON.parse(readFileSync(join(dir, "desktop/package-lock.json"))).packages[""].version, "1.0.0");
 
     const cargo = readFileSync(join(dir, "backend/Cargo.lock"), "utf8");
     const original = readFileSync(new URL("../backend/Cargo.lock", import.meta.url), "utf8");
