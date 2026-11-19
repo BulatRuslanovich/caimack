@@ -16,6 +16,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class Favorites(private val api: CaimackApi, private val scope: CoroutineScope, private val signals: Signals,
+    private val savedPreference: (String, String) -> Boolean? = { _, _ -> null },
     private val identity: () -> String? = { "default" }) {
     private val overrides = MutableStateFlow<Map<String, Boolean>>(emptyMap())
     private class Pending(var confirmed: Boolean) {
@@ -42,14 +43,15 @@ class Favorites(private val api: CaimackApi, private val scope: CoroutineScope, 
 
     @Synchronized fun isFavorite(track: Track): Boolean {
         refreshAccount()
-        return overrides.value[track.id] ?: track.isFavorite
+        return overrides.value[track.id] ?: account?.let { savedPreference(it, track.id) } ?: track.isFavorite
     }
 
     @Synchronized fun toggle(track: Track) {
         refreshAccount()
         val owner = account ?: return
-        val liked = !isFavorite(track)
-        val change = pending.getOrPut(track.id) { Pending(track.isFavorite) }
+        val previous = isFavorite(track)
+        val liked = !previous
+        val change = pending.getOrPut(track.id) { Pending(previous) }
         val revision = ++change.revision
         overrides.update { it + (track.id to liked) }
         val job = scope.launch {

@@ -3,6 +3,8 @@
 
 package app.caimack.api
 
+import kotlinx.serialization.json.JsonObject
+import okhttp3.HttpUrl
 import okhttp3.MultipartBody
 import retrofit2.Response
 import retrofit2.http.Body
@@ -15,6 +17,7 @@ import retrofit2.http.Part
 import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
+import retrofit2.http.Url
 
 interface CaimackApi {
     @GET("api/me/listening-stats")
@@ -61,6 +64,14 @@ interface CaimackApi {
 
     @GET("api/auth/me")
     suspend fun me(): User
+
+    @Headers("X-Caimack-Sync: 1")
+    @GET
+    suspend fun syncIdentity(@Url url: HttpUrl): JsonObject
+
+    @Headers("X-Caimack-Sync: 1")
+    @POST
+    suspend fun syncActions(@Url url: HttpUrl, @Body batch: JsonObject): JsonObject
 
     @GET("api/tracks/{id}/lyrics")
     suspend fun lyrics(@Path("id") id: String): Response<Lyrics>

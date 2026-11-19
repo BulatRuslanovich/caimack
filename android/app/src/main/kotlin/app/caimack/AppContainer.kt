@@ -62,6 +62,7 @@ import app.caimack.sync.SyncStore
 import app.caimack.sync.SyncAction
 import app.caimack.sync.OfflineCatalog
 import app.caimack.sync.LibrarySync
+import app.caimack.sync.PlaybackSync
 import app.caimack.sync.SyncScheduler
 import app.caimack.session.SessionState
 import java.io.IOException
@@ -106,16 +107,27 @@ class AppContainer(context: Context) {
     private val localHttp = app.caimack.session.LocalHttpPolicy(
         { connectionPreferences.allowLocalHttp.value }, { server.url.value },
     )
+    @Volatile private var loggingOut = false
+    private fun playbackOwner(): PlaybackSync.Owner? {
+        if (loggingOut) return null
+        val user = (session.state.value as? SessionState.SignedIn)?.user ?: return null
+        return server.url.value?.let { PlaybackSync.Owner(it, user.id) }
+    }
+    private val playbackSync by lazy {
+        PlaybackSync(File(context.filesDir, "playback-sync"), json, api, ::playbackOwner)
+    }
 
     val libraryCache by lazy { app.caimack.playback.LibraryCache(File(context.filesDir, "library-cache"),
         { (session.state.value as? SessionState.SignedIn)?.let { "${server.url.value}|${it.user.id}" } },
-        { downloadedCatalog.localSnapshot() }, json) }
+        { downloadedCatalog.localSnapshot() }, json, edits = playbackSync::edits,
+        confirmed = playbackSync::confirmed, observed = playbackSync::observed) }
 
     val http: OkHttpClient = OkHttpClient.Builder()
         .followSslRedirects(false)
         .cookieJar(cookies)
         .addInterceptor(server.interceptor)
         .addInterceptor(offlineCatalog.interceptor)
+        .addInterceptor { playbackSync.interceptor.intercept(it) }
         .addInterceptor { libraryCache.interceptor.intercept(it) }
         .addInterceptor(localHttp.interceptor)
         .addNetworkInterceptor(localHttp.networkInterceptor)
@@ -129,7 +141,9 @@ class AppContainer(context: Context) {
         .build()
         .create(CaimackApi::class.java)
 
-    val session = Session(api, server, cookies, json, { deviceName }, syncStore::offlineUser, syncStore::login, syncStore::logout)
+    val session = Session(api, server, cookies, json, { deviceName }, syncStore::offlineUser,
+        onLogin = { user -> syncStore.login(user); loggingOut = false },
+        onLogout = { loggingOut = true; syncStore.logout() })
 
     val media = Media(server,
         local = { path -> syncStore.asset(path) ?: downloadedCatalog.asset(path) },
@@ -168,14 +182,19 @@ class AppContainer(context: Context) {
     val listeningSession: String = UUID.randomUUID().toString()
 
     val signals = Signals(api, scope, listeningSession) { kind,payload,occurredAt ->
-        val saved = syncStore.enqueue(SyncAction(kind=kind,occurredAt=occurredAt,payload=payload))
-        if(saved) SyncScheduler.schedule(context,soon=true)
-        saved
+        val action = SyncAction(kind = kind, occurredAt = occurredAt, payload = payload)
+        try {
+            if (syncStore.enqueue(action)) {
+                SyncScheduler.schedule(context, soon = true)
+                true
+            } else playbackOwner()?.let { playbackSync.enqueue(it, action) } ?: false
+        } catch (error: IOException) {
+            android.util.Log.w("Caimack", "Could not save playback activity", error)
+            false
+        }
     }
 
-    val favorites = Favorites(api, scope, signals) {
-        (session.state.value as? SessionState.SignedIn)?.let { "${server.url.value}|${it.user.id}" }
-    }
+    val favorites = Favorites(api, scope, signals, identity = { accountKey }, savedPreference = playbackSync::favorite)
 
     val downloads by lazy {
         Downloads(context.applicationContext, http, server, json, { syncStore.downloadOwner }) { !syncStore.active }
@@ -265,6 +284,7 @@ class AppContainer(context: Context) {
 
     private val connectionProbe = kotlinx.coroutines.sync.Mutex()
     fun refreshLibraryConnection() {
+        playbackSync.request()
         scope.launch {
             if (session.state.value !is SessionState.SignedIn || !connectionProbe.tryLock()) return@launch
             try { withTimeoutOrNull(5_000) { runCatching { api.me() } } }
@@ -277,6 +297,7 @@ class AppContainer(context: Context) {
 
 
     init {
+        playbackSync.start(scope)
         scope.launch {
             for (request in lyricsRefresh) {
                 val owner = accountKey ?: continue
@@ -332,7 +353,10 @@ class AppContainer(context: Context) {
     val queue = AtomicFile(File(context.filesDir, "queue.json"))
 
     suspend fun flushSignals() {
-        withTimeoutOrNull(SIGNALS_FLUSH_WAIT_MS) { signals.send() }
+        withTimeoutOrNull(SIGNALS_FLUSH_WAIT_MS) {
+            signals.send()
+            playbackSync.flush()
+        }
     }
 
     suspend fun radio(request: RadioRequest): RadioBatch {

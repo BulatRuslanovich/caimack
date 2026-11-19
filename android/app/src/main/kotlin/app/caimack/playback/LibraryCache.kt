@@ -2,6 +2,8 @@
 package app.caimack.playback
 
 import app.caimack.sync.OfflineCatalog
+import app.caimack.sync.SyncAction
+import app.caimack.sync.string
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
@@ -19,7 +21,10 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 class LibraryCache(private val directory: File, private val identity: () -> String?,
     private val local: () -> JsonObject, private val json: Json,
     private val limits: LibraryCacheLimits = LibraryCacheLimits(),
-    private val clock: () -> Long = { System.nanoTime() / 1_000_000 }) {
+    private val clock: () -> Long = { System.nanoTime() / 1_000_000 },
+    private val edits: (String) -> List<SyncAction> = { emptyList() },
+    private val confirmed: (String) -> List<SyncAction> = { emptyList() },
+    private val observed: (String, Set<String>) -> Unit = { _, _ -> }) {
     val offline = MutableStateFlow(true)
     private var loadedFor: String? = null
     private data class Entry(val value: JsonElement, val bytes: Long)
@@ -130,7 +135,7 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
         val readable = request.method == "GET" && cacheable(path) && key != null
         fun fallback(): Response? {
             if (!readable || identity() != key) return null
-            val data = merge(local(), stored(key))
+            val data = merge(local(), stored(key), edits(key))
             val result = OfflineCatalog.read(path, request.url, buildJsonObject {}, data) ?: return null
             return Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(result.code)
                 .message("Offline library").body(result.value.toString().toResponseBody("application/json".toMediaType())).build()
@@ -144,6 +149,7 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
             }
         }
         try {
+            val sent = if (readable) confirmed(key) else emptyList()
             val network = if (probe) chain.withConnectTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
                 .withReadTimeout(3, java.util.concurrent.TimeUnit.SECONDS) else chain
             val response = network.proceed(request)
@@ -154,7 +160,19 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
             if (response.isSuccessful) {
                 if (readable) {
                     val value = runCatching { json.parseToJsonElement(response.peekBody(16L * 1024 * 1024).string()) }.getOrNull()
-                    if (value != null) runCatching { remember(key, request.url.encodedPath + "?" + request.url.encodedQuery.orEmpty(), value) }
+                    if (value != null && identity() == key) runCatching {
+                        remember(key, request.url.encodedPath + "?" + request.url.encodedQuery.orEmpty(), value)
+                        if (sent.isNotEmpty()) {
+                            val trackIds = trackIds(value)
+                            val firstHistoryPage = path == "history/recent" &&
+                                (request.url.queryParameter("page")?.toIntOrNull() ?: 1) == 1
+                            val seen = sent.filter { action ->
+                                action.kind == "favorite" && action.entityId in trackIds ||
+                                    action.kind == "history" && firstHistoryPage
+                            }.mapTo(hashSetOf()) { it.id }
+                            if (seen.isNotEmpty()) observed(key, seen)
+                        }
+                    }
                 }
                 if (path == "auth/me" || path == "auth/login" || readable) offline.value = false
             }
@@ -168,10 +186,24 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
     }
 
     companion object {
+        private fun trackIds(value: JsonElement): Set<String> = buildSet {
+            fun visit(node: JsonElement) {
+                when (node) {
+                    is JsonArray -> node.forEach(::visit)
+                    is JsonObject -> {
+                        if (node["isFavorite"] is JsonPrimitive) add(node.string("id"))
+                        listOf("items", "tracks", "topTracks").forEach { node[it]?.let(::visit) }
+                    }
+                    else -> Unit
+                }
+            }
+            visit(value)
+        }
+
         fun cacheable(path: String): Boolean = path in setOf("me/library", "me/library/folders", "me/library/order", "favorites", "history/recent", "genres") ||
             Regex("(tracks|albums|artists|playlists)(/[^/]+)?(/top-tracks)?").matches(path) || path.startsWith("search")
 
-        fun merge(local: JsonObject, responses: Map<String, JsonElement>): JsonObject {
+        fun merge(local: JsonObject, responses: Map<String, JsonElement>, edits: List<SyncAction> = emptyList()): JsonObject {
             fun rows(value: JsonElement?): List<JsonObject> = when (value) {
                 is JsonArray -> value.mapNotNull { it as? JsonObject }
                 is JsonObject -> rows(value["items"])
@@ -247,7 +279,7 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
                 "artists" to JsonArray(artists.values.toList()), "playlists" to JsonArray(playlists.values.toList()),
                 "playlistTracks" to JsonObject(membership), "savedLibrary" to JsonArray(mergedSaved),
                 "libraryFolders" to folders, "libraryOrder" to libraryOrder, "recent" to recent,
-            )), emptyList())
+            )), edits)
         }
     }
 }
