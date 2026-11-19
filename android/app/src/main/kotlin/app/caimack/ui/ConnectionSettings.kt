@@ -37,10 +37,11 @@ internal fun LocalHttpSetting() {
     }
     Column {
         Row(Modifier.fillMaxWidth().clickable { change(!enabled) }, verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f).padding(end = 12.dp)) {
-                Text(stringResource(R.string.settings_local_http), style = Type.small)
-                Text(stringResource(R.string.settings_local_http_hint), style = Type.tiny, color = LocalPalette.current.muted)
-            }
+            Text(
+                stringResource(R.string.settings_local_http),
+                modifier = Modifier.weight(1f).padding(end = 12.dp),
+                style = Type.small,
+            )
             Toggle(enabled, change)
         }
         if (enabled && !granted) {

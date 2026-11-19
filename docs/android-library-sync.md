@@ -1,9 +1,9 @@
 # Android library synchronization
 
-In **Settings → Downloads → Library synchronization**, enable **Synchronize
-this library**. **Sync now / resume** starts a foreground transfer. **Pause**
-stops automatic transfers until resumed. Turning sync off keeps completed
-downloads available in **Library → Downloads**, where you can play or remove them.
+Turn on **Full library synchronization** under **Settings → Downloads** to
+start a foreground transfer. The notification offers **Pause**. Turn the
+switch off and on again to resume. Completed downloads stay available in
+**Library → Downloads**, where you can play or remove them.
 
 The server must be reachable at a local address over Wi-Fi or Ethernet. The
 sync client binds its connections and DNS resolution to that network, rejects
@@ -55,7 +55,7 @@ fixed-size buffer. Catalog JSON is read and written through streams. Lyrics and
 waveforms are decoded per track when needed.
 
 While synchronization is active, **Library → Downloads** lists each downloaded
-track once and sync settings show progress. Track and collection download
+track once and shows progress. Track and collection download
 controls are available in individual-download mode.
 
 Media3 resumes interrupted audio transfers and skips already cached versions.
@@ -121,8 +121,8 @@ Playlist changes are merged as operations: adds/removals affect only those track
 reordering retains concurrent additions and does not resurrect removed tracks;
 metadata updates contain only locally edited fields. For simultaneous edits to
 the same field or favorite state, the last action accepted by the server wins.
-An edit to a playlist deleted on the server is rejected, retained in the local
-rejection journal, and shown in sync settings. Other valid actions still proceed.
+The server rejects edits to deleted playlists. The client retains them in its
+local rejection journal and continues syncing valid actions.
 Confirmed actions remain visible locally until a subsequent server snapshot
 includes them, including across a crash between acknowledgement and refresh.
 

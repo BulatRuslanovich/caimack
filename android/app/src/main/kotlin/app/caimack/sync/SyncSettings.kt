@@ -4,19 +4,34 @@
 package app.caimack.sync
 
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.caimack.R
 import app.caimack.session.SessionState
 import app.caimack.ui.LocalContainer
+import app.caimack.ui.Type
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -27,18 +42,15 @@ fun SyncSettings() {
     val context = LocalContext.current
     val state by container.syncStore.status.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
-    var error by remember { mutableStateOf<String?>(null) }
+    var updating by remember { mutableStateOf(false) }
     val session by container.session.state.collectAsStateWithLifecycle()
     val address by container.server.url.collectAsStateWithLifecycle()
     val catalogRevision by container.syncStore.catalogRevision.collectAsStateWithLifecycle()
     val user = (session as? SessionState.SignedIn)?.user
     val active = remember(user, address, state.enabled, catalogRevision) { container.syncStore.active }
-    fun start() {
-        if (container.syncStore.active) SyncScheduler.start(context)
-    }
     val permissions =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-            start()
+            if (container.syncStore.active) SyncScheduler.start(context)
         }
     fun requestPermissionsAndStart() {
         val required = buildList {
@@ -47,77 +59,32 @@ fun SyncSettings() {
         }
         permissions.launch(required.toTypedArray())
     }
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        HorizontalDivider(Modifier.padding(vertical = 8.dp))
-        Text(stringResource(R.string.sync_title), style = MaterialTheme.typography.titleMedium)
-        Text(stringResource(R.string.sync_description), style = MaterialTheme.typography.bodyMedium)
-        Text(stringResource(R.string.sync_network_hint), style = MaterialTheme.typography.bodySmall)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(stringResource(R.string.sync_enable), Modifier.weight(1f))
-            Switch(
-                checked = active,
-                enabled = user != null,
-                onCheckedChange = { value ->
-                    error = null
-                    if (!value) container.sync.pause()
-                    scope.launch {
-                        runCatching {
-                            withContext(Dispatchers.IO) {
-                                if (value) container.syncStore.configure(requireNotNull(user))
-                                container.syncStore.enable(value)
-                            }
-                        }.onSuccess {
-                            if (value) requestPermissionsAndStart() else SyncScheduler.schedule(context)
-                        }.onFailure { error = it.message }
+    val label = stringResource(R.string.sync_enable)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f).padding(end = 12.dp), style = Type.body.copy(fontWeight = FontWeight.SemiBold))
+        Switch(
+            checked = active,
+            enabled = user != null && !updating,
+            modifier = Modifier.semantics { contentDescription = label },
+            onCheckedChange = { value ->
+                val account = user ?: return@Switch
+                updating = true
+                scope.launch {
+                    try {
+                        withContext(Dispatchers.IO) {
+                            if (value) container.syncStore.configure(account) else container.sync.pause()
+                            container.syncStore.enable(value)
+                        }
+                        if (value) requestPermissionsAndStart() else SyncScheduler.schedule(context)
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        error.localizedMessage?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+                    } finally {
+                        updating = false
                     }
-                },
-            )
-        }
-        if (active) {
-            Text(stringResource(R.string.sync_progress, state.completed, state.total))
-            if (state.running)
-                LinearProgressIndicator(
-                    progress = {
-                        if (state.totalBytes > 0) state.bytes.toFloat() / state.totalBytes else 0f
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            state.message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-            if (state.lastSync > 0)
-                Text(
-                    stringResource(
-                        R.string.sync_last,
-                        java.text.DateFormat.getDateTimeInstance()
-                            .format(java.util.Date(state.lastSync)),
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            Text(
-                stringResource(R.string.sync_pending, state.pending),
-                style = MaterialTheme.typography.bodySmall,
-            )
-            if (state.rejected > 0)
-                Text(
-                    stringResource(R.string.sync_rejected, state.rejected) +
-                        "\n" +
-                        container.syncStore.rejectionMessages(),
-                    color = MaterialTheme.colorScheme.error,
-                )
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { requestPermissionsAndStart() }, enabled = !state.running) {
-                    Text(stringResource(R.string.sync_now))
                 }
-                OutlinedButton(
-                    onClick = {
-                        container.sync.pause()
-                        SyncScheduler.schedule(context)
-                    }
-                ) {
-                    Text(stringResource(R.string.sync_pause))
-                }
-            }
-        }
-        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        Text(stringResource(R.string.sync_files_hint), style = MaterialTheme.typography.bodySmall)
+            },
+        )
     }
 }

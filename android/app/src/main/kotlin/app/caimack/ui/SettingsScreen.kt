@@ -230,7 +230,6 @@ fun SettingsScreen(category: SettingsCategory? = null) {
 
             if (SettingKey.Downloads in visible) {
                 Panel(stringResource(R.string.settings_downloads)) {
-                    app.caimack.sync.SyncSettings()
                     if (SettingKey.Downloads in visible) {
                         val autoDownloads by container.playbackPrefs.autoDownloads.collectAsStateWithLifecycle()
                         Row(
@@ -245,7 +244,7 @@ fun SettingsScreen(category: SettingsCategory? = null) {
                             Toggle(autoDownloads) { container.playbackPrefs.setAutoDownloads(it) }
                         }
                     }
-
+                    app.caimack.sync.SyncSettings()
                 }
             }
             if (SettingKey.Reminder in visible) {

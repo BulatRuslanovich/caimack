@@ -1,18 +1,11 @@
 <resources>
     <string name="sync_title">Синхронизация медиатеки</string>
-    <string name="sync_network_hint">Телефон и сервер должны быть в одной локальной сети, а адрес сервера — вести на локальный IP. Для публичного домена можно настроить локальную DNS-запись на роутере.</string>
-    <string name="sync_description">Вся библиотека, тексты, обложки, векторы и подготовленные сервером миксы на телефоне. Исходное качество аудио. Автоматически по локальной сети Wi-Fi или Ethernet, в том числе от батареи.</string>
-    <string name="sync_enable">Синхронизировать эту библиотеку</string>
+    <string name="sync_enable">Полная синхронизация медиатеки</string>
     <string name="sync_progress">Доступно: %1$d / %2$d треков</string>
-    <string name="sync_pending">Действий ожидают отправки: %1$d</string>
-    <string name="sync_rejected">Сервер отклонил изменений: %1$d. Журнал действий сохранён.</string>
-    <string name="sync_last">Последняя полная синхронизация: %1$s</string>
-    <string name="sync_now">Синхронизировать / продолжить</string>
     <string name="sync_pause">Приостановить</string>
     <string name="sync_paused">Синхронизация приостановлена</string>
     <string name="sync_sign_in_again">Войдите на сервер заново для продолжения синхронизации. Офлайн-медиатека остаётся доступной.</string>
     <string name="sync_pending_before_change">Перед сменой аккаунта или сервера синхронизируйте накопленные действия.</string>
     <string name="sync_change_while_running">Дождитесь остановки синхронизации перед сменой аккаунта или сервера.</string>
     <string name="sync_audio_failed">Не удалось загрузить треки (%1$d). Возобновите синхронизацию, чтобы повторить попытку.</string>
-    <string name="sync_files_hint">Музыка, тексты и обложки хранятся внутри Caimack. Удаление на сервере удаляет и синхронизированную копию. Отключение синхронизации сохраняет завершённые загрузки. В офлайн-радио до 100 треков. В конце очереди воспроизведение останавливается.</string>
 </resources>
