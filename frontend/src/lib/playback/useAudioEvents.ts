@@ -14,6 +14,8 @@ import type { PlaybackRecovery } from "./playbackRecovery";
 
 interface AudioEventsInput {
   audioRef: RefObject<HTMLAudioElement | null>;
+  currentTrackId: string | undefined;
+  isPlaying: boolean;
   scrubRef: RefObject<number | null>;
   tracker: ListeningTracker;
   recovery: PlaybackRecovery;
@@ -30,6 +32,8 @@ interface AudioEventsInput {
 
 export function useAudioEvents({
   audioRef,
+  currentTrackId,
+  isPlaying,
   scrubRef,
   tracker,
   recovery,
@@ -44,8 +48,11 @@ export function useAudioEvents({
   clearWaitingTimer,
 }: AudioEventsInput) {
   const fromActive = useCallback(
-    (event: SyntheticEvent<HTMLAudioElement>) => event.currentTarget === audioRef.current,
-    [audioRef],
+    ({ currentTarget }: SyntheticEvent<HTMLAudioElement>) =>
+      currentTarget === audioRef.current &&
+      currentTrackId !== undefined &&
+      currentTarget.dataset.trackId === currentTrackId,
+    [audioRef, currentTrackId],
   );
 
   const audioProps: ComponentPropsWithoutRef<"audio"> = {
@@ -58,7 +65,13 @@ export function useAudioEvents({
     onDurationChange: (event) =>
       fromActive(event) && setDuration(event.currentTarget.duration || 0),
     onEnded: (event) => {
-      if (!fromActive(event)) return;
+      if (
+        !isPlaying ||
+        !fromActive(event) ||
+        !event.currentTarget.ended ||
+        event.currentTarget.dataset.sourceLoading === "true"
+      )
+        return;
       setWaiting(false);
       handleEnded();
     },
@@ -78,15 +91,14 @@ export function useAudioEvents({
       handleWaiting();
     },
     onStalled: (event) => fromActive(event) && handleWaiting(),
-    // Media events are queued: a source reload or quick pause/resume can make
-    // them stale before delivery. Echoing those events into playback intent
-    // makes the engine alternate play() and pause() indefinitely.
+    // Media events are queued and can be stale by the time they are delivered.
     onPlay: (event) => fromActive(event) && !event.currentTarget.paused && setIsPlaying(true),
     onPause: (event) => {
       if (scrubRef.current !== null) return;
       if (
         fromActive(event) &&
         event.currentTarget.paused &&
+        !event.currentTarget.ended &&
         event.currentTarget.dataset.sourceLoading !== "true" &&
         !event.currentTarget.error
       ) {

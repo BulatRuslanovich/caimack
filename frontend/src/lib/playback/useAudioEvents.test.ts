@@ -14,17 +14,21 @@ vi.mock("react", async (importOriginal) => ({
 function setup() {
   const audio = {
     paused: false,
-    dataset: {} as Record<string, string>,
+    ended: false,
+    dataset: { trackId: "current" } as Record<string, string>,
     error: null as MediaError | null,
   } as HTMLAudioElement;
   const audioRef = { current: audio };
   const scrubRef = { current: null as number | null };
   const setIsPlaying = vi.fn();
   const clearWaitingTimer = vi.fn();
+  const handleEnded = vi.fn();
   // useCallback is mocked; exercise the event handlers without a React mount.
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const props = useAudioEvents({
     audioRef,
+    currentTrackId: "current",
+    isPlaying: true,
     scrubRef,
     tracker: createListeningTracker(),
     recovery: new PlaybackRecovery(),
@@ -32,14 +36,14 @@ function setup() {
     handleProgress: vi.fn(),
     setDuration: vi.fn(),
     setWaiting: vi.fn(),
-    handleEnded: vi.fn(),
+    handleEnded,
     handleError: vi.fn(),
     handleWaiting: vi.fn(),
     setIsPlaying,
     clearWaitingTimer,
   });
   const event = { currentTarget: audio } as SyntheticEvent<HTMLAudioElement>;
-  return { audio, audioRef, scrubRef, props, event, setIsPlaying, clearWaitingTimer };
+  return { audio, audioRef, scrubRef, props, event, setIsPlaying, clearWaitingTimer, handleEnded };
 }
 
 describe("audio playback events", () => {
@@ -97,8 +101,8 @@ describe("audio playback events", () => {
     expect(setIsPlaying).toHaveBeenLastCalledWith(true);
   });
 
-  it.each(["loading", "scrubbing", "error", "inactive"])(
-    "does not treat a %s pause as a playback intent change",
+  it.each(["loading", "scrubbing", "error", "inactive", "previous track", "ended"])(
+    "does not treat the pause as a playback intent change (%s)",
     (reason) => {
       const { audio, audioRef, scrubRef, props, event, setIsPlaying } = setup();
       Object.assign(audio, { paused: true });
@@ -106,8 +110,23 @@ describe("audio playback events", () => {
       if (reason === "scrubbing") scrubRef.current = 12;
       if (reason === "error") Object.assign(audio, { error: { code: 2 } });
       if (reason === "inactive") audioRef.current = {} as HTMLAudioElement;
+      if (reason === "previous track") audio.dataset.trackId = "previous";
+      if (reason === "ended") Object.assign(audio, { ended: true });
       props.onPause!(event);
       expect(setIsPlaying).not.toHaveBeenCalled();
     },
   );
+
+  it("advances only for the end of the selected source", () => {
+    const { audio, props, event, handleEnded } = setup();
+    props.onEnded!(event);
+    Object.assign(audio, { paused: true, ended: true });
+    audio.dataset.trackId = "previous";
+    props.onEnded!(event);
+    expect(handleEnded).not.toHaveBeenCalled();
+
+    audio.dataset.trackId = "current";
+    props.onEnded!(event);
+    expect(handleEnded).toHaveBeenCalledOnce();
+  });
 });

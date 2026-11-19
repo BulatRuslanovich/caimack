@@ -20,6 +20,7 @@ interface PlaybackRequest {
 
 interface PlaybackCallbacks {
   onFatalError: () => void;
+  onPlayBlocked?: () => void;
 }
 
 const HLS_RETRY_DELAYS = [800, 2500, 6000];
@@ -84,9 +85,9 @@ export class AdaptivePlayback {
     const generation = ++this.generation;
     this.request = request;
     this.retries = 0;
+    this.audio.dataset.sourceLoading = "true";
     this.destroyDriver();
     this.audio.dataset.playbackMode = "progressive";
-    this.audio.dataset.sourceLoading = "true";
 
     this.audio.pause();
 
@@ -117,7 +118,28 @@ export class AdaptivePlayback {
 
   setPlaying(play: boolean): void {
     if (this.request) this.request.play = play;
-    if (!play) this.audio.pause();
+    if (play) this.playIfReady();
+    else this.audio.pause();
+  }
+
+  private playIfReady(): void {
+    if (!this.request?.play || this.audio.dataset.sourceLoading === "true" || !this.audio.paused) {
+      return;
+    }
+
+    const generation = this.generation;
+    void this.audio.play().catch((error: unknown) => {
+      // Source errors are handled by the media recovery path.
+      if (
+        error instanceof DOMException &&
+        error.name === "NotAllowedError" &&
+        generation === this.generation &&
+        this.request?.play &&
+        this.audio.paused
+      ) {
+        this.callbacks.onPlayBlocked?.();
+      }
+    });
   }
 
   private attachAdaptive(url: string, startAt: number): void {
@@ -195,7 +217,7 @@ export class AdaptivePlayback {
         this.audio.currentTime = Math.min(startAt, this.audio.duration);
       }
       this.audio.dispatchEvent(new Event(STREAM_CHANGE));
-      if (this.request?.play) void this.audio.play().catch(() => {});
+      this.playIfReady();
     };
 
     if (this.audio.readyState >= HTMLMediaElement.HAVE_METADATA) apply();
