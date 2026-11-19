@@ -11,6 +11,9 @@ vi.mock("@/contexts/I18nContext", () => ({ useT: () => (key: string) => key }));
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ isAdmin: false }) }));
 vi.mock("@/lib/useYandexMusic", () => ({ useYandexMusicSettings: () => ({ enabled: false }) }));
 vi.mock("./RecentSearches", () => ({ RecentSearches: () => <p>recent searches</p> }));
+vi.mock("@/app/tracks/TracksPage", () => ({
+  TracksPage: ({ query }: { query: string }) => <p data-tracks-query={query} />,
+}));
 vi.mock("@/app/playlists/(list)/PlaylistsPage", () => ({
   PlaylistsPage: ({ query }: { query: string }) => <p data-playlists-query={query} />,
 }));
@@ -33,6 +36,9 @@ it("shows all catalog tabs on the search start screen", () => {
     expect(markup).toContain(`>nav.${tab}</button>`);
   }
   expect(markup).toContain("recent searches");
+  expect(markup).toContain("search.allTracks");
+  expect(markup).toContain('data-tracks-query=""');
+  expect(render("q=ab")).not.toContain("search.allTracks");
 });
 
 it("opens the selected catalog category with or without a query", () => {

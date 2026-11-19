@@ -15,7 +15,8 @@ import { usePage } from "@/lib/usePage";
 import type { Genre } from "@/lib/types";
 import { AlbumMosaic } from "@/components/collection/CoverMosaic";
 import { Card } from "@/components/MediaCard";
-import { CardGrid, CardGridSkeleton, PageHeader, Section } from "@/components/PageHeader";
+import { CardGrid, CardGridSkeleton, Section } from "@/components/PageHeader";
+import { CatalogToolbar } from "@/app/search/CatalogToolbar";
 import { Pagination } from "@/components/PageToolbar";
 import { PlayAllButton } from "@/components/PlayAllButton";
 import { Query } from "@/components/Query";
@@ -48,6 +49,7 @@ export function GenresPage({
       )
     : genres.data;
   const selectedGenre = matching?.find((genre) => genre.id === selected);
+  const scrollToTracks = () => tracksRef.current?.scrollIntoView({ block: "start" });
 
   useEffect(() => {
     if (selectedGenre)
@@ -55,15 +57,8 @@ export function GenresPage({
   }, [selectedGenre]);
 
   return (
-    <div className="flex min-w-0 flex-col gap-6 max-md:gap-5">
-      <PageHeader
-        subtitle={matching && t("count.genres", { count: matching.length })}
-        actions={
-          tracks.data && tracks.data.items.length > 0 ? (
-            <PlayAllButton tracks={tracks.data.items} />
-          ) : undefined
-        }
-      />
+    <div className="flex min-w-0 flex-col gap-3">
+      <CatalogToolbar summary={matching && t("count.genres", { count: matching.length })} />
 
       <Query
         result={genres}
@@ -89,13 +84,26 @@ export function GenresPage({
       </Query>
 
       {selectedGenre ? (
-        <Section title={genreName(selectedGenre.name)} ref={tracksRef}>
+        <Section
+          title={genreName(selectedGenre.name)}
+          ref={tracksRef}
+          className="gap-2.5"
+          actions={
+            tracks.data &&
+            tracks.data.items.length > 0 && (
+              <PlayAllButton
+                tracks={tracks.data.items}
+                className="size-10 pointer-coarse:size-11"
+              />
+            )
+          }
+        >
           <Query result={tracks}>
             {(result) =>
               result === null ? null : (
                 <>
                   <TrackList tracks={result.items} />
-                  <Pagination result={result} onChange={setPage} />
+                  <Pagination result={result} onChange={setPage} scrollOnChange={scrollToTracks} />
                 </>
               )
             }

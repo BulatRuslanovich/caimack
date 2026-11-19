@@ -22,7 +22,7 @@ const profile = portable
   : process.argv[2]
     ? join(root, "Caimack")
     : join(root, "development");
-const server = await fixture();
+const server = await fixture({ trackCount: 51, isAdmin: true });
 let electron;
 let socket;
 let logs = "";
@@ -215,30 +215,248 @@ try {
     () => evaluate("!!document.querySelector('a[href=\"/downloads\"]')"),
     "downloads navigation",
   );
+  const desktopViewport = {
+    width: 1440,
+    height: 900,
+    deviceScaleFactor: 1,
+    mobile: false,
+  };
+  await command("Emulation.setDeviceMetricsOverride", desktopViewport);
   await evaluate(`document.querySelector('aside a[href="/search"]').click()`);
   const categories = '[role="group"][aria-label="Result types"]';
   const categoryButtons = `[...document.querySelectorAll(${JSON.stringify(categories + " button")})]`;
-  await until(() => evaluate(`${categoryButtons}.length === 6`), "search categories");
+  await until(
+    () => evaluate(`${categoryButtons}.length === 6`),
+    "search categories",
+  );
   assert.deepEqual(
     await evaluate(`${categoryButtons}.map(button => button.textContent)`),
     ["All", "Tracks", "Albums", "Artists", "Playlists", "Genres"],
   );
-  await evaluate(`${categoryButtons}.find(button => button.textContent === "Tracks").click()`);
+  const pagination = '[aria-label="Pagination"]';
+  const pageNumber = `document.querySelector(${JSON.stringify(pagination + " span")})?.textContent`;
+  const measureTrackToolbar = `(() => {
+    const catalog = [...document.querySelectorAll("#content .track-catalog")]
+      .find(element => element.getClientRects().length);
+    const toolbar = catalog.querySelector(".library-toolbar");
+    const table = catalog.querySelector('[role="table"]');
+    const controls = [...toolbar.querySelectorAll("button")]
+      .filter(button => button.getClientRects().length)
+      .map(button => button.getBoundingClientRect().toJSON());
+    const bounds = toolbar.getBoundingClientRect();
+    const play = toolbar.querySelector('button[aria-label="Play"]');
+    return {
+      controls,
+      verticalGap: table.getBoundingClientRect().top - bounds.bottom,
+      fits: controls.every(control => control.left >= bounds.left && control.right <= bounds.right + 1),
+      roundPlay: parseFloat(getComputedStyle(play).borderTopLeftRadius) >= play.offsetWidth / 2,
+    };
+  })()`;
+  async function assertTrackToolbar(wide) {
+    const { controls, verticalGap, fits, roundPlay } =
+      await evaluate(measureTrackToolbar);
+    assert.ok(
+      fits && verticalGap >= 0 && verticalGap <= 12,
+      "Track toolbar should fit above the table",
+    );
+    assert.ok(roundPlay, "The playback button should be round");
+    assert.equal(controls.length, wide ? 7 : 6);
+    assert.ok(
+      controls.every(
+        (control) => Math.abs(control.height - controls[0].height) <= 1,
+      ),
+    );
+    if (wide)
+      assert.ok(
+        controls.every(
+          (control) => Math.abs(control.top - controls[0].top) <= 1,
+        ),
+      );
+  }
   await until(
-    () => evaluate(`!!document.querySelector('[aria-label="Sort by"]')`),
+    () => evaluate(`${pageNumber} === "Page 1 of 2"`),
+    "pagination below all tracks",
+  );
+  await assertTrackToolbar(true);
+  await command("Emulation.setDeviceMetricsOverride", {
+    ...desktopViewport,
+    width: 390,
+  });
+  await assertTrackToolbar(false);
+  await command("Emulation.setDeviceMetricsOverride", desktopViewport);
+  assert.deepEqual(
+    await evaluate(
+      `[...document.querySelectorAll("#content h2")].map(heading => heading.textContent)`,
+    ),
+    ["Browse by genre", "All tracks"],
+  );
+  await evaluate(
+    `document.querySelector(${JSON.stringify(pagination + " button:last-child")}).click()`,
+  );
+  await until(
+    () =>
+      evaluate(
+        `${pageNumber} === "Page 2 of 2" && document.querySelector("#content").textContent.includes("Catalog track 51")`,
+      ),
+    "second page of all tracks",
+  );
+  await evaluate(
+    `${categoryButtons}.find(button => button.textContent === "Tracks").click()`,
+  );
+  await until(
+    () => evaluate(`!!document.querySelector('#content [role="table"]')`),
     "track sorting in Search",
   );
-  await evaluate(`document.querySelector('#content input[type="search"]').focus()`);
+  await assertTrackToolbar(true);
+  await command("Emulation.setDeviceMetricsOverride", {
+    ...desktopViewport,
+    width: 390,
+  });
+  await assertTrackToolbar(false);
+  await command("Emulation.setDeviceMetricsOverride", desktopViewport);
+  async function checkCatalogTab(name, content, width) {
+    await evaluate(
+      `${categoryButtons}.find(button => button.textContent === ${JSON.stringify(name)}).click()`,
+    );
+    await until(
+      () =>
+        evaluate(
+          `document.querySelector("#content").innerText.includes(${JSON.stringify(content)})`,
+        ),
+      name + " catalog",
+    );
+    const measure = await evaluate(`(() => {
+      const toolbar = [...document.querySelectorAll(".search-catalog-toolbar")]
+        .find(element => element.getClientRects().length);
+      const tabs = document.querySelector(${JSON.stringify(categories)}).getBoundingClientRect();
+      const panel = toolbar.getBoundingClientRect();
+      const content = document.querySelector("#content");
+      return {
+        topGap: panel.top - tabs.bottom,
+        leftGap: panel.left - tabs.left,
+        contained: content.scrollWidth <= content.clientWidth + 1,
+        centers: [...toolbar.children].map(child => {
+          const rect = child.getBoundingClientRect();
+          return (rect.top + rect.bottom) / 2;
+        })
+      };
+    })()`);
+    assert.ok(
+      measure.topGap >= 0 && measure.topGap <= 14,
+      name + " tab spacing",
+    );
+    assert.ok(
+      Math.abs(measure.leftGap) <= 1 && measure.contained,
+      name + " alignment",
+    );
+    if (width > 768)
+      assert.ok(
+        measure.centers.every(
+          (center) => Math.abs(center - measure.centers[0]) <= 1,
+        ),
+        name + " toolbar alignment",
+      );
+  }
+  const layouts = [
+    ["Albums", "Another Album"],
+    ["Artists", "Another Artist"],
+    ["Playlists", "Test Playlist"],
+    ["Genres", "Rock"],
+  ];
+  for (const width of [1440, 390]) {
+    await command("Emulation.setDeviceMetricsOverride", {
+      ...desktopViewport,
+      width,
+    });
+    for (const [name, content] of layouts)
+      await checkCatalogTab(name, content, width);
+    assert.ok(
+      await evaluate(`(() => {
+      const tabs = document.querySelector(${JSON.stringify(categories)});
+      const active = tabs.querySelector('[aria-pressed="true"]').getBoundingClientRect();
+      return active.right <= tabs.getBoundingClientRect().right + 1;
+    })()`),
+    );
+  }
+  await evaluate(
+    `[...document.querySelectorAll("#content button.media-card")].find(button => button.textContent.includes("Rock")).click()`,
+  );
+  await until(
+    () =>
+      evaluate(
+        `!!document.querySelector('#content .section-heading button[aria-label="Play"]') && document.querySelector("#content").innerText.includes("Offline Track")`,
+      ),
+    "playback in the selected genre heading",
+  );
+  await command("Emulation.setDeviceMetricsOverride", desktopViewport);
+  await evaluate(
+    `${categoryButtons}.find(button => button.textContent === "All").click()`,
+  );
+  await evaluate(
+    `document.querySelector('#content input[type="search"]').focus()`,
+  );
   await command("Input.insertText", { text: "test" });
+  await until(
+    () =>
+      evaluate(
+        `document.querySelector("#content").innerText.includes("Top result") && document.querySelector("#content").innerText.includes("Another Artist")`,
+      ),
+    "combined search results",
+  );
+  assert.equal(
+    await evaluate(`(() => {
+    const card = document.querySelector("#content .listening-panel");
+    const play = card.querySelector('button').getBoundingClientRect();
+    const panel = card.getBoundingClientRect();
+    return panel.height < 112 && Math.abs(play.top + play.height / 2 - panel.top - panel.height / 2) <= 1;
+  })()`),
+    true,
+    "Top result should be compact and its playback button centered",
+  );
+  await evaluate(
+    `${categoryButtons}.find(button => button.textContent === "Tracks").click()`,
+  );
   await until(
     () => evaluate(`new URL(location.href).searchParams.get("q") === "test"`),
     "query in Tracks",
   );
-  await evaluate(`${categoryButtons}.find(button => button.textContent === "Playlists").click()`);
-  assert.ok(await evaluate(`(() => {
+  await evaluate(
+    `${categoryButtons}.find(button => button.textContent === "Playlists").click()`,
+  );
+  assert.ok(
+    await evaluate(`(() => {
     const params = new URL(location.href).searchParams;
     return params.get("tab") === "playlists" && params.get("q") === "test";
-  })()`));
+  })()`),
+  );
+  await evaluate(`localStorage.setItem("music-streaming.yandexMusic", "on");
+    localStorage.setItem("music-streaming.yandexMusic.token", "fixture-only");
+    history.replaceState(null, "", "/search?tab=yandex&q=test");
+    setTimeout(() => location.reload(), 20);`);
+  await until(
+    () =>
+      evaluate(
+        `document.querySelector("#content")?.innerText.includes("Another Yandex Track")`,
+      ),
+    "Yandex Music search results",
+  );
+  const yandexActionsAlign = `(() => {
+    const buttons = [...document.querySelectorAll("#content li button")].map(button => button.getBoundingClientRect());
+    return buttons.length === 2 && buttons[0].left === buttons[1].left && buttons[0].right === buttons[1].right;
+  })()`;
+  for (const width of [1440, 390]) {
+    await command("Emulation.setDeviceMetricsOverride", {
+      ...desktopViewport,
+      width,
+    });
+    assert.ok(
+      await evaluate(yandexActionsAlign),
+      "Yandex Music actions should share a column",
+    );
+  }
+  await command("Emulation.setDeviceMetricsOverride", desktopViewport);
+  await evaluate(`localStorage.removeItem("music-streaming.yandexMusic");
+    localStorage.removeItem("music-streaming.yandexMusic.token");`);
   await evaluate(`history.pushState(null, "", "/albums/${albumId}")`);
   await until(
     () =>

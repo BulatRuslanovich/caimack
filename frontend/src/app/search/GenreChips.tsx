@@ -17,7 +17,7 @@ export function GenreCategories({ genres }: { genres: Genre[] }) {
         <Link
           key={genre.id}
           href={`/search?tab=genres&id=${genre.id}`}
-          className="flex min-h-28 min-w-0 flex-col gap-3 rounded-md bg-card p-4 hover:bg-raised hover:no-underline focus-visible:outline-2 focus-visible:outline-ring"
+          className="flex min-h-24 min-w-0 flex-col gap-2 rounded-md bg-card p-3 hover:bg-raised hover:no-underline focus-visible:outline-2 focus-visible:outline-ring"
         >
           <span className="text-body font-semibold wrap-anywhere">{genreName(genre.name)}</span>
           <span className="mt-auto flex items-end justify-between gap-2">
@@ -27,10 +27,10 @@ export function GenreCategories({ genres }: { genres: Genre[] }) {
             {genre.coverAlbumIds[0] ? (
               <AlbumCover
                 album={{ id: genre.coverAlbumIds[0], title: genre.name, hasCover: true }}
-                size={56}
+                size={48}
               />
             ) : (
-              <Cover name={genre.name} hasCover={false} size={56} />
+              <Cover name={genre.name} hasCover={false} size={48} />
             )}
           </span>
         </Link>

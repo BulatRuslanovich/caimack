@@ -455,7 +455,7 @@ export const ru: Dictionary = {
 
   "search.placeholder": "Музыка, исполнители, альбомы, жанры…",
   "search.browseGenres": "Жанры в фонотеке",
-  "search.allGenres": "Все жанры",
+  "search.allTracks": "Все треки",
   "search.browseEmpty": "В каталоге пока нет жанров",
   "search.browseEmptyHint": "Найдите трек, альбом или исполнителя через поиск выше.",
   "search.recent": "Недавние запросы",
@@ -1104,10 +1104,7 @@ export const ru: Dictionary = {
   "yandex.searchTitle": "Добавить из Яндекс Музыки",
   "yandex.resultsHint": "Найденную музыку можно добавить в библиотеку.",
   "yandex.searchHint":
-    "Найдите трек или альбом и добавьте в библиотеку. Статус появится рядом с ним.",
-  "yandex.searchEmpty": "Что хотите добавить?",
-  "yandex.searchEmptyHint":
-    "Введите название трека, исполнителя или альбома либо добавьте любимые треки.",
+    "Ищите по треку, исполнителю или альбому. Статус добавления появится рядом с результатом.",
   "yandex.searchPlaceholder": "Трек, исполнитель или альбом в Яндекс Музыке",
   "yandex.connectTitle": "Подключите Яндекс Музыку",
   "yandex.connectHint":

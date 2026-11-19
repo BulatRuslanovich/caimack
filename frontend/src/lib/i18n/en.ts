@@ -431,7 +431,7 @@ export const en = {
 
   "search.placeholder": "Music, artists, albums, genres…",
   "search.browseGenres": "Browse by genre",
-  "search.allGenres": "All genres",
+  "search.allTracks": "All tracks",
   "search.browseEmpty": "No genres in this catalog yet",
   "search.browseEmptyHint": "Search for a track, album or artist above.",
   "search.recent": "Recent searches",
@@ -1043,9 +1043,7 @@ export const en = {
   "yandex.searchTitle": "Add from Yandex Music",
   "yandex.resultsHint": "Add music you find to your library.",
   "yandex.searchHint":
-    "Find a track or album and add it to your library. Progress appears beside it.",
-  "yandex.searchEmpty": "What would you like to add?",
-  "yandex.searchEmptyHint": "Search by track, artist or album, or add your liked tracks.",
+    "Search by track, artist or album. Import progress appears beside the result.",
   "yandex.searchPlaceholder": "Track, artist or album in Yandex Music",
   "yandex.connectTitle": "Connect Yandex Music",
   "yandex.connectHint": "Save your account token in settings to search and add music.",

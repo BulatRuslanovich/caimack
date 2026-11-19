@@ -9,7 +9,15 @@ import { useT } from "@/contexts/I18nContext";
 import { Button } from "./ui/button";
 import { PauseIcon, PlayIcon } from "lucide-react";
 
-export function PlayAllButton({ tracks, name }: { tracks: Track[]; name?: string }) {
+export function PlayAllButton({
+  tracks,
+  name,
+  className,
+}: {
+  tracks: Track[];
+  name?: string;
+  className?: string;
+}) {
   const t = useT();
   const { isPlaying, playSet, setIsOnAir } = usePlayback();
 
@@ -19,6 +27,7 @@ export function PlayAllButton({ tracks, name }: { tracks: Track[]; name?: string
     <Button
       variant="play"
       size="play"
+      className={className}
       disabled={tracks.length === 0}
       onClick={() => playSet(tracks)}
       aria-label={

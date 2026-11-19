@@ -105,12 +105,34 @@
   font-size: 0.8125rem;
 }
 
-.library-display-trigger {
-  min-height: 2.75rem;
-}
-
 .library-toolbar {
   padding-block: 0.25rem;
+}
+
+.search-page .section-heading {
+  align-items: center;
+}
+
+.search-page .empty-state {
+  padding-block: 1.5rem;
+}
+
+.search-page .library-card-grid {
+  row-gap: min(var(--library-card-gap), 1rem);
+}
+
+.search-page .media-card .card-art.aspect-square {
+  margin-bottom: 0.5rem;
+}
+
+.track-catalog .library-toolbar,
+.search-page .library-track-list {
+  padding-block: 0;
+}
+
+.search-page .library-track-list > [role="row"]:first-child {
+  margin-bottom: 0.25rem;
+  padding-block: 0.5rem;
 }
 
 .library-search-panel {

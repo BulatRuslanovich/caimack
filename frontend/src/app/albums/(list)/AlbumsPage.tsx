@@ -8,7 +8,8 @@ import { Disc3Icon } from "lucide-react";
 import { useState } from "react";
 import { queries } from "@/lib/queries";
 import { AlbumCard } from "@/components/MediaCard";
-import { CardGrid, CardGridSkeleton, PageHeader, Section } from "@/components/PageHeader";
+import { CardGrid, CardGridSkeleton, Section } from "@/components/PageHeader";
+import { CatalogToolbar } from "@/app/search/CatalogToolbar";
 import { Shelf } from "@/components/Shelf";
 import { SortSelect } from "@/components/PageToolbar";
 import { InfiniteQuery } from "@/components/InfiniteQuery";
@@ -38,14 +39,14 @@ export function AlbumsPage({ query }: { query: string }) {
   const showShelf = alphabetical && recent.length > 0 && total > recent.length;
 
   return (
-    <div className="flex min-w-0 flex-col gap-6 [overflow-anchor:none] max-md:gap-5">
-      <PageHeader
-        subtitle={albums.data ? t("count.albums", { count: total }) : undefined}
+    <div className="flex min-w-0 flex-col gap-3 [overflow-anchor:none]">
+      <CatalogToolbar
+        summary={albums.data ? t("count.albums", { count: total }) : undefined}
         actions={<SortSelect value={sort} onChange={setSort} options={sortKeys} />}
       />
 
       {showShelf && (
-        <Shelf title={t("library.recentlyAdded")}>
+        <Shelf title={t("library.recentlyAdded")} className="gap-2.5">
           {recent.map((album) => (
             <AlbumCard key={album.id} album={album} />
           ))}
@@ -61,7 +62,7 @@ export function AlbumsPage({ query }: { query: string }) {
         }}
       >
         {(items) => (
-          <Section title={showShelf ? t("library.allAlbums") : undefined}>
+          <Section title={showShelf ? t("library.allAlbums") : undefined} className="gap-2.5">
             <CardGrid>
               {items.map((album) => (
                 <AlbumCard key={album.id} album={album} />

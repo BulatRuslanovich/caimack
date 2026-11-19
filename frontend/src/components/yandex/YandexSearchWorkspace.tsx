@@ -32,20 +32,12 @@ export function YandexSearchWorkspace({ query }: { query: string }) {
     );
   if (searching) return <YandexSearchResults query={query} />;
   return (
-    <>
-      <section className="flex flex-wrap items-center justify-between gap-4 rounded-lg bg-card p-5 max-md:p-4">
-        <div className="max-w-xl space-y-1.5">
-          <h2 className="text-section font-semibold">{t("yandex.searchTitle")}</h2>
-          <p className="text-sm text-muted-foreground">{t("yandex.searchHint")}</p>
-        </div>
-        <YandexImportButton source={{ kind: "Likes", title: t("yandex.likes") }} />
-      </section>
-      <EmptyState
-        bare
-        icon={<SearchIcon size={24} />}
-        title={t("yandex.searchEmpty")}
-        description={t("yandex.searchEmptyHint")}
-      />
-    </>
+    <section className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-card p-3">
+      <div className="max-w-xl space-y-1">
+        <h2 className="text-section font-semibold">{t("yandex.searchTitle")}</h2>
+        <p className="text-sm text-muted-foreground">{t("yandex.searchHint")}</p>
+      </div>
+      <YandexImportButton source={{ kind: "Likes", title: t("yandex.likes") }} />
+    </section>
   );
 }

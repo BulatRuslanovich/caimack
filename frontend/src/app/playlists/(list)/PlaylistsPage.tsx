@@ -9,7 +9,8 @@ import { useState } from "react";
 import { queries } from "@/lib/queries";
 import { useInvalidate } from "@/lib/useInvalidate";
 import { PlaylistCard } from "@/components/MediaCard";
-import { CardGrid, CardGridSkeleton, PageHeader } from "@/components/PageHeader";
+import { CardGrid, CardGridSkeleton } from "@/components/PageHeader";
+import { CatalogToolbar } from "@/app/search/CatalogToolbar";
 import { Query } from "@/components/Query";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupButton } from "@/components/ui/toggle-group";
@@ -37,26 +38,33 @@ export function PlaylistsPage({ query }: { query: string }) {
     ? playlists.data?.filter((playlist) => playlist.name.toLocaleLowerCase().includes(term))
     : playlists.data;
 
-  const newButton = (
-    <Button variant="primary" onClick={() => setCreating(true)}>
-      <PlusIcon size={16} /> {t("playlists.new")}
-    </Button>
-  );
-
   return (
-    <div className="flex min-w-0 flex-col gap-6 max-md:gap-5">
-      <PageHeader
-        subtitle={matching && t("count.playlists", { count: matching.length })}
-        actions={newButton}
-      />
-
-      <ToggleGroup aria-label={t("playlists.tabs")}>
-        {(["mine", "public"] as const).map((value) => (
-          <ToggleGroupButton key={value} active={tab === value} onClick={() => setTab(value)}>
-            {value === "mine" ? t("playlists.mine") : t("playlists.public")}
-          </ToggleGroupButton>
-        ))}
-      </ToggleGroup>
+    <div className="flex min-w-0 flex-col gap-3">
+      <CatalogToolbar
+        summary={matching && t("count.playlists", { count: matching.length })}
+        actions={
+          <Button
+            variant="primary"
+            className="px-3 pointer-coarse:h-11"
+            onClick={() => setCreating(true)}
+          >
+            <PlusIcon size={16} /> {t("playlists.new")}
+          </Button>
+        }
+      >
+        <ToggleGroup aria-label={t("playlists.tabs")} className="min-w-0 gap-x-4 shadow-none">
+          {(["mine", "public"] as const).map((value) => (
+            <ToggleGroupButton
+              key={value}
+              active={tab === value}
+              className="h-10 py-0 pointer-coarse:h-11"
+              onClick={() => setTab(value)}
+            >
+              {value === "mine" ? t("playlists.mine") : t("playlists.public")}
+            </ToggleGroupButton>
+          ))}
+        </ToggleGroup>
+      </CatalogToolbar>
 
       <Query
         result={playlists}
@@ -73,7 +81,6 @@ export function PlaylistsPage({ query }: { query: string }) {
               : {
                   icon: <ListMusicIcon size={24} />,
                   title: t("playlists.emptyTitle"),
-                  action: newButton,
                 }
         }
       >
@@ -82,20 +89,6 @@ export function PlaylistsPage({ query }: { query: string }) {
             {matching?.map((playlist) => (
               <PlaylistCard key={playlist.id} playlist={playlist} showOwner={tab === "public"} />
             ))}
-            {tab === "mine" && !query && (
-              <button
-                type="button"
-                onClick={() => setCreating(true)}
-                className="group flex min-w-0 flex-col gap-0.5 text-left"
-              >
-                <span className="mb-2.5 grid aspect-square w-full place-items-center rounded-xs border-2 border-dashed border-border-strong text-faint transition-colors duration-150 ease-brand group-hover:border-foreground group-hover:text-foreground">
-                  <PlusIcon size={34} />
-                </span>
-                <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground">
-                  {t("playlists.new")}
-                </span>
-              </button>
-            )}
           </CardGrid>
         )}
       </Query>

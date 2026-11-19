@@ -18,7 +18,7 @@ import { useRowSelection } from "@/lib/useRowSelection";
 import { useAuth } from "@/contexts/AuthContext";
 import { useT } from "@/contexts/I18nContext";
 import { useToast } from "@/lib/useToast";
-import { PageHeader, Section } from "@/components/PageHeader";
+import { Section } from "@/components/PageHeader";
 import { Pagination, SortSelect } from "@/components/PageToolbar";
 import {
   Select,
@@ -56,7 +56,13 @@ const TEMPOS: Record<string, { phrase: TranslationKey; filter: TrackFilter }> = 
   veryFast: { phrase: "filter.tempo.veryFast", filter: { bpmMin: 150 } },
 };
 
-export function TracksPage({ query }: { query: string }) {
+export function TracksPage({
+  query,
+  scrollOnPageChange,
+}: {
+  query: string;
+  scrollOnPageChange?: () => void;
+}) {
   const t = useT();
   const display = useTrackDisplay();
   const format = useFormat();
@@ -112,34 +118,20 @@ export function TracksPage({ query }: { query: string }) {
   }, [selecting, stopSelecting]);
 
   return (
-    <div className="flex min-w-0 flex-col gap-6 max-md:gap-5">
-      <PageHeader
-        subtitle={
-          tracks.data && (
-            <>
-              <span className="whitespace-nowrap">
-                {t("count.tracksInLibrary", { count: tracks.data.total })}
-              </span>
-              {!filtered && stats && stats.totalDurationSeconds > 0 && (
-                <span className="whitespace-nowrap">
-                  {" · "}
-                  {format.totalDuration(stats.totalDurationSeconds)}
-                </span>
-              )}
-            </>
-          )
-        }
-        actions={
-          items.length > 0 && (
-            <>
-              <PlayAllButton tracks={items} />
-              <ShuffleButton tracks={items} />
-            </>
-          )
-        }
-      />
+    <div className="track-catalog flex min-w-0 flex-col gap-2.5">
+      {tracks.data && (
+        <p className="text-sm text-muted-foreground">
+          {t("count.tracksInLibrary", { count: tracks.data.total })}
+          {!filtered && stats && stats.totalDurationSeconds > 0 && (
+            <span className="whitespace-nowrap">
+              {" · "}
+              {format.totalDuration(stats.totalDurationSeconds)}
+            </span>
+          )}
+        </p>
+      )}
 
-      <div className="library-toolbar flex flex-wrap items-center gap-2.5 max-md:gap-2">
+      <div className="library-toolbar flex flex-wrap items-center gap-2">
         <SortSelect value={sort} onChange={setSort} options={sortKeys} />
         <Select value={tempo} onValueChange={setTempo}>
           <SelectTrigger aria-label={t("sort.bpm")}>
@@ -177,11 +169,21 @@ export function TracksPage({ query }: { query: string }) {
             confirm={confirm}
           />
         )}
+        {items.length > 0 && (
+          <div className="ml-auto flex shrink-0 items-center gap-2 max-sm:ml-0">
+            <PlayAllButton tracks={items} className="size-10 pointer-coarse:size-11" />
+            <ShuffleButton
+              tracks={items}
+              compact
+              className="rounded-lg px-3 pointer-coarse:h-11 pointer-coarse:max-sm:w-11"
+            />
+          </div>
+        )}
       </div>
 
       <Query result={tracks}>
         {(data) => (
-          <Section>
+          <Section className="gap-2">
             <TrackList
               tracks={data.items}
               showTempoKey={display.showTempoKey}
@@ -198,7 +200,7 @@ export function TracksPage({ query }: { query: string }) {
               }
             />
 
-            <Pagination result={data} onChange={setPage} />
+            <Pagination result={data} onChange={setPage} scrollOnChange={scrollOnPageChange} />
           </Section>
         )}
       </Query>
@@ -238,17 +240,15 @@ function BulkActions({
 
   if (!selecting) {
     return (
-      <div className="flex min-h-9 items-center">
-        <Button variant="text" size="auto" onClick={onStart}>
-          <CheckIcon size={16} />
-          {t("tracks.selectMode")}
-        </Button>
-      </div>
+      <Button variant="ghost" className="rounded-lg px-3 pointer-coarse:h-11" onClick={onStart}>
+        <CheckIcon size={16} />
+        {t("tracks.selectMode")}
+      </Button>
     );
   }
 
   return (
-    <div className="flex min-h-9 items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <span className="text-sm text-muted-foreground tabular-nums" aria-live="polite">
         {t("tracks.selectedCount", { count: selected.size })}
       </span>
@@ -256,6 +256,7 @@ function BulkActions({
       {selected.size > 0 && (
         <Button
           variant="destructive"
+          className="rounded-lg px-3 pointer-coarse:h-11"
           disabled={deleteSelected.isPending}
           onClick={() =>
             confirm({
@@ -271,7 +272,12 @@ function BulkActions({
         </Button>
       )}
 
-      <Button variant="text" size="auto" disabled={deleteSelected.isPending} onClick={onStop}>
+      <Button
+        variant="ghost"
+        className="rounded-lg px-3 pointer-coarse:h-11"
+        disabled={deleteSelected.isPending}
+        onClick={onStop}
+      >
         {t("tracks.exitSelectMode")}
       </Button>
     </div>

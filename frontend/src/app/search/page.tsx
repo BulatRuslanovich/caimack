@@ -7,13 +7,13 @@ import { cn } from "@/lib/cn";
 import type { Route } from "next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
-import { Activity, Suspense, useMemo, useState } from "react";
+import { Activity, Suspense, useMemo, useRef, useState } from "react";
 import { prefetchSearchCategory, queries, SEARCH_MIN_LENGTH } from "@/lib/queries";
 import { rememberSearch } from "@/lib/recentSearches";
 import { isCatalogTab, type CatalogTab } from "@/lib/searchNavigation";
 import { AlbumCard, ArtistCard } from "@/components/MediaCard";
 import { PageHeader, Section } from "@/components/PageHeader";
-import { PageToolbar } from "@/components/PageToolbar";
+import { SearchField } from "@/components/SearchField";
 import { Query } from "@/components/Query";
 import { TrackList } from "@/components/TrackList";
 import { SearchIcon } from "lucide-react";
@@ -30,7 +30,6 @@ import { ArtistsPage } from "@/app/artists/(list)/ArtistsPage";
 import { PlaylistsPage } from "@/app/playlists/(list)/PlaylistsPage";
 import { GenresPage } from "@/app/genres/GenresPage";
 import { GenreCategories, GenreChips } from "./GenreChips";
-import Link from "next/link";
 import { RecentSearches } from "./RecentSearches";
 import { SearchTabs } from "./SearchTabs";
 import { TopResult } from "./TopResult";
@@ -44,8 +43,8 @@ const YANDEX_TAB = "yandex";
 type Tab = CatalogTab | typeof YANDEX_TAB;
 
 const previewRow = cn(
-  "grid grid-cols-5 gap-5 max-xl:gap-4",
-  "max-md:-mx-4 max-md:grid-flow-col max-md:grid-cols-none max-md:auto-cols-[7.5rem] max-md:gap-3 max-md:overflow-x-auto max-md:px-4",
+  "grid grid-cols-5 gap-3",
+  "max-md:grid-flow-col max-md:grid-cols-none max-md:auto-cols-[7.5rem] max-md:overflow-x-auto",
   hiddenScrollbar,
 );
 
@@ -94,8 +93,8 @@ function SearchView() {
   const previewTracks = useMemo(() => results.data?.tracks.slice(0, PREVIEW) ?? [], [results.data]);
 
   return (
-    <div className="flex min-w-0 flex-col gap-6">
-      <div className="search-controls flex flex-col gap-4 max-md:gap-3">
+    <div className="search-page flex min-w-0 flex-col gap-3">
+      <div className="search-controls flex min-w-0 flex-col gap-3 [&>header]:items-center">
         <PageHeader title={t("nav.search")} actions={yandex && <YandexActivityButton />} />
 
         {yandex && (
@@ -115,9 +114,9 @@ function SearchView() {
           </ToggleGroup>
         )}
 
-        <PageToolbar
-          search={query}
-          onSearch={(next) => navigate(next, yandexTab ? YANDEX_TAB : tab)}
+        <SearchField
+          value={query}
+          onChange={(next) => navigate(next, yandexTab ? YANDEX_TAB : tab)}
           placeholder={t(yandexTab ? "yandex.searchPlaceholder" : "search.placeholder")}
           autoFocus
         />
@@ -145,7 +144,7 @@ function SearchView() {
         {!yandexTab &&
           tab === null &&
           (query.length < SEARCH_MIN_LENGTH ? (
-            <SearchStart />
+            <SearchStart showTracks={query === ""} />
           ) : (
             <Query
               result={results}
@@ -161,7 +160,7 @@ function SearchView() {
                 <>
                   <div
                     data-beside={data.top && data.tracks.length > 0 ? "" : undefined}
-                    className="group/top grid gap-x-8 gap-y-11 max-md:gap-y-8 lg:data-beside:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]"
+                    className="grid min-w-0 items-start gap-3 lg:data-beside:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]"
                   >
                     {data.top && <TopResult top={data.top} />}
 
@@ -169,6 +168,7 @@ function SearchView() {
                       <Section
                         title={t("nav.tracks")}
                         href={seeAll(query, "tracks", data.tracks.length)}
+                        className="min-w-0 gap-2.5"
                       >
                         <TrackList tracks={previewTracks} showAlbum={!data.top} />
                       </Section>
@@ -179,6 +179,7 @@ function SearchView() {
                     <Section
                       title={t("nav.albums")}
                       href={seeAll(query, "albums", data.albums.length)}
+                      className="gap-2.5"
                     >
                       <div className={previewRow}>
                         {data.albums.slice(0, PREVIEW).map((album) => (
@@ -192,6 +193,7 @@ function SearchView() {
                     <Section
                       title={t("nav.artists")}
                       href={seeAll(query, "artists", data.artists.length)}
+                      className="gap-2.5"
                     >
                       <div className={previewRow}>
                         {data.artists.slice(0, PREVIEW).map((artist) => (
@@ -205,6 +207,7 @@ function SearchView() {
                     <Section
                       title={t("nav.genres")}
                       href={seeAll(query, "genres", data.genres.length)}
+                      className="gap-2.5"
                     >
                       <GenreChips genres={data.genres.slice(0, PREVIEW * 2)} />
                     </Section>
@@ -237,9 +240,10 @@ function seeAll(query: string, tab: CatalogTab, shown: number): Route | undefine
   return shown > PREVIEW ? `/search?q=${encodeURIComponent(query)}&tab=${tab}` : undefined;
 }
 
-function SearchStart() {
+function SearchStart({ showTracks }: { showTracks: boolean }) {
   const t = useT();
   const genres = useQuery(queries.genres());
+  const tracksRef = useRef<HTMLElement>(null);
 
   const top = useMemo(
     () =>
@@ -256,17 +260,20 @@ function SearchStart() {
         empty={{ title: t("search.browseEmpty"), description: t("search.browseEmptyHint") }}
       >
         {() => (
-          <Section title={t("search.browseGenres")} className="pt-1">
+          <Section title={t("search.browseGenres")} className="gap-2.5">
             <GenreCategories genres={top} />
-            <Link
-              href="/search?tab=genres"
-              className="w-fit rounded-sm py-2 text-sm text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring"
-            >
-              {t("search.allGenres")}
-            </Link>
           </Section>
         )}
       </Query>
+
+      {showTracks && (
+        <Section title={t("search.allTracks")} ref={tracksRef} className="gap-2.5">
+          <TracksPage
+            query=""
+            scrollOnPageChange={() => tracksRef.current?.scrollIntoView({ block: "start" })}
+          />
+        </Section>
+      )}
     </>
   );
 }

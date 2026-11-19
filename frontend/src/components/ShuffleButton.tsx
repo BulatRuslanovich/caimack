@@ -10,7 +10,15 @@ import { usePlayerActions, usePlayerState } from "@/contexts/PlayerContext";
 import { useT } from "@/contexts/I18nContext";
 import { Button } from "./ui/button";
 
-export function ShuffleButton({ tracks, compact = false }: { tracks: Track[]; compact?: boolean }) {
+export function ShuffleButton({
+  tracks,
+  compact = false,
+  className,
+}: {
+  tracks: Track[];
+  compact?: boolean;
+  className?: string;
+}) {
   const t = useT();
   const player = usePlayerActions();
   const { shuffle } = usePlayerState();
@@ -24,6 +32,7 @@ export function ShuffleButton({ tracks, compact = false }: { tracks: Track[]; co
         compact && "max-sm:w-10 max-sm:px-0",
         shuffle &&
           "border-primary bg-primary-soft text-primary hover:border-primary hover:bg-primary-soft",
+        className,
       )}
     >
       <ShuffleIcon size={16} />

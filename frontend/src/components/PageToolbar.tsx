@@ -75,9 +75,11 @@ export function SortSelect<T extends string>({
 export function Pagination({
   result,
   onChange,
+  scrollOnChange = scrollContentToTop,
 }: {
   result: Paged<unknown>;
   onChange: (page: number) => void;
+  scrollOnChange?: () => void;
 }) {
   const t = useT();
   const { page, totalPages } = result;
@@ -86,7 +88,7 @@ export function Pagination({
 
   const goTo = (next: number) => {
     onChange(next);
-    scrollContentToTop();
+    scrollOnChange();
   };
 
   return (

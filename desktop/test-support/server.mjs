@@ -41,7 +41,8 @@ const wave = () => {
   return buffer;
 };
 
-export async function fixture() {
+export async function fixture({ trackCount = 1, isAdmin = false } = {}) {
+  const account = { ...user, isAdmin };
   const state = {
     online: true,
     tag: "first",
@@ -67,6 +68,57 @@ export async function fixture() {
     extension: "mp3",
   });
   const currentTrack = () => ({ ...track, isFavorite: state.favorite });
+  const otherTracks = Array.from({ length: trackCount - 1 }, (_, index) => ({
+    ...track,
+    id: `ccccccc4-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+    title: `Catalog track ${index + 2}`,
+  }));
+  const album = {
+    id: albumId,
+    title: "Test Album",
+    artistId: track.artistId,
+    artistName: track.artistName,
+    hasCover: false,
+    trackCount: 1,
+    durationSeconds: track.durationSeconds,
+    createdAt: track.createdAt,
+  };
+  const albums = [
+    album,
+    {
+      ...album,
+      id: "eeeeeee6-0000-4000-8000-000000000006",
+      title: "Another Album",
+    },
+  ];
+  const artist = {
+    id: track.artistId,
+    name: track.artistName,
+    albumCount: 1,
+    trackCount: 1,
+    hasImage: false,
+  };
+  const artists = [
+    artist,
+    {
+      ...artist,
+      id: "ddddddd5-0000-4000-8000-000000000005",
+      name: "Another Artist",
+    },
+  ];
+  const playlist = {
+    id: "bbbbbbb2-0000-4000-8000-000000000002",
+    name: "Test Playlist",
+    ownerId: user.id,
+    ownerName: user.username,
+    isPublic: false,
+    trackCount: 1,
+    durationSeconds: track.durationSeconds,
+    hasCover: false,
+    createdAt: track.createdAt,
+    updatedAt: track.createdAt,
+  };
+  const genre = { id: "rock", name: "Rock", trackCount, coverAlbumIds: [] };
   const text = {
     trackId: track.id,
     plain: "hello",
@@ -130,12 +182,12 @@ export async function fixture() {
       for await (const chunk of request) chunks.push(chunk);
       const parsed = JSON.parse(Buffer.concat(chunks));
       return parsed.username === "tester" && parsed.password === "test-password"
-        ? json(user, 200, { "Set-Cookie": cookies })
+        ? json(account, 200, { "Set-Cookie": cookies })
         : json({ detail: "Incorrect credentials" }, 401);
     }
     if (path === "/api/auth/refresh") {
       return request.headers.cookie?.includes("ms_refresh=fixture-refresh")
-        ? json(user, 200, { "Set-Cookie": cookies })
+        ? json(account, 200, { "Set-Cookie": cookies })
         : json({ detail: "Signed out" }, 401);
     }
     if (
@@ -145,26 +197,60 @@ export async function fixture() {
       return response.writeHead(401).end();
     if (!request.headers.cookie?.includes("ms_access=fixture-token"))
       return json({ detail: "Signed out" }, 401);
-    if (path === "/api/auth/me") return json(user);
+    if (path === "/api/auth/me") return json(account);
     if (path === "/api/auth/logout") return response.writeHead(204).end();
     if (path === "/api/config")
       return json({ recommendationsEnabled: false, accessTokenMinutes: 15 });
     if (path === "/api/me/settings")
       return json({ quality: state.quality, timeZone: "UTC" });
-    if (path === "/api/home/feed")
+    if (path === "/api/home/feed" || path === "/api/library/overview") {
+      const stats = {
+        trackCount: state.present ? trackCount : 0,
+        albumCount: 0,
+        totalDurationSeconds: state.present
+          ? track.durationSeconds * trackCount
+          : 0,
+        totalBytes: state.wave.length,
+        freeBytes: 0,
+        favoriteCount: Number(state.favorite),
+      };
+      return json(
+        path === "/api/home/feed"
+          ? { blocks: [], stats }
+          : {
+              stats,
+              recentTracks: [],
+              recentAlbums: [album],
+              recentArtists: [artist],
+              topGenres: [genre],
+            },
+      );
+    }
+    if (path === "/api/tracks") {
+      const items = state.present ? [currentTrack(), ...otherTracks] : [];
+      const page = Number(url.searchParams.get("page")) || 1;
+      const pageSize = Number(url.searchParams.get("pageSize")) || 100;
       return json({
-        blocks: [],
-        stats: {
-          trackCount: 1,
-          albumCount: 0,
-          totalDurationSeconds: 4,
-          totalBytes: state.wave.length,
-          freeBytes: 0,
-          favoriteCount: Number(state.favorite),
-        },
+        items: items.slice((page - 1) * pageSize, page * pageSize),
+        page,
+        pageSize,
+        total: items.length,
+        totalPages: Math.ceil(items.length / pageSize),
       });
-    if (path === "/api/tracks")
-      return json(pagina(state.present ? [currentTrack()] : []));
+    }
+    if (path === "/api/search") {
+      const first = currentTrack();
+      return json({
+        tracks: [first, ...otherTracks.slice(0, 5)],
+        albums,
+        artists,
+        genres: [genre],
+        top: { kind: "Track", track: first },
+      });
+    }
+    if (path === "/api/genres") return json([genre]);
+    if (path === "/api/genres/rock/tracks")
+      return json(pagina([currentTrack()]));
     if (path === "/api/albums/" + albumId)
       return json({
         id: albumId,
@@ -175,14 +261,42 @@ export async function fixture() {
         durationSeconds: track.durationSeconds,
         tracks: [currentTrack()],
       });
-    if (path === "/api/albums") return json(pagina([]));
+    if (path === "/api/albums") return json(pagina(albums));
+    if (path === "/api/artists") return json(pagina(artists));
+    if (path === "/api/playlists") return json([playlist]);
+    if (path === "/api/playlists/public")
+      return json([{ ...playlist, name: "Public Playlist", isPublic: true }]);
+    if (path === "/api/integrations/yandex-music/imports") return json([]);
+    if (path === "/api/integrations/yandex-music/search")
+      return json({
+        tracks: [
+          {
+            id: "1",
+            title: "Yandex Track",
+            artist: artist.name,
+            album: album.title,
+            durationSeconds: 65,
+            available: true,
+            inLibrary: false,
+          },
+          {
+            id: "2",
+            title: "Another Yandex Track",
+            artist: artist.name,
+            durationSeconds: 185,
+            available: true,
+            inLibrary: true,
+          },
+        ],
+        albums: [{ id: "3", title: "Yandex Album", artist: artist.name }],
+      });
     if (path === "/api/favorites")
       return json(pagina(state.favorite ? [currentTrack()] : []));
     if (path === "/api/sync/snapshot")
       return json({
         protocol: 1,
         serverId,
-        user,
+        user: account,
         tracks: state.present ? [currentTrack()] : [],
         files: state.present && !state.malformed ? [file()] : [],
         albums: [],
