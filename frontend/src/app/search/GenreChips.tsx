@@ -16,7 +16,7 @@ export function GenreCategories({ genres }: { genres: Genre[] }) {
       {genres.map((genre) => (
         <Link
           key={genre.id}
-          href={`/genres?id=${genre.id}`}
+          href={`/search?tab=genres&id=${genre.id}`}
           className="flex min-h-28 min-w-0 flex-col gap-3 rounded-md bg-card p-4 hover:bg-raised hover:no-underline focus-visible:outline-2 focus-visible:outline-ring"
         >
           <span className="text-body font-semibold wrap-anywhere">{genreName(genre.name)}</span>
@@ -45,7 +45,7 @@ export function GenreChips({ genres }: { genres: Genre[] }) {
       {genres.map((genre) => (
         <Link
           key={genre.id}
-          href={`/genres?id=${genre.id}`}
+          href={`/search?tab=genres&id=${genre.id}`}
           className="flex items-center gap-2 rounded-full bg-raised px-4 py-2 text-sm font-medium text-muted-foreground transition-colors duration-150 ease-brand hover:bg-accent hover:text-foreground hover:no-underline"
         >
           {genreName(genre.name)}

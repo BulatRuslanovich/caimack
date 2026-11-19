@@ -9,9 +9,6 @@ export const en = {
   "collection.remove": "Remove from library",
   "collection.saved": "In your library",
   "collection.search": "Search saved music",
-  "collection.scope": "Library scope",
-  "collection.savedScope": "Saved",
-  "collection.types": "Catalog types",
   "collection.emptyAlbums": "No saved albums yet",
   "collection.emptyArtists": "No saved artists yet",
   "collection.emptyPlaylists": "No saved playlists yet",
@@ -27,7 +24,6 @@ export const en = {
   "collection.empty": "Nothing saved here yet",
   "collection.hint": "Save albums, artists and playlists using the + button.",
   "collection.noResults": "No matches in your library",
-  "collection.catalog": "Entire catalog",
   "collection.failed": "Could not update your library. Try again.",
   "connect.title": "Playback devices",
   "connect.description": "Choose where the music plays. Use this player to control it.",
@@ -80,6 +76,7 @@ export const en = {
   "action.close": "Close",
   "action.confirm": "Confirm",
   "action.seeAll": "See all",
+  "action.browseTracks": "Browse tracks",
   "action.tryAgain": "Try again",
   "action.switchLanguage": "Switch to {language}",
   "action.switchTheme": "Switch theme",
@@ -463,7 +460,6 @@ export const en = {
 
   "favorites.kind": "Collection",
   "favorites.emptyTitle": "No favourites yet",
-  "favorites.browseTracks": "Browse tracks",
 
   "albums.kind": "Album",
   "albums.empty": "There are no albums on this server yet.",
@@ -591,7 +587,6 @@ export const en = {
   "library.scan.removed": "removed: {count}",
   "library.scan.unsupported": "unsupported format: {count}",
   "upload.justAdded": "Just added",
-  "upload.goToLibrary": "Go to library",
   "upload.unsupportedFormat": "Supported formats: {formats}.",
   "upload.tooLarge": "Larger than the {limit} limit.",
   "upload.added": {
@@ -1045,7 +1040,6 @@ export const en = {
   "yandex.stopNamed": "Stop adding {name}",
   "yandex.dismissNamed": "Dismiss {name}",
   "yandex.failureDetails": "What happened",
-  "yandex.openLibrary": "Open library",
   "yandex.searchTitle": "Add from Yandex Music",
   "yandex.resultsHint": "Add music you find to your library.",
   "yandex.searchHint":

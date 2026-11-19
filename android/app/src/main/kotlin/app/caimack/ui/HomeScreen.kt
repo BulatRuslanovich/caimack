@@ -406,9 +406,9 @@ private fun blockLink(block: HomeBlock): Any? = when (block.baseKey) {
     "quickTiles" -> RecentRoute
     "newArrivals" -> MixRoute("new")
     "topTracks" -> MixRoute("top")
-    "newAlbums" -> AlbumsRoute
-    "yourPlaylists" -> PlaylistsRoute
-    "artistsForYou" -> ArtistsRoute
+    "newAlbums" -> SearchRoute(SearchCategory.Albums)
+    "yourPlaylists" -> SearchRoute(SearchCategory.Playlists)
+    "artistsForYou" -> SearchRoute(SearchCategory.Artists)
     else -> null
 }
 

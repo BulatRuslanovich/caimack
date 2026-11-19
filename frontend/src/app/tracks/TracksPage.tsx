@@ -19,7 +19,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useT } from "@/contexts/I18nContext";
 import { useToast } from "@/lib/useToast";
 import { PageHeader, Section } from "@/components/PageHeader";
-import { Pagination, PageToolbar, SortSelect } from "@/components/PageToolbar";
+import { Pagination, SortSelect } from "@/components/PageToolbar";
 import {
   Select,
   SelectContent,
@@ -36,7 +36,6 @@ import { useTrackDisplay } from "@/lib/trackDisplay";
 import { Button } from "@/components/ui/button";
 import { CheckIcon } from "lucide-react";
 import { useConfirm } from "@/components/ui/alert-dialog";
-import { LibraryNavigation } from "@/components/LibraryNavigation";
 
 const sortKeys: Record<TrackSort, TranslationKey> = {
   Title: "sort.title",
@@ -57,7 +56,7 @@ const TEMPOS: Record<string, { phrase: TranslationKey; filter: TrackFilter }> = 
   veryFast: { phrase: "filter.tempo.veryFast", filter: { bpmMin: 150 } },
 };
 
-export function TracksPage() {
+export function TracksPage({ query }: { query: string }) {
   const t = useT();
   const display = useTrackDisplay();
   const format = useFormat();
@@ -65,10 +64,9 @@ export function TracksPage() {
   const [confirm, confirmDialog] = useConfirm();
 
   const [sort, setSort] = useState<TrackSort>("Title");
-  const [search, setSearch] = useState("");
   const [tempo, setTempo] = useState(ANY);
   const [key, setKey] = useState(ANY);
-  const [page, setPage] = usePage([sort, search, tempo, key]);
+  const [page, setPage] = usePage([sort, query, tempo, key]);
   const filter: TrackFilter = {
     ...TEMPOS[tempo]?.filter,
     key: key === ANY ? undefined : key,
@@ -79,17 +77,17 @@ export function TracksPage() {
       page,
       pageSize: TRACK_PAGE_SIZE,
       sort,
-      q: search || undefined,
+      q: query || undefined,
       ...filter,
     }),
   );
-  const filtered = Boolean(search) || tempo !== ANY || key !== ANY;
-  const stats = useQuery(queries.libraryOverview()).data?.stats;
+  const filtered = Boolean(query) || tempo !== ANY || key !== ANY;
+  const stats = useQuery({ ...queries.libraryOverview(), enabled: !filtered }).data?.stats;
 
   const items = useMemo(() => tracks.data?.items ?? [], [tracks.data]);
   const ids = useMemo(() => items.map((track) => track.id), [items]);
 
-  const selection = useRowSelection(ids, `${page}:${sort}:${search}:${tempo}:${key}`);
+  const selection = useRowSelection(ids, JSON.stringify([page, sort, query, tempo, key]));
 
   const [selecting, setSelecting] = useState(false);
   const { clear } = selection;
@@ -116,7 +114,6 @@ export function TracksPage() {
   return (
     <div className="flex min-w-0 flex-col gap-6 max-md:gap-5">
       <PageHeader
-        title={t("nav.tracks")}
         subtitle={
           tracks.data && (
             <>
@@ -142,8 +139,7 @@ export function TracksPage() {
         }
       />
 
-      <LibraryNavigation />
-      <PageToolbar search={search} onSearch={setSearch} placeholder={t("filter.tracks")}>
+      <div className="library-toolbar flex flex-wrap items-center gap-2.5 max-md:gap-2">
         <SortSelect value={sort} onChange={setSort} options={sortKeys} />
         <Select value={tempo} onValueChange={setTempo}>
           <SelectTrigger aria-label={t("sort.bpm")}>
@@ -181,7 +177,7 @@ export function TracksPage() {
             confirm={confirm}
           />
         )}
-      </PageToolbar>
+      </div>
 
       <Query result={tracks}>
         {(data) => (

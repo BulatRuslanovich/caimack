@@ -45,7 +45,6 @@
     <string name="search_placeholder">Музыка, исполнители, альбомы, жанры…</string>
     <string name="search_nothing_found">Ничего не найдено.</string>
     <string name="search_top_result">Лучшее совпадение</string>
-    <string name="search_tab_all">Всё</string>
     <string name="search_browse_genres">Жанры в фонотеке</string>
     <string name="search_recent">Недавние запросы</string>
     <string name="search_forget">Убрать из недавних: %1$s</string>

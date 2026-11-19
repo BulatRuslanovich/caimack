@@ -8,13 +8,7 @@ import { PrefetchLink as Link } from "@/components/PrefetchLink";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
-import {
-  isActivePath,
-  isLibraryBrowsePath,
-  libraryTabs,
-  mobileNav,
-  serviceNav,
-} from "@/lib/navigation";
+import { isActivePath, libraryTabs, mobileNav, serviceNav } from "@/lib/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUpload } from "@/contexts/UploadContext";
 import { useT } from "@/contexts/I18nContext";
@@ -110,12 +104,7 @@ export function LibraryChips() {
     strip.current.scrollLeft += offset - (strip.current.clientWidth - active.offsetWidth) / 2;
   }, [pathname]);
 
-  if (
-    isLibraryBrowsePath(pathname) ||
-    /^\/(albums|artists|playlists)\//.test(pathname) ||
-    !inLibrary(pathname)
-  )
-    return null;
+  if (pathname === "/library" || !inLibrary(pathname)) return null;
 
   return (
     <nav

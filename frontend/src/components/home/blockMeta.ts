@@ -34,10 +34,10 @@ const LINKS = {
   [QUICK_TILES]: "/recently-played",
   [NEW_ARRIVALS]: "/mixes/new",
   [TOP_TRACKS]: "/mixes/top",
-  newAlbums: "/albums",
-  yourPlaylists: "/playlists",
+  newAlbums: "/search?tab=albums",
+  yourPlaylists: "/search?tab=playlists",
 
-  artistsForYou: "/artists",
+  artistsForYou: "/search?tab=artists",
 } as const;
 
 type BlockLink = (typeof LINKS)[keyof typeof LINKS];
@@ -76,7 +76,7 @@ export function blockNote(block: HomeBlock, translate: Translate): string | unde
 
 export function blockSubjectHref(
   block: HomeBlock,
-): Route<`/artists/${string}` | `/genres?id=${string}`> | undefined {
+): Route<`/artists/${string}` | `/search?tab=genres&id=${string}`> | undefined {
   const id = block.reason?.subjectId;
   if (!id) return undefined;
 
@@ -85,7 +85,7 @@ export function blockSubjectHref(
     case "newFromArtistYouPlay":
       return `/artists/${id}`;
     case "fromGenreYouLike":
-      return `/genres?id=${id}`;
+      return `/search?tab=genres&id=${id}`;
     default:
       return undefined;
   }

@@ -1,5 +1,4 @@
 <resources>
-    <string name="tracks_search">Search this collection</string>
     <string name="tracks_sort">Sort tracks</string>
     <string name="sort_title">Title</string>
     <string name="sort_artist">Artist</string>

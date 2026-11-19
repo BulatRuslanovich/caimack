@@ -43,8 +43,6 @@ import { ToggleGroup, ToggleGroupButton } from "@/components/ui/toggle-group";
 import { EmptyState } from "@/components/EmptyState";
 import { PlaylistDialog } from "@/components/PlaylistDialog";
 import { Button } from "@/components/ui/button";
-import { LibraryNavigation } from "@/components/LibraryNavigation";
-import { PrefetchLink } from "@/components/PrefetchLink";
 
 export default function LibraryPage() {
   const t = useT();
@@ -146,9 +144,6 @@ export default function LibraryPage() {
             </div>
           }
         />
-        <div className="mt-5">
-          <LibraryNavigation saved />
-        </div>
         <div
           id="library-search"
           className="library-search-panel"
@@ -425,16 +420,6 @@ export default function LibraryPage() {
                                       : "collection.empty",
                           )}
                           description={t(currentFolder ? "folders.emptyHint" : "collection.hint")}
-                          action={
-                            !currentFolder &&
-                            !q && (
-                              <Button asChild>
-                                <PrefetchLink href="/tracks">
-                                  {t("collection.catalog")}
-                                </PrefetchLink>
-                              </Button>
-                            )
-                          }
                         />
                       )}
                   </>

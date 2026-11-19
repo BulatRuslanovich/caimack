@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useMemo, useSyncExternalStore } from "react";
 import { scrollContentToTop } from "@/lib/scroll";
+import { isCatalogTab } from "@/lib/searchNavigation";
 
 const navigationEvent = "caimack:navigate";
 
 export function installNavigation() {
+  const initial = new URL(location.href);
+  if (moveCatalogToSearch(initial)) history.replaceState(history.state, "", initial);
+
   for (const method of ["pushState", "replaceState"] as const) {
     const change = history[method].bind(history);
     history[method] = (data: unknown, unused: string, url?: string | URL | null) => {
@@ -12,6 +16,14 @@ export function installNavigation() {
       window.dispatchEvent(new Event(navigationEvent));
     };
   }
+}
+
+function moveCatalogToSearch(url: URL) {
+  const tab = url.pathname.slice(1);
+  if (!isCatalogTab(tab)) return false;
+  url.pathname = "/search";
+  url.searchParams.set("tab", tab);
+  return true;
 }
 
 function subscribe(onChange: () => void) {
@@ -51,7 +63,9 @@ export function useParams<T = Record<string, string>>(): T {
 
 export function navigate(href: string, replace = false, scroll = true) {
   const url = new URL(href, location.href);
-  if (url.origin !== location.origin || url.href === location.href) return;
+  if (url.origin !== location.origin) return;
+  moveCatalogToSearch(url);
+  if (url.href === location.href) return;
   const changedPage = url.pathname !== location.pathname;
   history[replace ? "replaceState" : "pushState"](null, "", url);
   if (changedPage && scroll) scrollContentToTop();

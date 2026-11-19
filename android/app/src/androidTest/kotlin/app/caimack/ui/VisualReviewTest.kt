@@ -291,22 +291,21 @@ class VisualReviewTest {
         compose.onNodeWithContentDescription(label(R.string.player_open_full)).assertIsDisplayed()
     }
 
-    @Test fun catalogScopeKeepsTheSavedFolderOnReturn() {
+    @Test fun catalogCategoriesOpenFromSearchWithNoQuery() {
         container.appearance.setLanguage("ru")
         compose.activityRule.scenario.recreate()
         compose.onNode(hasText(label(R.string.nav_library)) and hasClickAction()).performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText("На вечер").fetchSemanticsNodes().isNotEmpty() }
         compose.onNode(hasText("На вечер") and hasClickAction()).performClick()
-        compose.onNodeWithText(label(R.string.collection_saved)).assertIsSelected()
-        compose.onNodeWithText(label(R.string.collection_catalog)).performClick()
-        compose.onNodeWithText(label(R.string.collection_catalog)).assertIsSelected()
-        compose.onNode(hasText(label(R.string.nav_artists)) and hasClickAction()).performClick()
+        compose.onNodeWithContentDescription(label(R.string.folders_up)).assertIsDisplayed()
+        compose.onNode(hasText(label(R.string.nav_search)) and hasClickAction()).performClick()
+        val artists = hasText(label(R.string.nav_artists)) and hasClickAction()
+        compose.onNode(artists).performClick().assertIsSelected()
         compose.waitUntil(10_000) { compose.onAllNodesWithText(label(R.string.artists_empty)).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText(label(R.string.artists_empty)).assertIsDisplayed()
-        capture("library-catalog", seedPlayback = false)
-        compose.onNodeWithText(label(R.string.collection_saved)).performClick()
-        compose.onNodeWithText("На вечер").assertIsDisplayed()
-        compose.onNodeWithContentDescription(label(R.string.folders_up)).assertIsDisplayed()
+        capture("search-artists", seedPlayback = false)
+        compose.onNodeWithContentDescription(label(R.string.collection_clear_filter)).performClick()
+        compose.onNodeWithContentDescription(label(R.string.search_placeholder)).assertIsDisplayed()
     }
 
     @Test fun auditSearchBrowseAndKeyboard() {
@@ -464,8 +463,7 @@ class VisualReviewTest {
         assertEquals(LibraryDensity.Spacious, Appearance(context).libraryDensity.value)
         capture("parity-density-settings")
         compose.activityRule.scenario.recreate()
-        compose.onNode(hasText(label(R.string.nav_library)) and hasClickAction()).performClick()
-        compose.onNodeWithText(label(R.string.collection_catalog)).performClick()
+        compose.onNode(hasText(label(R.string.nav_search)) and hasClickAction()).performClick()
         compose.onNode(hasText(label(R.string.nav_albums)) and hasClickAction()).performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText(original[0].title).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText(label(R.string.view_grid)).assertDoesNotExist()

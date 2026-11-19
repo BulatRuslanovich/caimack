@@ -2,7 +2,6 @@
 import { lazy, Suspense, useState, type ComponentType } from "react";
 import { createRoot } from "react-dom/client";
 import { Application } from "@/components/Application";
-import { LibraryWorkspace } from "@/components/LibraryWorkspace";
 import { Loading } from "@/components/Loading";
 import { useI18n } from "@/contexts/I18nContext";
 import AdminLayout from "@/app/admin/layout";
@@ -47,24 +46,11 @@ const Invitation = lazy(() => import("@/app/invite/[token]/page"));
 const Admin = lazy(() => import("@/app/admin/page"));
 const Upload = lazy(() => import("@/app/upload/page"));
 const Duplicates = lazy(() => import("@/app/duplicates/page"));
-const library = {
-  "/library": lazy(() => import("@/app/library/LibraryPage")),
-  "/tracks": lazy(() => import("@/app/tracks/TracksPage").then((m) => ({ default: m.TracksPage }))),
-  "/albums": lazy(() =>
-    import("@/app/albums/(list)/AlbumsPage").then((m) => ({ default: m.AlbumsPage })),
-  ),
-  "/artists": lazy(() =>
-    import("@/app/artists/(list)/ArtistsPage").then((m) => ({ default: m.ArtistsPage })),
-  ),
-  "/playlists": lazy(() =>
-    import("@/app/playlists/(list)/PlaylistsPage").then((m) => ({ default: m.PlaylistsPage })),
-  ),
-  "/genres": lazy(() => import("@/app/genres/GenresPage").then((m) => ({ default: m.GenresPage }))),
-} satisfies Record<string, ComponentType>;
 const pages: Record<string, ComponentType> = {
   "/": Home,
   "/login": SignIn,
   "/search": Search,
+  "/library": lazy(() => import("@/app/library/LibraryPage")),
   "/settings": Settings,
   "/favorites": Favorites,
   "/recently-played": Recent,
@@ -119,13 +105,6 @@ function SignIn() {
 
 function Screen() {
   const path = usePathname();
-  const List = library[path as keyof typeof library];
-  if (List)
-    return (
-      <LibraryWorkspace>
-        <List />
-      </LibraryWorkspace>
-    );
   const AdminPage = adminPages[path];
   if (AdminPage)
     return (

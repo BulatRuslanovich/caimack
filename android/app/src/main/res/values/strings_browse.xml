@@ -45,7 +45,6 @@
     <string name="search_placeholder">Music, artists, albums, genres…</string>
     <string name="search_nothing_found">Nothing matched.</string>
     <string name="search_top_result">Top result</string>
-    <string name="search_tab_all">All</string>
     <string name="search_browse_genres">Browse by genre</string>
     <string name="search_recent">Recent searches</string>
     <string name="search_forget">Remove from recent: %1$s</string>

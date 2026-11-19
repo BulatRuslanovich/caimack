@@ -276,7 +276,7 @@ export default function UploadPage() {
                       {t("action.clear")}
                     </Button>
                     <Button variant="text" size="auto" asChild>
-                      <Link href="/tracks">{t("upload.goToLibrary")}</Link>
+                      <Link href="/search?tab=tracks">{t("action.browseTracks")}</Link>
                     </Button>
                   </>
                 }

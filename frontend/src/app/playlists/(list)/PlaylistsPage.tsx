@@ -15,7 +15,6 @@ import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupButton } from "@/components/ui/toggle-group";
 import { ListMusicIcon, PlusIcon } from "lucide-react";
 import { useT } from "@/contexts/I18nContext";
-import { LibraryNavigation } from "@/components/LibraryNavigation";
 
 const PlaylistDialog = dynamic(() =>
   import("@/components/PlaylistDialog").then((m) => m.PlaylistDialog),
@@ -23,7 +22,7 @@ const PlaylistDialog = dynamic(() =>
 
 type Tab = "mine" | "public";
 
-export function PlaylistsPage() {
+export function PlaylistsPage({ query }: { query: string }) {
   const t = useT();
   const invalidate = useInvalidate();
 
@@ -33,6 +32,10 @@ export function PlaylistsPage() {
   const mine = useQuery({ ...queries.playlists(), enabled: tab === "mine" });
   const shared = useQuery({ ...queries.publicPlaylists(), enabled: tab === "public" });
   const playlists = tab === "public" ? shared : mine;
+  const term = query.toLocaleLowerCase();
+  const matching = term
+    ? playlists.data?.filter((playlist) => playlist.name.toLocaleLowerCase().includes(term))
+    : playlists.data;
 
   const newButton = (
     <Button variant="primary" onClick={() => setCreating(true)}>
@@ -43,14 +46,10 @@ export function PlaylistsPage() {
   return (
     <div className="flex min-w-0 flex-col gap-6 max-md:gap-5">
       <PageHeader
-        title={t("nav.playlists")}
-        subtitle={
-          playlists.data ? t("count.playlists", { count: playlists.data.length }) : undefined
-        }
+        subtitle={matching && t("count.playlists", { count: matching.length })}
         actions={newButton}
       />
 
-      <LibraryNavigation />
       <ToggleGroup aria-label={t("playlists.tabs")}>
         {(["mine", "public"] as const).map((value) => (
           <ToggleGroupButton key={value} active={tab === value} onClick={() => setTab(value)}>
@@ -61,26 +60,29 @@ export function PlaylistsPage() {
 
       <Query
         result={playlists}
+        isEmpty={() => !matching?.length}
         skeleton={<CardGridSkeleton />}
         empty={
-          tab === "public"
-            ? {
-                icon: <ListMusicIcon size={24} />,
-                title: t("playlists.publicEmptyTitle"),
-              }
-            : {
-                icon: <ListMusicIcon size={24} />,
-                title: t("playlists.emptyTitle"),
-                action: newButton,
-              }
+          query
+            ? { icon: <ListMusicIcon size={24} />, title: t("search.nothingFound") }
+            : tab === "public"
+              ? {
+                  icon: <ListMusicIcon size={24} />,
+                  title: t("playlists.publicEmptyTitle"),
+                }
+              : {
+                  icon: <ListMusicIcon size={24} />,
+                  title: t("playlists.emptyTitle"),
+                  action: newButton,
+                }
         }
       >
-        {(list) => (
+        {() => (
           <CardGrid>
-            {list.map((playlist) => (
+            {matching?.map((playlist) => (
               <PlaylistCard key={playlist.id} playlist={playlist} showOwner={tab === "public"} />
             ))}
-            {tab === "mine" && (
+            {tab === "mine" && !query && (
               <button
                 type="button"
                 onClick={() => setCreating(true)}

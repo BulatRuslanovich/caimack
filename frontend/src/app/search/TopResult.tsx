@@ -53,7 +53,7 @@ export function TopResult({ top }: { top: SearchTopResult }) {
         />
       ) : top.genre ? (
         <Card
-          href={`/genres?id=${top.genre.id}`}
+          href={`/search?tab=genres&id=${top.genre.id}`}
           kind={t("field.genre")}
           title={genreName(top.genre.name)}
           subtitle={t("count.tracks", { count: top.genre.trackCount })}

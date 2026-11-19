@@ -215,6 +215,30 @@ try {
     () => evaluate("!!document.querySelector('a[href=\"/downloads\"]')"),
     "downloads navigation",
   );
+  await evaluate(`document.querySelector('aside a[href="/search"]').click()`);
+  const categories = '[role="group"][aria-label="Result types"]';
+  const categoryButtons = `[...document.querySelectorAll(${JSON.stringify(categories + " button")})]`;
+  await until(() => evaluate(`${categoryButtons}.length === 6`), "search categories");
+  assert.deepEqual(
+    await evaluate(`${categoryButtons}.map(button => button.textContent)`),
+    ["All", "Tracks", "Albums", "Artists", "Playlists", "Genres"],
+  );
+  await evaluate(`${categoryButtons}.find(button => button.textContent === "Tracks").click()`);
+  await until(
+    () => evaluate(`!!document.querySelector('[aria-label="Sort by"]')`),
+    "track sorting in Search",
+  );
+  await evaluate(`document.querySelector('#content input[type="search"]').focus()`);
+  await command("Input.insertText", { text: "test" });
+  await until(
+    () => evaluate(`new URL(location.href).searchParams.get("q") === "test"`),
+    "query in Tracks",
+  );
+  await evaluate(`${categoryButtons}.find(button => button.textContent === "Playlists").click()`);
+  assert.ok(await evaluate(`(() => {
+    const params = new URL(location.href).searchParams;
+    return params.get("tab") === "playlists" && params.get("q") === "test";
+  })()`));
   await evaluate(`history.pushState(null, "", "/albums/${albumId}")`);
   await until(
     () =>

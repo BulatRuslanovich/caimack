@@ -10,29 +10,27 @@ import { queries } from "@/lib/queries";
 import { AlbumCard } from "@/components/MediaCard";
 import { CardGrid, CardGridSkeleton, PageHeader, Section } from "@/components/PageHeader";
 import { Shelf } from "@/components/Shelf";
-import { PageToolbar, SortSelect } from "@/components/PageToolbar";
+import { SortSelect } from "@/components/PageToolbar";
 import { InfiniteQuery } from "@/components/InfiniteQuery";
 import { useT } from "@/contexts/I18nContext";
-import { LibraryNavigation } from "@/components/LibraryNavigation";
 
 const sortKeys = { title: "sort.title", recent: "sort.dateAdded" } as const;
 
 type Sort = keyof typeof sortKeys;
 
-export function AlbumsPage() {
+export function AlbumsPage({ query }: { query: string }) {
   const t = useT();
 
   const [sort, setSort] = useState<Sort>("title");
-  const [search, setSearch] = useState("");
 
   const albums = useInfiniteQuery(
     queries.albumsFeed({
       recentFirst: sort === "recent",
-      q: search || undefined,
+      q: query || undefined,
     }),
   );
 
-  const alphabetical = !search && sort === "title";
+  const alphabetical = !query && sort === "title";
   const overview = useQuery({ ...queries.libraryOverview(), enabled: alphabetical });
   const recent = overview.data?.recentAlbums ?? [];
 
@@ -42,14 +40,9 @@ export function AlbumsPage() {
   return (
     <div className="flex min-w-0 flex-col gap-6 [overflow-anchor:none] max-md:gap-5">
       <PageHeader
-        title={t("nav.albums")}
         subtitle={albums.data ? t("count.albums", { count: total }) : undefined}
+        actions={<SortSelect value={sort} onChange={setSort} options={sortKeys} />}
       />
-
-      <LibraryNavigation />
-      <PageToolbar search={search} onSearch={setSearch} placeholder={t("filter.albums")}>
-        <SortSelect value={sort} onChange={setSort} options={sortKeys} />
-      </PageToolbar>
 
       {showShelf && (
         <Shelf title={t("library.recentlyAdded")}>
@@ -64,7 +57,7 @@ export function AlbumsPage() {
         skeleton={<CardGridSkeleton />}
         empty={{
           icon: <Disc3Icon size={24} />,
-          title: search ? t("filter.nothingMatched") : t("albums.empty"),
+          title: query ? t("filter.nothingMatched") : t("albums.empty"),
         }}
       >
         {(items) => (

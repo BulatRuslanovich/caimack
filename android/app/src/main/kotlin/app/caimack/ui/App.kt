@@ -85,13 +85,13 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 
 @Serializable data object HomeRoute
-@Serializable data object SearchRoute
-@Serializable data object TracksRoute
-@Serializable data object PlaylistsRoute
+@Serializable
+data class SearchRoute(val category: String = "") {
+    constructor(category: SearchCategory) : this(category.name)
+
+    fun initialCategory(): SearchCategory? = SearchCategory.entries.firstOrNull { it.name == category }
+}
 @Serializable data object FavoritesRoute
-@Serializable data object AlbumsRoute
-@Serializable data object ArtistsRoute
-@Serializable data object GenresRoute
 @Serializable data object RecentRoute
 @Serializable data object SettingsRoute
 @Serializable data class ListeningRoute(val week: String = "", val view: String = "overview")
@@ -107,19 +107,14 @@ import kotlinx.serialization.Serializable
 private data class Tab(val route: Any, val type: KClass<*>, val label: Int, val icon: ImageVector)
 
 private val library = listOf(
-    Tab(PlaylistsRoute, PlaylistsRoute::class, R.string.nav_playlists, Lucide.ListMusic),
-    Tab(AlbumsRoute, AlbumsRoute::class, R.string.nav_albums, Lucide.Disc3),
-    Tab(ArtistsRoute, ArtistsRoute::class, R.string.nav_artists, Lucide.UsersRound),
-    Tab(TracksRoute, TracksRoute::class, R.string.nav_tracks, Lucide.AudioLines),
     Tab(FavoritesRoute, FavoritesRoute::class, R.string.nav_favorites, Lucide.Heart),
     Tab(RecentRoute, RecentRoute::class, R.string.nav_recently_played, Lucide.History),
-    Tab(GenresRoute, GenresRoute::class, R.string.nav_genres, Lucide.Tags),
     Tab(DownloadsRoute, DownloadsRoute::class, R.string.downloads_title, Lucide.Download),
 )
 
 private val tabs = listOf(
     Tab(HomeRoute, HomeRoute::class, R.string.nav_home, Lucide.House),
-    Tab(SearchRoute, SearchRoute::class, R.string.nav_search, Lucide.Search),
+    Tab(SearchRoute(), SearchRoute::class, R.string.nav_search, Lucide.Search),
     Tab(LibraryRoute, LibraryRoute::class, R.string.nav_library, Lucide.LibraryBig),
 )
 
@@ -131,8 +126,8 @@ internal fun NavController.openSection(route: Any) {
     if (currentDestination?.hasRoute(route::class) == true) return
 
     // Reselecting an open section returns to its root without duplicating it.
-    if (route != HomeRoute && runCatching { getBackStackEntry(route) }.isSuccess) {
-        popBackStack(route, inclusive = false)
+    if (route != HomeRoute && runCatching { getBackStackEntry(route::class) }.isSuccess) {
+        popBackStack(route::class, inclusive = false)
         return
     }
 
@@ -284,14 +279,9 @@ private fun AppContent(
             modifier = Modifier.padding(padding).fillMaxSize().background(palette.background),
         ) {
             composable<HomeRoute> { HomeScreen(nav) }
-            composable<SearchRoute> { SearchScreen(nav, play) }
-            composable<TracksRoute> { LibraryCatalogFrame(nav, TracksRoute) { TracksScreen(play) } }
+            composable<SearchRoute> { SearchScreen(nav, play, it.toRoute<SearchRoute>().initialCategory()) }
             composable<LibraryRoute> { LibraryScreen(nav) }
-            composable<PlaylistsRoute> { LibraryCatalogFrame(nav, PlaylistsRoute) { PlaylistsScreen(nav) } }
             composable<FavoritesRoute> { FavoritesScreen(play) }
-            composable<AlbumsRoute> { LibraryCatalogFrame(nav, AlbumsRoute) { AlbumsScreen(nav) } }
-            composable<ArtistsRoute> { LibraryCatalogFrame(nav, ArtistsRoute) { ArtistsScreen(nav) } }
-            composable<GenresRoute> { LibraryCatalogFrame(nav, GenresRoute) { GenresScreen(nav) } }
             composable<RecentRoute> { RecentScreen(play) }
             composable<ListeningRoute> { entry ->
                 val route = entry.toRoute<ListeningRoute>()
@@ -403,7 +393,7 @@ internal fun BottomBar(nav: NavController) {
         entry?.destination?.takeIf { destination -> sections.any { destination.hasRoute(it.type) } }
             // Home stays at the bottom of every stack, so check it last.
             ?: (library + tabs.asReversed()).firstNotNullOfOrNull { tab ->
-                runCatching { nav.getBackStackEntry(tab.route).destination }.getOrNull()
+                runCatching { nav.getBackStackEntry(tab.type).destination }.getOrNull()
             }
     }
     val inLibrary = section?.hasRoute(LibraryRoute::class) == true || library.any { section?.hasRoute(it.type) == true }
@@ -457,7 +447,6 @@ private fun sourceOf(entry: NavBackStackEntry?): String? {
         destination.hasRoute(FavoritesRoute::class) -> "favorites"
         destination.hasRoute(RecentRoute::class) -> "history"
         destination.hasRoute(SearchRoute::class) -> "search"
-        destination.hasRoute(TracksRoute::class) -> "tracks"
         destination.hasRoute(DownloadsRoute::class) -> "downloads"
         else -> null
     }

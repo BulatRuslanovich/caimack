@@ -41,7 +41,7 @@ describe("blockSubjectHref", () => {
     };
 
     expect(blockSubjectHref(artist)).toBe("/artists/a1");
-    expect(blockSubjectHref(genre)).toBe("/genres?id=g1");
+    expect(blockSubjectHref(genre)).toBe("/search?tab=genres&id=g1");
   });
 
   it("does not link a track, which has no page of its own", () => {

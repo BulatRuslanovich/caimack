@@ -62,7 +62,7 @@ export function PlaylistPage() {
     onSuccess: () => {
       notify(t("playlists.deleted"), "success");
       invalidate("playlists");
-      router.push("/playlists");
+      router.push("/search?tab=playlists");
     },
   });
 

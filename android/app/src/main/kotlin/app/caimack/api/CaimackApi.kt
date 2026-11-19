@@ -107,13 +107,13 @@ interface CaimackApi {
     suspend fun shuffleTracks(@Query("q") query: String? = null): List<Track>
 
     @GET("api/albums")
-    suspend fun albums(@Query("page") page: Int, @Query("pageSize") pageSize: Int): Paged<Album>
+    suspend fun albums(@Query("page") page: Int, @Query("pageSize") pageSize: Int, @Query("q") query: String? = null): Paged<Album>
 
     @GET("api/albums/{id}")
     suspend fun album(@Path("id") id: String): AlbumDetail
 
     @GET("api/artists")
-    suspend fun artists(@Query("page") page: Int, @Query("pageSize") pageSize: Int): Paged<Artist>
+    suspend fun artists(@Query("page") page: Int, @Query("pageSize") pageSize: Int, @Query("q") query: String? = null): Paged<Artist>
 
     @GET("api/artists/{id}")
     suspend fun artist(@Path("id") id: String, @Query("page") page: Int = 1, @Query("pageSize") pageSize: Int = 50): ArtistDetail

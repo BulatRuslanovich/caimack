@@ -1,5 +1,4 @@
 <resources>
-    <string name="tracks_search">Поиск в этой коллекции</string>
     <string name="tracks_sort">Сортировка треков</string>
     <string name="sort_title">По названию</string>
     <string name="sort_artist">По исполнителю</string>

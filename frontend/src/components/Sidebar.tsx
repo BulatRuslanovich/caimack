@@ -9,14 +9,7 @@ import { LogOutIcon } from "lucide-react";
 import { PrefetchLink as Link } from "@/components/PrefetchLink";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
-import {
-  isActivePath,
-  isLibraryBrowsePath,
-  libraryNav,
-  primaryNav,
-  serviceNav,
-  type NavEntry,
-} from "@/lib/navigation";
+import { isActivePath, libraryNav, primaryNav, serviceNav, type NavEntry } from "@/lib/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUpload } from "@/contexts/UploadContext";
 import { useT } from "@/contexts/I18nContext";
@@ -35,9 +28,7 @@ export function NavLink({
 }) {
   const t = useT();
   const pathname = usePathname();
-  const active =
-    isActivePath(pathname, entry.href) ||
-    (entry.href === "/library" && isLibraryBrowsePath(pathname));
+  const active = isActivePath(pathname, entry.href);
   const Icon = entry.icon;
 
   return (

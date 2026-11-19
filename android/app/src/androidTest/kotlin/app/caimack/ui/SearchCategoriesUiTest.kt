@@ -17,21 +17,16 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavHostController
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
 import androidx.test.platform.app.InstrumentationRegistry
 import app.caimack.R
 import java.io.File
 import org.junit.Rule
 import org.junit.Test
 
-class LibraryNavigationUiTest {
+class SearchCategoriesUiTest {
     @get:Rule val compose = createComposeRule()
-    private lateinit var nav: NavHostController
 
-    @Test fun themesKeepScopeAndScrollableCategoriesUsable() {
+    @Test fun themesKeepSearchFiltersScrollableAndClearable() {
         val baseContext = InstrumentationRegistry.getInstrumentation().targetContext
         val configuration = Configuration(baseContext.resources.configuration).apply {
             setLocales(LocaleList.forLanguageTags("ru"))
@@ -40,6 +35,7 @@ class LibraryNavigationUiTest {
         var colorway by mutableStateOf(Colorway.Coffee)
         var dark by mutableStateOf(true)
         var fontScale by mutableFloatStateOf(1f)
+        var category by mutableStateOf<SearchCategory?>(null)
         compose.setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(
@@ -48,17 +44,9 @@ class LibraryNavigationUiTest {
                 LocalConfiguration provides configuration,
             ) {
                 CaimackTheme(dark = dark, colorway = colorway) {
-                    nav = rememberNavController()
                     // A narrow phone viewport makes overflow and scrolling observable.
                     Box(Modifier.width(320.dp).background(LocalPalette.current.background)) {
-                        NavHost(nav, startDestination = TracksRoute) {
-                            composable<LibraryRoute> { LibraryScopeSelector(nav, saved = true) }
-                            composable<TracksRoute> { LibraryCatalogFrame(nav, TracksRoute) {} }
-                            composable<AlbumsRoute> { LibraryCatalogFrame(nav, AlbumsRoute) {} }
-                            composable<ArtistsRoute> { LibraryCatalogFrame(nav, ArtistsRoute) {} }
-                            composable<PlaylistsRoute> { LibraryCatalogFrame(nav, PlaylistsRoute) {} }
-                            composable<GenresRoute> { LibraryCatalogFrame(nav, GenresRoute) {} }
-                        }
+                        SearchCategoryFilters(category) { category = it }
                     }
                 }
             }
@@ -69,33 +57,26 @@ class LibraryNavigationUiTest {
             return node(label)
         }
         fun snapshot(name: String) {
-            val file = File(context.cacheDir, "library-navigation-$name.png")
+            val file = File(context.cacheDir, "search-categories-$name.png")
             file.outputStream().use {
                 compose.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
             }
         }
         for (theme in Colorway.entries) for (night in listOf(true, false)) {
             compose.runOnIdle { colorway = theme; dark = night }
-            node(R.string.collection_catalog).assertIsSelected().assertHeightIsAtLeast(48.dp)
-            scrollTo(R.string.nav_tracks).assertIsSelected().assertHeightIsAtLeast(48.dp)
+            scrollTo(R.string.nav_tracks).assertIsNotSelected().assertTouchHeightIsEqualTo(48.dp)
             snapshot("${theme.key}-$night")
             scrollTo(R.string.nav_genres).assertIsDisplayed().performClick()
-            scrollTo(R.string.nav_genres).assertIsSelected()
-            node(R.string.collection_saved).performClick().assertIsSelected()
-            node(R.string.collection_catalog).performClick().assertIsSelected()
-            scrollTo(R.string.nav_tracks).assertIsSelected()
+            node(R.string.nav_genres).assertIsSelected()
+            node(R.string.nav_tracks).assertDoesNotExist()
+            compose.onNodeWithContentDescription(context.getString(R.string.collection_clear_filter)).performClick()
+            scrollTo(R.string.nav_tracks).assertIsNotSelected()
         }
         compose.runOnIdle { fontScale = 1.5f }
-        node(R.string.collection_saved).assertIsDisplayed().assertHeightIsAtLeast(48.dp)
         scrollTo(R.string.nav_playlists).performClick()
-        scrollTo(R.string.nav_playlists).assertIsSelected().assertHeightIsAtLeast(48.dp)
+        node(R.string.nav_playlists).assertIsSelected().assertTouchHeightIsEqualTo(48.dp)
         snapshot("large-text")
-        node(R.string.collection_saved).performClick().assertIsSelected()
-        // Returning to the catalog retains the established Tracks entry behavior.
-        node(R.string.collection_catalog).performClick()
-        scrollTo(R.string.nav_tracks).assertIsSelected()
-        scrollTo(R.string.nav_albums).performClick().assertIsSelected()
-        compose.runOnIdle { nav.popBackStack() }
-        scrollTo(R.string.nav_tracks).assertIsSelected()
+        node(R.string.nav_playlists).performClick()
+        scrollTo(R.string.nav_playlists).assertIsNotSelected()
     }
 }

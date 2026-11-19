@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -34,6 +33,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,14 +55,32 @@ private const val MIN_LENGTH = 3
 private const val LIMIT = 25
 private const val PREVIEW = 5
 
+enum class SearchCategory(val label: Int) {
+    Tracks(R.string.nav_tracks),
+    Albums(R.string.nav_albums),
+    Artists(R.string.nav_artists),
+    Playlists(R.string.nav_playlists),
+    Genres(R.string.nav_genres),
+}
+
 @Composable
-fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit) {
-    val palette = LocalPalette.current
+internal fun SearchCategoryFilters(category: SearchCategory?, onCategory: (SearchCategory?) -> Unit) {
+    CategoryFilterRow(category, category != null, { onCategory(null) }) {
+        val visible = category?.let(::listOf) ?: SearchCategory.entries
+        items(visible, key = { it.name }) { item ->
+            CategoryFilter(item.label, category == item) { onCategory(if (category == item) null else item) }
+        }
+    }
+}
+
+@Composable
+fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit, initialCategory: SearchCategory? = null) {
     val container = LocalContainer.current
     val focus = LocalFocusManager.current
     var input by rememberSaveable { mutableStateOf("") }
     var query by rememberSaveable { mutableStateOf("") }
-    var tab by rememberSaveable { mutableStateOf("all") }
+    var category by rememberSaveable { mutableStateOf(initialCategory) }
+    val categoryState = rememberSaveableStateHolder()
 
     LaunchedEffect(input) {
         delay(300)
@@ -92,6 +110,22 @@ fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit) {
             },
         )
 
+        SearchCategoryFilters(category) { category = it }
+
+        val selected = category
+        if (selected != null) {
+            categoryState.SaveableStateProvider(selected.name) {
+                when (selected) {
+                    SearchCategory.Tracks -> TracksScreen(query, playFound)
+                    SearchCategory.Albums -> AlbumsScreen(query, open)
+                    SearchCategory.Artists -> ArtistsScreen(query, open)
+                    SearchCategory.Playlists -> PlaylistsScreen(query, open)
+                    SearchCategory.Genres -> GenresScreen(query, open)
+                }
+            }
+            return@Column
+        }
+
         if (query.length < MIN_LENGTH) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 24.dp, bottom = 24.dp + LocalMiniPlayerInset.current)) {
                 RecentSearches { recent ->
@@ -99,40 +133,13 @@ fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit) {
                     query = recent
                     focus.clearFocus()
                 }
-                BrowseGenres(open)
+                BrowseGenres(open) { category = SearchCategory.Genres }
             }
             return@Column
         }
 
-        Tabs(Modifier.padding(top = 8.dp, bottom = 8.dp)) {
-            listOf("all" to R.string.search_tab_all, "tracks" to R.string.nav_tracks, "albums" to R.string.nav_albums, "artists" to R.string.nav_artists).forEach { (value, label) ->
-                Tab(stringResource(label), tab == value) { tab = value }
-            }
-        }
-
-        when (tab) {
-            "tracks" -> {
-                val pager = rememberPager("search-tracks:$query") { container.api.searchTracks(query, it, TRACK_PAGE_SIZE) }
-                PagedColumn(pager, stringResource(R.string.search_nothing_found), header = {}) { index, track -> TrackRow(track, { playFound(pager.items, index) }) }
-            }
-            "albums" -> {
-                val pager = rememberPager("search-albums:$query") { container.api.searchAlbums(query, it, CARD_PAGE_SIZE) }
-                PagedGrid(pager, stringResource(R.string.search_nothing_found), header = {}) { album ->
-                    val cover = container.media.albumCover(album, small = true)
-                    Card(album.title, album.artistName, { open(AlbumRoute(album.id)) }, toneUrl = cover) { Cover(cover, album.title, it) }
-                }
-            }
-            "artists" -> {
-                val pager = rememberPager("search-artists:$query") { container.api.searchArtists(query, it, CARD_PAGE_SIZE) }
-                PagedGrid(pager, stringResource(R.string.search_nothing_found), header = {}) { artist ->
-                    Card(artist.name, pluralStringResource(R.plurals.count_tracks, artist.trackCount, artist.trackCount), { open(ArtistRoute(artist.id)) }, round = true) {
-                        Cover(container.media.artistImage(artist.id, artist.hasImage, small = true), artist.name, it, round = true)
-                    }
-                }
-            }
-            else -> Load("search:$query", { container.api.search(query, LIMIT) }, isEmpty = { it.isEmpty() }, empty = { Empty(stringResource(R.string.search_nothing_found)) }) { results ->
-                AllResults(results, open, playFound)
-            }
+        Load("search:$query", { container.api.search(query, LIMIT) }, isEmpty = { it.isEmpty() }, empty = { Empty(stringResource(R.string.search_nothing_found)) }) { results ->
+            AllResults(results, open, playFound)
         }
     }
 }
@@ -209,7 +216,7 @@ private fun AllResults(results: SearchResults, open: (Any) -> Unit, play: (List<
 private data class TopRow(val title: String, val subtitle: String, val url: String?, val round: Boolean, val open: () -> Unit)
 
 @Composable
-private fun BrowseGenres(open: (Any) -> Unit) {
+private fun BrowseGenres(open: (Any) -> Unit, openAll: () -> Unit) {
     val container = LocalContainer.current
     Load("genres", { container.api.genres() }, isEmpty = { it.isEmpty() }, empty = { Empty(stringResource(R.string.search_browse_empty), stringResource(R.string.search_browse_empty_hint)) }) { genres ->
         val palette = LocalPalette.current
@@ -231,7 +238,7 @@ private fun BrowseGenres(open: (Any) -> Unit) {
                     if (columns == 2 && row.size == 1) Box(Modifier.weight(1f))
                 }
             }
-            androidx.compose.material3.TextButton(onClick = { open(GenresRoute) }) {
+            androidx.compose.material3.TextButton(onClick = openAll) {
                 Text(stringResource(R.string.search_all_genres), color = LocalPalette.current.primary)
             }
         }

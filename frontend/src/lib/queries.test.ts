@@ -5,11 +5,26 @@ import { describe, expect, it, vi } from "vitest";
 import { api } from "./api";
 import { ApiError } from "./http";
 import { WAVEFORM_VERSION } from "./waveform";
-import { invalidates, navigationPrefetch, queries } from "./queries";
+import { invalidates, navigationPrefetch, prefetchRouteData, queries } from "./queries";
 import { CARD_PAGE_SIZE } from "./pageSizes";
 import type { Album, Paged } from "./types";
 
 describe("library navigation cache", () => {
+  it("prefetches the filtered feed used by a Search category link", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { staleTime: 300_000 } } });
+    const page = { items: [], total: 0, page: 1, pageSize: CARD_PAGE_SIZE, totalPages: 0 };
+    const request = vi.spyOn(api, "artists").mockResolvedValue(page);
+    try {
+      await prefetchRouteData(client, "/search?tab=artists&q=road%20trip");
+      const result = await client.fetchInfiniteQuery(queries.artistsFeed({ q: "road trip" }));
+      expect(result.pages).toEqual([page]);
+      expect(request).toHaveBeenCalledOnce();
+    } finally {
+      request.mockRestore();
+      client.clear();
+    }
+  });
+
   it("warms the saved library and reuses that data when returning to Saved", async () => {
     const client = new QueryClient({ defaultOptions: { queries: { staleTime: 300_000 } } });
     const saved = vi.spyOn(api, "savedLibrary").mockResolvedValue([]);

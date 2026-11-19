@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 package app.caimack.ui
 
-import androidx.compose.animation.core.Spring
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -20,8 +18,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -192,7 +189,6 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
                 }
             }
         }
-        LibraryScopeSelector(nav, saved = true)
         AnimatedVisibility(searchExpanded,
             enter = expandVertically(tween(220)) + fadeIn(tween(160)),
             exit = shrinkVertically(tween(180)) + fadeOut(tween(120)),
@@ -455,54 +451,17 @@ internal fun LibraryEntry(title: String, hint: String?, icon: ImageVector, grid:
 
 @Composable
 internal fun LibraryFilters(filter: String, downloadedOnly: Boolean, onFilter: (String) -> Unit, onDownloaded: (Boolean) -> Unit) {
-    val palette = LocalPalette.current
-    val scroll = rememberLazyListState()
-    LaunchedEffect(filter, downloadedOnly) { scroll.animateScrollToItem(0) }
-    val downloadedChip: @Composable (Modifier) -> Unit = { modifier ->
-        FilterChip(
-            modifier = modifier,
-            selected = downloadedOnly,
-            onClick = { onDownloaded(!downloadedOnly) },
-            label = { Text(stringResource(R.string.collection_downloaded)) },
-            shape = CircleShape, border = null,
-            colors = FilterChipDefaults.filterChipColors(
-                containerColor = palette.raised, labelColor = palette.foreground,
-                selectedContainerColor = palette.selection, selectedLabelColor = palette.primary,
-            ),
-        )
+    val downloadedChip: LazyListScope.() -> Unit = {
+        item(key = "downloaded") {
+            CategoryFilter(R.string.collection_downloaded, downloadedOnly, Modifier.animateItem()) { onDownloaded(!downloadedOnly) }
+        }
     }
-    LazyRow(state = scroll, contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (filter != "all" || downloadedOnly) item(key = "clear") {
-            IconButton(
-                onClick = { onFilter("all"); onDownloaded(false) },
-                modifier = Modifier.animateItem(
-                    fadeInSpec = tween(220),
-                    placementSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
-                    fadeOutSpec = tween(140),
-                ),
-            ) {
-                Icon(Lucide.X, stringResource(R.string.collection_clear_filter), tint = palette.muted)
-            }
+    CategoryFilterRow(filter to downloadedOnly, filter != "all" || downloadedOnly, { onFilter("all"); onDownloaded(false) }) {
+        if (downloadedOnly) downloadedChip()
+        val categories = listOf("playlist" to R.string.nav_playlists, "album" to R.string.nav_albums, "artist" to R.string.nav_artists)
+        items(categories.filter { filter == "all" || it.first == filter }, key = { it.first }) { (kind, label) ->
+            CategoryFilter(label, filter == kind) { onFilter(if (filter == kind) "all" else kind) }
         }
-        if (downloadedOnly) item(key = "downloaded") { downloadedChip(Modifier.animateItem()) }
-        items(listOf("playlist" to R.string.nav_playlists, "album" to R.string.nav_albums, "artist" to R.string.nav_artists).filter { filter == "all" || it.first == filter }, key = { it.first }) { (kind, label) ->
-            FilterChip(
-                modifier = Modifier.animateItem(
-                    fadeInSpec = tween(220),
-                    placementSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
-                    fadeOutSpec = tween(140),
-                ),
-                selected = filter == kind,
-                onClick = { onFilter(if (filter == kind) "all" else kind) },
-                label = { Text(stringResource(label)) },
-                shape = CircleShape,
-                border = null,
-                colors = FilterChipDefaults.filterChipColors(
-                    containerColor = palette.raised, labelColor = palette.foreground,
-                    selectedContainerColor = palette.selection, selectedLabelColor = palette.primary,
-                ),
-            )
-        }
-        if (!downloadedOnly) item(key = "downloaded") { downloadedChip(Modifier.animateItem()) }
+        if (!downloadedOnly) downloadedChip()
     }
 }

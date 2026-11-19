@@ -9,9 +9,6 @@ export const ru: Dictionary = {
   "collection.remove": "Убрать из медиатеки",
   "collection.saved": "В медиатеке",
   "collection.search": "Поиск в сохранённом",
-  "collection.scope": "Область медиатеки",
-  "collection.savedScope": "Сохранённое",
-  "collection.types": "Типы каталога",
   "collection.emptyAlbums": "Нет сохранённых альбомов",
   "collection.emptyArtists": "Нет сохранённых исполнителей",
   "collection.emptyPlaylists": "Нет сохранённых плейлистов",
@@ -27,7 +24,6 @@ export const ru: Dictionary = {
   "collection.empty": "Здесь пока ничего не сохранено",
   "collection.hint": "Сохраняйте альбомы, исполнителей и плейлисты кнопкой +.",
   "collection.noResults": "В медиатеке ничего не найдено",
-  "collection.catalog": "Весь каталог",
   "collection.failed": "Не удалось изменить медиатеку. Попробуйте ещё раз.",
   "connect.title": "Устройства воспроизведения",
   "connect.description": "Выберите, где звучит музыка. Управляйте ей в этом плеере.",
@@ -81,6 +77,7 @@ export const ru: Dictionary = {
   "action.close": "Закрыть",
   "action.confirm": "Подтвердить",
   "action.seeAll": "Показать все",
+  "action.browseTracks": "Перейти к трекам",
   "action.tryAgain": "Повторить",
   "action.switchLanguage": "Переключить на {language}",
   "action.switchTheme": "Переключить тему",
@@ -487,7 +484,6 @@ export const ru: Dictionary = {
 
   "favorites.kind": "Коллекция",
   "favorites.emptyTitle": "В избранном пока пусто",
-  "favorites.browseTracks": "Перейти к трекам",
 
   "albums.kind": "Альбом",
   "albums.empty": "На сервере пока нет альбомов.",
@@ -622,7 +618,6 @@ export const ru: Dictionary = {
   "library.scan.removed": "удалено: {count}",
   "library.scan.unsupported": "формат не поддерживается: {count}",
   "upload.justAdded": "Только что добавлены",
-  "upload.goToLibrary": "Перейти в библиотеку",
   "upload.unsupportedFormat": "Поддерживаемые форматы: {formats}.",
   "upload.tooLarge": "Больше допустимого размера ({limit}).",
   "upload.added": {
@@ -1106,7 +1101,6 @@ export const ru: Dictionary = {
   "yandex.stopNamed": "Остановить добавление «{name}»",
   "yandex.dismissNamed": "Убрать «{name}» из списка",
   "yandex.failureDetails": "Что произошло",
-  "yandex.openLibrary": "Открыть библиотеку",
   "yandex.searchTitle": "Добавить из Яндекс Музыки",
   "yandex.resultsHint": "Найденную музыку можно добавить в библиотеку.",
   "yandex.searchHint":
