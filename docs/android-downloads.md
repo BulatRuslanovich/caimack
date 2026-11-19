@@ -22,9 +22,9 @@ dimmed and cannot be played. Starting a collection while the server is
 unavailable queues only its completed downloads, preserving their order.
 Downloaded audio from another server is excluded from the active server's list.
 **Library → Downloads** always provides access to individual transfers and their
-removal. The storage total at the top includes both individual downloads and
-full-library synchronized audio, including embedded tags and artwork. It is
-available for existing synchronized files without downloading them again.
+removal. The storage total includes both individual downloads and audio from
+full-library synchronization. Completed copies from full sync remain playable
+and can be removed from Downloads when sync is turned off.
 
 Previously unseen pages require a connection. Open an older playlist online
 once to retain its membership and ordering. A download's own metadata is enough

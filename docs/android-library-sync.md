@@ -1,10 +1,9 @@
 # Android library synchronization
 
-In **Settings → Downloads → Library synchronization**, choose a folder with
-Android's system folder picker and enable **Synchronize this library**. The
-feature is off by default. **Sync now / resume** starts a foreground transfer;
-**Pause** stops automatic transfers until resumed. Disabling synchronization
-leaves exported files in place and returns the client to its normal online mode.
+In **Settings → Downloads → Library synchronization**, enable **Synchronize
+this library**. **Sync now / resume** starts a foreground transfer. **Pause**
+stops automatic transfers until resumed. Turning sync off keeps completed
+downloads available in **Library → Downloads**, where you can play or remove them.
 
 The server must be reachable at a local address over Wi-Fi or Ethernet. The
 sync client binds its connections and DNS resolution to that network, rejects
@@ -44,64 +43,31 @@ foreground sync shows a notification with progress and a pause action.
 
 ## Files and playback
 
-The selected folder contains a separate `Caimack-<server>-<account>` subfolder:
+Full sync downloads the original audio into the same private Media3 cache used by
+individual downloads. The app retains covers, artist images, playlist artwork,
+lyrics, waveforms, metadata, vectors and server-prepared mixes in private storage.
+Gallery apps cannot index these files. The catalog retains the lyrics API's
+word intervals and provider attribution, as well as the playlist membership and
+ordering needed for offline playback.
 
-```text
-Caimack-…/
-  Artist/Album/Title [identifier].mp3 (or .flac)
-  Artist/Album/Title [identifier].lrc (or .txt)
-  Artist/Album/Title [identifier].jpg
-  Playlist [identifier].m3u8
-  Caimack daily.m3u8
-  Caimack new.m3u8
-  Caimack top.m3u8
-  Caimack Radio.m3u8
-  .caimack/library.json
-  .caimack/vectors.json
-```
+The Android client stores vectors as opaque data in an atomic file using a
+fixed-size buffer. Catalog JSON is read and written through streams. Lyrics and
+waveforms are decoded per track when needed.
 
-Audio retains the original encoded quality and the server file's embedded tags
-and artwork. Timed lyrics use UTF-8 LRC; plain lyrics use UTF-8 TXT. These files
-and relative M3U8 playlists are usable by other players. Caimack also keeps a
-private catalog, image cache, file ownership index and action journal so browsing,
-searching, lyrics and playback work without a server after restarting the app.
-Vectors are exported as data; the Android client does not run MERT or recommendation
-algorithms.
+While synchronization is active, **Library → Downloads** lists each downloaded
+track once and sync settings show progress. Track and collection download
+controls are available in individual-download mode.
 
-Vector exports stream from the local server into a temporary document with a
-fixed-size buffer. Their size does not create a corresponding JSON tree, string
-or byte array in the Android heap. The previous complete export and its version
-remain current if a transfer is interrupted. Catalog JSON is also read and
-written through streams. Track lists and other browsing metadata remain decoded;
-lyrics and waveforms are retained as encoded per-track JSON and decoded only for
-the requested track. Loading a new snapshot or restoring it after a restart does
-not build hundreds of thousands of lyric-line maps and waveform-number objects.
-The persisted and exported catalog keeps the same JSON format.
+Media3 resumes interrupted audio transfers and skips already cached versions.
+A replacement becomes the playback source after its SHA-256 checksum is verified.
+The versioned audio endpoint checks the requested file version before serving bytes.
+Server deletions remove copies managed by sync after the app accepts a complete
+manifest. Account and server checks bind offline data and pending edits to their
+owner.
 
-While synchronization is active for the signed-in account, manual download
-buttons and per-track download badges are hidden, and new manual/background
-download requests are ignored. Transfer progress remains available in sync
-settings. Outside library synchronization, completed individual downloads have
-an offline badge. Downloads lists each track once when it exists in both stores;
-existing individual downloads are kept intact.
-
-Only new/replaced audio is downloaded. The server identifies encoded audio
-separately from its ID3/FLAC metadata, including external tag edits. Metadata
-envelopes let the phone rebuild updated tags from its existing audio bytes. Both
-downloads and rebuilt files are verified against the complete server SHA-256
-before replacing a previous complete copy. Interrupted downloads use HTTP Range.
-Running out of space or losing folder permission pauses synchronization; it does
-not evict unrelated music. A creation journal recovers interrupted file writes.
-Untracked companions that conflict with an expected name are preserved as hidden
-`.recovered-…` files, rather than overwritten.
-
-Server deletions remove only document URIs recorded as owned by this sync.
-Replacing an audio file downloads the new version before removing its previous
-copy. A complete validated catalog is required before applying deletions; failed
-requests and partial pagination cannot be interpreted as an empty library.
-Account and server identity are checked before reading the offline catalog or
-uploading changes. Switching folders/accounts never claims an older folder's files;
-pending actions must be synchronized before changing their binding.
+After an update from a version that exported to a selected folder, Caimack
+plays those copies while the next sync downloads them into private storage.
+The old exports stay in the folder originally selected.
 
 ## Browsing individual downloads
 
@@ -210,35 +176,18 @@ restrictions.
 `SnapshotJsonDeviceTest` generates a catalog of 2,500 tracks with 400,000 timed
 lyric lines and 600,000 waveform peaks. It checks retained heap usage below
 96 MiB, unchanged JSON export, offline detail reads and restoration from the
-private snapshot. `SyncStreamingDeviceTest` also covers a vector export larger
-than 100 MiB and interrupted-transfer recovery. These tests use an isolated app
-package and a fixture documents provider; no real account or music folder is
-required:
+private snapshot. `SyncStreamingDeviceTest` verifies atomic private storage of
+vectors larger than 100 MiB and retries interrupted transfers.
+`LibrarySyncDeviceTest` exercises Media3 range requests, unchanged versions,
+replacements and deletion, metadata restoration, and playback after the test
+server shuts down. Run the tests on Android 13 or later with a local Wi-Fi or
+Ethernet connection. Gradle installs an isolated test app.
 
 ```sh
 cd android
 ./gradlew :app:connectedDebugAndroidTest -PcaimackIsolatedUiTests=true \
-  '-Pandroid.testInstrumentationRunnerArguments.class=app.caimack.sync.SnapshotJsonDeviceTest'
+  '-Pandroid.testInstrumentationRunnerArguments.class=app.caimack.sync.SnapshotJsonDeviceTest,app.caimack.sync.SyncStreamingDeviceTest,app.caimack.sync.LibrarySyncDeviceTest'
 ```
-
-For the physical-device test, connect an Android 13+ phone through adb, join
-Wi-Fi and grant a music folder through the app. The test uses a separate random
-server/account namespace and generated two-second audio fixtures:
-
-```sh
-cd android
-./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-adb shell am instrument -w -e class app.caimack.sync.LibrarySyncDeviceTest \
-  app.caimack.test/androidx.test.runner.AndroidJUnitRunner
-```
-
-The device test exercises actual SAF files, byte-range resume, unchanged-file
-reuse, tag-only updates, LRC/M3U8 extensions, MP3-to-FLAC replacement, durable
-actions/index restoration, a real Media3 decoder with the server shut down, and
-deletion without removing unrelated files. It skips if no writable SAF grant or
-Wi-Fi connection has been configured.
 
 `OfflineAccountDeviceTest` additionally uses the signed-in account and at least
 two downloaded radio tracks. It temporarily disables Wi-Fi and simulates battery

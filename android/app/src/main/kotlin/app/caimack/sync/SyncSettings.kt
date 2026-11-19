@@ -3,8 +3,6 @@
 
 package app.caimack.sync
 
-import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -30,41 +28,25 @@ fun SyncSettings() {
     val state by container.syncStore.status.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var error by remember { mutableStateOf<String?>(null) }
-    var enableAfterPicker by remember { mutableStateOf(false) }
     val session by container.session.state.collectAsStateWithLifecycle()
+    val address by container.server.url.collectAsStateWithLifecycle()
+    val catalogRevision by container.syncStore.catalogRevision.collectAsStateWithLifecycle()
     val user = (session as? SessionState.SignedIn)?.user
+    val active = remember(user, address, state.enabled, catalogRevision) { container.syncStore.active }
     fun start() {
-        SyncScheduler.start(context)
+        if (container.syncStore.active) SyncScheduler.start(context)
     }
     val permissions =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
             start()
         }
-    val picker =
-        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-            if (uri != null && user != null)
-                scope.launch {
-                    runCatching {
-                        context.contentResolver.takePersistableUriPermission(
-                            uri,
-                            Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                                Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
-                        )
-                        val startAfterSelection = enableAfterPicker || state.enabled
-                        withContext(Dispatchers.IO) {
-                            container.syncStore.configure(uri, user)
-                            if (startAfterSelection) container.syncStore.enable(true)
-                        }
-                        val required = buildList {
-                            add(android.Manifest.permission.POST_NOTIFICATIONS)
-                            if (Build.VERSION.SDK_INT >= 37)
-                                add("android.permission.ACCESS_LOCAL_NETWORK")
-                        }
-                        if (startAfterSelection) permissions.launch(required.toTypedArray())
-                    }
-                        .onFailure { error = it.message }
-                }
+    fun requestPermissionsAndStart() {
+        val required = buildList {
+            add(android.Manifest.permission.POST_NOTIFICATIONS)
+            if (Build.VERSION.SDK_INT >= 37) add("android.permission.ACCESS_LOCAL_NETWORK")
         }
+        permissions.launch(required.toTypedArray())
+    }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
         Text(stringResource(R.string.sync_title), style = MaterialTheme.typography.titleMedium)
@@ -73,47 +55,25 @@ fun SyncSettings() {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(stringResource(R.string.sync_enable), Modifier.weight(1f))
             Switch(
-                checked = state.enabled,
+                checked = active,
+                enabled = user != null,
                 onCheckedChange = { value ->
-                    if (
-                        value &&
-                            (state.folder == null ||
-                                container.syncStore.boundUser != user?.id ||
-                                container.syncStore.boundAddress !=
-                                    container.server.url.value?.toString())
-                    ) {
-                        enableAfterPicker = true
-                        picker.launch(null)
-                    } else {
-                        if (!value) container.sync.pause()
-                        scope.launch {
-                            runCatching {
-                                withContext(Dispatchers.IO) {
-                                    container.syncStore.enable(value)
-                                }
+                    error = null
+                    if (!value) container.sync.pause()
+                    scope.launch {
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                if (value) container.syncStore.configure(requireNotNull(user))
+                                container.syncStore.enable(value)
                             }
-                                .onSuccess {
-                                    if (value) start() else SyncScheduler.schedule(context)
-                                }
-                                .onFailure { error = it.message }
-                        }
+                        }.onSuccess {
+                            if (value) requestPermissionsAndStart() else SyncScheduler.schedule(context)
+                        }.onFailure { error = it.message }
                     }
                 },
             )
         }
-        state.folder?.let {
-            Text(Uri.decode(it.substringAfterLast('/')), style = MaterialTheme.typography.bodySmall)
-        }
-        OutlinedButton(
-            onClick = {
-                enableAfterPicker = false
-                picker.launch(state.folder?.let(Uri::parse))
-            },
-            enabled = !state.running,
-        ) {
-            Text(stringResource(R.string.sync_choose_folder))
-        }
-        if (state.enabled) {
+        if (active) {
             Text(stringResource(R.string.sync_progress, state.completed, state.total))
             if (state.running)
                 LinearProgressIndicator(
@@ -144,7 +104,7 @@ fun SyncSettings() {
                     color = MaterialTheme.colorScheme.error,
                 )
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { start() }, enabled = !state.running) {
+                Button(onClick = { requestPermissionsAndStart() }, enabled = !state.running) {
                     Text(stringResource(R.string.sync_now))
                 }
                 OutlinedButton(

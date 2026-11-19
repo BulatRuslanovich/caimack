@@ -3,7 +3,6 @@ package app.caimack.sync
 
 import android.content.Context
 import android.content.ContextWrapper
-import android.net.Uri
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.test.platform.app.InstrumentationRegistry
 import app.caimack.api.Track
@@ -41,7 +40,7 @@ class SyncStoreProjectionTest {
         fun audio(id: String) = SyncedFile("content://test/$id", "$id.mp3", "v1", "hash", 17, 3, 2_500_000_000L)
         try {
             val store = SyncStore(isolated, json, server)
-            store.configure(Uri.parse("content://test/folder"), user)
+            store.configure(user)
             store.enable(true)
             store.accept(manifest(listOf(first, second)))
             store.updateIndex { it.copy(files = mapOf(first.id to audio(first.id))) }

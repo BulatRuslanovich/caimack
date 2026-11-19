@@ -150,9 +150,10 @@ fun App(user: User, dark: Boolean, colorway: Colorway) {
     val playback by container.player.state.collectAsStateWithLifecycle()
     val toneEnabled by container.appearance.coverTone.collectAsStateWithLifecycle()
     val artworkRevision by container.downloadedCatalog.revision.collectAsStateWithLifecycle()
-    val resolveArtwork = remember(container, user.id) { container.downloadedCatalog::cachedUrl }
+    val syncArtworkRevision by container.syncStore.artworkRevision.collectAsStateWithLifecycle()
+    val resolveArtwork = remember(container, user.id) { container::cachedArtwork }
     CompositionLocalProvider(
-        LocalArtworkRevision provides artworkRevision,
+        LocalArtworkRevision provides (artworkRevision + syncArtworkRevision),
         LocalArtworkResolver provides resolveArtwork,
     ) {
         val adaptive = colorway == Colorway.Cover

@@ -260,7 +260,7 @@ class PlaybackService : MediaLibraryService() {
                     return
                 }
                 val adaptive = item.localConfiguration?.mimeType == MimeTypes.APPLICATION_M3U8
-                val offline = container.syncStore.audio(item.mediaId) != null || container.downloads.completed(item.mediaId) != null
+                val offline = container.locallyAvailable(item.mediaId)
                 container.playbackDelivery.value = PlaybackDelivery(
                     item.mediaId, adaptive,
                     player.audioFormat?.bitrate?.takeIf { it > 0 }?.div(1000),
@@ -472,7 +472,7 @@ class PlaybackService : MediaLibraryService() {
         val item = player.currentMediaItem ?: return false
         if (container.settings.value.quality != ORIGINAL ||
             item.localConfiguration?.mimeType == MimeTypes.APPLICATION_M3U8 ||
-            container.syncStore.audio(item.mediaId) != null || container.downloads.completed(item.mediaId) != null || item.mediaId in fellBack) return false
+            container.locallyAvailable(item.mediaId) || item.mediaId in fellBack) return false
         val master = container.server.resolve("api/tracks/${item.mediaId}/hls/master.m3u8")
             ?.newBuilder()?.addQueryParameter("maxQuality", NORMAL)?.build() ?: return false
         // Keep the original and its buffer until a compatible rendition actually exists.
@@ -494,9 +494,6 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private fun source(container: AppContainer, item: MediaItem): MediaItem {
-        container.syncStore.audio(item.mediaId)?.let { uri ->
-            return item.buildUpon().setUri(uri).setMimeType(null).setCustomCacheKey("sync:${item.mediaId}").setStreamKeys(emptyList()).build()
-        }
         container.downloads.completed(item.mediaId)?.request?.let { request ->
             return item.buildUpon()
                 .setUri(request.uri)
@@ -504,6 +501,9 @@ class PlaybackService : MediaLibraryService() {
                 .setCustomCacheKey(request.customCacheKey)
                 .setStreamKeys(request.streamKeys)
                 .build()
+        }
+        container.syncStore.audio(item.mediaId)?.let { uri ->
+            return item.buildUpon().setUri(uri).setMimeType(null).setCustomCacheKey("sync:${item.mediaId}").setStreamKeys(emptyList()).build()
         }
 
         val quality = container.settings.value.quality

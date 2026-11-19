@@ -166,7 +166,8 @@ internal fun Actions(tracks: List<Track>, play: (List<Track>, Int) -> Unit, onMo
     val offline by container.downloads.state.collectAsStateWithLifecycle()
     val synchronization by container.syncStore.status.collectAsStateWithLifecycle()
     val librarySync = synchronization.enabled && container.syncStore.active
-    val mine = tracks.mapNotNull { offline[it.id] }.filter { it.download.state != Download.STATE_FAILED }
+    val mine = if (librarySync) emptyList() else tracks.mapNotNull { container.downloads.entry(it.id, offline) }
+        .filter { it.download.state != Download.STATE_FAILED }
     val pending = mine.any { !it.done }
     val complete = mine.count { it.done } == tracks.size
 
@@ -175,7 +176,7 @@ internal fun Actions(tracks: List<Track>, play: (List<Track>, Int) -> Unit, onMo
         libraryAction?.invoke()
         if (!librarySync && !LocalOfflineLibrary.current) Box(
             Modifier.size(48.dp).clip(CircleShape).clickable {
-                if (pending || complete) container.downloads.remove(mine.map { it.download.request.id })
+                if (pending || complete) container.downloads.remove(mine.mapNotNull { it.track?.id })
                 else scope.launch {
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { beforeDownload() }
                     container.downloads.add(tracks, container.settings.value)

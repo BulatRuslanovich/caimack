@@ -104,8 +104,8 @@ artwork for offline browsing. Android also supports opt-in
 [HTTP connections to a local server](docs/android-local-http.md).
 
 Android also supports opt-in [full library synchronization](docs/android-library-sync.md)
-to a folder you choose: original music, lyrics, artwork, vectors and server-prepared
-mixes/radio remain available away from your local network. Offline listening and
+in private app storage. Original music, lyrics, artwork, vectors and server-prepared
+mixes and radio remain available away from your local network. Offline listening and
 playlist edits are merged back when the phone returns.
 
 The normal player can also control another signed-in web or Android device.
