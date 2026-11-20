@@ -70,8 +70,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
-import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -120,6 +120,8 @@ private val tabs = listOf(
     Tab(SearchRoute(), SearchRoute::class, R.string.nav_search, Lucide.Search),
     Tab(LibraryRoute, LibraryRoute::class, R.string.nav_library, Lucide.LibraryBig),
 )
+
+internal fun NavDestination.primaryTabIndex(): Int = tabs.indexOfFirst { hasRoute(it.type) }
 
 internal fun NavController.openSection(route: Any) {
     // Settings belongs to the account, not to a tab's saved navigation history.
@@ -307,9 +309,8 @@ private fun AppContent(
             } else MiniPlayer(playback) { expanded = true }
         },
     ) { padding ->
-        NavHost(
+        AppNavHost(
             nav,
-            startDestination = HomeRoute,
             modifier = Modifier.padding(padding).fillMaxSize().background(palette.background),
         ) {
             composable<HomeRoute> { HomeScreen(nav) }
