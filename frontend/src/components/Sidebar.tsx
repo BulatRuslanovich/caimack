@@ -4,7 +4,7 @@
 "use client";
 
 import { useRecommendations } from "@/lib/useRecommendations";
-import { useAudiobookExperiment } from "@/lib/audiobookExperiment";
+import { useAudiobooks } from "@/contexts/AudiobookContext";
 import { useMutation } from "@tanstack/react-query";
 import { LogOutIcon } from "lucide-react";
 import { PrefetchLink as Link } from "@/components/PrefetchLink";
@@ -122,7 +122,7 @@ function NavGroup({
 
 export function Sidebar() {
   const recommendations = useRecommendations();
-  const audiobooks = useAudiobookExperiment();
+  const { enabled: audiobooks } = useAudiobooks();
 
   const t = useT();
   const { isAdmin } = useAuth();

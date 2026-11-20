@@ -66,7 +66,7 @@ private const val MIN_DISTINCT = 3
 fun HomeScreen(nav: NavController) {
     var mode by rememberSaveable { mutableStateOf("all") }
     val container = LocalContainer.current
-    val enabled by container.playbackPrefs.audiobooksEnabled.collectAsStateWithLifecycle()
+    val enabled by container.audiobooksEnabled.collectAsStateWithLifecycle()
     val catalog by container.audiobookStore.state.collectAsStateWithLifecycle()
     val selected = if (enabled) mode else "all"
     val filters: @Composable () -> Unit = {

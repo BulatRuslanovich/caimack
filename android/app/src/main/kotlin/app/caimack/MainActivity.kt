@@ -100,7 +100,7 @@ class MainActivity : ComponentActivity() {
         if (intent.getStringExtra(Background.EXTRA_OPEN) == Background.OPEN_RECAP) {
             container.openRecap.value = true
         }
-        if (intent.action == AudiobookPlayback.OPEN && container.playbackPrefs.audiobooksEnabled.value) {
+        if (intent.action == AudiobookPlayback.OPEN && container.audiobooksEnabled.value) {
             container.audiobookPlayback.openFromNotification.value = true
         }
     }

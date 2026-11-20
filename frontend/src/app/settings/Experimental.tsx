@@ -18,28 +18,24 @@ import { useToast } from "@/lib/useToast";
 import { Panel } from "./Panel";
 import { setTatarMafia, useTatarMafia } from "@/lib/tatarMafia";
 import { vinylScratchSupported } from "@/lib/playback/equalizer";
-import { setAudiobookExperiment, useAudiobookExperiment } from "@/lib/audiobookExperiment";
+import { useSetAudiobookExperiment } from "@/lib/audiobookExperiment";
 import { useAudiobooks } from "@/contexts/AudiobookContext";
-import { useAuth } from "@/contexts/AuthContext";
 
 const subscribeSupport = () => () => {};
 
 export function Experimental() {
   const t = useT();
-  const { isAdmin } = useAuth();
-  const enabled = useAudiobookExperiment();
-  const { player } = useAudiobooks();
+  const { enabled, experimentReady, scope } = useAudiobooks();
+  const change = useSetAudiobookExperiment(scope);
   return (
     <Panel title={t("settings.experimental")}>
       <label className="flex cursor-pointer items-start gap-3">
         <Switch
           className="mt-0.5"
           checked={enabled}
+          disabled={!experimentReady || change.isPending}
           aria-describedby="audiobooks-experiment-hint"
-          onCheckedChange={(value) => {
-            if (!value) player.close();
-            setAudiobookExperiment(value);
-          }}
+          onCheckedChange={(value) => change.mutate(value)}
         />
         <span className="flex flex-col gap-1">
           <span className="font-medium">{t("nav.audiobooks")}</span>
@@ -48,7 +44,7 @@ export function Experimental() {
           </span>
         </span>
       </label>
-      {isAdmin && <AdminExperiments />}
+      <AdminExperiments />
     </Panel>
   );
 }

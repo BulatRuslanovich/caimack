@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { Copyright } from "@/components/Copyright";
 import { PageHeader } from "@/components/PageHeader";
+import { useAuth } from "@/contexts/AuthContext";
 import { useT } from "@/contexts/I18nContext";
 import { RecommendationStats } from "./RecommendationStats";
 import { Appearance } from "./Appearance";
@@ -56,8 +57,9 @@ const SECTIONS: SettingsSection[] = [
   "listening",
   "recommendations",
   "account",
-  "experimental",
 ];
+
+const ADMIN_SECTIONS: SettingsSection[] = [...SECTIONS, "experimental"];
 
 const DEFAULT_SECTION: SettingsSection = "playback";
 
@@ -73,8 +75,11 @@ const SECTION_ICONS = {
 function SettingsSections() {
   const t = useT();
   const params = useSearchParams();
+  const { isAdmin } = useAuth();
   const recommendations = useRecommendations();
-  const sections = SECTIONS.filter((key) => key !== "recommendations" || recommendations);
+  const sections = (isAdmin ? ADMIN_SECTIONS : SECTIONS).filter(
+    (key) => key !== "recommendations" || recommendations,
+  );
 
   const raw = params.get("tab");
   const section = sections.find((key) => key === raw) ?? DEFAULT_SECTION;

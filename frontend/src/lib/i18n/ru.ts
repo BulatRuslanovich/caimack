@@ -69,7 +69,7 @@ export const ru: Dictionary = {
   "audiobooks.continueAtHome": "Продолжить аудиокнигу",
   "audiobooks.recent": "Недавние",
   "audiobooks.duration": "По длительности",
-  "audiobooks.disabled": "Включите аудиокниги в разделе «Настройки → Эксперименты».",
+  "audiobooks.disabled": "Аудиокниги выключены на этом сервере.",
   "audiobooks.narrator": "Читает {name}",
   "audiobooks.remaining": "Осталось {time} · {percent}%",
   "audiobooks.progress": "Прогресс прослушивания",
@@ -856,7 +856,7 @@ export const ru: Dictionary = {
   "settings.account": "Учётная запись",
   "settings.recommendations": "Рекомендации",
   "settings.experimental": "Эксперименты",
-  "settings.audiobooksHint": "Показывать аудиокниги в каталоге, поиске и медиатеке.",
+  "settings.audiobooksHint": "Включить аудиокниги на всех устройствах, подключённых к этому серверу.",
   "settings.tatarMafia": "Режим татарской мафии",
   "settings.tatarMafiaHint":
     "Крути пластинку в полноэкранном плеере вперёд-назад — будут скретчи и искажения. Воспроизведение должно идти на этом устройстве. Кто поймёт, тот поймёт.",

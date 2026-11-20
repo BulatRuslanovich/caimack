@@ -188,7 +188,7 @@ class AudiobookService : MediaSessionService() {
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
-        session.takeIf { container.playbackPrefs.audiobooksEnabled.value }
+        session.takeIf { container.audiobooksEnabled.value }
 
     private fun publish() {
         val item = player.currentMediaItem

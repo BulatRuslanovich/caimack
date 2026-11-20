@@ -4,7 +4,7 @@
 "use client";
 
 import { useRecommendations } from "@/lib/useRecommendations";
-import { useAudiobookExperiment } from "@/lib/audiobookExperiment";
+import { useAudiobooks } from "@/contexts/AudiobookContext";
 import { PrefetchLink as Link } from "@/components/PrefetchLink";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -136,7 +136,7 @@ export function LibraryChips() {
 export function MobileNav() {
   const t = useT();
   const pathname = usePathname();
-  const audiobooks = useAudiobookExperiment();
+  const { enabled: audiobooks } = useAudiobooks();
 
   return (
     <nav

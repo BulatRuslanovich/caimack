@@ -68,7 +68,7 @@ export const en = {
   "audiobooks.continueAtHome": "Continue audiobook",
   "audiobooks.recent": "Recent",
   "audiobooks.duration": "By duration",
-  "audiobooks.disabled": "Enable audiobooks in Settings → Experimental.",
+  "audiobooks.disabled": "Audiobooks are disabled on this server.",
   "audiobooks.narrator": "Read by {name}",
   "audiobooks.remaining": "{time} left · {percent}%",
   "audiobooks.progress": "Book progress",
@@ -810,7 +810,7 @@ export const en = {
   "settings.account": "Account",
   "settings.recommendations": "Recommendations",
   "settings.experimental": "Experimental",
-  "settings.audiobooksHint": "Show audiobooks in the catalog, search, and your library.",
+  "settings.audiobooksHint": "Enable audiobooks on all devices connected to this server.",
   "settings.tatarMafia": "Tatar Mafia mode",
   "settings.tatarMafiaHint":
     "Scratch the record in the full-screen player: drag it back and forth to bend the sound. Playback must be on this device. If you know, you know.",

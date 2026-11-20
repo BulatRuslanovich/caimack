@@ -17,8 +17,7 @@ enum class SettingsCategory(val key: String, val title: Int, val hint: Int) {
     Downloads("downloads", R.string.settings_downloads, R.string.settings_downloads_intro),
     Listening("listening", R.string.listening_title, R.string.listening_intro),
     Account("account", R.string.nav_account, R.string.settings_account_intro),
-    Updates("updates", R.string.settings_updates, R.string.settings_updates_intro),
-    Experimental("experimental", R.string.settings_experimental, R.string.settings_experimental_intro);
+    Updates("updates", R.string.settings_updates, R.string.settings_updates_intro);
     companion object { fun of(key: String) = entries.firstOrNull { it.key == key } }
 }
 
@@ -44,7 +43,6 @@ internal fun SettingsOverview(query: String = "") {
                 SettingsCategory.Listening -> Lucide.ChartLine
                 SettingsCategory.Account -> Lucide.UsersRound
                 SettingsCategory.Updates -> Lucide.Download
-                SettingsCategory.Experimental -> Lucide.FlaskConical
             }
             LibraryEntry(stringResource(category.title), stringResource(category.hint), icon) {
                 navigate(if (category == SettingsCategory.Listening) ListeningRoute() else SettingsSectionRoute(category.key))

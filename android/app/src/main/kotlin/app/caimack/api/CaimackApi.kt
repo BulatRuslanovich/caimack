@@ -56,6 +56,9 @@ interface CaimackApi {
     @GET("api/config")
     suspend fun capabilities(): ServerCapabilities
 
+    @GET("api/experiments/audiobooks")
+    suspend fun audiobookExperiment(): AudiobookExperiment
+
     @POST("api/auth/login")
     suspend fun login(@Body request: LoginRequest): User
 

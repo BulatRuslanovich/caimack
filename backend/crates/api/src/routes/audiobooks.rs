@@ -1,17 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Bulat Ruslanovich
 
-use app::audiobooks::Progress;
+use app::AppError;
+use app::audiobooks::{Audiobooks, Progress};
 use axum::Router;
 use axum::body::Bytes;
-use axum::extract::State;
+use axum::extract::{Request, State};
 use axum::http::{HeaderMap, StatusCode, header};
+use axum::middleware::{Next, from_fn_with_state};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, put};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::auth::CurrentUser;
+use crate::auth::{Admin, CurrentUser};
 use crate::extract::{Json, RequestLang, RoutePath};
 use crate::files::{self, FileReply};
 use crate::problem::ApiResult;
@@ -20,7 +22,7 @@ use crate::state::AppState;
 const MEDIA_CACHE: &str = "private, max-age=300";
 const SERVER_TIME: header::HeaderName = header::HeaderName::from_static("x-caimack-server-time-ms");
 
-pub(super) fn router() -> Router<AppState> {
+pub(super) fn router(state: AppState) -> Router<AppState> {
     Router::new()
         .route("/api/audiobooks", get(list))
         .route("/api/audiobooks/{id}", get(get_book))
@@ -28,6 +30,34 @@ pub(super) fn router() -> Router<AppState> {
         .route("/api/audiobooks/{id}/progress", put(set_progress))
         .route("/api/audiobooks/{id}/cover", get(cover))
         .route("/api/audiobooks/{id}/chapters/{chapter_id}/stream", get(stream))
+        .route_layer(from_fn_with_state(state, require_experiment))
+        .route("/api/experiments/audiobooks", get(experiment))
+        .route("/api/admin/experiments/audiobooks", put(set_experiment))
+}
+
+#[derive(Serialize, Deserialize)]
+struct Experiment {
+    enabled: bool,
+}
+
+async fn require_experiment(State(state): State<AppState>, request: Request, next: Next) -> ApiResult<Response> {
+    if !Audiobooks::experiment_enabled(&state.db).await? {
+        return Err(AppError::forbidden("Audiobooks are disabled.").into());
+    }
+    Ok(next.run(request).await)
+}
+
+async fn experiment(State(state): State<AppState>) -> ApiResult<Response> {
+    Ok(timed_json(Experiment { enabled: Audiobooks::experiment_enabled(&state.db).await? }))
+}
+
+async fn set_experiment(
+    State(state): State<AppState>,
+    Admin(_): Admin,
+    Json(value): Json<Experiment>,
+) -> ApiResult<Response> {
+    state.audiobooks.set_experiment(&state.db, value.enabled).await?;
+    Ok(timed_json(value))
 }
 
 fn timed_json(body: impl Serialize) -> Response {

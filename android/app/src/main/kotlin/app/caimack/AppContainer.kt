@@ -3,6 +3,7 @@
 
 package app.caimack
 
+import androidx.core.content.edit
 import android.content.Context
 import android.os.Build
 import android.provider.Settings
@@ -49,11 +50,15 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
@@ -77,6 +82,9 @@ import retrofit2.converter.kotlinx.serialization.asConverterFactory
 
 class AppContainer(context: Context) {
     val recommendationsEnabled = MutableStateFlow(false)
+    private val audiobookExperimentPreferences = context.getSharedPreferences("server_experiments", Context.MODE_PRIVATE)
+    private val audiobookExperiment = MutableStateFlow(false)
+    val audiobooksEnabled = audiobookExperiment.asStateFlow()
     private var capabilitiesFor: String? = null
     suspend fun refreshCapabilities() {
         val address = server.url.value?.toString()
@@ -269,25 +277,25 @@ class AppContainer(context: Context) {
     val connect by lazy { ConnectPlayback(context.applicationContext, this) }
 
     internal fun audiobookAccount(): AudiobookAccount? = playbackOwner()?.let { AudiobookAccount(it.address, it.userId) }
-    internal val audiobookAccounts get() = combine(session.state, server.url, playbackPrefs.audiobooksEnabled) { _, _, enabled ->
+    internal val audiobookAccounts get() = combine(session.state, server.url, audiobooksEnabled) { _, _, enabled ->
         if (enabled) audiobookAccount() else null
     }.distinctUntilChanged()
     internal val audiobookStore by lazy {
         AudiobookStore(File(context.filesDir, "audiobooks"), json, http, retrofit.create(AudiobookApi::class.java),
-            scope, ::audiobookAccount, audiobookAccounts) { playbackPrefs.audiobooksEnabled.value }
+            scope, ::audiobookAccount, audiobookAccounts) { audiobooksEnabled.value }
     }
     internal val audiobookPlayback by lazy {
         AudiobookPlayback(context.applicationContext, scope, audiobookStore, {
-            if (playbackPrefs.audiobooksEnabled.value) audiobookAccount() else null
+            if (audiobooksEnabled.value) audiobookAccount() else null
         }, connect::pauseForAudiobook)
     }
 
-    internal fun setAudiobooksEnabled(enabled: Boolean) {
-        if (!enabled && playbackPrefs.audiobooksEnabled.value) {
+    private fun applyAudiobookExperiment(enabled: Boolean) {
+        if (!enabled && audiobooksEnabled.value) {
             audiobookPlayback.pauseForMusic()
             audiobookPlayback.openFromNotification.value = false
         }
-        playbackPrefs.setAudiobooksEnabled(enabled)
+        audiobookExperiment.value = enabled
     }
 
     private val artworkRefresh = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
@@ -312,7 +320,7 @@ class AppContainer(context: Context) {
     private val connectionProbe = kotlinx.coroutines.sync.Mutex()
     fun refreshLibraryConnection() {
         playbackSync.request()
-        if (playbackPrefs.audiobooksEnabled.value) audiobookStore.requestRefresh()
+        if (audiobooksEnabled.value) audiobookStore.requestRefresh()
         scope.launch {
             if (session.state.value !is SessionState.SignedIn || !connectionProbe.tryLock()) return@launch
             try { withTimeoutOrNull(5_000) { runCatching { api.me() } } }
@@ -326,6 +334,34 @@ class AppContainer(context: Context) {
 
     init {
         playbackSync.start(scope)
+        scope.launch {
+            combine(session.state, server.url) { state, address ->
+                address?.takeIf { state is SessionState.SignedIn }
+            }.distinctUntilChanged().collectLatest { address ->
+                withContext(Dispatchers.Main) { applyAudiobookExperiment(false) }
+                if (address == null) return@collectLatest
+                val key = address.toString()
+                var first = true
+                while (isActive) {
+                    val remote = try {
+                        withTimeoutOrNull(4_000) { api.audiobookExperiment().enabled }
+                    } catch (_: IOException) {
+                        null
+                    } catch (error: retrofit2.HttpException) {
+                        if (error.code() == 404) false else null
+                    }
+                    if (remote != null) audiobookExperimentPreferences.edit { putBoolean(key, remote) }
+                    if (remote != null || first) {
+                        val enabled = remote ?: audiobookExperimentPreferences.getBoolean(key, false)
+                        withContext(Dispatchers.Main) {
+                            if (server.url.value == address) applyAudiobookExperiment(enabled)
+                        }
+                    }
+                    first = false
+                    delay(4_000)
+                }
+            }
+        }
         scope.launch {
             for (request in lyricsRefresh) {
                 val owner = accountKey ?: continue

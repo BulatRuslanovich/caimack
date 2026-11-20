@@ -96,10 +96,43 @@ pub struct Progress {
 }
 
 impl Audiobooks {
-    pub fn spawn(&self, root: PathBuf, interval: Option<Duration>, cancel: CancellationToken) -> JoinHandle<()> {
+    pub async fn experiment_enabled(db: &PgPool) -> AppResult<bool> {
+        Ok(sqlx::query_scalar("SELECT enabled FROM server_experiments WHERE name = 'audiobooks'")
+            .fetch_optional(db)
+            .await?
+            .unwrap_or(false))
+    }
+
+    pub async fn set_experiment(&self, db: &PgPool, enabled: bool) -> AppResult<()> {
+        sqlx::query(
+            "INSERT INTO server_experiments (name, enabled) VALUES ('audiobooks', $1)
+                     ON CONFLICT (name) DO UPDATE SET enabled = EXCLUDED.enabled",
+        )
+        .bind(enabled)
+        .execute(db)
+        .await?;
+        self.request_scan();
+        Ok(())
+    }
+
+    pub fn spawn(
+        &self,
+        db: PgPool,
+        root: PathBuf,
+        interval: Option<Duration>,
+        cancel: CancellationToken,
+    ) -> JoinHandle<()> {
         let audiobooks = self.clone();
         tokio::spawn(async move {
             loop {
+                if !matches!(Self::experiment_enabled(&db).await, Ok(true)) {
+                    tokio::select! {
+                        () = cancel.cancelled() => return,
+                        () = audiobooks.requested.notified() => {},
+                        () = tokio::time::sleep(Duration::from_secs(30)) => {},
+                    }
+                    continue;
+                }
                 let previous = audiobooks.snapshot();
                 let root = root.clone();
                 let cancel_scan = cancel.clone();

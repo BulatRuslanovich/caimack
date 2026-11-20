@@ -166,23 +166,6 @@ fun SettingsScreen(category: SettingsCategory? = null) {
         Column(Modifier.weight(1f).verticalScroll(scroll).padding(bottom = 24.dp + LocalMiniPlayerInset.current)) {
             if (category == null && query.isBlank()) SettingsOverview()
             else if (visible.isEmpty()) Empty(stringResource(R.string.settings_search_empty))
-            if (SettingKey.Audiobooks in visible) {
-                val enabled by container.playbackPrefs.audiobooksEnabled.collectAsStateWithLifecycle()
-                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
-                    SectionHeader(stringResource(R.string.settings_experimental))
-                    Row(
-                        Modifier.fillMaxWidth().clickable { container.setAudiobooksEnabled(!enabled) }.padding(vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        SettingLabel(
-                            stringResource(R.string.nav_audiobooks),
-                            stringResource(R.string.settings_audiobooks_hint),
-                            modifier = Modifier.weight(1f).padding(end = 12.dp),
-                        )
-                        Toggle(enabled, container::setAudiobooksEnabled)
-                    }
-                }
-            }
             if (SettingKey.Listening in visible) {
                 val navigate = LocalNavigate.current
                 LibraryEntry(stringResource(R.string.listening_title), stringResource(R.string.listening_intro), Lucide.ChartLine) { navigate(ListeningRoute()) }

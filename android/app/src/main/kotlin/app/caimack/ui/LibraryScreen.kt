@@ -82,7 +82,7 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
     val palette = LocalPalette.current
     var selectedFilter by rememberSaveable { mutableStateOf(initialFilter) }
     val audiobookCatalog by container.audiobookStore.state.collectAsStateWithLifecycle()
-    val audiobooksEnabled by container.playbackPrefs.audiobooksEnabled.collectAsStateWithLifecycle()
+    val audiobooksEnabled by container.audiobooksEnabled.collectAsStateWithLifecycle()
     val filter = if (!audiobooksEnabled && selectedFilter == "audiobook") "all" else selectedFilter
     val savedBooks = if (audiobooksEnabled) audiobookCatalog.books.filter { it.saved } else emptyList()
     var downloadedOnly by rememberSaveable { mutableStateOf(false) }

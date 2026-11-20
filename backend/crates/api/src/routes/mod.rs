@@ -34,7 +34,7 @@ pub fn router(state: AppState) -> Router {
     let protected = Router::new()
         .merge(auth::protected())
         .merge(account::router())
-        .merge(audiobooks::router())
+        .merge(audiobooks::router(state.clone()))
         .merge(catalog::router())
         .merge(integrations::router())
         .merge(library::router())

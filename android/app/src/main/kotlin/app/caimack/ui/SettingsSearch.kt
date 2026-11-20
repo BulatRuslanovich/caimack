@@ -27,7 +27,6 @@ internal enum class SettingKey(val section: Int, vararg val terms: Int) {
     Language(R.string.settings_appearance, R.string.settings_language, R.string.settings_help_language, R.string.language_english, R.string.language_russian),
     SignOut(R.string.nav_account, R.string.sign_out),
     Updates(R.string.settings_updates, R.string.settings_updates_intro, R.string.update_check, R.string.update_installed),
-    Audiobooks(R.string.settings_experimental, R.string.nav_audiobooks, R.string.settings_audiobooks_hint),
 }
 
 internal fun matchingSettings(query: String, resources: Resources): Set<SettingKey> =

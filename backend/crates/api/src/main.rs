@@ -127,7 +127,12 @@ async fn run() -> anyhow::Result<()> {
         .with_metadata_export(config.export_music_metadata);
     workers.push(library.clone().spawn(config.library_scan_interval, background.clone()));
     let audiobooks = Audiobooks::default();
-    workers.push(audiobooks.spawn(storage.audiobooks_root(), config.library_scan_interval, background.clone()));
+    workers.push(audiobooks.spawn(
+        db.clone(),
+        storage.audiobooks_root(),
+        config.library_scan_interval,
+        background.clone(),
+    ));
 
     let yandex_client = YandexClient::new(config.yandex_music.clone());
     let (imports, import_jobs) = ImportQueue::new();

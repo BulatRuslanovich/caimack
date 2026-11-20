@@ -61,6 +61,7 @@ interface AudiobookPlayer {
 
 interface AudiobookState {
   enabled: boolean;
+  experimentReady: boolean;
   player: AudiobookPlayer;
   clock: ReturnType<typeof createClock>;
   scope: string | null;
@@ -129,14 +130,15 @@ interface AudiobookProviderProps {
 
 export function AudiobookProvider(props: AudiobookProviderProps) {
   const desktop = useDesktopStatus();
-  const enabled = useAudiobookExperiment();
   const id = props.userId;
   const scope = id && (desktop?.server ? `${desktop.server}\n${id}` : id);
+  const experiment = useAudiobookExperiment(scope);
   return (
     <AudiobookSession
       key={scope}
       {...props}
-      enabled={enabled}
+      enabled={experiment.enabled}
+      experimentReady={experiment.ready}
       scope={scope}
       serverOnline={desktop?.online ?? true}
     />
@@ -146,6 +148,7 @@ export function AudiobookProvider(props: AudiobookProviderProps) {
 function AudiobookSession({
   scope,
   enabled,
+  experimentReady,
   serverOnline,
   musicPlaying,
   pauseMusic,
@@ -155,7 +158,12 @@ function AudiobookSession({
   setVolume,
   toggleMute,
   children,
-}: AudiobookProviderProps & { scope: string | null; serverOnline: boolean; enabled: boolean }) {
+}: AudiobookProviderProps & {
+  scope: string | null;
+  serverOnline: boolean;
+  enabled: boolean;
+  experimentReady: boolean;
+}) {
   const networkOnline = useSyncExternalStore(
     subscribeToNetwork,
     () => navigator.onLine,
@@ -583,6 +591,7 @@ function AudiobookSession({
     <AudiobookContext.Provider
       value={{
         enabled,
+        experimentReady,
         player: {
           active: enabled ? active : null,
           playing: enabled && playing,
