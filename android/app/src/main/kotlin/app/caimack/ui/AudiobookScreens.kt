@@ -340,16 +340,22 @@ fun AudiobookDetail(id: String) {
         item("header") {
             Box(Modifier.fillMaxWidth()) {
                 BookBackdrop(cover, book.title, LocalPalette.current)
-                DetailHeader(
-                    kind = stringResource(R.string.audiobook_kind),
-                    title = book.title,
-                    facts = listOfNotNull(
-                        book.author,
-                        book.narrator?.let { stringResource(R.string.audiobook_narrator, it) },
-                        pluralStringResource(R.plurals.audiobook_chapter_count, book.chapters.size, book.chapters.size),
-                        bookTime(book.durationMs),
-                    ),
-                ) { Cover(cover, book.title, it, book = true) }
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Cover(cover, book.title, Modifier.size(88.dp).clip(Radius.row), book = true)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(book.title, style = Type.section, color = LocalPalette.current.foreground)
+                        book.author?.let { Text(it, style = Type.body, color = LocalPalette.current.foreground) }
+                        book.narrator?.let {
+                            Text(stringResource(R.string.audiobook_narrator, it), style = Type.small, color = LocalPalette.current.muted)
+                        }
+                        val chapters = pluralStringResource(R.plurals.audiobook_chapter_count, book.chapters.size, book.chapters.size)
+                        Text("$chapters · ${bookTime(book.durationMs)}", style = Type.small, color = LocalPalette.current.muted)
+                    }
+                }
             }
         }
         item("actions") { BookDetailActions(book, active, catalog) }
