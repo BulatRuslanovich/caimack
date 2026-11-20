@@ -336,10 +336,10 @@ fun AudiobookDetail(id: String) {
     val chapterId = active?.chapterId ?: book.progress?.chapterId
     val cover = container.audiobookStore.cover(book)
     val playable = catalog.canPlay(book)
-    Box(Modifier.fillMaxSize()) {
-        BookBackdrop(cover, book.title, LocalPalette.current)
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(bottom = 24.dp)) {
-            item("header") {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(bottom = 24.dp)) {
+        item("header") {
+            Box(Modifier.fillMaxWidth()) {
+                BookBackdrop(cover, book.title, LocalPalette.current)
                 DetailHeader(
                     kind = stringResource(R.string.audiobook_kind),
                     title = book.title,
@@ -351,33 +351,33 @@ fun AudiobookDetail(id: String) {
                     ),
                 ) { Cover(cover, book.title, it, book = true) }
             }
-            item("actions") { BookDetailActions(book, active, catalog) }
-            if (active != null || book.progress != null) {
-                item("listening-position") { BookListeningPosition(book, active) }
-            }
-            item("chapter-header") { SectionHeader(stringResource(R.string.audiobook_chapters)) }
-            itemsIndexed(book.chapters, key = { _, chapter -> chapter.id }) { index, chapter ->
-                val palette = LocalPalette.current
-                val density = LocalLibraryDensity.current
-                val current = chapter.id == chapterId
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 8.dp).clip(Radius.row)
-                        .then(if (current) Modifier.background(palette.card) else Modifier)
-                        .alpha(if (playable) 1f else .38f)
-                        .clickable(enabled = playable) { container.audiobookPlayback.play(book, chapter.id) }
-                        .heightIn(min = 48.dp)
-                        .padding(start = 8.dp, end = 12.dp, top = density.rowPadding, bottom = density.rowPadding),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Box(Modifier.width(26.dp), contentAlignment = Alignment.CenterEnd) {
-                        if (current && active?.playing == true) NowPlayingBars(palette.primary)
-                        else Text((index + 1).toString(), style = Type.small, color = if (current) palette.primary else palette.faint)
-                    }
-                    Text(chapter.title, Modifier.weight(1f), style = Type.body.copy(fontWeight = FontWeight.Medium),
-                        color = if (current) palette.primary else palette.foreground, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(bookTime(chapter.durationMs), style = Type.tiny, color = palette.faint)
+        }
+        item("actions") { BookDetailActions(book, active, catalog) }
+        if (active != null || book.progress != null) {
+            item("listening-position") { BookListeningPosition(book, active) }
+        }
+        item("chapter-header") { SectionHeader(stringResource(R.string.audiobook_chapters)) }
+        itemsIndexed(book.chapters, key = { _, chapter -> chapter.id }) { index, chapter ->
+            val palette = LocalPalette.current
+            val density = LocalLibraryDensity.current
+            val current = chapter.id == chapterId
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 8.dp).clip(Radius.row)
+                    .then(if (current) Modifier.background(palette.card) else Modifier)
+                    .alpha(if (playable) 1f else .38f)
+                    .clickable(enabled = playable) { container.audiobookPlayback.play(book, chapter.id) }
+                    .heightIn(min = 48.dp)
+                    .padding(start = 8.dp, end = 12.dp, top = density.rowPadding, bottom = density.rowPadding),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(Modifier.width(26.dp), contentAlignment = Alignment.CenterEnd) {
+                    if (current && active?.playing == true) NowPlayingBars(palette.primary)
+                    else Text((index + 1).toString(), style = Type.small, color = if (current) palette.primary else palette.faint)
                 }
+                Text(chapter.title, Modifier.weight(1f), style = Type.body.copy(fontWeight = FontWeight.Medium),
+                    color = if (current) palette.primary else palette.foreground, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(bookTime(chapter.durationMs), style = Type.tiny, color = palette.faint)
             }
         }
     }
