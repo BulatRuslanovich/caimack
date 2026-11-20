@@ -32,10 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -67,17 +64,20 @@ private const val MOBILE_CHART = 5
 private const val MIN_DISTINCT = 3
 
 @Composable
-fun HomeScreen(nav: NavController) {
-    var mode by rememberSaveable { mutableStateOf("all") }
+internal fun HomeScreen(
+    nav: NavController,
+    category: String,
+    downloads: Boolean,
+    onFilterChange: (category: String, downloads: Boolean) -> Unit,
+) {
     val container = LocalContainer.current
     val enabled by container.audiobooksEnabled.collectAsStateWithLifecycle()
     val catalog = browsingAudiobooks()
-    var downloads by rememberSaveable { mutableStateOf(false) }
-    val selected = if (mode == "audiobooks" && !enabled) "all" else mode
+    val selected = if (category == "audiobooks" && !enabled) "all" else category
     fun select(category: String) {
-        mode = if (category == selected) "all" else category
-        downloads = false
+        onFilterChange(if (category == selected) "all" else category, false)
     }
+    val toggleDownloads = { onFilterChange(category, !downloads) }
     // Keep motion and the horizontal position as the selected feed changes its LazyColumn.
     val scroll = rememberLazyListState()
     val duration = if (systemMotionEnabled()) 240 else 0
@@ -96,10 +96,10 @@ fun HomeScreen(nav: NavController) {
         CategoryFilterRow(selected, false, {}, scroll = scroll, autoReset = false) {
             item("all") { CategoryFilter(R.string.home_filter_all, selected == "all") { select("all") } }
             item("music") {
-                HomeCategory(R.string.home_filter_music, selected == "music", downloads, music, emphasis, { select("music") }, { downloads = !downloads })
+                HomeCategory(R.string.home_filter_music, selected == "music", downloads, music, emphasis, { select("music") }, toggleDownloads)
             }
             if (enabled) item("audiobooks") {
-                HomeCategory(R.string.nav_audiobooks, selected == "audiobooks", downloads, books, emphasis, { select("audiobooks") }, { downloads = !downloads })
+                HomeCategory(R.string.nav_audiobooks, selected == "audiobooks", downloads, books, emphasis, { select("audiobooks") }, toggleDownloads)
             }
         }
     }
