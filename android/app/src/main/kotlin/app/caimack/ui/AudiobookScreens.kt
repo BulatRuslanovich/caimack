@@ -63,7 +63,7 @@ private const val DURATION = "duration"
 private const val DOWNLOADED = "downloaded"
 
 @Composable
-fun AudiobookBrowse() {
+fun AudiobookBrowse(homeFilters: @Composable () -> Unit) {
     val container = LocalContainer.current
     val catalog by container.audiobookStore.state.collectAsStateWithLifecycle()
     var filter by rememberSaveable { mutableStateOf(RECENT) }
@@ -80,6 +80,7 @@ fun AudiobookBrowse() {
         contentPadding = playerContentPadding(top = 12.dp, bottom = 20.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
+        item("home-filters") { homeFilters() }
         if (filter == RECENT) inProgress.firstOrNull()?.let { book ->
             item("continue") {
                 BookHeader(R.string.audiobook_continue)
@@ -114,7 +115,7 @@ fun AudiobookBrowse() {
 internal fun LazyListScope.homeAudiobook(catalog: AudiobookCatalog) {
     val latest = catalog.books.inProgress().firstOrNull() ?: return
     item("audiobook-home-continue") {
-        BookHeader(R.string.audiobook_continue)
+        BookHeader(R.string.audiobook_continue_home)
         BookHero(latest, catalog)
     }
 }

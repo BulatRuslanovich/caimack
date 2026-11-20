@@ -7,7 +7,7 @@ import { queries } from "@/lib/queries";
 import type { Album, Artist, Track } from "@/lib/types";
 import SearchPage from "./page";
 
-const route = vi.hoisted(() => ({ search: "" }));
+const route = vi.hoisted(() => ({ search: "", audiobooksEnabled: true }));
 const books = vi.hoisted(() => [
   {
     id: "quantum",
@@ -26,7 +26,11 @@ vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(r
 vi.mock("@/contexts/I18nContext", () => ({ useT: () => (key: string) => key }));
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ isAdmin: false }) }));
 vi.mock("@/contexts/AudiobookContext", () => ({
-  useAudiobooks: () => ({ books, result: { data: books, isPending: false } }),
+  useAudiobooks: () => ({
+    enabled: route.audiobooksEnabled,
+    books: route.audiobooksEnabled ? books : [],
+    result: { data: books, isPending: false },
+  }),
 }));
 vi.mock("@/components/audiobooks/AudiobookViews", () => ({
   AudiobookRow: ({ book }: { book: (typeof books)[number] }) => <li>{book.title}</li>,
@@ -66,8 +70,9 @@ vi.mock("@/app/genres/GenresPage", () => ({
   GenresPage: ({ selected }: { selected: string }) => <p data-selected-genre={selected} />,
 }));
 
-function render(search: string) {
+function render(search: string, audiobooksEnabled = true) {
   route.search = search;
+  route.audiobooksEnabled = audiobooksEnabled;
   const client = new QueryClient();
   const metadata = {
     artistId: "artist-0",
@@ -113,6 +118,12 @@ it("shows all catalog tabs on the search start screen", () => {
   }
   expect(markup).toContain("recent searches");
   expect(markup).not.toContain('data-tracks-query=""');
+});
+
+it("hides the audiobook search filter while its experiment is disabled", () => {
+  const markup = render("tab=audiobooks&q=Hawking", false);
+  expect(markup).not.toContain(">nav.audiobooks</button>");
+  expect(markup).not.toContain("search.audiobookPlaceholder");
 });
 
 it("shows popular tracks, albums and artists in order on the empty All tab", () => {

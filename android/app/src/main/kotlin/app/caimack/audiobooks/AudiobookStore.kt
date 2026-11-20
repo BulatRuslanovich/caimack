@@ -75,6 +75,7 @@ internal class AudiobookStore(
     private val scope: CoroutineScope,
     private val currentAccount: () -> AudiobookAccount?,
     accounts: Flow<AudiobookAccount?>,
+    private val enabled: () -> Boolean,
 ) {
     private val lock = Mutex()
     private val refreshLock = Mutex()
@@ -169,6 +170,7 @@ internal class AudiobookStore(
     }
 
     fun setSaved(id: String, saved: Boolean) {
+        if (!enabled()) return
         val account = currentAccount() ?: return
         scope.launch {
             try {
@@ -187,11 +189,12 @@ internal class AudiobookStore(
     }
 
     fun download(book: Audiobook) {
+        if (!enabled()) return
         val account = currentAccount() ?: return
         scope.launch {
             val key = account to book.id
             val started = lock.withLock {
-                if (currentAccount() != account || !downloadJobs.add(key)) return@withLock false
+                if (!enabled() || currentAccount() != account || !downloadJobs.add(key)) return@withLock false
                 load(account)
                 current.update { it.copy(downloading = it.downloading + (book.id to 0f), failedDownloads = it.failedDownloads - book.id) }
                 true
@@ -207,8 +210,10 @@ internal class AudiobookStore(
                 var bytes = 0L
                 var lastPercent = 0
                 for (chapter in book.chapters) {
+                    if (!enabled()) throw CancellationException("Audiobooks disabled")
                     if (currentAccount() != account) throw IOException("Audiobook account changed")
                     fetch(account, chapter.streamUrl, chapterFile(staging, chapter)) { amount ->
+                        if (!enabled()) throw CancellationException("Audiobooks disabled")
                         if (currentAccount() != account) throw IOException("Audiobook account changed")
                         bytes += amount
                         val percent = ((bytes.toDouble() / total) * 100).toInt().coerceIn(0, 100)
@@ -224,7 +229,7 @@ internal class AudiobookStore(
                     catch (_: IOException) { File(staging, "cover").delete() }
                 }
                 lock.withLock {
-                    if (currentAccount() != account) return@withLock
+                    if (!enabled() || currentAccount() != account) return@withLock
                     target.deleteRecursively()
                     if (!staging.renameTo(target)) throw IOException("Could not install audiobook download")
                     val books = if (cache.books.any { it.id == book.id }) cache.books else cache.books + book
@@ -244,6 +249,7 @@ internal class AudiobookStore(
     }
 
     fun removeDownload(id: String) {
+        if (!enabled()) return
         val account = currentAccount() ?: return
         scope.launch {
             try {

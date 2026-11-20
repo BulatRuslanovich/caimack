@@ -25,7 +25,7 @@ import {
 import { ApiError } from "./http";
 import { readStored, writeStored } from "./storage";
 
-export function useAudiobookCatalog(scope: string | null, online: boolean) {
+export function useAudiobookCatalog(scope: string | null, online: boolean, enabled: boolean) {
   const client = useQueryClient();
   const key = useMemo(() => ["audiobooks", scope], [scope]);
   const downloadKey = useMemo(() => ["audiobook-downloads", scope], [scope]);
@@ -80,7 +80,7 @@ export function useAudiobookCatalog(scope: string | null, online: boolean) {
 
   const result = useQuery({
     queryKey: key,
-    enabled: scope !== null,
+    enabled: enabled && scope !== null,
     staleTime: 0,
     refetchInterval: online ? 20_000 : false,
     refetchOnWindowFocus: true,
@@ -117,7 +117,7 @@ export function useAudiobookCatalog(scope: string | null, online: boolean) {
 
   const downloads = useQuery({
     queryKey: downloadKey,
-    enabled: scope !== null,
+    enabled: enabled && scope !== null,
     staleTime: Infinity,
     networkMode: "always",
     meta: { handlesError: true },
@@ -156,7 +156,7 @@ export function useAudiobookCatalog(scope: string | null, online: boolean) {
 
   const flush = useCallback(async () => {
     const signal = scopeRequest.current?.signal;
-    if (!scope || !online || !navigator.onLine || !signal || signal.aborted) return;
+    if (!enabled || !scope || !online || !navigator.onLine || !signal || signal.aborted) return;
     const entries = Object.entries(readJournal());
     await Promise.all(
       entries.map(async ([id, initial]) => {
@@ -194,7 +194,7 @@ export function useAudiobookCatalog(scope: string | null, online: boolean) {
         }
       }),
     );
-  }, [scope, online, readJournal, updateBook, remember, saveEntry, observeServerTime]);
+  }, [enabled, scope, online, readJournal, updateBook, remember, saveEntry, observeServerTime]);
 
   const checkpoint = useCallback(
     (
@@ -247,15 +247,19 @@ export function useAudiobookCatalog(scope: string | null, online: boolean) {
 
   const { refetch } = result;
   useEffect(() => {
+    if (!enabled) return;
     const controller = new AbortController();
     scopeRequest.current = controller;
     return () => controller.abort();
-  }, [scope]);
+  }, [enabled, scope]);
 
   useEffect(() => {
-    if (!scope) return;
+    if (!enabled || !scope) return;
+    let active = true;
     const onlineAgain = () => {
-      void flush().finally(() => void refetch());
+      void flush().finally(() => {
+        if (active) void refetch();
+      });
     };
     const onStorage = (event: StorageEvent) => {
       if (!isJournalKey(scope, event.key)) return;
@@ -275,12 +279,13 @@ export function useAudiobookCatalog(scope: string | null, online: boolean) {
     onlineAgain();
 
     return () => {
+      active = false;
       window.clearInterval(timer);
       window.removeEventListener("online", onlineAgain);
       window.removeEventListener("caimack:refetch", onlineAgain);
       window.removeEventListener("storage", onStorage);
     };
-  }, [scope, flush, refetch, readJournal, updateBook]);
+  }, [enabled, scope, flush, refetch, readJournal, updateBook]);
 
   const savedChange = async (book: Audiobook) => {
     const saved = !book.saved;

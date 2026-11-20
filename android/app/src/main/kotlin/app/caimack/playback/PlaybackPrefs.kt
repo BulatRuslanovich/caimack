@@ -42,6 +42,14 @@ class PlaybackPrefs(private val context: Context) {
 
     val recapReminder: StateFlow<Boolean> = reminder
 
+    private val audiobooks = MutableStateFlow(preferences.getBoolean(AUDIOBOOKS, false))
+    val audiobooksEnabled: StateFlow<Boolean> = audiobooks
+
+    fun setAudiobooksEnabled(enabled: Boolean) {
+        preferences.edit { putBoolean(AUDIOBOOKS, enabled) }
+        audiobooks.value = enabled
+    }
+
     fun setRecapReminder(enabled: Boolean) {
         preferences.edit { putBoolean(RECAP_REMINDER, enabled) }
         reminder.value = enabled
@@ -64,5 +72,6 @@ class PlaybackPrefs(private val context: Context) {
         const val AUTO_DOWNLOADED = "auto_downloaded"
         const val RECAP_REMINDER = "recap_reminder"
         const val RECAP_NOTIFIED = "recap_notified"
+        const val AUDIOBOOKS = "audiobooks_experiment"
     }
 }

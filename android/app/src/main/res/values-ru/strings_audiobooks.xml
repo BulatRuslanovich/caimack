@@ -4,6 +4,11 @@
     <string name="home_filter_all">Все</string>
     <string name="home_filter_music">Музыка</string>
     <string name="audiobook_continue">Продолжить</string>
+    <string name="audiobook_continue_home">Продолжить аудиокнигу</string>
+    <string name="settings_experimental">Эксперименты</string>
+    <string name="settings_experimental_intro">Дополнительные возможности</string>
+    <string name="settings_audiobooks_hint">Показывать аудиокниги в каталоге, поиске и медиатеке.</string>
+    <string name="audiobooks_disabled">Включите аудиокниги в разделе «Настройки → Эксперименты».</string>
     <string name="audiobook_recent">Недавние</string>
     <string name="audiobook_by_duration">По длительности</string>
     <string name="audiobook_all">Все аудиокниги</string>

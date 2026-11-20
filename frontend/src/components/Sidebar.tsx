@@ -4,6 +4,7 @@
 "use client";
 
 import { useRecommendations } from "@/lib/useRecommendations";
+import { useAudiobookExperiment } from "@/lib/audiobookExperiment";
 import { useMutation } from "@tanstack/react-query";
 import { LogOutIcon } from "lucide-react";
 import { PrefetchLink as Link } from "@/components/PrefetchLink";
@@ -121,6 +122,7 @@ function NavGroup({
 
 export function Sidebar() {
   const recommendations = useRecommendations();
+  const audiobooks = useAudiobookExperiment();
 
   const t = useT();
   const { isAdmin } = useAuth();
@@ -147,7 +149,7 @@ export function Sidebar() {
         aria-label={t("nav.main")}
         className="flex flex-1 flex-col gap-6 [@media(max-height:52rem)]:gap-3"
       >
-        <NavGroup entries={primaryNav} />
+        <NavGroup entries={primaryNav(audiobooks)} />
         <NavGroup
           label={t("nav.quickAccess")}
           entries={libraryNav.filter((entry) => entry.href !== "/map" || recommendations)}

@@ -95,7 +95,7 @@ it("shows only the most recent unfinished audiobook immediately after fresh arri
     ],
   );
   expect(html).toMatch(
-    /home\.newArrivals.*audiobooks\.continue.*href="\/audiobooks\/last-book".*home\.topThisWeek/,
+    /home\.newArrivals.*audiobooks\.continueAtHome.*href="\/audiobooks\/last-book".*home\.topThisWeek/,
   );
   expect(html.match(/href="\/audiobooks\//g)).toHaveLength(1);
 });

@@ -68,14 +68,15 @@ function SearchView() {
   const client = useQueryClient();
 
   const { isAdmin } = useAuth();
-  const { books, result: audiobookCatalog } = useAudiobooks();
+  const { enabled: audiobooksEnabled, books, result: audiobookCatalog } = useAudiobooks();
   const yandexSettings = useYandexMusicSettings();
   const yandex = isAdmin && yandexSettings.enabled;
 
   const query = (params.get("q") ?? "").trim();
   const tabParam = params.get("tab");
   const yandexTab = yandex && tabParam === YANDEX_TAB;
-  const tab = isCatalogTab(tabParam) ? tabParam : null;
+  const tab =
+    isCatalogTab(tabParam) && (tabParam !== "audiobooks" || audiobooksEnabled) ? tabParam : null;
   const [visited, setVisited] = useState<CatalogTab[]>([]);
   if (tab && tab !== "audiobooks" && !visited.includes(tab)) setVisited([...visited, tab]);
 
@@ -101,7 +102,9 @@ function SearchView() {
     ? "yandex.searchPlaceholder"
     : tab === "audiobooks"
       ? "search.audiobookPlaceholder"
-      : "search.placeholder";
+      : audiobooksEnabled
+        ? "search.placeholderWithAudiobooks"
+        : "search.placeholder";
 
   return (
     <div className="search-page flex min-w-0 flex-col gap-3">
@@ -136,6 +139,7 @@ function SearchView() {
       {!yandexTab && (
         <SearchTabs
           tab={tab}
+          audiobooksEnabled={audiobooksEnabled}
           onSelect={(value) => tab !== value && navigate(query, value, true)}
           onIntent={(value) => {
             if (tab !== value) void prefetchSearchCategory(client, value, query || undefined);
@@ -161,7 +165,7 @@ function SearchView() {
               result={results}
               isEmpty={(data) =>
                 bookMatches.length === 0 &&
-                !audiobookCatalog.isPending &&
+                (!audiobooksEnabled || !audiobookCatalog.isPending) &&
                 data.artists.length === 0 &&
                 data.albums.length === 0 &&
                 data.tracks.length === 0 &&

@@ -18,10 +18,42 @@ import { useToast } from "@/lib/useToast";
 import { Panel } from "./Panel";
 import { setTatarMafia, useTatarMafia } from "@/lib/tatarMafia";
 import { vinylScratchSupported } from "@/lib/playback/equalizer";
+import { setAudiobookExperiment, useAudiobookExperiment } from "@/lib/audiobookExperiment";
+import { useAudiobooks } from "@/contexts/AudiobookContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 const subscribeSupport = () => () => {};
 
 export function Experimental() {
+  const t = useT();
+  const { isAdmin } = useAuth();
+  const enabled = useAudiobookExperiment();
+  const { player } = useAudiobooks();
+  return (
+    <Panel title={t("settings.experimental")}>
+      <label className="flex cursor-pointer items-start gap-3">
+        <Switch
+          className="mt-0.5"
+          checked={enabled}
+          aria-describedby="audiobooks-experiment-hint"
+          onCheckedChange={(value) => {
+            if (!value) player.close();
+            setAudiobookExperiment(value);
+          }}
+        />
+        <span className="flex flex-col gap-1">
+          <span className="font-medium">{t("nav.audiobooks")}</span>
+          <span id="audiobooks-experiment-hint" className="text-sm text-muted-foreground">
+            {t("settings.audiobooksHint")}
+          </span>
+        </span>
+      </label>
+      {isAdmin && <AdminExperiments />}
+    </Panel>
+  );
+}
+
+function AdminExperiments() {
   const t = useT();
   const { notify } = useToast();
   const yandex = useYandexMusicSettings();
@@ -40,7 +72,7 @@ export function Experimental() {
   });
 
   return (
-    <Panel title={t("settings.experimental")}>
+    <>
       <label className="flex cursor-pointer items-start gap-3">
         <Switch
           className="mt-0.5"
@@ -115,6 +147,6 @@ export function Experimental() {
           </form>
         </div>
       )}
-    </Panel>
+    </>
   );
 }

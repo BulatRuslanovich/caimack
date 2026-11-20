@@ -42,7 +42,8 @@
     <string name="mixes_kind">Сборник</string>
     <string name="mixes_empty">Для этого микса пока мало треков</string>
     <string name="tracks_empty">На сервере пока нет треков.</string>
-    <string name="search_placeholder">Музыка, исполнители, аудиокниги…</string>
+    <string name="search_placeholder">Музыка, исполнители, альбомы, жанры…</string>
+    <string name="search_with_audiobooks_placeholder">Музыка, исполнители, аудиокниги…</string>
     <string name="search_audiobook_placeholder">Название, автор, чтец…</string>
     <string name="search_nothing_found">Ничего не найдено.</string>
     <string name="search_top_result">Лучшее совпадение</string>

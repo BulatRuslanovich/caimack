@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useMemo, useSyncExternalStore } from "react";
 import { scrollContentToTop } from "@/lib/scroll";
-import { isCatalogTab } from "@/lib/searchNavigation";
+import { isCatalogRedirect } from "@/lib/searchNavigation";
 
 const navigationEvent = "caimack:navigate";
 
@@ -20,7 +20,7 @@ export function installNavigation() {
 
 function moveCatalogToSearch(url: URL) {
   const tab = url.pathname.slice(1);
-  if (!isCatalogTab(tab)) return false;
+  if (!isCatalogRedirect(tab)) return false;
   url.pathname = "/search";
   url.searchParams.set("tab", tab);
   return true;

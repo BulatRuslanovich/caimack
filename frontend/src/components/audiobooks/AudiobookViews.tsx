@@ -7,6 +7,7 @@ import {
   BookHeadphonesIcon,
   BookmarkIcon,
   CheckIcon,
+  Clock3Icon,
   EllipsisIcon,
   ListMusicIcon,
   PauseIcon,
@@ -280,14 +281,16 @@ function BookSection({ title, books }: { title: string; books: Audiobook[] }) {
   );
 }
 
-function ContinueBook({ book }: { book: Audiobook }) {
+function ContinueBook({ book, home = false }: { book: Audiobook; home?: boolean }) {
   const t = useT();
   const artwork = useAudiobookArtwork(book);
   const chapter = book.chapters.find((item) => item.id === book.progress?.chapterId);
 
   return (
     <section className="min-w-0 space-y-3.5">
-      <h2 className="text-heading font-semibold">{t("audiobooks.continue")}</h2>
+      <h2 className="text-heading font-semibold">
+        {t(home ? "audiobooks.continueAtHome" : "audiobooks.continue")}
+      </h2>
       <div className="relative isolate flex items-center gap-5 overflow-hidden rounded-2xl border border-border bg-card p-4 max-sm:gap-3 max-sm:p-3">
         {artwork && (
           <div
@@ -320,7 +323,7 @@ function listeningBooks(books: Audiobook[]) {
 export function AudiobookHome() {
   const { books } = useAudiobooks();
   const latest = listeningBooks(books)[0];
-  return latest ? <ContinueBook book={latest} /> : null;
+  return latest ? <ContinueBook book={latest} home /> : null;
 }
 
 export function LibraryAudiobookCard({ book, grid }: { book: Audiobook; grid: boolean }) {
@@ -350,14 +353,22 @@ export function LibraryAudiobookCard({ book, grid }: { book: Audiobook; grid: bo
 
 export function AudiobooksPage() {
   const t = useT();
-  const { books, result, downloaded, online } = useAudiobooks();
-  const [filter, setFilter] = useState<"all" | "saved" | "downloaded">("all");
+  const { enabled, books, result, downloaded, online } = useAudiobooks();
+  const [filter, setFilter] = useState<"all" | "duration" | "saved" | "downloaded">("all");
+  if (!enabled) return <AudiobooksDisabled />;
   const saved = books.filter((book) => book.saved);
   const allBooks = online ? books : books.filter((book) => downloaded.has(book.id));
   const listening = listeningBooks(allBooks);
   const hero = listening[0];
-  const catalog = allBooks.filter((book) => book.progress?.completed !== false);
-  const filtered = filter === "saved" ? saved : allBooks.filter((book) => downloaded.has(book.id));
+  const catalog = allBooks
+    .filter((book) => book.progress?.completed !== false)
+    .sort((a, b) => (b.progress?.updatedAtMs ?? 0) - (a.progress?.updatedAtMs ?? 0));
+  const filtered =
+    filter === "saved"
+      ? saved
+      : filter === "duration"
+        ? allBooks.toSorted((a, b) => a.durationMs - b.durationMs)
+        : allBooks.filter((book) => downloaded.has(book.id));
   const empty = t(
     filter === "saved"
       ? "audiobooks.emptySaved"
@@ -371,7 +382,7 @@ export function AudiobooksPage() {
       <PageHeader title={t("nav.audiobooks")} />
       {filter === "all" && hero && <ContinueBook book={hero} />}
       <div role="group" aria-label={t("nav.audiobooks")} className="flex flex-wrap gap-2">
-        {(["all", "saved", "downloaded"] as const).map((option) => (
+        {(["all", "duration", "downloaded", "saved"] as const).map((option) => (
           <Button
             key={option}
             size="sm"
@@ -380,8 +391,9 @@ export function AudiobooksPage() {
             onClick={() => setFilter(option)}
           >
             {option === "saved" && <BookmarkIcon size={16} />}
+            {option === "duration" && <Clock3Icon size={16} />}
             {option === "downloaded" && <ArrowDownToLineIcon size={16} />}
-            {t(option === "all" ? "collection.all" : `audiobooks.${option}`)}
+            {t(option === "all" ? "audiobooks.recent" : `audiobooks.${option}`)}
           </Button>
         ))}
       </div>
@@ -414,7 +426,8 @@ export function AudiobooksPage() {
 export function AudiobookDetailPage() {
   const t = useT();
   const { id } = useParams<{ id: string }>();
-  const { books, result } = useAudiobooks();
+  const { enabled, books, result } = useAudiobooks();
+  if (!enabled) return <AudiobooksDisabled />;
   const book = books.find((item) => item.id === id);
 
   if (book) return <BookDetail book={book} />;
@@ -427,6 +440,22 @@ export function AudiobookDetailPage() {
       action={
         <Button variant="primary" asChild>
           <PrefetchLink href="/audiobooks">{t("nav.audiobooks")}</PrefetchLink>
+        </Button>
+      }
+    />
+  );
+}
+
+function AudiobooksDisabled() {
+  const t = useT();
+  return (
+    <EmptyState
+      icon={<BookHeadphonesIcon size={24} />}
+      title={t("nav.audiobooks")}
+      description={t("audiobooks.disabled")}
+      action={
+        <Button asChild>
+          <PrefetchLink href="/settings?tab=experimental">{t("nav.settings")}</PrefetchLink>
         </Button>
       }
     />

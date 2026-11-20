@@ -149,8 +149,9 @@ fun App(user: User, dark: Boolean, colorway: Colorway) {
     val playback by container.player.state.collectAsStateWithLifecycle()
     val audiobookPlayback by container.audiobookPlayback.state.collectAsStateWithLifecycle()
     val audiobookCatalog by container.audiobookStore.state.collectAsStateWithLifecycle()
+    val audiobooksEnabled by container.playbackPrefs.audiobooksEnabled.collectAsStateWithLifecycle()
     val activeAudiobook by remember(container) {
-        derivedStateOf { audiobookCatalog.books.firstOrNull { it.id == audiobookPlayback?.bookId } }
+        derivedStateOf { if (audiobooksEnabled) audiobookCatalog.books.firstOrNull { it.id == audiobookPlayback?.bookId } else null }
     }
     val activeBookDownloaded by remember(container) {
         derivedStateOf { activeAudiobook?.id in audiobookCatalog.downloaded }
@@ -203,6 +204,7 @@ private fun AppContent(
     val focus = LocalFocusManager.current
     var expanded by rememberSaveable { mutableStateOf(false) }
     val offlineLibrary by container.libraryCache.offline.collectAsStateWithLifecycle()
+    val audiobooksEnabled by container.playbackPrefs.audiobooksEnabled.collectAsStateWithLifecycle()
     val audiobookPlayback by container.audiobookPlayback.state.collectAsStateWithLifecycle()
     val openAudiobook by container.audiobookPlayback.openFromNotification.collectAsStateWithLifecycle()
     val bookPlayback = audiobookPlayback?.takeIf { it.bookId == activeAudiobook?.id }
@@ -319,8 +321,11 @@ private fun AppContent(
             composable<HomeRoute> { HomeScreen(nav) }
             composable<SearchRoute> { SearchScreen(nav, play, it.toRoute<SearchRoute>().initialCategory()) }
             composable<LibraryRoute> { LibraryScreen(nav) }
-            composable<SavedAudiobooksRoute> { LibraryScreen(nav, initialFilter = "audiobook") }
-            composable<AudiobookRoute> { AudiobookDetail(it.toRoute<AudiobookRoute>().id) }
+            composable<SavedAudiobooksRoute> { LibraryScreen(nav, initialFilter = if (audiobooksEnabled) "audiobook" else "all") }
+            composable<AudiobookRoute> {
+                if (audiobooksEnabled) AudiobookDetail(it.toRoute<AudiobookRoute>().id)
+                else Empty(stringResource(R.string.nav_audiobooks), stringResource(R.string.audiobooks_disabled))
+            }
             composable<FavoritesRoute> { FavoritesScreen(play) }
             composable<RecentRoute> { RecentScreen(play) }
             composable<ListeningRoute> { entry ->

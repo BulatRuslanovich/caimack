@@ -42,7 +42,8 @@
     <string name="mixes_kind">Mix</string>
     <string name="mixes_empty">Not enough tracks for this mix yet</string>
     <string name="tracks_empty">There are no tracks on this server yet.</string>
-    <string name="search_placeholder">Music, artists, audiobooks…</string>
+    <string name="search_placeholder">Music, artists, albums, genres…</string>
+    <string name="search_with_audiobooks_placeholder">Music, artists, audiobooks…</string>
     <string name="search_audiobook_placeholder">Title, author, narrator…</string>
     <string name="search_nothing_found">Nothing matched.</string>
     <string name="search_top_result">Top result</string>

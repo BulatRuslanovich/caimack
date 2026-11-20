@@ -70,9 +70,9 @@ enum class SearchCategory(val label: Int) {
 }
 
 @Composable
-internal fun SearchCategoryFilters(category: SearchCategory?, onCategory: (SearchCategory?) -> Unit) {
+internal fun SearchCategoryFilters(category: SearchCategory?, audiobooksEnabled: Boolean = true, onCategory: (SearchCategory?) -> Unit) {
     CategoryFilterRow(category, category != null, { onCategory(null) }) {
-        val visible = category?.let(::listOf) ?: SearchCategory.entries
+        val visible = category?.let(::listOf) ?: SearchCategory.entries.filter { audiobooksEnabled || it != SearchCategory.Audiobooks }
         items(visible, key = { it.name }) { item ->
             CategoryFilter(item.label, category == item) { onCategory(if (category == item) null else item) }
         }
@@ -88,7 +88,9 @@ fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit, initialCa
     var category by rememberSaveable { mutableStateOf(initialCategory) }
     val categoryState = rememberSaveableStateHolder()
     val catalog by container.audiobookStore.state.collectAsStateWithLifecycle()
-    val books = catalog.books
+    val audiobooksEnabled by container.playbackPrefs.audiobooksEnabled.collectAsStateWithLifecycle()
+    val selected = category.takeUnless { it == SearchCategory.Audiobooks && !audiobooksEnabled }
+    val books = catalog.books.takeIf { audiobooksEnabled }.orEmpty()
     val bookMatches = remember(books, query) { books.matchingAudiobooks(query) }
 
     LaunchedEffect(input) {
@@ -112,7 +114,11 @@ fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit, initialCa
             value = input,
             onValueChange = { input = it; if (it.isEmpty()) query = "" },
             label = stringResource(
-                if (category == SearchCategory.Audiobooks) R.string.search_audiobook_placeholder else R.string.search_placeholder,
+                when {
+                    selected == SearchCategory.Audiobooks -> R.string.search_audiobook_placeholder
+                    audiobooksEnabled -> R.string.search_with_audiobooks_placeholder
+                    else -> R.string.search_placeholder
+                },
             ),
             modifier = Modifier.padding(horizontal = 16.dp),
             onSearch = {
@@ -121,9 +127,8 @@ fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit, initialCa
             },
         )
 
-        SearchCategoryFilters(category) { category = it }
+        SearchCategoryFilters(selected, audiobooksEnabled) { category = it }
 
-        val selected = category
         if (selected != null) {
             categoryState.SaveableStateProvider(selected.name) {
                 when (selected) {

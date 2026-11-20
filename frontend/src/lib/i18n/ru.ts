@@ -66,6 +66,10 @@ export const ru: Dictionary = {
   "audiobooks.downloaded": "Скачанные",
   "audiobooks.catalog": "Все аудиокниги",
   "audiobooks.continue": "Продолжить",
+  "audiobooks.continueAtHome": "Продолжить аудиокнигу",
+  "audiobooks.recent": "Недавние",
+  "audiobooks.duration": "По длительности",
+  "audiobooks.disabled": "Включите аудиокниги в разделе «Настройки → Эксперименты».",
   "audiobooks.narrator": "Читает {name}",
   "audiobooks.remaining": "Осталось {time} · {percent}%",
   "audiobooks.progress": "Прогресс прослушивания",
@@ -498,7 +502,8 @@ export const ru: Dictionary = {
   "queue.saveAsPlaylist": "Сохранить очередь как плейлист",
   "queue.savedAsPlaylist": "Очередь сохранена как плейлист.",
 
-  "search.placeholder": "Музыка, исполнители, аудиокниги…",
+  "search.placeholder": "Музыка, исполнители, альбомы, жанры…",
+  "search.placeholderWithAudiobooks": "Музыка, исполнители, аудиокниги…",
   "search.audiobookPlaceholder": "Название, автор, чтец…",
   "search.browseGenres": "Жанры в фонотеке",
   "search.mostPlayedTracks": "Самые прослушиваемые треки",
@@ -851,6 +856,7 @@ export const ru: Dictionary = {
   "settings.account": "Учётная запись",
   "settings.recommendations": "Рекомендации",
   "settings.experimental": "Эксперименты",
+  "settings.audiobooksHint": "Показывать аудиокниги в каталоге, поиске и медиатеке.",
   "settings.tatarMafia": "Режим татарской мафии",
   "settings.tatarMafiaHint":
     "Крути пластинку в полноэкранном плеере вперёд-назад — будут скретчи и искажения. Воспроизведение должно идти на этом устройстве. Кто поймёт, тот поймёт.",

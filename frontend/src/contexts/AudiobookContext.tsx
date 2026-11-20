@@ -4,6 +4,7 @@
 
 import { useT } from "@/contexts/I18nContext";
 import { useDesktopStatus } from "@/desktop/api";
+import { useAudiobookExperiment } from "@/lib/audiobookExperiment";
 import {
   downloadAudiobook,
   downloadedAudio,
@@ -59,6 +60,7 @@ interface AudiobookPlayer {
 }
 
 interface AudiobookState {
+  enabled: boolean;
   player: AudiobookPlayer;
   clock: ReturnType<typeof createClock>;
   scope: string | null;
@@ -127,15 +129,23 @@ interface AudiobookProviderProps {
 
 export function AudiobookProvider(props: AudiobookProviderProps) {
   const desktop = useDesktopStatus();
+  const enabled = useAudiobookExperiment();
   const id = props.userId;
   const scope = id && (desktop?.server ? `${desktop.server}\n${id}` : id);
   return (
-    <AudiobookSession key={scope} {...props} scope={scope} serverOnline={desktop?.online ?? true} />
+    <AudiobookSession
+      key={scope}
+      {...props}
+      enabled={enabled}
+      scope={scope}
+      serverOnline={desktop?.online ?? true}
+    />
   );
 }
 
 function AudiobookSession({
   scope,
+  enabled,
   serverOnline,
   musicPlaying,
   pauseMusic,
@@ -145,7 +155,7 @@ function AudiobookSession({
   setVolume,
   toggleMute,
   children,
-}: AudiobookProviderProps & { scope: string | null; serverOnline: boolean }) {
+}: AudiobookProviderProps & { scope: string | null; serverOnline: boolean; enabled: boolean }) {
   const networkOnline = useSyncExternalStore(
     subscribeToNetwork,
     () => navigator.onLine,
@@ -153,7 +163,7 @@ function AudiobookSession({
   );
   const online = networkOnline && serverOnline;
 
-  const catalog = useAudiobookCatalog(scope, online);
+  const catalog = useAudiobookCatalog(scope, online, enabled);
   const downloaded = new Set(catalog.downloads.data?.map((book) => book.id));
   const { notify } = useToast();
   const t = useT();
@@ -233,9 +243,10 @@ function AudiobookSession({
   }, [checkpoint, onActiveChange, unload]);
 
   useEffect(() => {
-    if (!musicPlaying) return;
+    if (!enabled) controller.current?.abort();
+    if (enabled && !musicPlaying) return;
     if (current.current || selecting.current) close();
-  }, [musicPlaying, close]);
+  }, [enabled, musicPlaying, close]);
 
   useEffect(() => {
     const recordOnBackground = () => {
@@ -462,6 +473,7 @@ function AudiobookSession({
   };
 
   const play = (book: Audiobook, chapterId?: string) => {
+    if (!enabled) return;
     const audio = audioRef.current;
     const session = current.current;
     const localChapter = session?.book.chapters[session.chapterIndex];
@@ -570,10 +582,11 @@ function AudiobookSession({
   return (
     <AudiobookContext.Provider
       value={{
+        enabled,
         player: {
-          active,
-          playing,
-          pending,
+          active: enabled ? active : null,
+          playing: enabled && playing,
+          pending: enabled && pending,
           speed,
           play,
           toggle,
@@ -590,7 +603,7 @@ function AudiobookSession({
         clock,
         scope,
         online,
-        books: catalog.books,
+        books: enabled ? catalog.books : [],
         result: catalog.result,
         downloaded,
         transfer,

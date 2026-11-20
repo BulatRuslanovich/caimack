@@ -65,25 +65,28 @@ private const val MIN_DISTINCT = 3
 @Composable
 fun HomeScreen(nav: NavController) {
     var mode by rememberSaveable { mutableStateOf("all") }
-    val catalog by LocalContainer.current.audiobookStore.state.collectAsStateWithLifecycle()
-    Column(Modifier.fillMaxSize()) {
-        Box(Modifier.padding(top = 6.dp)) {
+    val container = LocalContainer.current
+    val enabled by container.playbackPrefs.audiobooksEnabled.collectAsStateWithLifecycle()
+    val catalog by container.audiobookStore.state.collectAsStateWithLifecycle()
+    val selected = if (enabled) mode else "all"
+    val filters: @Composable () -> Unit = {
+        Box {
             CategoryFilterRow(mode, false, {}) {
                 item("all") { CategoryFilter(R.string.home_filter_all, mode == "all") { mode = "all" } }
                 item("music") { CategoryFilter(R.string.home_filter_music, mode == "music") { mode = "music" } }
                 item("audiobooks") { CategoryFilter(R.string.nav_audiobooks, mode == "audiobooks") { mode = "audiobooks" } }
             }
         }
-        if (mode == "audiobooks") {
-            AudiobookBrowse()
-        } else {
-            MusicHome(nav, catalog.takeIf { mode == "all" })
-        }
+    }
+    if (selected == "audiobooks") {
+        AudiobookBrowse(filters)
+    } else {
+        MusicHome(nav, catalog.takeIf { enabled && selected == "all" }, filters.takeIf { enabled })
     }
 }
 
 @Composable
-private fun MusicHome(nav: NavController, audiobooks: AudiobookCatalog?) {
+private fun MusicHome(nav: NavController, audiobooks: AudiobookCatalog?, filters: (@Composable () -> Unit)?) {
     val container = LocalContainer.current
     Load(
         key = "home",
@@ -91,14 +94,14 @@ private fun MusicHome(nav: NavController, audiobooks: AudiobookCatalog?) {
             container.flushSignals()
             container.api.homeFeed().blocks
         },
-        error = { retry -> HomeFeed(emptyList(), nav, audiobooks) { Failure(retry) } },
+        error = { retry -> HomeFeed(emptyList(), nav, audiobooks, filters) { Failure(retry) } },
         loading = {
-            HomeFeed(emptyList(), nav, audiobooks) {
+            HomeFeed(emptyList(), nav, audiobooks, filters) {
                 Box(Modifier.fillMaxWidth().padding(vertical = 64.dp), contentAlignment = Alignment.Center) { RecordLoading(44.dp) }
             }
         },
     ) { blocks ->
-        HomeFeed(blocks, nav, audiobooks, if (blocks.isEmpty()) {
+        HomeFeed(blocks, nav, audiobooks, filters, if (blocks.isEmpty()) {
             { Empty(stringResource(R.string.home_empty_title)) }
         } else null)
     }
@@ -109,6 +112,7 @@ private fun HomeFeed(
     blocks: List<HomeBlock>,
     nav: NavController,
     audiobooks: AudiobookCatalog?,
+    filters: (@Composable () -> Unit)?,
     status: (@Composable () -> Unit)?,
 ) {
     val container = LocalContainer.current
@@ -126,6 +130,7 @@ private fun HomeFeed(
         contentPadding = playerContentPadding(top = 16.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
+        if (filters != null) item("home-filters") { filters() }
         if (recommendations && status == null) item("personal-radio") { RadioHero(blocks.flatMap { it.tracks.orEmpty() }) }
 
         val quick = blocks.filter { it.zone == "Quick" }

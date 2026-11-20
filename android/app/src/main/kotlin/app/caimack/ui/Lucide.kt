@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.dp
 
 object Lucide {
+    val FlaskConical by lazy { icon(false, "M10 2v7.31L4.14 18a2.5 2.5 0 0 0 2.11 4h11.5a2.5 2.5 0 0 0 2.11-4L14 9.31V2", "M8.5 2h7", "M7 16h10") }
     val Folder by lazy { icon(false, "M20 20H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2Z") }
     val Info by lazy { icon(false, "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0", "M12 16v-4", "M12 8h.01") }
     val ArrowLeft by lazy { icon(false, "m12 19-7-7 7-7", "M5 12h14") }

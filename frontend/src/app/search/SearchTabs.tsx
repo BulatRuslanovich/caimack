@@ -16,10 +16,12 @@ const labels = {
 
 export function SearchTabs({
   tab,
+  audiobooksEnabled,
   onSelect,
   onIntent,
 }: {
   tab: CatalogTab | null;
+  audiobooksEnabled: boolean;
   onSelect: (tab: CatalogTab | null) => void;
   onIntent?: (tab: CatalogTab) => void;
 }) {
@@ -44,18 +46,20 @@ export function SearchTabs({
       >
         {t("search.tab.all")}
       </ToggleGroupButton>
-      {catalogTabs.map((value) => (
-        <ToggleGroupButton
-          key={value}
-          active={tab === value}
-          className="h-10 py-0 pointer-coarse:h-11"
-          onClick={() => onSelect(value)}
-          onPointerEnter={() => onIntent?.(value)}
-          onFocus={() => onIntent?.(value)}
-        >
-          {t(labels[value])}
-        </ToggleGroupButton>
-      ))}
+      {catalogTabs
+        .filter((value) => audiobooksEnabled || value !== "audiobooks")
+        .map((value) => (
+          <ToggleGroupButton
+            key={value}
+            active={tab === value}
+            className="h-10 py-0 pointer-coarse:h-11"
+            onClick={() => onSelect(value)}
+            onPointerEnter={() => onIntent?.(value)}
+            onFocus={() => onIntent?.(value)}
+          >
+            {t(labels[value])}
+          </ToggleGroupButton>
+        ))}
     </ToggleGroup>
   );
 }

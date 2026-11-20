@@ -61,7 +61,9 @@ describe("persistent playback modes", () => {
     const covers = surfaces.map(
       (tone) => `rgb(${backdropRgb(playerBackdropSurface(tone).top).join(" ")})`,
     );
-    const search = renderToStaticMarkup(<SearchTabs tab="tracks" onSelect={() => {}} />);
+    const search = renderToStaticMarkup(
+      <SearchTabs tab="tracks" audiobooksEnabled onSelect={() => {}} />,
+    );
     const disabled = renderToStaticMarkup(
       <Button variant="ghost" disabled>
         Недоступно

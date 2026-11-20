@@ -4,6 +4,11 @@
     <string name="home_filter_all">All</string>
     <string name="home_filter_music">Music</string>
     <string name="audiobook_continue">Continue listening</string>
+    <string name="audiobook_continue_home">Continue audiobook</string>
+    <string name="settings_experimental">Experimental</string>
+    <string name="settings_experimental_intro">Optional features</string>
+    <string name="settings_audiobooks_hint">Show audiobooks in the catalog, search, and your library.</string>
+    <string name="audiobooks_disabled">Enable audiobooks in Settings → Experimental.</string>
     <string name="audiobook_recent">Recent</string>
     <string name="audiobook_by_duration">By duration</string>
     <string name="audiobook_all">All audiobooks</string>

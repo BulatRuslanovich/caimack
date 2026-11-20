@@ -43,15 +43,15 @@ const audiobooks = {
   icon: BookHeadphonesIcon,
 } as const;
 
-export const primaryNav: NavEntry[] = [home, search, library, audiobooks];
+export function primaryNav(audiobooksEnabled: boolean): NavEntry[] {
+  return audiobooksEnabled ? [home, search, library, audiobooks] : [home, search, library];
+}
 
 const downloads: NavEntry[] = isDesktop
   ? [{ href: "/downloads" as Route, labelKey: "nav.downloads", icon: DownloadIcon }]
   : [];
 
 export const libraryNav: NavEntry[] = [favorites, recent, ...downloads, map];
-
-export const mobileNav: NavEntry[] = [home, search, library, audiobooks];
 
 export const libraryTabs: NavEntry[] = [library, ...libraryNav];
 

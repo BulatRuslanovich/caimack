@@ -80,9 +80,11 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
     val local = LocalOfflineLibrary.current
     val api = catalogApi()
     val palette = LocalPalette.current
-    var filter by rememberSaveable { mutableStateOf(initialFilter) }
+    var selectedFilter by rememberSaveable { mutableStateOf(initialFilter) }
     val audiobookCatalog by container.audiobookStore.state.collectAsStateWithLifecycle()
-    val savedBooks = audiobookCatalog.books.filter { it.saved }
+    val audiobooksEnabled by container.playbackPrefs.audiobooksEnabled.collectAsStateWithLifecycle()
+    val filter = if (!audiobooksEnabled && selectedFilter == "audiobook") "all" else selectedFilter
+    val savedBooks = if (audiobooksEnabled) audiobookCatalog.books.filter { it.saved } else emptyList()
     var downloadedOnly by rememberSaveable { mutableStateOf(false) }
     val available = LocalAvailableCollections.current
     val availableTracks = LocalAvailableTracks.current
@@ -217,7 +219,7 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
                 )
             }
         }
-        LibraryFilters(filter, downloadedOnly, { filter = it }, { downloadedOnly = it })
+        LibraryFilters(filter, downloadedOnly, audiobooksEnabled, { selectedFilter = it }, { downloadedOnly = it })
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = { sort = when (sort) { "manual" -> "recent"; "recent" -> "name"; else -> "manual" } }, modifier = Modifier.weight(1f)) { Text(stringResource(when (sort) { "name" -> R.string.collection_name; "recent" -> R.string.collection_recent; else -> R.string.collection_manual }), maxLines = 1, overflow = TextOverflow.Ellipsis) }
             TextButton(onClick = { nav.navigate(RecentRoute) }) {
@@ -484,7 +486,7 @@ internal fun LibraryEntry(title: String, hint: String?, icon: ImageVector, grid:
 }
 
 @Composable
-internal fun LibraryFilters(filter: String, downloadedOnly: Boolean, onFilter: (String) -> Unit, onDownloaded: (Boolean) -> Unit) {
+internal fun LibraryFilters(filter: String, downloadedOnly: Boolean, audiobooksEnabled: Boolean, onFilter: (String) -> Unit, onDownloaded: (Boolean) -> Unit) {
     val downloadedChip: LazyListScope.() -> Unit = {
         item(key = "downloaded") {
             CategoryFilter(R.string.collection_downloaded, downloadedOnly, Modifier.animateItem()) { onDownloaded(!downloadedOnly) }
@@ -496,7 +498,7 @@ internal fun LibraryFilters(filter: String, downloadedOnly: Boolean, onFilter: (
             "audiobook" to R.string.nav_audiobooks, "playlist" to R.string.nav_playlists,
             "album" to R.string.nav_albums, "artist" to R.string.nav_artists,
         )
-        items(categories.filter { filter == "all" || it.first == filter }, key = { it.first }) { (kind, label) ->
+        items(categories.filter { (filter == "all" || it.first == filter) && (audiobooksEnabled || it.first != "audiobook") }, key = { it.first }) { (kind, label) ->
             CategoryFilter(label, filter == kind) { onFilter(if (filter == kind) "all" else kind) }
         }
         if (!downloadedOnly) downloadedChip()

@@ -269,13 +269,25 @@ class AppContainer(context: Context) {
     val connect by lazy { ConnectPlayback(context.applicationContext, this) }
 
     internal fun audiobookAccount(): AudiobookAccount? = playbackOwner()?.let { AudiobookAccount(it.address, it.userId) }
-    internal val audiobookAccounts get() = combine(session.state, server.url) { _, _ -> audiobookAccount() }.distinctUntilChanged()
+    internal val audiobookAccounts get() = combine(session.state, server.url, playbackPrefs.audiobooksEnabled) { _, _, enabled ->
+        if (enabled) audiobookAccount() else null
+    }.distinctUntilChanged()
     internal val audiobookStore by lazy {
         AudiobookStore(File(context.filesDir, "audiobooks"), json, http, retrofit.create(AudiobookApi::class.java),
-            scope, ::audiobookAccount, audiobookAccounts)
+            scope, ::audiobookAccount, audiobookAccounts) { playbackPrefs.audiobooksEnabled.value }
     }
     internal val audiobookPlayback by lazy {
-        AudiobookPlayback(context.applicationContext, scope, audiobookStore, ::audiobookAccount, connect::pauseForAudiobook)
+        AudiobookPlayback(context.applicationContext, scope, audiobookStore, {
+            if (playbackPrefs.audiobooksEnabled.value) audiobookAccount() else null
+        }, connect::pauseForAudiobook)
+    }
+
+    internal fun setAudiobooksEnabled(enabled: Boolean) {
+        if (!enabled && playbackPrefs.audiobooksEnabled.value) {
+            audiobookPlayback.pauseForMusic()
+            audiobookPlayback.openFromNotification.value = false
+        }
+        playbackPrefs.setAudiobooksEnabled(enabled)
     }
 
     private val artworkRefresh = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
@@ -300,7 +312,7 @@ class AppContainer(context: Context) {
     private val connectionProbe = kotlinx.coroutines.sync.Mutex()
     fun refreshLibraryConnection() {
         playbackSync.request()
-        audiobookStore.requestRefresh()
+        if (playbackPrefs.audiobooksEnabled.value) audiobookStore.requestRefresh()
         scope.launch {
             if (session.state.value !is SessionState.SignedIn || !connectionProbe.tryLock()) return@launch
             try { withTimeoutOrNull(5_000) { runCatching { api.me() } } }

@@ -50,7 +50,7 @@ import { filterAudiobooks } from "@/lib/audiobooks";
 export default function LibraryPage() {
   const t = useT();
   const invalidate = useInvalidate();
-  const { books, result: bookResult } = useAudiobooks();
+  const { enabled: audiobooksEnabled, books, result: bookResult } = useAudiobooks();
   const savedBooks = books.filter((book) => book.saved);
   const result = useQuery({ ...queries.savedLibrary(), refetchInterval: 30_000 });
   const favoriteResult = useQuery(queries.favorites({ page: 1, pageSize: 1 }));
@@ -70,7 +70,8 @@ export default function LibraryPage() {
     );
     document.getElementById("content")?.scrollTo({ top: 0 });
   };
-  const [filter, setFilter] = useState<LibraryKind | "all" | "audiobook">("all");
+  const [selectedFilter, setFilter] = useState<LibraryKind | "all" | "audiobook">("all");
+  const filter = !audiobooksEnabled && selectedFilter === "audiobook" ? "all" : selectedFilter;
   const [search, setSearch] = useState("");
   const [searchExpanded, setSearchExpanded] = useState(false);
   const searchInput = useRef<HTMLInputElement>(null);
@@ -420,15 +421,17 @@ export default function LibraryPage() {
             aria-label={t("nav.mediaLibrary")}
             className="min-w-0 shadow-none max-sm:w-full"
           >
-            {filters.map(([value, label]) => (
-              <ToggleGroupButton
-                key={value}
-                active={filter === value}
-                onClick={() => setFilter(value)}
-              >
-                {label}
-              </ToggleGroupButton>
-            ))}
+            {filters
+              .filter(([value]) => audiobooksEnabled || value !== "audiobook")
+              .map(([value, label]) => (
+                <ToggleGroupButton
+                  key={value}
+                  active={filter === value}
+                  onClick={() => setFilter(value)}
+                >
+                  {label}
+                </ToggleGroupButton>
+              ))}
           </ToggleGroup>
           <div className="library-toolbar ml-auto flex shrink-0 items-center gap-2.5 max-sm:order-first">
             <SortSelect

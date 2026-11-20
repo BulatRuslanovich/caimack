@@ -65,6 +65,10 @@ export const en = {
   "audiobooks.downloaded": "Downloaded",
   "audiobooks.catalog": "All audiobooks",
   "audiobooks.continue": "Continue listening",
+  "audiobooks.continueAtHome": "Continue audiobook",
+  "audiobooks.recent": "Recent",
+  "audiobooks.duration": "By duration",
+  "audiobooks.disabled": "Enable audiobooks in Settings → Experimental.",
   "audiobooks.narrator": "Read by {name}",
   "audiobooks.remaining": "{time} left · {percent}%",
   "audiobooks.progress": "Book progress",
@@ -473,7 +477,8 @@ export const en = {
   "queue.saveAsPlaylist": "Save the queue as a playlist",
   "queue.savedAsPlaylist": "The queue was saved as a playlist.",
 
-  "search.placeholder": "Music, artists, audiobooks…",
+  "search.placeholder": "Music, artists, albums, genres…",
+  "search.placeholderWithAudiobooks": "Music, artists, audiobooks…",
   "search.audiobookPlaceholder": "Title, author, narrator…",
   "search.browseGenres": "Browse by genre",
   "search.mostPlayedTracks": "Most played tracks",
@@ -805,6 +810,7 @@ export const en = {
   "settings.account": "Account",
   "settings.recommendations": "Recommendations",
   "settings.experimental": "Experimental",
+  "settings.audiobooksHint": "Show audiobooks in the catalog, search, and your library.",
   "settings.tatarMafia": "Tatar Mafia mode",
   "settings.tatarMafiaHint":
     "Scratch the record in the full-screen player: drag it back and forth to bend the sound. Playback must be on this device. If you know, you know.",
