@@ -3,6 +3,15 @@
 
 package app.caimack.ui
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.progressSemantics
@@ -160,6 +169,38 @@ private fun BoxScope.BookBackdrop(cover: String?, title: String, palette: Palett
                 1f to palette.background.copy(alpha = .82f),
             )),
     )
+}
+
+@Composable
+private fun BoxScope.BookHeaderBackdrop(cover: String?, title: String) {
+    if (cover == null) return
+    val palette = LocalPalette.current
+    val motion = systemMotionEnabled()
+    val opacity = remember(cover) { Animatable(if (motion) 0f else 1f) }
+    LaunchedEffect(cover, motion) {
+        if (motion) opacity.animateTo(1f, tween(320)) else opacity.snapTo(1f)
+    }
+    Box(
+        Modifier.matchParentSize().graphicsLayer {
+            compositingStrategy = CompositingStrategy.Offscreen
+            alpha = opacity.value
+        }.drawWithCache {
+            val edges = Brush.verticalGradient(
+                0f to Color.Transparent, .18f to Color.White, .48f to Color.White,
+                .76f to Color.White.copy(alpha = .5f), 1f to Color.Transparent,
+            )
+            onDrawWithContent {
+                drawContent()
+                drawRect(edges, blendMode = BlendMode.DstIn)
+            }
+        },
+    ) {
+        Cover(cover, title, Modifier.matchParentSize().blur(20.dp), book = true)
+        Box(Modifier.matchParentSize().background(Brush.horizontalGradient(listOf(
+            palette.background.copy(alpha = .38f), palette.background.copy(alpha = .72f),
+            palette.background.copy(alpha = .94f),
+        ))))
+    }
 }
 
 @Composable
@@ -339,21 +380,21 @@ fun AudiobookDetail(id: String) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(bottom = 24.dp)) {
         item("header") {
             Box(Modifier.fillMaxWidth()) {
-                BookBackdrop(cover, book.title, LocalPalette.current)
+                BookHeaderBackdrop(cover, book.title)
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 18.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Cover(cover, book.title, Modifier.size(88.dp).clip(Radius.row), book = true)
+                    Cover(cover, book.title, Modifier.size(96.dp).clip(Radius.panel), book = true)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(book.title, style = Type.section, color = LocalPalette.current.foreground)
+                        Text(book.title, style = Type.section.copy(fontSize = 21.sp, lineHeight = 26.sp), color = LocalPalette.current.foreground)
                         book.author?.let { Text(it, style = Type.body, color = LocalPalette.current.foreground) }
                         book.narrator?.let {
                             Text(stringResource(R.string.audiobook_narrator, it), style = Type.small, color = LocalPalette.current.muted)
                         }
                         val chapters = pluralStringResource(R.plurals.audiobook_chapter_count, book.chapters.size, book.chapters.size)
-                        Text("$chapters · ${bookTime(book.durationMs)}", style = Type.small, color = LocalPalette.current.muted)
+                        Text("$chapters · ${bookTime(book.durationMs)}", Modifier.padding(top = 3.dp), style = Type.tiny, color = LocalPalette.current.muted)
                     }
                 }
             }
