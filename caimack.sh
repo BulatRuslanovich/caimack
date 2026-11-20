@@ -345,6 +345,7 @@ install() {
   LIBRARY=$(ask 'Music library directory (read-only)' "${LIBRARY:-./library}")
   if [[ $LIBRARY == ./library ]]; then mkdir -p library
   else [[ -d $LIBRARY ]] || die "Music library directory not found: $LIBRARY"; LIBRARY=$(cd -- "$LIBRARY" && pwd); fi
+  mkdir -p audiobooks
   OWNER=$(ask 'Admin username' "${OWNER:-admin}"); validate_owner "$OWNER"
   local initial_password list
   initial_password=$(password)

@@ -76,7 +76,7 @@ fn insert(headers: &mut HeaderMap, name: header::HeaderName, value: &str) {
     }
 }
 
-fn etag_matches(request: &HeaderMap, etag: &str) -> bool {
+pub(crate) fn etag_matches(request: &HeaderMap, etag: &str) -> bool {
     request
         .get_all(header::IF_NONE_MATCH)
         .iter()

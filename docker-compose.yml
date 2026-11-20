@@ -167,6 +167,7 @@ services:
     volumes:
       - ${MUSIC_STORAGE_PATH:-./storage}:/storage
       - ${MUSIC_LIBRARY_PATH:-./library}:/storage/library:${MUSIC_LIBRARY_ACCESS:-ro}
+      - ${AUDIOBOOKS_PATH:-./audiobooks}:/storage/audiobooks:ro
     deploy:
       resources:
         limits:

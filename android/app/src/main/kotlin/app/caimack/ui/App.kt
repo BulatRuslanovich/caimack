@@ -97,6 +97,8 @@ data class SearchRoute(val category: String = "") {
 @Serializable data class ListeningRoute(val week: String = "", val view: String = "overview")
 @Serializable data object DownloadsRoute
 @Serializable data object LibraryRoute
+@Serializable data object SavedAudiobooksRoute
+@Serializable data class AudiobookRoute(val id: String)
 @Serializable data class SettingsSectionRoute(val section: String)
 @Serializable data class AlbumRoute(val id: String)
 @Serializable data class ArtistRoute(val id: String)
@@ -184,6 +186,10 @@ private fun AppContent(
     val focus = LocalFocusManager.current
     var expanded by rememberSaveable { mutableStateOf(false) }
     val offlineLibrary by container.libraryCache.offline.collectAsStateWithLifecycle()
+    val audiobookPlayback by container.audiobookPlayback.state.collectAsStateWithLifecycle()
+    val audiobookCatalog by container.audiobookStore.state.collectAsStateWithLifecycle()
+    val openAudiobook by container.audiobookPlayback.openFromNotification.collectAsStateWithLifecycle()
+    val activeAudiobook = audiobookCatalog.books.firstOrNull { it.id == audiobookPlayback?.bookId }
     val catalog by container.localLibrary.collectAsStateWithLifecycle()
     val localLibrary = catalog.takeIf { it.account == container.accountKey } ?: app.caimack.playback.LocalLibrary()
     val availableTracks = localLibrary.trackIds
@@ -223,6 +229,13 @@ private fun AppContent(
         nav.navigate(route) { launchSingleTop = true }
     }
 
+    LaunchedEffect(openAudiobook, activeAudiobook?.id) {
+        if (openAudiobook && activeAudiobook != null) {
+            container.audiobookPlayback.openFromNotification.value = false
+            navigate(AudiobookRoute(activeAudiobook.id))
+        }
+    }
+
     SharedTransitionLayout {
     CompositionLocalProvider(
         LocalNowPlayingTransition provides NowPlayingTransition(this, full),
@@ -243,6 +256,7 @@ private fun AppContent(
             SettingsMenu(user, onClose = { focus.clearFocus(); account = false }, onSignOut = {
                 account = false
                 Remote.cache.clear()
+                container.audiobookPlayback.pauseForMusic()
                 container.player.stop()
                 scope.launch { container.session.logout() }
             })
@@ -271,7 +285,14 @@ private fun AppContent(
             }
         },
         bottomBar = { BottomBar(nav) },
-        miniPlayer = { MiniPlayer(playback) { expanded = true } },
+        miniPlayer = {
+            if (activeAudiobook != null && !playback.playing) {
+                val entry by nav.currentBackStackEntryAsState()
+                if (entry?.destination?.hasRoute(AudiobookRoute::class) != true) {
+                    AudiobookMiniPlayer(activeAudiobook, audiobookCatalog) { navigate(AudiobookRoute(activeAudiobook.id)) }
+                }
+            } else MiniPlayer(playback) { expanded = true }
+        },
     ) { padding ->
         NavHost(
             nav,
@@ -281,6 +302,8 @@ private fun AppContent(
             composable<HomeRoute> { HomeScreen(nav) }
             composable<SearchRoute> { SearchScreen(nav, play, it.toRoute<SearchRoute>().initialCategory()) }
             composable<LibraryRoute> { LibraryScreen(nav) }
+            composable<SavedAudiobooksRoute> { AudiobookBrowse(savedOnly = true) }
+            composable<AudiobookRoute> { AudiobookDetail(it.toRoute<AudiobookRoute>().id) }
             composable<FavoritesRoute> { FavoritesScreen(play) }
             composable<RecentRoute> { RecentScreen(play) }
             composable<ListeningRoute> { entry ->

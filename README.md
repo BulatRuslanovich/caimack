@@ -77,6 +77,24 @@ that timing. Automatic lookup checks multiple providers and verifies the recordi
 accepting a match; plain lyrics remain available when synchronized text cannot be found.
 See [lyrics lookup and synchronization](docs/lyrics.md).
 
+### Audiobooks
+
+Open **Audiobooks** in the web sidebar or use the **All**, **Music**, and **Audiobooks** filters on
+Android Home. Add books to your personal library and resume each book where you left off. Listening
+positions sync when your devices reconnect to the same account. Download each book from its own
+menu to listen offline. Full music library synchronization leaves audiobook downloads to that menu.
+
+In Compose, place audiobooks in the project’s `audiobooks/` directory or set `AUDIOBOOKS_PATH`.
+For a native backend, use `<STORAGE_ROOT>/audiobooks/`.
+Each top-level folder is one book, with audio files and nested disc folders played in natural
+filename order. Individual audio files in the root are also books. Supported containers include
+MP3, FLAC, M4A, M4B, Ogg, Opus, and WAV. An M4B file plays as one continuous file.
+A folder named `Author - Title [Narrator]` supplies display metadata. Books can use embedded
+artwork or a JPEG, PNG, or WebP in the book directory. Name it `cover` or `folder` to select it
+when there are several images.
+Standalone audio files can use an image with the same basename. Audiobooks are scanned at startup,
+on the library scan interval, and when a server administrator starts a scan from the Upload page.
+
 ## A look around
 
 A few screens from the current web client using a live demo library, in **OLED Black** and **Coffee**.
@@ -197,11 +215,12 @@ JWT_SIGNING_KEY=     # openssl rand -base64 48
 OWNER_PASSWORD=      # password for the first admin account
 PUBLIC_DOMAIN=       # domain for the automatic HTTPS certificate
 MUSIC_LIBRARY_PATH=  # optional: a folder with your music, mounted read-only (default ./library)
+AUDIOBOOKS_PATH=      # optional: audiobooks folder, mounted read-only (default ./audiobooks)
 COMPOSE_FILE=docker-compose.yml:docker-compose.images.yml   # use the prebuilt images; leave out to build
 ```
 
-Then run `docker compose up -d`. To update, run `docker compose pull && docker compose up -d`;
-`CAIMACK_VERSION` pins a release instead of `latest`.
+Create the `audiobooks/` directory if you want to use it for books, then run `docker compose up -d`.
+To update, run `docker compose pull && docker compose up -d`. Set `CAIMACK_VERSION` to pin a release.
 
 Use `./caimack.sh install --build` for a source-based installation, or
 `./caimack.sh --help` for the non-interactive options.

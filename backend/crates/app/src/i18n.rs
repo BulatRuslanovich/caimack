@@ -66,6 +66,11 @@ pub fn format_template(template: &str, args: &[String]) -> String {
 fn russian(template: &str) -> Option<&'static str> {
     Some(match template {
         "Invalid playback state." => "Не удалось обновить состояние воспроизведения.",
+        "Invalid audiobook progress." => "Некорректная позиция воспроизведения аудиокниги.",
+        "Audiobook not found." => "Аудиокнига не найдена.",
+        "Audiobook chapter not found." => "Глава аудиокниги не найдена.",
+        "Audiobook cover not found." => "Обложка аудиокниги не найдена.",
+        "Audiobook audio file not found." => "Аудиофайл книги не найден.",
         "Invalid playback command." => "Недопустимая команда воспроизведения.",
         "Invalid deviceId." => "Недопустимый идентификатор устройства.",
         "Too many connected playback devices." => "Подключено слишком много устройств воспроизведения.",

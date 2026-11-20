@@ -24,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.caimack.session.SessionState
+import app.caimack.audiobooks.AudiobookPlayback
 import app.caimack.ui.App
 import app.caimack.ui.Appearance
 import app.caimack.ui.CaimackTheme
@@ -95,9 +96,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun openFromNotification(intent: Intent) {
+        val container = (application as CaimackApp).container
         if (intent.getStringExtra(Background.EXTRA_OPEN) == Background.OPEN_RECAP) {
-            (application as CaimackApp).container.openRecap.value = true
+            container.openRecap.value = true
         }
+        if (intent.action == AudiobookPlayback.OPEN) container.audiobookPlayback.openFromNotification.value = true
     }
 
     private fun playFromSearch(intent: Intent) {

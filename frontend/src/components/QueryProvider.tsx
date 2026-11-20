@@ -21,7 +21,9 @@ export function QueryProvider({ children }: { children: ReactNode }) {
     () =>
       new QueryClient({
         queryCache: new QueryCache({
-          onError: (error) => notifyError(error, t("error.load")),
+          onError: (error, query) => {
+            if (!query.meta?.handlesError) notifyError(error, t("error.load"));
+          },
         }),
         mutationCache: new MutationCache({
           onError: (error, _variables, _context, mutation) => {

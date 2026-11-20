@@ -451,12 +451,14 @@ internal fun LibraryEntry(title: String, hint: String?, icon: ImageVector, grid:
 
 @Composable
 internal fun LibraryFilters(filter: String, downloadedOnly: Boolean, onFilter: (String) -> Unit, onDownloaded: (Boolean) -> Unit) {
+    val navigate = LocalNavigate.current
     val downloadedChip: LazyListScope.() -> Unit = {
         item(key = "downloaded") {
             CategoryFilter(R.string.collection_downloaded, downloadedOnly, Modifier.animateItem()) { onDownloaded(!downloadedOnly) }
         }
     }
     CategoryFilterRow(filter to downloadedOnly, filter != "all" || downloadedOnly, { onFilter("all"); onDownloaded(false) }) {
+        item("audiobooks") { CategoryFilter(R.string.nav_audiobooks, false) { navigate(SavedAudiobooksRoute) } }
         if (downloadedOnly) downloadedChip()
         val categories = listOf("playlist" to R.string.nav_playlists, "album" to R.string.nav_albums, "artist" to R.string.nav_artists)
         items(categories.filter { filter == "all" || it.first == filter }, key = { it.first }) { (kind, label) ->

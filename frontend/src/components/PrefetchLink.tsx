@@ -7,12 +7,14 @@ import { useState, type ComponentProps } from "react";
 import type { Route } from "next";
 import type { UrlObject } from "url";
 import { prefetchRouteData } from "@/lib/queries";
+import { isDesktop } from "@/desktop/runtime";
 
 /** Warm both the route code and its query data on intent, never every link in a list. */
 export function PrefetchLink<T extends string>({
   onPointerEnter,
   onFocus,
   onTouchStart,
+  onClick,
   ...props
 }: Omit<ComponentProps<typeof Link>, "href"> & { href: Route<T> | UrlObject }) {
   const [intent, setIntent] = useState(false);
@@ -33,6 +35,25 @@ export function PrefetchLink<T extends string>({
     <Link
       {...props}
       prefetch={intent}
+      onClick={(event) => {
+        onClick?.(event);
+        if (
+          !event.defaultPrevented &&
+          !isDesktop &&
+          !navigator.onLine &&
+          typeof props.href === "string" &&
+          (isAudiobookPath(props.href) ||
+            (isAudiobookPath(location.pathname) && props.href === "/")) &&
+          event.button === 0 &&
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          !event.shiftKey
+        ) {
+          event.preventDefault();
+          location.assign(event.currentTarget.href);
+        }
+      }}
       onPointerEnter={(event) => {
         warm();
         onPointerEnter?.(event);
@@ -47,4 +68,8 @@ export function PrefetchLink<T extends string>({
       }}
     />
   );
+}
+
+function isAudiobookPath(path: string) {
+  return path === "/audiobooks" || path.startsWith("/audiobooks/");
 }

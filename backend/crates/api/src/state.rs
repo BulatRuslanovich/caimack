@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use app::audiobooks::Audiobooks;
 use app::auth::AuthService;
 use app::catalog::overview::StatsCache;
 use app::config::Config;
@@ -29,6 +30,7 @@ pub struct AppState {
     pub hashes: HashCache,
     pub uploads: Uploads,
     pub library: LibraryScanner,
+    pub audiobooks: Audiobooks,
     pub playback: PlaybackRegistry,
     pub yandex: YandexMusic,
     pub recommendations: Recommendations,

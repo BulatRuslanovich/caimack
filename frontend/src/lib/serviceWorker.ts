@@ -2,9 +2,11 @@
 // Copyright (c) 2026 Bulat Ruslanovich
 
 let shellCachePromise: Promise<void> | null = null;
+const audiobookShells = new Map<string, Promise<void>>();
 
 export async function clearStreamCache(): Promise<void> {
   shellCachePromise = null;
+  audiobookShells.clear();
   if ("caches" in window) {
     await Promise.all([
       caches.delete("caimack-shell-v1"),
@@ -48,6 +50,43 @@ export function cacheAppShell(): Promise<void> {
   });
 
   return shellCachePromise;
+}
+
+export function cacheAudiobookShell(path: string): Promise<void> {
+  if (process.env.NEXT_PUBLIC_CAIMACK_DESKTOP === "1" || !("serviceWorker" in navigator)) {
+    return Promise.resolve();
+  }
+
+  const existing = audiobookShells.get(path);
+  if (existing) return existing;
+  const shell = (async () => {
+    const request = new Request(path, {
+      credentials: "include",
+      headers: { Accept: "text/html" },
+    });
+    const response = await fetch(request);
+    if (
+      !response.ok ||
+      response.redirected ||
+      !response.headers.get("Content-Type")?.includes("text/html")
+    ) {
+      throw new Error("Audiobook page unavailable");
+    }
+    const html = new DOMParser().parseFromString(await response.clone().text(), "text/html");
+    const assets = [...html.querySelectorAll("script[src], link[rel=stylesheet], link[as=script]")]
+      .map((element) => element.getAttribute("src") ?? element.getAttribute("href"))
+      .filter((url): url is string => Boolean(url?.startsWith("/_next/static/")));
+    const assetCache = await caches.open("caimack-assets-v2");
+    await assetCache.addAll([...new Set(assets)]);
+
+    const cache = await caches.open("caimack-shell-v1");
+    await cache.put(request, response);
+  })().catch(() => {
+    audiobookShells.delete(path);
+  });
+
+  audiobookShells.set(path, shell);
+  return shell;
 }
 
 function postToStreamWorker(message: unknown): void {

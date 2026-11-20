@@ -12,6 +12,7 @@ export function usePlayerPlatform(
   connected: ReturnType<typeof useConnectPlayback>,
   play: () => void,
   setIsPlaying: Dispatch<SetStateAction<boolean>>,
+  ownMediaSession = true,
 ) {
   const { notify } = useToast();
   const t = useT();
@@ -48,5 +49,6 @@ export function usePlayerPlatform(
       seekBy: connected.actions.seekBy,
       getPosition: connected.progress.getPosition,
     },
+    ownMediaSession,
   );
 }

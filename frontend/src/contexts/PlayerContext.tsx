@@ -47,6 +47,7 @@ import React, {
   useState,
 } from "react";
 import { useAuth } from "./AuthContext";
+import { AudiobookProvider } from "./AudiobookContext";
 
 export type { RepeatMode } from "@/lib/playback/playerTypes";
 
@@ -99,6 +100,7 @@ function PlayerSessionProvider({
     restoreSession,
   } = useQueueState();
   const [isPlaying, setIsPlaying] = useState(false);
+  const [audiobookActive, setAudiobookActive] = useState(false);
   const {
     volume,
     setVolumeState,
@@ -699,7 +701,12 @@ function PlayerSessionProvider({
     connected.progress.getPosition,
   );
 
-  usePlayerPlatform({ ...connected, actions: artwork.actions }, play, setIsPlaying);
+  usePlayerPlatform(
+    { ...connected, actions: artwork.actions },
+    play,
+    setIsPlaying,
+    !audiobookActive,
+  );
 
   const currentTrackId = connected.state.currentTrack?.id ?? null;
   const currentAlbumId = connected.state.currentTrack?.albumId ?? null;
@@ -731,7 +738,16 @@ function PlayerSessionProvider({
               <PlayerProgressContext.Provider value={connected.progress}>
                 <ArtworkDirectionContext.Provider value={artwork.direction}>
                   <PlayerQueueContext.Provider value={connected.state.queue}>
-                    {children}
+                    <AudiobookProvider
+                      userId={userId}
+                      musicPlaying={displayedPlaying}
+                      pauseMusic={connected.actions.pause}
+                      onActiveChange={setAudiobookActive}
+                      volume={volume}
+                      muted={muted}
+                    >
+                      {children}
+                    </AudiobookProvider>
                   </PlayerQueueContext.Provider>
                 </ArtworkDirectionContext.Provider>
               </PlayerProgressContext.Provider>

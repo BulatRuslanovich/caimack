@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Bulat Ruslanovich
 
 mod account;
+mod audiobooks;
 mod auth;
 mod catalog;
 mod connect;
@@ -33,6 +34,7 @@ pub fn router(state: AppState) -> Router {
     let protected = Router::new()
         .merge(auth::protected())
         .merge(account::router())
+        .merge(audiobooks::router())
         .merge(catalog::router())
         .merge(integrations::router())
         .merge(library::router())

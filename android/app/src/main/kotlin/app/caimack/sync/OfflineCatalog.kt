@@ -23,14 +23,15 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
     val interceptor = Interceptor { chain ->
         val request = chain.request()
         val bound = store.boundAddress
+        val path = request.url.encodedPath.substringAfter("/api/", "")
         if (
             !store.active ||
                 bound == null ||
                 !request.url.toString().startsWith(bound) ||
-                request.header("X-Caimack-Sync") != null
+                request.header("X-Caimack-Sync") != null ||
+                path == "audiobooks" || path.startsWith("audiobooks/")
         )
             return@Interceptor chain.proceed(request)
-        val path = request.url.encodedPath.substringAfter("/api/", "")
         val body =
             request.body
                 ?.let { Buffer().also(it::writeTo).readUtf8() }

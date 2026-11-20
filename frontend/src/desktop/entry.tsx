@@ -51,6 +51,7 @@ const pages: Record<string, ComponentType> = {
   "/login": SignIn,
   "/search": Search,
   "/library": lazy(() => import("@/app/library/LibraryPage")),
+  "/audiobooks": lazy(() => import("@/app/audiobooks/page")),
   "/settings": Settings,
   "/favorites": Favorites,
   "/recently-played": Recent,
@@ -65,6 +66,7 @@ const adminPages: Record<string, ComponentType> = {
 };
 const details: Record<string, ComponentType> = {
   albums: Album,
+  audiobooks: lazy(() => import("@/app/audiobooks/[id]/page")),
   artists: Artist,
   playlists: Playlist,
   invite: Invitation,

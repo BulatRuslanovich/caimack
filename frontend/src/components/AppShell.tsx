@@ -16,7 +16,7 @@ import { LeanBack } from "./LeanBack";
 import { Loading } from "./Loading";
 import { LibraryChips, MobileHeader, MobileNav } from "./MobileNav";
 import { NowPlayingTone } from "./NowPlayingTone";
-import { Player } from "./Player";
+import { PlaybackFooter } from "./audiobooks/AudiobookPlayer";
 import { SecretCat } from "./SecretCat";
 import { ShortcutsHelp } from "./ShortcutsHelp";
 import { Sidebar } from "./Sidebar";
@@ -101,7 +101,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {queueOpen && <QueuePanel docked={queueDocked} onClose={() => setQueueOpen(false)} />}
 
       <div className="flex flex-col [grid-area:player]">
-        <Player />
+        <PlaybackFooter />
       </div>
       <MobileNav />
       <NowPlayingTone />

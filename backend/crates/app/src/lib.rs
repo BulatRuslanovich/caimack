@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Bulat Ruslanovich
 
 pub mod analysis;
+pub mod audiobooks;
 pub mod auth;
 pub mod background;
 pub mod catalog;

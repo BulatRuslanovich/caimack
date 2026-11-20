@@ -18,6 +18,7 @@ import { Section } from "@/components/PageHeader";
 import { Query } from "@/components/Query";
 import { Shelf } from "@/components/Shelf";
 import { Button } from "@/components/ui/button";
+import { AudiobookHome } from "@/components/audiobooks/AudiobookViews";
 import { blockHref, blockNote, blockSubjectHref, blockTitle } from "./blockMeta";
 import { DailyMix, HERO_PREVIEW_SIZE } from "./DailyMix";
 import { capFiveOnMobile, deferredSection, dropOrphanRow, listPanel } from "./layout";
@@ -32,20 +33,23 @@ export function HomePage() {
   const feed = useQuery(queries.homeFeed());
 
   return (
-    <Query
-      result={feed}
-      isEmpty={(data) => data.blocks.length === 0}
-      empty={{
-        title: t("home.emptyTitle"),
-        action: isAdmin && (
-          <Button variant="primary" asChild>
-            <Link href="/upload">{t("home.uploadMusic")}</Link>
-          </Button>
-        ),
-      }}
-    >
-      {({ blocks }) => <Blocks blocks={blocks} />}
-    </Query>
+    <>
+      <AudiobookHome />
+      <Query
+        result={feed}
+        isEmpty={(data) => data.blocks.length === 0}
+        empty={{
+          title: t("home.emptyTitle"),
+          action: isAdmin && (
+            <Button variant="primary" asChild>
+              <Link href="/upload">{t("home.uploadMusic")}</Link>
+            </Button>
+          ),
+        }}
+      >
+        {({ blocks }) => <Blocks blocks={blocks} />}
+      </Query>
+    </>
   );
 }
 

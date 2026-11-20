@@ -4,7 +4,7 @@
 "use client";
 
 import { api } from "@/lib/api";
-import { onSessionExpired, refreshSession } from "@/lib/http";
+import { ApiError, GATEWAY_STATUSES, onSessionExpired, refreshSession } from "@/lib/http";
 import { describeDevice } from "@/lib/playback/deviceName";
 import { queries } from "@/lib/queries";
 import { cacheAppShell, clearStreamCache } from "@/lib/serviceWorker";
@@ -76,9 +76,13 @@ export function AuthProvider({
       .then((me) => {
         if (!cancelled) setResolved({ user: me });
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!cancelled) {
-          setResolved({ user: navigator.onLine ? null : hint });
+          const unavailable =
+            error instanceof ApiError
+              ? GATEWAY_STATUSES.has(error.status)
+              : !navigator.onLine || error instanceof TypeError;
+          setResolved({ user: unavailable ? hint : null });
         }
       });
 

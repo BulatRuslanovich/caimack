@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nav_audiobooks">Аудиокниги</string>
+    <string name="home_filter_all">Все</string>
+    <string name="home_filter_music">Музыка</string>
+    <string name="audiobook_continue">Продолжить</string>
+    <string name="audiobook_recent">Недавние</string>
+    <string name="audiobook_by_duration">По длительности</string>
+    <string name="audiobook_all">Все аудиокниги</string>
+    <string name="audiobook_in_progress">Прослушиваемые аудиокниги</string>
+    <string name="audiobook_unplayed">Ещё не начаты</string>
+    <string name="audiobook_saved_section">В медиатеке</string>
+    <string name="audiobook_browse_all">Все</string>
+    <string name="audiobook_empty">Здесь пока нет аудиокниг</string>
+    <string name="audiobook_narrator">Читает %1$s</string>
+    <string name="audiobook_completed">Прослушано</string>
+    <string name="audiobook_remaining">Осталось %1$s</string>
+    <string name="audiobook_actions">Действия с аудиокнигой</string>
+    <string name="audiobook_save">Добавить в медиатеку</string>
+    <string name="audiobook_unsave">Убрать из медиатеки</string>
+    <string name="audiobook_download">Скачать аудиокнигу</string>
+    <string name="audiobook_remove_download">Удалить загрузку</string>
+    <string name="audiobook_download_progress">Загрузка %1$d%%</string>
+    <string name="audiobook_retry_download">Повторить загрузку</string>
+    <string name="audiobook_download_error">Ошибка загрузки.</string>
+    <string name="audiobook_chapters">Главы</string>
+    <string name="audiobook_kind">Аудиокнига</string>
+    <plurals name="audiobook_chapter_count">
+        <item quantity="one">%d глава</item>
+        <item quantity="few">%d главы</item>
+        <item quantity="many">%d глав</item>
+        <item quantity="other">%d главы</item>
+    </plurals>
+    <string name="audiobook_previous_chapter">Предыдущая глава</string>
+    <string name="audiobook_next_chapter">Следующая глава</string>
+    <string name="audiobook_playback_error">Не удалось воспроизвести главу. Нажмите кнопку воспроизведения, чтобы повторить.</string>
+</resources>

@@ -277,6 +277,7 @@ class PlaybackService : MediaLibraryService() {
                 musicHaptics?.update(player.audioSessionId, container.haptics.musicEnabled.value, isPlaying)
                 ticks.removeCallbacks(tick)
                 if (isPlaying) {
+                    container.audiobookPlayback.pauseForMusic()
                     playbackLease = true
                     failures = 0
                     listen(player)

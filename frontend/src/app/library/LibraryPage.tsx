@@ -43,6 +43,7 @@ import { ToggleGroup, ToggleGroupButton } from "@/components/ui/toggle-group";
 import { EmptyState } from "@/components/EmptyState";
 import { PlaylistDialog } from "@/components/PlaylistDialog";
 import { Button } from "@/components/ui/button";
+import { AudiobookLibrary } from "@/components/audiobooks/AudiobookViews";
 
 export default function LibraryPage() {
   const t = useT();
@@ -186,6 +187,7 @@ export default function LibraryPage() {
           ))}
         </nav>
       )}
+      {folderId === null && filter === "all" && !q && <AudiobookLibrary />}
       <div className="space-y-1">
         <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 shadow-[inset_0_-1px_0_var(--border)]">
           <ToggleGroup

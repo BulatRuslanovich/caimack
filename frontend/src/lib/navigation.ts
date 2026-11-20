@@ -4,6 +4,7 @@
 import type { Route } from "next";
 import type { TranslationKey } from "@/lib/i18n";
 import {
+  BookHeadphonesIcon,
   CopyIcon,
   DownloadIcon,
   HeartIcon,
@@ -36,8 +37,13 @@ const recent: NavEntry = {
 };
 
 const library = { href: "/library", labelKey: "nav.mediaLibrary", icon: LibraryBigIcon } as const;
+const audiobooks = {
+  href: "/audiobooks",
+  labelKey: "nav.audiobooks",
+  icon: BookHeadphonesIcon,
+} as const;
 
-export const primaryNav: NavEntry[] = [home, search, library];
+export const primaryNav: NavEntry[] = [home, search, library, audiobooks];
 
 const downloads: NavEntry[] = isDesktop
   ? [{ href: "/downloads" as Route, labelKey: "nav.downloads", icon: DownloadIcon }]
@@ -45,7 +51,7 @@ const downloads: NavEntry[] = isDesktop
 
 export const libraryNav: NavEntry[] = [favorites, recent, ...downloads, map];
 
-export const mobileNav: NavEntry[] = [home, search, library];
+export const mobileNav: NavEntry[] = [home, search, library, audiobooks];
 
 export const libraryTabs: NavEntry[] = [library, ...libraryNav];
 

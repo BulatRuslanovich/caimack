@@ -74,6 +74,11 @@ used by metadata export. Tag-only exports retain lyrics and provider backoff;
 changes to the recording, title, artist, album or duration invalidate matches and
 restart enrichment. Existing upstream migrations remain unchanged.
 
+Migration 0013 stores each account’s saved audiobooks and one progress checkpoint
+per book. Newer checkpoints win, including when a device uploads after listening
+offline. Checkpoints survive a temporary loss of the audiobook folder. Book and
+chapter identifiers derive from paths relative to that folder.
+
 The local fork previously shipped collections/folders as migrations 0008/0009.
 Use `caimack migrate` for its first upgrade: it recognizes the exact original
 checksums and atomically aligns those two ledger entries to 0009/0010 before

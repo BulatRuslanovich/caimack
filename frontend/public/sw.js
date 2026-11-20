@@ -6,6 +6,7 @@ const ASSET_CACHE = "caimack-assets-v2";
 const IMAGE_CACHE = "caimack-images-v1";
 const HLS_CACHE = "caimack-hls-v2";
 const DATA_CACHE = "caimack-data-v2";
+const AUDIOBOOK_CACHE = "caimack-audiobooks-v1";
 const LEGACY_AUDIO_CACHE = "caimack-audio-v1";
 
 const CACHE_DATABASE = "caimack-stream-cache";
@@ -15,14 +16,15 @@ const CACHE_BUDGET = 250 * 1024 * 1024;
 
 const IMAGE_ENTRY_BUDGET = 600;
 
-const OWN_CACHES = [SHELL_CACHE, ASSET_CACHE, IMAGE_CACHE, HLS_CACHE, DATA_CACHE];
+const OWN_CACHES = [SHELL_CACHE, ASSET_CACHE, IMAGE_CACHE, HLS_CACHE, DATA_CACHE, AUDIOBOOK_CACHE];
 const DEV = self.location.search === "?dev";
 
 const IMAGE = /^\/api\/(albums|artists|playlists|tracks)\/[0-9a-f-]+\/(cover|image)$/i;
 const HLS = /^\/api\/tracks\/([0-9a-f-]+)\/hls\//i;
 
 const UNCACHEABLE_API =
-  /^\/api\/(auth|me|connect|tracks\/[^/]+\/stream|playback\/|library\/(scan|enrichment)|integrations\/yandex-music\/imports)/i;
+  /^\/api\/(auth|me|connect|audiobooks|tracks\/[^/]+\/stream|playback\/|library\/(scan|enrichment)|integrations\/yandex-music\/imports)/i;
+const DOWNLOADED_CHAPTER = /^\/__caimack\/audiobooks\/[^/]+\/[^/]+\/audio\/[^/]+$/;
 
 let maintenance = Promise.resolve();
 
@@ -69,6 +71,11 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
+  if (DOWNLOADED_CHAPTER.test(url.pathname)) {
+    event.respondWith(downloadedChapter(request));
+    return;
+  }
+
   const hlsMatch = HLS.exec(url.pathname);
   if (hlsMatch) {
     const trackId = hlsMatch[1];
@@ -99,6 +106,35 @@ self.addEventListener("fetch", (event) => {
 
   if (request.mode === "navigate") event.respondWith(shell(event, request));
 });
+
+async function downloadedChapter(request) {
+  const cache = await caches.open(AUDIOBOOK_CACHE);
+  const response = await cache.match(request.url);
+  if (!response) return new Response(null, { status: 404 });
+
+  const range = request.headers.get("Range");
+  if (!range) return response;
+
+  const blob = await response.blob();
+  const bytes = /^bytes=(\d*)-(\d*)$/.exec(range);
+  const start = bytes?.[1] ? Number(bytes[1]) : Math.max(0, blob.size - Number(bytes?.[2]));
+  const end = bytes?.[1] && bytes[2] ? Math.min(Number(bytes[2]), blob.size - 1) : blob.size - 1;
+  if ((!bytes?.[1] && !bytes?.[2]) || start > end || start >= blob.size) {
+    return new Response(null, {
+      status: 416,
+      headers: { "Content-Range": `bytes */${blob.size}` },
+    });
+  }
+
+  return new Response(blob.slice(start, end + 1, blob.type), {
+    status: 206,
+    headers: {
+      "Accept-Ranges": "bytes",
+      "Content-Range": `bytes ${start}-${end}/${blob.size}`,
+      "Content-Length": String(end - start + 1),
+    },
+  });
+}
 
 async function playlist(event, request, trackId) {
   const cache = await caches.open(HLS_CACHE);

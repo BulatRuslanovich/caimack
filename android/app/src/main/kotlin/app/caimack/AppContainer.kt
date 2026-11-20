@@ -23,6 +23,10 @@ import app.caimack.api.RadioRequest
 import app.caimack.api.RadioBatch
 import app.caimack.api.Track
 import app.caimack.api.UserSettings
+import app.caimack.audiobooks.AudiobookAccount
+import app.caimack.audiobooks.AudiobookApi
+import app.caimack.audiobooks.AudiobookPlayback
+import app.caimack.audiobooks.AudiobookStore
 import app.caimack.playback.Downloads
 import app.caimack.playback.EqualizerSettings
 import app.caimack.playback.Favorites
@@ -134,12 +138,13 @@ class AppContainer(context: Context) {
         .authenticator(SessionAuthenticator(server, { http }) { session.expire() })
         .build()
 
-    val api: CaimackApi = Retrofit.Builder()
+    private val retrofit = Retrofit.Builder()
         .baseUrl(Server.PLACEHOLDER)
         .client(http)
         .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
         .build()
-        .create(CaimackApi::class.java)
+
+    val api: CaimackApi = retrofit.create(CaimackApi::class.java)
 
     val session = Session(api, server, cookies, json, { deviceName }, syncStore::offlineUser,
         onLogin = { user -> syncStore.login(user); loggingOut = false },
@@ -263,6 +268,16 @@ class AppContainer(context: Context) {
     val player = PlayerConnection(context.applicationContext, media, tracks, radio, signals)
     val connect by lazy { ConnectPlayback(context.applicationContext, this) }
 
+    internal fun audiobookAccount(): AudiobookAccount? = playbackOwner()?.let { AudiobookAccount(it.address, it.userId) }
+    internal val audiobookAccounts get() = combine(session.state, server.url) { _, _ -> audiobookAccount() }.distinctUntilChanged()
+    internal val audiobookStore by lazy {
+        AudiobookStore(File(context.filesDir, "audiobooks"), json, http, retrofit.create(AudiobookApi::class.java),
+            scope, ::audiobookAccount, audiobookAccounts)
+    }
+    internal val audiobookPlayback by lazy {
+        AudiobookPlayback(context.applicationContext, scope, audiobookStore, ::audiobookAccount, player::pauseLocal)
+    }
+
     private val artworkRefresh = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
     private val lyricsRefresh = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
     fun refreshDownloadMetadata() {
@@ -285,6 +300,7 @@ class AppContainer(context: Context) {
     private val connectionProbe = kotlinx.coroutines.sync.Mutex()
     fun refreshLibraryConnection() {
         playbackSync.request()
+        audiobookStore.requestRefresh()
         scope.launch {
             if (session.state.value !is SessionState.SignedIn || !connectionProbe.tryLock()) return@launch
             try { withTimeoutOrNull(5_000) { runCatching { api.me() } } }
