@@ -152,12 +152,7 @@ fun App(user: User, dark: Boolean, colorway: Colorway) {
     val activeAudiobook by remember(container) {
         derivedStateOf { if (audiobooksEnabled) audiobookCatalog.books.firstOrNull { it.id == audiobookPlayback?.bookId } else null }
     }
-    val activeBookDownloaded by remember(container) {
-        derivedStateOf { activeAudiobook?.id in audiobookCatalog.downloaded }
-    }
-    val bookCover = remember(activeAudiobook?.id, activeAudiobook?.coverUrl, activeBookDownloaded) {
-        activeAudiobook?.let(container.audiobookStore::cover)
-    }
+    val bookCover = audiobookCover(activeAudiobook)
     val toneEnabled by container.appearance.coverTone.collectAsStateWithLifecycle()
     val artworkRevision by container.downloadedCatalog.revision.collectAsStateWithLifecycle()
     val syncArtworkRevision by container.syncStore.artworkRevision.collectAsStateWithLifecycle()

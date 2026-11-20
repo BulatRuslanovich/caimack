@@ -423,6 +423,7 @@ class AppContainer(context: Context) {
     }
 
     suspend fun radio(request: RadioRequest): RadioBatch {
+        if (libraryCache.offline.value && request.seedTrackId == null) return localRadio(request)
         if(syncStore.active && request.seedTrackId==null && syncStore.snapshot?.containsKey("radio")==true) return offlineRadio(request)
         if(syncStore.active && !sync.network.available()) return offlineRadio(request)
         return try {
@@ -435,6 +436,18 @@ class AppContainer(context: Context) {
         } catch(error: IOException) { if(syncStore.active) offlineRadio(request) else throw error }
           catch(error: kotlinx.coroutines.TimeoutCancellationException) { if(syncStore.active) offlineRadio(request) else throw error }
           catch(error: retrofit2.HttpException) { if(syncStore.active && (error.code()>=500 || error.code()==401)) offlineRadio(request) else throw error }
+    }
+
+    private fun localRadio(request: RadioRequest): RadioBatch {
+        val library = localLibrary.value
+        if (library.account != accountKey) return RadioBatch()
+        val seen = request.exclude.toMutableSet()
+        val ranked = if (syncStore.active) syncStore.snapshot?.get("radio")?.let { json.decodeFromJsonElement<RadioBatch>(it) } else null
+        val tracks = buildList {
+            ranked?.tracks.orEmpty().forEach { if (it.track.id in library.trackIds && seen.add(it.track.id)) add(it) }
+            library.availableTracks.shuffled().forEach { if (seen.add(it.id)) add(app.caimack.api.RecommendedTrack(it)) }
+        }
+        return RadioBatch(tracks)
     }
 
     private fun offlineRadio(request: RadioRequest): RadioBatch {

@@ -561,7 +561,7 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private fun continueWithRadio(container: AppContainer, player: ExoPlayer, refresh: Boolean = false) {
-        if (container.connect.isRemote) return
+        if (container.connect.isRemote || container.libraryCache.offline.value) return
         if (container.syncStore.active && (container.syncStore.offlineQueue || !container.sync.network.available())) return
         if (!container.radio.autoplay.value || player.repeatMode != Player.REPEAT_MODE_OFF || player.mediaItemCount == 0) return
         val queued = idsOf(player)

@@ -14,6 +14,7 @@ import { useT } from "@/contexts/I18nContext";
 import { RankedList } from "@/components/collection/RankedList";
 import { AlbumCard, ArtistCard, PlaylistCard } from "@/components/MediaCard";
 import { Section } from "@/components/PageHeader";
+import { desktopRequest, useDesktopStatus, type DesktopStatus } from "@/desktop/api";
 import { Query } from "@/components/Query";
 import { Shelf } from "@/components/Shelf";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,57 @@ import { QuickTiles } from "./QuickTiles";
 import { RadioHero } from "./RadioHero";
 
 export function HomePage() {
+  const status = useDesktopStatus();
+  return status && !status.online ? <OfflineHome status={status} /> : <OnlineHome />;
+}
+
+function OfflineHome({ status }: { status: DesktopStatus }) {
+  const t = useT();
+  const home = useQuery({
+    queryKey: [
+      "offlineHome",
+      status.server,
+      status.user?.id,
+      status.localTracks,
+      status.sync.lastAt,
+    ],
+    queryFn: () =>
+      desktopRequest<{ blocks: HomeBlock[]; downloads: Track[]; radio: Track[] }>("/offline-home"),
+    networkMode: "always",
+  });
+  return (
+    <>
+      <Query
+        result={home}
+        isEmpty={(data) => !data.blocks.length && !data.downloads.length}
+        empty={{ title: t("home.emptyDownloads") }}
+      >
+        {({ blocks, downloads, radio }) =>
+          blocks.length ? (
+            <Blocks blocks={blocks} offline localRadio={radio} />
+          ) : (
+            <div className="home-page">
+              <RadioHero tracks={radio} offline />
+              <DailyMix
+                title={t("home.downloaded")}
+                block={{
+                  key: "downloads",
+                  baseKey: "downloads",
+                  zone: "Lead",
+                  layout: "Hero",
+                  tracks: downloads,
+                }}
+              />
+            </div>
+          )
+        }
+      </Query>
+      {!home.data?.blocks.length && <AudiobookHome />}
+    </>
+  );
+}
+
+function OnlineHome() {
   const t = useT();
   const { isAdmin } = useAuth();
   const feed = useQuery(queries.homeFeed());
@@ -52,7 +104,15 @@ export function HomePage() {
   );
 }
 
-function Blocks({ blocks }: { blocks: HomeBlock[] }) {
+function Blocks({
+  blocks,
+  offline = false,
+  localRadio,
+}: {
+  blocks: HomeBlock[];
+  offline?: boolean;
+  localRadio?: Track[];
+}) {
   const quick = blocks.filter((block) => block.zone === "Quick");
   const lead = blocks.filter((block) => block.zone === "Lead");
   const radioTracks = [
@@ -91,7 +151,7 @@ function Blocks({ blocks }: { blocks: HomeBlock[] }) {
 
     if (trackShelf) {
       const fresh = (block.tracks ?? []).filter((track) => !seen.has(track.id));
-      if (fresh.length < MIN_SHELF) continue;
+      if (fresh.length < (offline ? 1 : MIN_SHELF)) continue;
 
       visible = { ...block, tracks: fresh };
     }
@@ -104,7 +164,7 @@ function Blocks({ blocks }: { blocks: HomeBlock[] }) {
   return (
     <div className="home-page [&_h2]:line-clamp-2 [&_h2]:whitespace-normal">
       <div className="home-listening-stage">
-        <RadioHero tracks={radioTracks} />
+        <RadioHero tracks={localRadio ?? radioTracks} offline={offline} />
         {quick.length > 0 && <QuickTiles blocks={quick} />}
         <div className="home-daily-selection">
           {lead.map((block) => (
@@ -113,7 +173,7 @@ function Blocks({ blocks }: { blocks: HomeBlock[] }) {
         </div>
       </div>
 
-      <RecapBanner />
+      {!offline && <RecapBanner />}
 
       {!audiobookAnchor && <AudiobookHome />}
       {browse}

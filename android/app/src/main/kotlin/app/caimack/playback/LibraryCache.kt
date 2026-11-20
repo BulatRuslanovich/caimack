@@ -200,7 +200,7 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
             visit(value)
         }
 
-        fun cacheable(path: String): Boolean = path in setOf("me/library", "me/library/folders", "me/library/order", "favorites", "history/recent", "genres") ||
+        fun cacheable(path: String): Boolean = path in setOf("home/feed", "home/mixes/daily", "home/mixes/new", "home/mixes/top", "me/library", "me/library/folders", "me/library/order", "favorites", "history/recent", "genres") ||
             Regex("(tracks|albums|artists|playlists)(/[^/]+)?(/top-tracks)?").matches(path) || path.startsWith("search")
 
         fun merge(local: JsonObject, responses: Map<String, JsonElement>, edits: List<SyncAction> = emptyList()): JsonObject {
@@ -218,6 +218,8 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
             var libraryOrder: JsonElement = local["libraryOrder"] ?: buildJsonObject {}
             var saved: JsonElement? = null
             var folders = local["libraryFolders"] ?: JsonArray(emptyList())
+            var feed = local["feed"] ?: buildJsonObject { put("blocks", JsonArray(emptyList())) }
+            val mixes = (local["mixes"] as? JsonObject).orEmpty().toMutableMap()
             var recent = local["recent"] ?: JsonArray(emptyList())
             fun add(target: MutableMap<String, JsonObject>, values: List<JsonObject>) { values.forEach { if (id(it).isNotEmpty()) target[id(it)] = it } }
             add(tracks, rows(local["tracks"])); add(albums, rows(local["albums"])); add(artists, rows(local["artists"])); add(playlists, rows(local["playlists"]))
@@ -225,6 +227,8 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
                 val path = url.substringBefore('?').removePrefix("/api/")
                 val obj = value as? JsonObject
                 when {
+                    path == "home/feed" -> feed = value
+                    path.startsWith("home/mixes/") -> mixes[path.substringAfterLast('/')] = value
                     path == "me/library/order" -> libraryOrder = value
                     path == "me/library" -> saved = value
                     path == "me/library/folders" -> folders = value
@@ -278,6 +282,7 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
                 "tracks" to JsonArray(tracks.values.toList()), "albums" to JsonArray(albums.values.toList()),
                 "artists" to JsonArray(artists.values.toList()), "playlists" to JsonArray(playlists.values.toList()),
                 "playlistTracks" to JsonObject(membership), "savedLibrary" to JsonArray(mergedSaved),
+                "feed" to feed, "mixes" to JsonObject(mixes),
                 "libraryFolders" to folders, "libraryOrder" to libraryOrder, "recent" to recent,
             )), edits)
         }

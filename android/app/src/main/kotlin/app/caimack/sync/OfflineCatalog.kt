@@ -349,9 +349,14 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
                         }
                     )
                 path == "me/settings" -> result(data["settings"])
-                path == "home/feed" -> result(data["feed"])
-                path.startsWith("home/mixes/") ->
-                    result(data["mixes"]?.jsonObject?.get(parts.last().lowercase()))
+                path == "home/feed" -> result(data["feed"] ?: buildJsonObject { put("blocks", JsonArray(emptyList())) })
+                path.startsWith("home/mixes/") -> {
+                    val kind = parts.last().lowercase()
+                    val key = mapOf("daily" to "dailyMix", "new" to "newArrivals", "top" to "topTracks")[kind]
+                    val preview = (data["feed"] as? JsonObject)?.objects("blocks")?.find { it.string("baseKey") == key }
+                    val full = (data["mixes"] as? JsonObject)?.get(kind)
+                    result(full ?: preview?.let { buildJsonObject { put("tracks", it["tracks"] ?: JsonArray(emptyList())) } })
+                }
                 path == "tracks" || path == "search/tracks" -> {
                     val sort = url.queryParameter("sort").orEmpty().lowercase()
                     page(

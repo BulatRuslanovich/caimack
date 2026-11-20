@@ -117,7 +117,7 @@ fun GenreScreen(id: String, name: String, play: (List<Track>, Int) -> Unit) {
 
 @Composable
 fun MixScreen(kind: String, play: (List<Track>, Int) -> Unit) {
-    if (!recommendationsEnabled()) return
+    if (!LocalOfflineLibrary.current && !recommendationsEnabled()) return
     val container = LocalContainer.current
     val api = catalogApi()
     val title = when (kind) {

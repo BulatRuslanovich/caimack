@@ -15,7 +15,7 @@ import { trackCoverUrl } from "@/lib/media";
 import type { Track } from "@/lib/types";
 import { useCoverLight } from "@/lib/useCoverTone";
 
-function EnabledRadioHero({ tracks }: { tracks: Track[] }) {
+function EnabledRadioHero({ tracks, offline = false }: { tracks: Track[]; offline?: boolean }) {
   const t = useT();
   const state = usePlayerState();
   const player = usePlayerActions();
@@ -49,7 +49,9 @@ function EnabledRadioHero({ tracks }: { tracks: Track[] }) {
         <h1 id="personal-radio-title" className="radio-title">
           {t("radio.mine")}
         </h1>
-        <p className="radio-description">{t("radio.description")}</p>
+        <p className="radio-description">
+          {t(offline ? "radio.localDescription" : "radio.description")}
+        </p>
         <Button
           variant="primary"
           size="auto"
@@ -107,7 +109,7 @@ function EnabledRadioHero({ tracks }: { tracks: Track[] }) {
               </span>
             </span>
           ) : (
-            t("radio.fromLibrary")
+            t(offline ? "radio.fromLocalLibrary" : "radio.fromLibrary")
           )}
         </span>
         {next && (
@@ -122,7 +124,10 @@ function EnabledRadioHero({ tracks }: { tracks: Track[] }) {
   );
 }
 
-export function RadioHero(props: import("react").ComponentProps<typeof EnabledRadioHero>) {
+export function RadioHero({
+  offline = false,
+  ...props
+}: import("react").ComponentProps<typeof EnabledRadioHero> & { offline?: boolean }) {
   const enabled = useRecommendations();
-  return enabled ? <EnabledRadioHero {...props} /> : null;
+  return offline || enabled ? <EnabledRadioHero {...props} offline={offline} /> : null;
 }

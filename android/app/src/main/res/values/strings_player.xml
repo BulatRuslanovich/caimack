@@ -30,6 +30,8 @@
     <string name="downloads_available">Available offline</string>
     <string name="downloads_remove">Remove download</string>
     <string name="downloads_remove_all">Remove all</string>
+    <string name="home_downloaded">Downloaded</string>
+    <string name="home_empty_downloads">There is no downloaded music on this device yet.</string>
     <string name="downloads_empty_title">Nothing downloaded</string>
     <string name="downloads_size">%1$s on this phone</string>
     <plurals name="downloads_pending">

@@ -40,4 +40,5 @@
     <string name="audiobook_back_time">Back 15 seconds</string>
     <string name="audiobook_forward_time">Forward 30 seconds</string>
     <string name="audiobook_playback_error">Could not play this chapter. Tap Play to retry.</string>
+    <string name="audiobook_empty_downloads">No audiobooks downloaded on this device yet</string>
 </resources>

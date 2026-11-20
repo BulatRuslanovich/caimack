@@ -14,6 +14,8 @@ import {
   type AudiobookProgress,
 } from "./audiobooks";
 
+import { refreshDownloadedArtwork } from "./audiobookDownloads";
+
 const chapters = ["1_1", "1_2", "1_3"].map((id) => ({
   id,
   title: id,
@@ -39,6 +41,44 @@ const at = (chapterId: string, positionMs: number, updatedAtMs: number): Audiobo
   positionMs,
   updatedAtMs,
   completed: false,
+});
+
+describe("downloaded audiobook covers", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("preserves the offline copy on failure and fetches only a changed cover on reconnect", async () => {
+    const scope = "listener";
+    const key = "/__caimack/audiobooks/listener/book/cover";
+    const origin = "https://caimack.test";
+    const coverUrl = "/api/audiobooks/book/cover?v=2";
+    const response = (body: string, url: string) =>
+      Object.defineProperty(new Response(body), "url", { value: url });
+    const entries = new Map([
+      [key, response("old", origin + "/api/audiobooks/book/cover?v=1")],
+      ["/__caimack/audiobooks/listener/book/book", Response.json(book)],
+    ]);
+    vi.stubGlobal("location", new URL(origin));
+    vi.stubGlobal("caches", {
+      open: async () => ({
+        match: async (path: string) => entries.get(path),
+        put: async (path: string, value: Response) => entries.set(path, value),
+        delete: async (path: string) => entries.delete(path),
+      }),
+    });
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(response("new", origin + coverUrl));
+    vi.stubGlobal("fetch", fetch);
+    const refresh = () =>
+      refreshDownloadedArtwork(scope, [{ ...book, coverUrl }], new AbortController().signal);
+    await refresh();
+    expect(await entries.get(key)?.clone().text()).toBe("old");
+    await refresh();
+    expect(await entries.get(key)?.clone().text()).toBe("new");
+    await refresh();
+    expect(fetch.mock.calls.map(([path]) => path)).toEqual([coverUrl, coverUrl]);
+  });
 });
 
 describe("audiobook playback target", () => {

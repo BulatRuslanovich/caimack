@@ -7,6 +7,8 @@ export function reasonLabel(reason: RecommendationReason, t: Translate): string 
   const subject = reason.subject ?? "";
 
   switch (reason.kind) {
+    case "localCollection":
+      return t("radio.fromLocalLibrary");
     case "becauseYouListened":
       return t("rec.reason.becauseYouListened", { subject });
     case "popularWithSimilarTaste":

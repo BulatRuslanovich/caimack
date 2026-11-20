@@ -72,11 +72,15 @@ export function useAudiobookArtwork(book: Audiobook | null) {
 
     return () => {
       disposed = true;
-      if (url) URL.revokeObjectURL(url);
+      if (url) {
+        URL.revokeObjectURL(url);
+        setArt(null);
+      }
     };
   }, [scope, local, online, id, cover]);
 
-  return local && !online && art?.bookId === id && art.cover === cover ? art.url : cover;
+  if (online) return cover;
+  return local && art?.bookId === id && art.cover === cover ? art.url : null;
 }
 
 export function AudiobookCover({
@@ -90,7 +94,7 @@ export function AudiobookCover({
   artwork: string | null;
   style?: CSSProperties;
 }) {
-  const [failed, setFailed] = useState<string | null>(null);
+  const { online } = useAudiobooks();
   return (
     <span
       style={style}
@@ -99,20 +103,24 @@ export function AudiobookCover({
         className,
       )}
     >
-      {artwork && failed !== artwork ? (
-        <img
-          src={artwork}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          className="absolute inset-0 size-full object-cover"
-          onError={() => setFailed(artwork)}
-        />
-      ) : (
-        <BookHeadphonesIcon aria-hidden="true" size={26} />
-      )}
+      <BookCoverImage key={JSON.stringify([online, artwork])} artwork={artwork} />
       <span className="sr-only">{book.title}</span>
     </span>
+  );
+}
+
+function BookCoverImage({ artwork }: { artwork: string | null }) {
+  const [failed, setFailed] = useState(false);
+  if (!artwork || failed) return <BookHeadphonesIcon aria-hidden="true" size={26} />;
+  return (
+    <img
+      src={artwork}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      className="absolute inset-0 size-full object-cover"
+      onError={() => setFailed(true)}
+    />
   );
 }
 
@@ -352,8 +360,8 @@ function listeningBooks(books: Audiobook[]) {
 }
 
 export function AudiobookHome() {
-  const { books } = useAudiobooks();
-  const latest = listeningBooks(books)[0];
+  const { books, online, downloaded } = useAudiobooks();
+  const latest = listeningBooks(books).find((book) => online || downloaded.has(book.id));
   return latest ? <ContinueBook book={latest} home /> : null;
 }
 

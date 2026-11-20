@@ -280,6 +280,8 @@ export const ru: Dictionary = {
   "track.tempoKey": "{bpm} BPM, {key}",
   "column.actions": "Действия",
   "cover.alt": "Обложка: {name}",
+  "home.downloaded": "Скачанное",
+  "home.emptyDownloads": "На этом устройстве пока нет скачанной музыки",
   "home.emptyTitle": "Здесь пока пусто",
   "home.uploadMusic": "Загрузить музыку",
   "home.dailyMix": "Плейлист дня",
@@ -297,6 +299,8 @@ export const ru: Dictionary = {
   "radio.resume": "Продолжить",
   "radio.onAir": "В эфире",
   "radio.paused": "На паузе",
+  "radio.localDescription": "Радио из музыки, сохранённой на этом устройстве.",
+  "radio.fromLocalLibrary": "Из локальной коллекции",
   "radio.fromLibrary": "Из вашей коллекции",
   "radio.failed": "Не удалось запустить радио.",
 

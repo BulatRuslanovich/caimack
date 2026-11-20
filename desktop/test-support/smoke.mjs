@@ -324,10 +324,16 @@ try {
   const filterButton = `document.querySelector('.track-catalog button[aria-controls]')`;
   const sortButton = `document.querySelector('.track-catalog button[aria-label="Sort by"]')`;
   await evaluate(`${filterButton}.click()`);
-  assert.equal(await evaluate(`${filterButton}.getAttribute('aria-expanded')`), "true");
+  assert.equal(
+    await evaluate(`${filterButton}.getAttribute('aria-expanded')`),
+    "true",
+  );
   assert.ok(await evaluate(`Boolean(${sortButton}?.getClientRects().length)`));
   await evaluate(`${filterButton}.click()`);
-  assert.equal(await evaluate(`${filterButton}.getAttribute('aria-expanded')`), "false");
+  assert.equal(
+    await evaluate(`${filterButton}.getAttribute('aria-expanded')`),
+    "false",
+  );
   assert.equal(await evaluate(`${sortButton}?.getClientRects().length`), 0);
   await command("Emulation.setDeviceMetricsOverride", desktopViewport);
   await evaluate(
@@ -592,6 +598,38 @@ try {
     () => evaluate("!!document.querySelector('.app-shell aside')"),
     "offline restart",
   );
+  await until(
+    () =>
+      evaluate(
+        "document.querySelector('.daily-mix h2')?.textContent === 'Downloaded'",
+      ),
+    "downloaded music on the offline home page",
+  );
+  await until(
+    () =>
+      evaluate(
+        "document.querySelector('.radio-status')?.textContent.includes('From your local collection')",
+      ),
+    "local radio on offline home",
+  );
+  await evaluate("document.querySelector('.radio-start').click()");
+  await until(
+    () =>
+      evaluate(
+        "[...document.querySelectorAll('audio')].some(audio => !audio.paused && audio.currentTime > 0)",
+      ),
+    "offline radio playback",
+  );
+  await evaluate("document.querySelector('.radio-start').click()");
+  await evaluate("document.querySelector('.daily-mix-header button').click()");
+  await until(
+    () =>
+      evaluate(
+        "[...document.querySelectorAll('audio')].some(audio => !audio.paused && audio.currentTime > 0)",
+      ),
+    "playback from offline home",
+  );
+  await evaluate("document.querySelector('.daily-mix-header button').click()");
   await evaluate("document.querySelector('a[href=\"/downloads\"]').click()");
   await until(
     () =>

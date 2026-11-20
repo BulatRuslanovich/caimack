@@ -56,7 +56,7 @@ fun Cover(url: String?, name: String, modifier: Modifier = Modifier, round: Bool
                 ImageRequest.Builder(context).data(resolvedUrl).crossfade(fadeIn).build()
             }
             // A recycled image painter must never display the previous song while loading.
-            key(resolvedUrl) {
+            key(resolvedUrl, book && LocalOfflineLibrary.current) {
                 SubcomposeAsyncImage(
                     model = request,
                     contentDescription = null,
