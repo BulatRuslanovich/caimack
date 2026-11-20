@@ -353,6 +353,7 @@ class NowPlayingWidget : AppWidgetProvider() {
                 val bitmap = Bitmap.createBitmap(ART_HEIGHT, ART_HEIGHT, Bitmap.Config.ARGB_8888)
                 val bounds = RectF(0f, 0f, ART_HEIGHT.toFloat(), ART_HEIGHT.toFloat())
                 Canvas(bitmap).apply {
+                    scale(0.76f, 0.76f, bounds.centerX(), bounds.centerY())
                     clipPath(Path().apply { addRoundRect(bounds, 18f, 18f, Path.Direction.CW) })
                     val image = frame.cover
                     if (image != null) drawBitmap(image, coverCrop(image), bounds, Paint(Paint.FILTER_BITMAP_FLAG))
