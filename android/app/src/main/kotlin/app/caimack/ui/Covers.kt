@@ -27,7 +27,7 @@ internal val LocalArtworkRevision = androidx.compose.runtime.staticCompositionLo
 internal val LocalArtworkResolver = androidx.compose.runtime.staticCompositionLocalOf<(String) -> String?> { { null } }
 
 @Composable
-fun Cover(url: String?, name: String, modifier: Modifier = Modifier, round: Boolean = false, fadeIn: Boolean = true) {
+fun Cover(url: String?, name: String, modifier: Modifier = Modifier, round: Boolean = false, fadeIn: Boolean = true, book: Boolean = false) {
     val revision = LocalArtworkRevision.current
     val resolve = LocalArtworkResolver.current
     val resolvedUrl = remember(url, revision, resolve) { url?.let { resolve(it) ?: it } }
@@ -36,7 +36,11 @@ fun Cover(url: String?, name: String, modifier: Modifier = Modifier, round: Bool
 
     Box(modifier.clip(shape).background(palette.accent)) {
         val fallback = @Composable {
-            if (round) {
+            if (book) {
+                Box(Modifier.fillMaxSize().background(sleeveColor(name, palette)), contentAlignment = Alignment.Center) {
+                    Text(initialsOf(name), style = Type.section, color = palette.foreground)
+                }
+            } else if (round) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(initialsOf(name), style = Type.section, color = palette.faint)
                 }

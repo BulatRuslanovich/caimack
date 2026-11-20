@@ -4,6 +4,7 @@
 package app.caimack.widget
 
 import android.app.PendingIntent
+import app.caimack.audiobooks.AudiobookPlayback
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.BroadcastReceiver
@@ -110,13 +111,15 @@ class NowPlayingWidget : AppWidgetProvider() {
 
         private var pendingNavigation: WidgetTrackNavigation? = null
 
-        fun progress(context: Context, positionMs: Long, durationMs: Long) {
+        fun progress(context: Context, positionMs: Long, durationMs: Long, audiobook: Boolean = false) {
             val app = context.applicationContext
             val manager = AppWidgetManager.getInstance(app)
             val ids = manager.getAppWidgetIds(ComponentName(app, NowPlayingWidget::class.java))
             if (ids.isEmpty()) return
 
-            preferences(app).edit { putLong(POSITION, positionMs); if (durationMs > 0) putLong(DURATION, durationMs) }
+            val container = (app as CaimackApp).container
+            if (audiobook != (container.audiobooksEnabled.value && container.audiobookPlayback.state.value != null)) return
+            if (!audiobook) preferences(app).edit { putLong(POSITION, positionMs); if (durationMs > 0) putLong(DURATION, durationMs) }
             // The system merges partial updates into its cached full RemoteViews. Remove
             // transition commands first, so a progress tick cannot replay an old animation.
             settle()
@@ -136,7 +139,14 @@ class NowPlayingWidget : AppWidgetProvider() {
             if (!hasWide && !hasSquare) return
 
             val container = (app as CaimackApp).container
-            val stored = Snapshot(preferences(app).all)
+            val playback = container.audiobookPlayback.state.value.takeIf { container.audiobooksEnabled.value }
+            val book = playback?.let { state -> container.audiobookStore.state.value.books.find { it.id == state.bookId } }
+            val stored = if (book != null) Snapshot(mapOf(
+                TRACK to book.id, TITLE to book.title,
+                ARTIST to book.chapters.find { it.id == playback.chapterId }?.title,
+                ART_NAME to book.title, COVER to container.audiobookStore.cover(book),
+                PLAYING to playback.playing, POSITION to playback.positionMs, DURATION to playback.durationMs,
+            ), audiobook = true) else Snapshot(preferences(app).all)
             latestUpdate.submit(container.scope) {
                 val cover = stored.getString(COVER, null)?.let { url ->
                     val request = ImageRequest.Builder(app).data(url).size(240).allowHardware(false).build()
@@ -155,7 +165,8 @@ class NowPlayingWidget : AppWidgetProvider() {
                     manager.getAppWidgetOptions(it).getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 120) < 100
                 }.toIntArray()
                 val expandedIds = wideIds.filter { it !in compactIds }.toIntArray()
-                val bindArtwork = artwork(app, look, next, stored.getBoolean(REVERSE, false))
+                val bindArtwork = if (stored.audiobook) bookArtwork(app, look, frame)
+                    else artwork(app, look, next, stored.getBoolean(REVERSE, false))
                 fun render(animate: Boolean): () -> Unit {
                     val artwork: (RemoteViews) -> Unit = { bindArtwork(it, animate) }
                     val compact = if (compactIds.isNotEmpty()) views(app, look, stored, R.layout.widget_now_playing_compact, cover, artwork) else null
@@ -167,13 +178,13 @@ class NowPlayingWidget : AppWidgetProvider() {
                         if (record != null) manager.updateAppWidget(square, record)
                     }
                 }
-                val changed = recordFrames.current?.let { old -> next.slot != recordFrames.slot || old.playing != frame.playing } == true
+                val changed = !stored.audiobook && recordFrames.current?.let { old -> next.slot != recordFrames.slot || old.playing != frame.playing } == true
                 val still = render(false)
                 val animated = if (changed) render(true) else still
                 val publish: () -> Unit = {
                     settleJob?.cancel()
                     pendingSteady = null
-                    recordFrames = next
+                    recordFrames = if (stored.audiobook) WidgetRecordFrames() else next
                     animated()
                     if (changed) {
                         pendingSteady = still
@@ -200,7 +211,7 @@ class NowPlayingWidget : AppWidgetProvider() {
         private val latestUpdate = LatestWidgetUpdate()
         private data class RecordFrame(val id: String?, val name: String, val cover: Bitmap?, val playing: Boolean)
         private var recordFrames = WidgetRecordFrames<RecordFrame>()
-        private class Snapshot(private val values: Map<String, *>) {
+        private class Snapshot(private val values: Map<String, *>, val audiobook: Boolean = false) {
             fun getString(key: String, default: String?): String? = values[key] as? String ?: default
             fun getBoolean(key: String, default: Boolean) = values[key] as? Boolean ?: default
             fun getLong(key: String, default: Long) = values[key] as? Long ?: default
@@ -237,7 +248,7 @@ class NowPlayingWidget : AppWidgetProvider() {
 
                 val open = PendingIntent.getActivity(
                     context, 0,
-                    Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                    Intent(context, MainActivity::class.java).apply { if (stored.audiobook) action = AudiobookPlayback.OPEN }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
                     PendingIntent.FLAG_IMMUTABLE,
                 )
                 setOnClickPendingIntent(R.id.widget_art, open)
@@ -269,7 +280,7 @@ class NowPlayingWidget : AppWidgetProvider() {
 
                 val playingParts = if (idle) View.GONE else View.VISIBLE
                 setViewVisibility(R.id.widget_previous, playingParts)
-                setViewVisibility(R.id.widget_like, playingParts)
+                setViewVisibility(R.id.widget_like, if (stored.audiobook) View.GONE else playingParts)
                 setViewVisibility(R.id.widget_progress, playingParts)
 
                 if (idle) {
@@ -335,6 +346,34 @@ class NowPlayingWidget : AppWidgetProvider() {
 
         private const val WASH_WIDTH = 256
         private const val WASH_ALPHA = 0.4f
+
+        private fun bookArtwork(context: Context, look: Look, frame: RecordFrame): (RemoteViews, Boolean) -> Unit {
+            val layer = RemoteViews(context.packageName, R.layout.widget_book_art)
+            layer.icon(R.id.widget_book_cover, look) { palette ->
+                val bitmap = Bitmap.createBitmap(ART_HEIGHT, ART_HEIGHT, Bitmap.Config.ARGB_8888)
+                val bounds = RectF(0f, 0f, ART_HEIGHT.toFloat(), ART_HEIGHT.toFloat())
+                Canvas(bitmap).apply {
+                    clipPath(Path().apply { addRoundRect(bounds, 18f, 18f, Path.Direction.CW) })
+                    val image = frame.cover
+                    if (image != null) drawBitmap(image, coverCrop(image), bounds, Paint(Paint.FILTER_BITMAP_FLAG))
+                    else {
+                        drawColor(app.caimack.ui.sleeveColor(frame.name, palette).toArgb())
+                        val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                            color = palette.foreground.toArgb()
+                            textSize = ART_HEIGHT * .32f
+                            textAlign = Paint.Align.CENTER
+                        }
+                        drawText(app.caimack.ui.sleeveLetter(frame.name).orEmpty(), bounds.centerX(),
+                            bounds.centerY() - (ink.ascent() + ink.descent()) / 2, ink)
+                    }
+                }
+                bitmap
+            }
+            return { views, _ ->
+                views.removeAllViews(R.id.widget_art)
+                views.addStableView(R.id.widget_art, layer, 1)
+            }
+        }
 
         private fun artwork(context: Context, look: Look, frames: WidgetRecordFrames<RecordFrame>, reverse: Boolean): (RemoteViews, Boolean) -> Unit {
             val previous = recordFrames
@@ -445,6 +484,16 @@ class NowPlayingWidget : AppWidgetProvider() {
 class WidgetActions : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val container = (context.applicationContext as CaimackApp).container
+        val playback = container.audiobookPlayback.state.value.takeIf { container.audiobooksEnabled.value }
+        if (playback != null) {
+            val book = container.audiobookStore.state.value.books.find { it.id == playback.bookId } ?: return
+            when (intent.action) {
+                TOGGLE -> container.audiobookPlayback.toggle(book)
+                NEXT -> container.audiobookPlayback.skipChapter(true)
+                PREVIOUS -> container.audiobookPlayback.skipChapter(false)
+            }
+            return
+        }
         val player = container.player
 
         when (intent.action) {

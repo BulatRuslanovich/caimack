@@ -62,11 +62,11 @@ export function AudiobookFullScreenPlayer({
       }
     >
       <div ref={stage} className={cn(fullPlayerStage, "max-lg:overflow-y-auto")}>
-        <div className="flex min-h-0 flex-[1.2] items-center justify-end max-lg:flex-[1_0_auto] max-lg:justify-center max-lg:pt-5">
+        <div className="flex min-h-0 min-w-0 flex-[1.2] items-center justify-end max-lg:flex-[1_0_auto] max-lg:justify-center max-lg:pt-5">
           <AudiobookCover
             book={book}
             artwork={artwork}
-            className="w-[min(100%,48vh)] rounded-xs shadow-art max-lg:w-[min(76vw,22rem)]"
+            className="w-[min(100%,72dvh)] rounded-2xl shadow-art max-lg:w-[min(100%,88vw,54dvh)]"
             style={{ viewTransitionName: "player-artwork" }}
           />
         </div>

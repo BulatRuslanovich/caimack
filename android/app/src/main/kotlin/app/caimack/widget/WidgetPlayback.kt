@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
+private data class BookWidgetContent(val id: String, val chapter: String, val playing: Boolean, val cover: String?, val downloaded: Boolean)
 private data class WidgetContent(val track: Track?, val playing: Boolean, val liked: Boolean, val durationMs: Long)
 private data class WidgetPlayback(val content: WidgetContent, val positionMs: Long, val remote: Boolean)
 
@@ -19,6 +20,23 @@ private data class WidgetPlayback(val content: WidgetContent, val positionMs: Lo
 internal fun observeWidgetPlayback(context: Context, container: AppContainer) = container.scope.launch(Dispatchers.Main) {
     val app = context.applicationContext
     val power = app.getSystemService(PowerManager::class.java)
+    launch {
+        var last: BookWidgetContent? = null
+        combine(container.audiobooksEnabled, container.audiobookPlayback.state, container.audiobookStore.state) { enabled, state, catalog ->
+            val book = state?.takeIf { enabled }?.let { active -> catalog.books.find { it.id == active.bookId } }
+            val content = if (book != null)
+                BookWidgetContent(book.id, state.chapterId, state.playing, book.coverUrl, book.id in catalog.downloaded)
+            else null
+            content to state
+        }.collect { (content, state) ->
+            if (content != last) {
+                NowPlayingWidget.refresh(app)
+                last = content
+            } else if (content != null && state != null && power.isInteractive) {
+                NowPlayingWidget.progress(app, state.positionMs, state.durationMs, audiobook = true)
+            }
+        }
+    }
     var previous: WidgetContent? = null
     combine(container.player.state, container.connect.state, container.favorites.state) { player, connect, _ ->
         val remote = connect.selectedId != null

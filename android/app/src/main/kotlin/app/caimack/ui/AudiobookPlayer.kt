@@ -3,20 +3,18 @@
 
 package app.caimack.ui
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -58,7 +56,7 @@ internal fun AudiobookMiniPlayer(
     val container = LocalContainer.current
     val chapter = book.chapters.firstOrNull { it.id == playback.chapterId }
     MiniPlayerLayout(
-        artwork = PlayerArtworkRef(book.id, cover, book.title),
+        artwork = PlayerArtworkRef(book.id, cover, book.title, book = true),
         position = playback.positionMs,
         duration = playback.durationMs.takeIf { it > 0 } ?: chapter?.durationMs ?: 0,
         playing = playback.playing || playback.buffering,
@@ -100,7 +98,7 @@ private fun BookPlayerContent(
     val palette = LocalPalette.current
     val haptic = rememberPlayerHaptics()
     val surface = rememberPlayerSurface(cover)
-    val artwork = PlayerArtworkRef(book.id, cover, book.title)
+    val artwork = PlayerArtworkRef(book.id, cover, book.title, book = true)
     val index = book.chapters.indexOfFirst { it.id == playback.chapterId }
     val chapter = book.chapters.getOrNull(index)
     val duration = playback.durationMs.takeIf { it > 0 } ?: chapter?.durationMs ?: 0
@@ -124,13 +122,13 @@ private fun BookPlayerContent(
                 }
             }
         },
-        artwork = { modifier, inset -> BookRecord(artwork, playback, modifier.padding(horizontal = inset)) },
+        artwork = { modifier, inset -> BookPlayerCover(artwork, modifier.padding(horizontal = inset)) },
         background = { PlayerBackdropFill(surface, it.testTag("player-backdrop")) },
         stage = { modifier ->
             if (chapters) {
                 BookChapterQueue(book, index, playback.playing, modifier) { chapterId -> player.play(book, chapterId) }
             } else {
-                BookRecord(artwork, playback, modifier)
+                BookPlayerCover(artwork, modifier)
             }
         },
         controls = { modifier ->
@@ -203,17 +201,11 @@ private fun BookPlayerContent(
 }
 
 @Composable
-private fun BookRecord(artwork: PlayerArtworkRef, playback: AudiobookPlaybackState, modifier: Modifier) {
-    val motion = playerMotionEnabled()
-    val extension by animateFloatAsState(if (playback.playing) 1f else 0f, tween(if (motion) 650 else 0), label = "deck-centering")
-    BoxWithConstraints(modifier.testTag("player-artwork-scene"), contentAlignment = Alignment.Center) {
-        val size = minOf((maxWidth - 8.dp) / (1 + RECORD_OUT), (maxHeight - 24.dp) / 1.4f, 320.dp).coerceAtLeast(1.dp)
-        RecordArtwork(
-            artwork, spinning = playback.playing && !playback.buffering,
-            modifier = Modifier.size(size).offset(x = -size * RECORD_OUT * 0.5f * extension).testTag("player-record"),
-            out = playback.playing,
-            jacket = Modifier.nowPlayingCover(LocalFullPlayerVisibility.current),
-        )
+private fun BookPlayerCover(artwork: PlayerArtworkRef, modifier: Modifier) {
+    Box(modifier.padding(8.dp).testTag("player-artwork-scene"), contentAlignment = Alignment.Center) {
+        Cover(artwork.url, artwork.title, Modifier.aspectRatio(1f)
+            .nowPlayingCover(LocalFullPlayerVisibility.current)
+            .clip(RoundedCornerShape(18.dp)).testTag("book-player-cover"), fadeIn = false, book = true)
     }
 }
 

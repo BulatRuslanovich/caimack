@@ -189,7 +189,7 @@ fun MiniPlayer(state: PlayerState, onOpen: () -> Unit) {
     }
 }
 
-internal data class PlayerArtworkRef(val id: String, val url: String?, val title: String)
+internal data class PlayerArtworkRef(val id: String, val url: String?, val title: String, val book: Boolean = false)
 
 @Composable
 internal fun MiniPlayerLayout(
@@ -277,7 +277,7 @@ private fun MiniPlayerCover(artwork: PlayerArtworkRef, onOpen: () -> Unit) {
             AnimatedContent(targetState = artwork, contentKey = { it.id }, label = "mini-player-artwork",
                 modifier = Modifier.size(40.dp).nowPlayingCover(this),
                 transitionSpec = { fadeIn(tween(if (motion) 180 else 0)) togetherWith fadeOut(tween(if (motion) 120 else 0)) }) { picture ->
-                Cover(picture.url, picture.title, Modifier.size(40.dp), fadeIn = false)
+                Cover(picture.url, picture.title, Modifier.size(40.dp), fadeIn = false, book = picture.book)
             }
         }
     }

@@ -160,7 +160,7 @@ private fun BookHero(book: Audiobook, catalog: AudiobookCatalog) {
             .clickable { navigate(AudiobookRoute(book.id)) },
     ) {
         if (cover != null) {
-            Cover(cover, book.title, Modifier.matchParentSize().blur(14.dp))
+            Cover(cover, book.title, Modifier.matchParentSize().blur(14.dp), book = true)
             Box(
                 Modifier.matchParentSize()
                     .background(Brush.horizontalGradient(
@@ -176,7 +176,7 @@ private fun BookHero(book: Audiobook, catalog: AudiobookCatalog) {
         }
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Cover(cover, book.title, Modifier.size(72.dp))
+                Cover(cover, book.title, Modifier.size(72.dp), book = true)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(book.title, style = Type.section, color = hero.foreground, maxLines = 3, overflow = TextOverflow.Ellipsis)
                     book.author?.let { Text(it, style = Type.small, color = secondary) }
@@ -218,7 +218,7 @@ internal fun BookRow(book: Audiobook, catalog: AudiobookCatalog, open: (() -> Un
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box {
-            Cover(container.audiobookStore.cover(book), book.title, Modifier.size(58.dp))
+            Cover(container.audiobookStore.cover(book), book.title, Modifier.size(58.dp), book = true)
             if (book.id in catalog.downloaded) {
                 Icon(Lucide.CircleCheck, stringResource(R.string.collection_downloaded),
                     Modifier.align(Alignment.BottomEnd).size(18.dp).background(palette.background, CircleShape), tint = palette.primary)
@@ -343,7 +343,7 @@ fun AudiobookDetail(id: String) {
                     bookTime(book.durationMs),
                 ),
                 backdrop = cover,
-            ) { Cover(cover, book.title, it) }
+            ) { Cover(cover, book.title, it, book = true) }
         }
         item("actions") { BookDetailActions(book, active, catalog) }
         if (active != null || book.progress != null) {

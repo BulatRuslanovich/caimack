@@ -366,7 +366,7 @@ private fun LibraryAudiobookCard(book: Audiobook, catalog: AudiobookCatalog, gri
     ).joinToString(" · ")
     Card(book.title, subtitle, open, toneUrl = cover, list = !grid, details = bookTime(book.durationMs),
         menu = { BookMenu(book, catalog) },
-    ) { Cover(cover, book.title, it) }
+    ) { Cover(cover, book.title, it, book = true) }
 }
 
 @Composable
