@@ -83,7 +83,7 @@ function FullScreenProgress({ track, chrome }: { track: Track; chrome: string })
         });
 
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="fullscreen-player-progress flex flex-col gap-0.5">
       <WaveformSeekbar
         trackId={track.id}
         cues={smartTransitions ? track.cues : null}
@@ -361,55 +361,62 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
 
             <div
               ref={stage}
+              data-panel={panel}
               className={cn(
-                "relative z-1 flex min-h-0 flex-1 gap-[clamp(2rem,5vw,5rem)] max-lg:-mx-5 max-lg:flex-col max-lg:overflow-x-hidden max-lg:px-5",
+                "fullscreen-player-stage relative z-1 flex min-h-0 flex-1 gap-[clamp(2rem,5vw,5rem)] max-lg:-mx-5 max-lg:flex-col max-lg:overflow-x-hidden max-lg:px-5",
                 panel === "art" ? "max-lg:overflow-y-auto" : "max-lg:gap-0 max-lg:overflow-hidden",
               )}
             >
               {panel === "art" && (
-                <div className="flex min-h-0 flex-[1.2] items-center justify-end pr-[min(40%,20vh)] max-lg:flex-[1_0_auto] max-lg:justify-center max-lg:pt-[calc(min(76vw,22rem)*0.22+1rem)] max-lg:pr-0">
+                <div className="fullscreen-player-art flex min-h-0 flex-[1.2] items-center justify-end pr-[min(40%,20vh)] max-lg:flex-[1_0_auto] max-lg:justify-center max-lg:pr-0">
                   <RecordTransition
                     out
                     spinning={player.isPlaying && !player.buffering}
                     scratchable
                     aura
                     axis="responsive"
-                    sizes="(max-width: 1023px) min(76vw, 22rem), min(48vh, 28rem)"
+                    sizes="(orientation: landscape) and (min-width: 34rem) and (max-height: 36rem) min(22vw, 54vh, 18rem), (max-width: 1023px) min(76vw, 22rem), min(48vh, 28rem)"
                     transitionCover
-                    className="w-[min(100%,48vh)] max-lg:w-[min(76vw,22rem)]"
+                    className="w-(--player-art-size)"
                   />
                 </div>
               )}
 
               <div
                 className={cn(
-                  "flex min-h-0 flex-1 flex-col justify-center gap-6 max-lg:flex-none max-lg:pb-4",
+                  "fullscreen-player-controls flex min-h-0 flex-1 flex-col justify-center gap-6 max-lg:flex-none max-lg:pb-4",
                   panel !== "art" && "max-lg:hidden lg:max-w-[50%] lg:flex-none lg:basis-1/2",
                 )}
               >
                 <div
                   className={cn(
-                    "flex w-full max-w-[34rem] flex-col gap-6 max-lg:mx-auto",
+                    "fullscreen-player-details flex w-full max-w-[34rem] flex-col gap-6 max-lg:mx-auto",
                     panel !== "art" && "lg:mx-auto",
                   )}
                 >
                   <div className="flex min-w-0 items-start gap-3">
-                    <div className="flex min-w-0 flex-1 flex-col gap-2">
+                    <div className="fullscreen-player-caption flex min-w-0 flex-1 flex-col gap-2">
                       <h2
                         className={cn("text-balance wrap-anywhere", displayTitleClass(track.title))}
+                        title={track.title}
                       >
                         {track.title}
                       </h2>
-                      <p className="text-muted-foreground">
+                      <p className="fullscreen-player-byline wrap-anywhere text-muted-foreground">
                         <ArtistLinks
                           track={track}
                           onNavigate={onClose}
-                          className="font-medium text-foreground"
+                          className="fullscreen-player-artist font-medium text-foreground"
                         />
                         {track.albumId && (
                           <>
-                            {", "}
-                            <Link href={`/albums/${track.albumId}`} onClick={onClose}>
+                            <span className="fullscreen-player-divider">{", "}</span>
+                            <Link
+                              href={`/albums/${track.albumId}`}
+                              onClick={onClose}
+                              className="fullscreen-player-album"
+                              title={track.albumTitle ?? undefined}
+                            >
                               {track.albumTitle}
                             </Link>
                           </>
@@ -446,7 +453,7 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
                       type="button"
                       onClick={() => setPanel("queue")}
                       className={cn(
-                        "-mt-2 truncate text-center text-sm text-muted-foreground hover:text-foreground",
+                        "fullscreen-player-up-next -mt-2 truncate text-center text-sm text-muted-foreground hover:text-foreground",
                         chrome,
                       )}
                     >
@@ -456,7 +463,7 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
                     </button>
                   )}
 
-                  <div className={cn("flex items-center gap-2", chrome)}>
+                  <div className={cn("fullscreen-player-tools flex items-center gap-2", chrome)}>
                     <Suspense fallback={null}>
                       <TrackMenu
                         track={track}

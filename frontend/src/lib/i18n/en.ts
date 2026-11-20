@@ -100,6 +100,7 @@ export const en = {
   "error.pageDescription": "This page hit a wrong note. Try again, or head back to your library.",
 
   "filter.tracks": "Filter tracks…",
+  "filter.options": "Filters",
   "filter.artists": "Filter artists…",
   "filter.albums": "Filter albums…",
   "filter.nothingMatched": "Nothing matched that filter.",
@@ -742,6 +743,7 @@ export const en = {
   "settings.colorway.midnight": "Midnight Blue",
   "settings.colorway.plum": "Plum Violet",
   "settings.colorway.studio": "Studio: Pine & Lime",
+  "settings.colorway.cover": "From track artwork",
   "settings.language": "Language",
   "settings.playback": "Playback",
   "settings.quality": "Audio quality",
@@ -1149,7 +1151,7 @@ export const en = {
   "settings.help.theme": "Use light, dark or your system appearance.",
   "settings.help.colorway": "Change the colours of backgrounds, surfaces and accents.",
   "settings.help.language": "Change the interface language.",
-  "settings.help.coverTone": "Tint the interface with colours from the current cover.",
+  "settings.help.coverTone": "Show highlights that pick up the colours of the current cover.",
   "settings.help.visualizer":
     "Show a glow and rings around the record that respond to music in the full-screen player.",
   "settings.help.leanBack": "Open the listening screen automatically when idle.",

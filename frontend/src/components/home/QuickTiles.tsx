@@ -129,7 +129,14 @@ function TrackTile({ track, context }: { track: Track; context: Track[] }) {
       onClick={() => playTrack(track, context)}
       art={<TrackCover track={track} />}
       toneSrc={trackCoverUrl(track, "thumb")}
-      action={<PlayBadge size={8} playing={soundingNow(track.id)} visible={isCurrent} />}
+      action={
+        <PlayBadge
+          size={8}
+          playing={soundingNow(track.id)}
+          visible={isCurrent}
+          className="quick-tile-play-badge"
+        />
+      }
     />
   );
 }

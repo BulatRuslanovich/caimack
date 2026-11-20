@@ -2,7 +2,9 @@
 
 "use client";
 
-import type { ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
+import { SlidersHorizontalIcon } from "lucide-react";
+import { cn } from "@/lib/cn";
 import { scrollContentToTop } from "@/lib/scroll";
 import type { Paged } from "@/lib/types";
 import type { TranslationKey } from "@/lib/i18n";
@@ -16,14 +18,20 @@ export function PageToolbar({
   onSearch,
   placeholder,
   autoFocus = false,
+  mobileFilters,
   children,
 }: {
   search: string;
   onSearch: (value: string) => void;
   placeholder: string;
   autoFocus?: boolean;
+  mobileFilters?: { active: boolean };
   children?: ReactNode;
 }) {
+  const t = useT();
+  const controlsId = useId();
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
   return (
     <div className="library-toolbar flex flex-wrap items-center gap-2.5 max-md:gap-2">
       <SearchField
@@ -33,8 +41,30 @@ export function PageToolbar({
         autoFocus={autoFocus}
         className="min-w-0 flex-[1_1_16rem] max-md:flex-1 max-md:basis-0"
       />
+      {mobileFilters && children && (
+        <Button
+          size="icon-lg"
+          className={cn(
+            "shrink-0 rounded-lg md:hidden min-[24rem]:w-auto min-[24rem]:px-3",
+            (filtersOpen || mobileFilters.active) && "border-primary bg-primary-soft text-primary",
+          )}
+          aria-expanded={filtersOpen}
+          aria-controls={controlsId}
+          title={t("filter.options")}
+          onClick={() => setFiltersOpen((open) => !open)}
+        >
+          <SlidersHorizontalIcon size={18} />
+          <span className="max-[24rem]:sr-only">{t("filter.options")}</span>
+        </Button>
+      )}
       {children && (
-        <div className="flex flex-wrap items-center gap-2.5 max-md:order-2 max-md:w-full max-md:gap-2">
+        <div
+          id={mobileFilters ? controlsId : undefined}
+          className={cn(
+            "flex flex-wrap items-center gap-2.5 max-md:order-2 max-md:w-full max-md:gap-2",
+            mobileFilters && !filtersOpen && "max-md:hidden",
+          )}
+        >
           {children}
         </div>
       )}

@@ -35,7 +35,7 @@
   animation-name: record-rise;
 }
 
-@media (width < 64rem) {
+@media (width < 64rem) and ((orientation: portrait) or (width < 34rem) or (height >= 36rem)) {
   .record[data-axis="responsive"] {
     --record-out: 22%;
   }

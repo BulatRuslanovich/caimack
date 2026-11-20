@@ -40,6 +40,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -77,6 +78,7 @@ import androidx.navigation.toRoute
 import app.caimack.R
 import app.caimack.api.Track
 import app.caimack.api.User
+import app.caimack.playback.PlayerState
 import kotlin.reflect.KClass
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
@@ -141,9 +143,41 @@ internal fun NavController.openSection(route: Any) {
     }
 }
 
+@Composable
+fun App(user: User, dark: Boolean, colorway: Colorway) {
+    val container = LocalContainer.current
+    val playback by container.player.state.collectAsStateWithLifecycle()
+    val toneEnabled by container.appearance.coverTone.collectAsStateWithLifecycle()
+    val artworkRevision by container.downloadedCatalog.revision.collectAsStateWithLifecycle()
+    val resolveArtwork = remember(container, user.id) { container.downloadedCatalog::cachedUrl }
+    CompositionLocalProvider(
+        LocalArtworkRevision provides artworkRevision,
+        LocalArtworkResolver provides resolveArtwork,
+    ) {
+        val adaptive = colorway == Colorway.Cover
+        val cover = playback.current?.takeIf { toneEnabled || adaptive }?.let { trackCover(it) }
+        val loadedTone = rememberLoadedPlayerTone(cover)
+        val palette = if (adaptive) {
+            rememberCoverPalette(dark, cover, loadedTone)
+        } else {
+            paletteOf(colorway, dark)
+        }
+        CaimackTheme(dark = dark, colorway = colorway, palette = palette) {
+            Surface(Modifier.fillMaxSize()) {
+                AppContent(user, playback, toneEnabled, loadedTone.takeIf { toneEnabled })
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun App(user: User) {
+private fun AppContent(
+    user: User,
+    playback: PlayerState,
+    toneEnabled: Boolean,
+    loadedTone: LoadedPlayerTone?,
+) {
     val palette = LocalPalette.current
     val container = LocalContainer.current
     val nav = rememberNavController()
@@ -152,13 +186,10 @@ fun App(user: User) {
     var account by rememberSaveable { mutableStateOf(false) }
     val focus = LocalFocusManager.current
     var expanded by rememberSaveable { mutableStateOf(false) }
-    val playback by container.player.state.collectAsStateWithLifecycle()
     val offlineLibrary by container.libraryCache.offline.collectAsStateWithLifecycle()
     val catalog by container.localLibrary.collectAsStateWithLifecycle()
     val localLibrary = catalog.takeIf { it.account == container.accountKey } ?: app.caimack.playback.LocalLibrary()
     val availableTracks = localLibrary.trackIds
-    val artworkRevision by container.downloadedCatalog.revision.collectAsStateWithLifecycle()
-    val resolveArtwork = remember(container, user.id) { container.downloadedCatalog::cachedUrl }
     val appUpdate by container.updates.state.collectAsStateWithLifecycle()
     var updateDetails by rememberSaveable { mutableStateOf(false) }
     val play: (List<Track>, Int) -> Unit = { tracks, index ->
@@ -173,8 +204,6 @@ fun App(user: User) {
     val libraryDensity by container.appearance.libraryDensity.collectAsStateWithLifecycle()
 
     val colorway = LocalColorway.current
-    val toneEnabled by container.appearance.coverTone.collectAsStateWithLifecycle()
-    val loadedTone = rememberLoadedPlayerTone(playback.current?.takeIf { toneEnabled }?.let { trackCover(it) })
     val tone = loadedTone?.tone?.let { CoverTone(it.hue, it.chroma) }
     val toneTarget = if (colorway == Colorway.Graphite && palette.dark) Color.Transparent else tone?.color(palette, colorway) ?: Color.Transparent
     val motion = playerMotionEnabled()
@@ -209,8 +238,6 @@ fun App(user: User) {
         LocalNowPlayingCoverTone provides loadedTone,
         LocalToneEnabled provides toneEnabled,
         LocalSnackbar provides snackbar,
-        LocalArtworkRevision provides artworkRevision,
-        LocalArtworkResolver provides resolveArtwork,
     ) {
     SettingsDrawer(
         open = account,

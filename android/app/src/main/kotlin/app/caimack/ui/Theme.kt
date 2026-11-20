@@ -12,7 +12,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.compositeOver
@@ -60,7 +60,8 @@ enum class Colorway(val key: String) {
     Graphite("graphite"),
     Midnight("midnight"),
     Plum("plum"),
-    Studio("studio");
+    Studio("studio"),
+    Cover("cover");
 
     companion object {
         fun of(key: String?) = entries.firstOrNull { it.key == key } ?: Coffee
@@ -307,7 +308,7 @@ private val StudioLight = Palette(
 )
 
 fun paletteOf(colorway: Colorway, dark: Boolean): Palette = when (colorway) {
-    Colorway.Coffee -> if (dark) CoffeeDark else CoffeeLight
+    Colorway.Coffee, Colorway.Cover -> if (dark) CoffeeDark else CoffeeLight
     Colorway.Graphite -> if (dark) GraphiteDark else GraphiteLight
     Colorway.Midnight -> if (dark) MidnightDark else MidnightLight
     Colorway.Plum -> if (dark) PlumDark else PlumLight
@@ -368,7 +369,7 @@ object Type {
     val micro = TextStyle(fontFamily = Onest, fontSize = 12.sp, lineHeight = 16.sp)
 }
 
-val LocalPalette = staticCompositionLocalOf { CoffeeDark }
+val LocalPalette = compositionLocalOf { CoffeeDark }
 
 @Composable
 fun CaimackTheme(

@@ -113,6 +113,35 @@
   padding-block: 0.25rem;
 }
 
+@media (width < 56.25rem) {
+  .tracks-page-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.25rem 0.5rem;
+  }
+  .tracks-page-heading > :first-child {
+    display: contents;
+  }
+  .tracks-page-heading > :nth-child(2) {
+    grid-area: 1 / 2;
+    gap: 0.5rem;
+  }
+  .tracks-page-heading p {
+    grid-column: 1 / -1;
+    margin-top: 0;
+  }
+}
+
+@media (width < 360px) {
+  .library-catalog-tabs {
+    column-gap: 0.25rem;
+  }
+  .library-catalog-tabs a {
+    font-size: 0.75rem;
+  }
+}
+
 .library-search-panel {
   display: grid;
   grid-template-rows: 0fr;

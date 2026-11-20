@@ -531,11 +531,19 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .home-quick-access .quick-tile {
+    position: relative;
     gap: 0.5rem;
   }
   .home-quick-access .quick-tile-art {
     width: 2.75rem;
     height: 2.75rem;
+  }
+  .quick-tile-play-badge {
+    position: absolute;
+    top: 50%;
+    left: 1.625rem;
+    translate: -50% -50%;
+    pointer-events: none;
   }
   .daily-mix-header h2 {
     font-size: 1.0625rem;
@@ -571,9 +579,12 @@
   }
 }
 
-@media (width < 300px) {
+@media (width < 360px) {
   .home-quick-access {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .home-quick-access .quick-tile {
+    min-height: 3.5rem;
   }
 }
 

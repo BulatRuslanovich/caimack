@@ -20,13 +20,13 @@ export function ShuffleButton({ tracks, compact = false }: { tracks: Track[]; co
       aria-pressed={shuffle}
       disabled={tracks.length === 0}
       className={cn(
-        compact && "max-sm:w-10 max-sm:px-0",
+        compact && "max-md:size-11 max-md:px-0",
         shuffle &&
           "border-primary bg-primary-soft text-primary hover:border-primary hover:bg-primary-soft",
       )}
     >
       <ShuffleIcon size={16} />
-      <span className={cn(compact && "max-sm:sr-only")}>{t("action.shuffle")}</span>
+      <span className={cn(compact && "max-md:sr-only")}>{t("action.shuffle")}</span>
     </Button>
   );
 }

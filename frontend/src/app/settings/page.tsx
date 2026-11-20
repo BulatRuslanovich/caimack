@@ -5,7 +5,7 @@
 import { useRecommendations } from "@/lib/useRecommendations";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef } from "react";
+import { Suspense } from "react";
 import {
   AudioLinesIcon,
   ChartLineIcon,
@@ -73,29 +73,11 @@ function SettingsSections() {
 
   const raw = params.get("tab");
   const section = sections.find((key) => key === raw) ?? DEFAULT_SECTION;
-  const navigation = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    const nav = navigation.current;
-    if (!nav) return;
-    const revealCurrent = () => {
-      const current = nav.querySelector('[aria-current="page"]');
-      if (!current || nav.scrollWidth <= nav.clientWidth) return;
-      const outer = nav.getBoundingClientRect();
-      const inner = current.getBoundingClientRect();
-      if (inner.left < outer.left) nav.scrollLeft += inner.left - outer.left;
-      else if (inner.right > outer.right) nav.scrollLeft += inner.right - outer.right;
-    };
-    const observer = new ResizeObserver(revealCurrent);
-    observer.observe(nav);
-    revealCurrent();
-    return () => observer.disconnect();
-  }, [section]);
 
   return (
     <div className="settings-workspace">
       <div className="settings-sidebar">
-        <nav ref={navigation} aria-label={t("settings.title")} className="settings-navigation">
+        <nav aria-label={t("settings.title")} className="settings-navigation">
           {sections.map((key) => {
             const Icon = SECTION_ICONS[key];
             return (
