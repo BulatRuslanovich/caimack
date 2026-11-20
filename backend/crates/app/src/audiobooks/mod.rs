@@ -17,6 +17,7 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+use crate::i18n::{self, Lang};
 use crate::{AppError, AppResult};
 
 #[derive(Clone, Default)]
@@ -133,19 +134,23 @@ impl Audiobooks {
         self.requested.notify_one();
     }
 
-    pub async fn list(&self, db: &PgPool, user_id: Uuid) -> AppResult<Vec<Audiobook>> {
+    pub async fn list(&self, db: &PgPool, user_id: Uuid, lang: Lang) -> AppResult<Vec<Audiobook>> {
         let mut state = state::list(db, user_id).await?;
-        let mut books: Vec<_> =
-            self.snapshot().books.values().map(|book| book.dto(state.remove(&book.id).unwrap_or_default())).collect();
+        let mut books: Vec<_> = self
+            .snapshot()
+            .books
+            .values()
+            .map(|book| book.dto(state.remove(&book.id).unwrap_or_default(), lang))
+            .collect();
         books.sort_by_cached_key(|book| (book.title.to_lowercase(), book.id));
         Ok(books)
     }
 
-    pub async fn get(&self, db: &PgPool, user_id: Uuid, id: Uuid) -> AppResult<Audiobook> {
+    pub async fn get(&self, db: &PgPool, user_id: Uuid, id: Uuid, lang: Lang) -> AppResult<Audiobook> {
         let snapshot = self.snapshot();
         let book = snapshot.book(id)?;
         let state = state::get(db, user_id, id).await?.unwrap_or_default();
-        Ok(book.dto(state))
+        Ok(book.dto(state, lang))
     }
 
     pub async fn set_saved(&self, db: &PgPool, user_id: Uuid, id: Uuid, saved: bool) -> AppResult<()> {
@@ -224,7 +229,7 @@ impl Book {
         Ok(progress)
     }
 
-    fn dto(&self, state: state::BookState) -> Audiobook {
+    fn dto(&self, state: state::BookState, lang: Lang) -> Audiobook {
         let progress = state.progress().and_then(|progress| self.normalize_progress(progress).ok());
         Audiobook {
             id: self.id,
@@ -233,7 +238,18 @@ impl Book {
             narrator: self.narrator.clone(),
             cover_url: self.cover.as_ref().map(|_| format!("/api/audiobooks/{}/cover", self.id)),
             duration_ms: self.duration_ms,
-            chapters: self.chapters.iter().map(|file| file.data.clone()).collect(),
+            chapters: self
+                .chapters
+                .iter()
+                .enumerate()
+                .map(|(index, file)| {
+                    let mut chapter = file.data.clone();
+                    if chapter.title.is_empty() {
+                        chapter.title = i18n::localize("Chapter {0}", &[(index + 1).to_string()], lang);
+                    }
+                    chapter
+                })
+                .collect(),
             saved: state.saved,
             progress,
         }

@@ -67,6 +67,7 @@ fn russian(template: &str) -> Option<&'static str> {
     Some(match template {
         "Invalid playback state." => "Не удалось обновить состояние воспроизведения.",
         "Invalid audiobook progress." => "Некорректная позиция воспроизведения аудиокниги.",
+        "Chapter {0}" => "Глава {0}",
         "Audiobook not found." => "Аудиокнига не найдена.",
         "Audiobook chapter not found." => "Глава аудиокниги не найдена.",
         "Audiobook cover not found." => "Обложка аудиокниги не найдена.",

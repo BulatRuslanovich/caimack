@@ -161,8 +161,6 @@ private fun BookHero(book: Audiobook, catalog: AudiobookCatalog) {
     val chapterIndex = book.chapters.indexOfFirst { it.id == progress.chapterId }
     val chapter = book.chapters.getOrNull(chapterIndex)
     val elapsed = book.elapsedMs(progress).coerceIn(0, book.durationMs)
-    val fraction = elapsed.fractionOf(book.durationMs)
-    val wholeBookProgress = stringResource(R.string.audiobook_book_position)
     val secondary = hero.foreground.copy(alpha = .84f)
     Box(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(Radius.hero).background(hero.raised)
@@ -195,19 +193,20 @@ private fun BookHero(book: Audiobook, catalog: AudiobookCatalog) {
             }
             if (chapter != null) {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(stringResource(R.string.audiobook_numbered_chapter, chapterIndex + 1, chapter.title),
+                    Text(chapterHeading(chapterIndex + 1, chapter.title),
                         style = Type.small, color = hero.foreground)
                     if (chapter.durationMs > 0) {
-                        Text(chapterTime(progress.positionMs.coerceIn(0, chapter.durationMs), chapter.durationMs),
+                        val position = progress.positionMs.coerceIn(0, chapter.durationMs)
+                        val fraction = position.fractionOf(chapter.durationMs)
+                        val label = stringResource(R.string.audiobook_chapter_position)
+                        Text(chapterTime(position, chapter.durationMs),
                             style = Type.tiny, color = secondary)
+                        PlayerProgressTrack(fraction, hero.primary, hero.borderStrong,
+                            Modifier.padding(top = 4.dp).progressSemantics(fraction).semantics { contentDescription = label })
                     }
                 }
             }
             if (book.durationMs > 0) {
-                PlayerProgressTrack(fraction, hero.primary, hero.borderStrong,
-                    Modifier.progressSemantics(fraction).semantics {
-                        contentDescription = wholeBookProgress
-                    })
                 Text(bookSummary(book, elapsed, progress.completed), style = Type.tiny, color = secondary)
             }
         }
@@ -455,7 +454,7 @@ private fun BookListeningPosition(book: Audiobook, active: AudiobookPlaybackStat
     var preview by remember(active?.chapterId) { mutableStateOf<Long?>(null) }
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         chapter?.let {
-            Text(stringResource(R.string.audiobook_numbered_chapter, chapterIndex + 1, it.title), style = Type.small)
+            Text(chapterHeading(chapterIndex + 1, it.title), style = Type.small)
         }
         if (chapter != null && duration > 0) {
             Text(chapterTime(preview ?: position, duration), style = Type.tiny, color = palette.muted)
@@ -476,6 +475,11 @@ private fun BookListeningPosition(book: Audiobook, active: AudiobookPlaybackStat
         if (active?.failed == true) Text(stringResource(R.string.audiobook_playback_error), style = Type.small, color = palette.muted)
     }
 }
+
+@Composable
+private fun chapterHeading(number: Int, title: String): String =
+    if (title == stringResource(R.string.audiobook_chapter_number, number)) title
+    else stringResource(R.string.audiobook_numbered_chapter, number, title)
 
 @Composable
 private fun chapterTime(position: Long, duration: Long): String =

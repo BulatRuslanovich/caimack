@@ -43,7 +43,28 @@ pub(super) fn book(label: &str) -> BookName {
     BookName { title, author: author.map(str::to_owned), narrator, release }
 }
 
-pub(super) fn chapter(label: &str) -> String {
+pub(super) fn chapter_title(
+    tag: Option<&str>,
+    stem: &str,
+    album: &str,
+    author: Option<&str>,
+    narrator: Option<&str>,
+) -> String {
+    if let Some(title) = tag.map(chapter) {
+        if let (Some(author), Some(narrator)) = (author, narrator)
+            && is_credit_label(&title, album, author, narrator)
+        {
+            return String::new();
+        }
+        if !title.is_empty() && !is_file_index(&title) {
+            return title;
+        }
+    }
+    let title = chapter(stem);
+    if is_file_index(&title) { String::new() } else { title }
+}
+
+fn chapter(label: &str) -> String {
     let (label, _) = without_release_suffix(label);
     let title = CHAPTER_PREFIX
         .captures(label)
@@ -51,6 +72,38 @@ pub(super) fn chapter(label: &str) -> String {
         .filter(|title| title.as_str().chars().any(char::is_alphabetic))
         .map_or(label, |title| title.as_str());
     normalize_spacing(title)
+}
+
+fn is_file_index(label: &str) -> bool {
+    let parts = label.split_whitespace();
+    parts.clone().count() > 1
+        && parts.clone().all(|part| part.len() <= 3 && part.bytes().all(|byte| byte.is_ascii_digit()))
+        && parts.into_iter().any(|part| part.len() > 1 && part.starts_with('0'))
+}
+
+fn is_credit_label(title: &str, album: &str, author: &str, narrator: &str) -> bool {
+    let title = title.to_lowercase();
+    let album = normalize_spacing(album).to_lowercase();
+    title.split_once(&format!(" {album} ")).is_some_and(|(left, right)| {
+        matches_credit(left, &author.to_lowercase()) && matches_credit(right, &narrator.to_lowercase())
+    })
+}
+
+fn matches_credit(label: &str, name: &str) -> bool {
+    let words = label.split_whitespace();
+    let full = name.split_whitespace();
+    let mut has_full_name = false;
+    words.clone().count() == full.clone().count()
+        && words.zip(full).all(|(short, long)| {
+            let short = short.trim_end_matches('.');
+            if short == long.trim_end_matches('.') {
+                has_full_name |= short.chars().count() > 1;
+                true
+            } else {
+                short.chars().count() == 1 && long.starts_with(short)
+            }
+        })
+        && has_full_name
 }
 
 pub(super) fn display_label(label: &str) -> String {
@@ -211,5 +264,23 @@ mod tests {
         assert_eq!(chapter("1. Рассвет"), "1. Рассвет");
         assert_eq!(chapter("2001: A Space Odyssey"), "2001: A Space Odyssey");
         assert_eq!(chapter("00_01_(Не)совершенная случайность"), "(Не)совершенная случайность");
+    }
+
+    #[test]
+    fn index_only_tags_yield_a_meaningful_filename_or_an_unnamed_chapter() {
+        assert_eq!(chapter_title(Some("00 01"), "00_01", "Психология масс", None, None), "");
+        assert_eq!(chapter_title(Some("00 01"), "00_01_Вступление", "Психология масс", None, None), "Вступление");
+        assert_eq!(chapter_title(Some("1984"), "00_01", "Book", None, None), "1984");
+    }
+
+    #[test]
+    fn credit_tags_repeat_the_book_title_and_both_known_people() {
+        let author = Some("Млодинов Леонард");
+        let narrator = Some("Росляков Михаил");
+        let album = "(Не)совершенная случайность";
+        let credits = Some("00_00_Млодинов_Л_(Не)совершенная_случайность_Росляков_М");
+        assert_eq!(chapter_title(credits, "00_00_Mlodinov_L", album, author, narrator), "");
+        assert_eq!(chapter_title(Some("00_01_(Не)совершенная случайность"), "00_01", album, author, narrator), album);
+        assert!(!chapter_title(credits, "00_00_Mlodinov_L", album, author, None).is_empty());
     }
 }

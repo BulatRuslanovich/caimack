@@ -12,7 +12,7 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::auth::CurrentUser;
-use crate::extract::{Json, RoutePath};
+use crate::extract::{Json, RequestLang, RoutePath};
 use crate::files::{self, FileReply};
 use crate::problem::ApiResult;
 use crate::state::AppState;
@@ -35,8 +35,12 @@ fn timed_json(body: impl Serialize) -> Response {
     ([(header::CACHE_CONTROL, "private, no-store"), (SERVER_TIME, now.as_str())], Json(body)).into_response()
 }
 
-async fn list(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> ApiResult<Response> {
-    let catalog = state.audiobooks.list(&state.db, user.user_id).await?;
+async fn list(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    RequestLang(lang): RequestLang,
+) -> ApiResult<Response> {
+    let catalog = state.audiobooks.list(&state.db, user.user_id, lang).await?;
     Ok(timed_json(catalog))
 }
 
@@ -44,8 +48,9 @@ async fn get_book(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     RoutePath(id): RoutePath<Uuid>,
+    RequestLang(lang): RequestLang,
 ) -> ApiResult<Response> {
-    let book = state.audiobooks.get(&state.db, user.user_id, id).await?;
+    let book = state.audiobooks.get(&state.db, user.user_id, id, lang).await?;
     Ok(timed_json(book))
 }
 

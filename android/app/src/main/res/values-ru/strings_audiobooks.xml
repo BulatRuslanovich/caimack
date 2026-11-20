@@ -16,7 +16,7 @@
     <string name="audiobook_completed">Прослушано</string>
     <string name="audiobook_remaining">Осталось %1$s</string>
     <string name="audiobook_chapter_position">Позиция в главе</string>
-    <string name="audiobook_book_position">Прогресс по аудиокниге</string>
+    <string name="audiobook_chapter_number">Глава %1$d</string>
     <string name="audiobook_numbered_chapter">Глава %1$d · %2$s</string>
     <string name="audiobook_position_of">%1$s / %2$s</string>
     <string name="audiobook_book_summary">Вся книга · Прослушано %1$d%% · Осталось %2$s</string>

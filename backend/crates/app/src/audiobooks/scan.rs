@@ -142,8 +142,9 @@ fn read_book(
         if title.is_none() {
             title = metadata
                 .album
-                .or_else(|| if standalone { metadata.title.clone() } else { None })
-                .map(|tag| names::display_label(&tag));
+                .as_deref()
+                .or(if standalone { metadata.title.as_deref() } else { None })
+                .map(names::display_label);
         }
         if author.is_none() {
             author = metadata.author;
@@ -154,10 +155,16 @@ fn read_book(
         duration_ms = duration_ms.saturating_add(metadata.duration_ms);
         let chapter_id = path_id("audiobook-chapter", &file.path);
         let stem = file.path.file_stem().unwrap_or_default();
-        let chapter_title = match metadata.title.as_deref() {
-            Some(tag) if stem != label || tag != stem => names::chapter(tag),
-            _ if stem == label => named_title.clone(),
-            _ => names::chapter(&stem.to_string_lossy()),
+        let chapter_title = if stem == label && metadata.title.as_deref().is_none_or(|tag| tag == stem) {
+            named_title.clone()
+        } else {
+            names::chapter_title(
+                metadata.title.as_deref(),
+                &stem.to_string_lossy(),
+                metadata.album.as_deref().unwrap_or(&named_title),
+                author.as_deref(),
+                narrator.as_deref(),
+            )
         };
         chapters.push(ChapterFile {
             data: Chapter {
