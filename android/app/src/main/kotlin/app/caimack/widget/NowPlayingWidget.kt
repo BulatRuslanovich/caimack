@@ -165,13 +165,14 @@ class NowPlayingWidget : AppWidgetProvider() {
                     manager.getAppWidgetOptions(it).getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 120) < 100
                 }.toIntArray()
                 val expandedIds = wideIds.filter { it !in compactIds }.toIntArray()
-                val bindArtwork = if (stored.audiobook) bookArtwork(app, look, frame)
+                val bindArtwork = if (stored.audiobook) bookArtwork(app, look, frame, scale = 0.76f)
                     else artwork(app, look, next, stored.getBoolean(REVERSE, false))
+                val squareArtwork = if (hasSquare && stored.audiobook) bookArtwork(app, look, frame, scale = 1f) else bindArtwork
                 fun render(animate: Boolean): () -> Unit {
                     val artwork: (RemoteViews) -> Unit = { bindArtwork(it, animate) }
                     val compact = if (compactIds.isNotEmpty()) views(app, look, stored, R.layout.widget_now_playing_compact, cover, artwork) else null
                     val expanded = if (expandedIds.isNotEmpty()) views(app, look, stored, R.layout.widget_now_playing, cover, artwork) else null
-                    val record = if (hasSquare) views(app, look, stored, R.layout.widget_record, cover, artwork) else null
+                    val record = if (hasSquare) views(app, look, stored, R.layout.widget_record, cover) { squareArtwork(it, animate) } else null
                     return {
                         if (compact != null) manager.updateAppWidget(compactIds, compact)
                         if (expanded != null) manager.updateAppWidget(expandedIds, expanded)
@@ -347,13 +348,13 @@ class NowPlayingWidget : AppWidgetProvider() {
         private const val WASH_WIDTH = 256
         private const val WASH_ALPHA = 0.4f
 
-        private fun bookArtwork(context: Context, look: Look, frame: RecordFrame): (RemoteViews, Boolean) -> Unit {
+        private fun bookArtwork(context: Context, look: Look, frame: RecordFrame, scale: Float): (RemoteViews, Boolean) -> Unit {
             val layer = RemoteViews(context.packageName, R.layout.widget_book_art)
             layer.icon(R.id.widget_book_cover, look) { palette ->
                 val bitmap = Bitmap.createBitmap(ART_HEIGHT, ART_HEIGHT, Bitmap.Config.ARGB_8888)
                 val bounds = RectF(0f, 0f, ART_HEIGHT.toFloat(), ART_HEIGHT.toFloat())
                 Canvas(bitmap).apply {
-                    scale(0.76f, 0.76f, bounds.centerX(), bounds.centerY())
+                    scale(scale, scale, bounds.centerX(), bounds.centerY())
                     clipPath(Path().apply { addRoundRect(bounds, 18f, 18f, Path.Direction.CW) })
                     val image = frame.cover
                     if (image != null) drawBitmap(image, coverCrop(image), bounds, Paint(Paint.FILTER_BITMAP_FLAG))
