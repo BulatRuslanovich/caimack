@@ -39,12 +39,14 @@ class LibraryCacheTest {
         } finally { directory.deleteRecursively() }
     }
 
-    @Test fun `catalog probes the recovered server after transient failure without resuming the app`() {
+    @Test fun `offline reads request a background probe without waiting for it`() {
         val directory = Files.createTempDirectory("library-recovery").toFile()
         MockWebServer().use { web ->
             web.start()
             var now = 0L
-            val cache = LibraryCache(directory, { "account" }, ::local, json, clock = { now })
+            var probes = 0
+            val cache = LibraryCache(directory, { "account" }, ::local, json, clock = { now },
+                probeConnection = { probes++ })
             cache.offline.value = false
             val client = OkHttpClient.Builder().addInterceptor(cache.interceptor).build()
             fun get() = client.newCall(Request.Builder().url(web.url("/api/albums/album")).build()).execute().use { it.body.string() }
@@ -57,12 +59,38 @@ class LibraryCacheTest {
                 get()
                 assertEquals(2, web.requestCount)
                 now = 5_000
-                web.enqueue(MockResponse.Builder().body(json.encodeToString(album.copy(title = "Recovered"))).build())
-                assertEquals("Recovered", json.decodeFromString<AlbumDetail>(get()).title)
-                assertEquals(3, web.requestCount)
-                assertFalse(cache.offline.value)
+                assertEquals(album.title, json.decodeFromString<AlbumDetail>(get()).title)
+                get()
+                assertEquals(2, web.requestCount)
+                assertEquals(1, probes)
+                assertTrue(cache.offline.value)
             } finally { directory.deleteRecursively() }
         }
+    }
+
+    @Test fun `offline catalog is reused until local tracks or account change`() {
+        val directory = Files.createTempDirectory("library-catalog").toFile()
+        var version = 0
+        var builds = 0
+        var account = "alice"
+        val cache = LibraryCache(directory, { account }, {
+            builds++
+            DownloadedCatalog.snapshot(json, if (version == 0) listOf(downloaded) else listOf(downloaded, remote), emptyList())
+        }, json, localVersion = { version })
+        val client = OkHttpClient.Builder().addInterceptor(cache.interceptor).build()
+        fun get(path: String) =
+            client.newCall(Request.Builder().url("http://unused.invalid/api/$path").build()).execute().use { it.body.string() }
+        try {
+            assertEquals(1, json.decodeFromString<AlbumDetail>(get("albums/album")).tracks.size)
+            get("artists/artist")
+            get("tracks")
+            assertEquals(1, builds)
+            version++
+            assertEquals(2, json.decodeFromString<AlbumDetail>(get("albums/album")).tracks.size)
+            account = "bob"
+            get("tracks")
+            assertEquals(3, builds)
+        } finally { directory.deleteRecursively() }
     }
 
     @Test fun `responses are written separately and entry and byte budgets survive restart`() {

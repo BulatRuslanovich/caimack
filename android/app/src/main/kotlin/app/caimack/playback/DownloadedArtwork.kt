@@ -19,6 +19,8 @@ import okhttp3.Request
 class DownloadedArtwork(private val directory: File, private val legacyDirectory: File? = null) {
     private val changed = MutableStateFlow(0L)
     val revision: StateFlow<Long> = changed
+    private val refreshLock = Any()
+    private var invalidationRevision = 0L
 
     @Serializable private data class Entry(val file: String, val etag: String? = null)
     private fun hash(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
@@ -63,54 +65,71 @@ class DownloadedArtwork(private val directory: File, private val legacyDirectory
     fun invalidate(server: String, path: String, account: String = server) {
         asset(server, path, account)
         record(server, path, account).setLastModified(0)
+        invalidationRevision++
     }
 
-    @Synchronized
     fun cache(server: String, paths: List<String>, client: OkHttpClient, account: String = server) {
-        directory.mkdirs()
-        val http = client.newBuilder().callTimeout(5, TimeUnit.SECONDS).build()
-        for (path in paths.distinct()) {
+        // Serialize refreshes without holding the lock used by offline artwork reads.
+        synchronized(refreshLock) {
+            directory.mkdirs()
+            val http = client.newBuilder().callTimeout(5, TimeUnit.SECONDS).build()
+            for (path in paths.distinct()) {
+                try {
+                    refresh(server, path, http, account)
+                } catch (_: IOException) {
+                    // Retry after reconnect/resume. An interrupted transfer leaves the offline copy intact.
+                    return
+                }
+            }
+        }
+    }
+
+    private fun refresh(server: String, path: String, http: OkHttpClient, account: String) {
+        val record = record(server, path, account)
+        val (old, cached, revision) = synchronized(this) {
             asset(server, path, account)
-            val record = record(server, path, account)
-            val old = entry(record)
-            val cached = old?.let { File(directory, it.file) }?.takeIf { it.isFile && it.length() > 0 }
-            if (cached != null && System.currentTimeMillis() - record.lastModified() < TimeUnit.HOURS.toMillis(1)) continue
-            try {
-                val request = Request.Builder().url(server + path)
-                if (cached != null) old?.etag?.let { request.header("If-None-Match", it) }
-                http.newCall(request.build()).execute().use { response ->
-                    if (response.code == 304 && cached != null && old != null) {
-                        save(record, old)
-                        return@use
-                    }
-                    if (response.code == 401 || response.code >= 500) return
-                    if (response.code == 404 && old != null) {
+            val entry = entry(record)
+            val file = entry?.let { File(directory, it.file) }?.takeIf { it.isFile && it.length() > 0 }
+            if (file != null && System.currentTimeMillis() - record.lastModified() < TimeUnit.HOURS.toMillis(1)) return
+            Triple(entry, file, invalidationRevision)
+        }
+        val request = Request.Builder().url(server + path)
+        if (cached != null) old?.etag?.let { request.header("If-None-Match", it) }
+        http.newCall(request.build()).execute().use { response ->
+            if (response.code == 401 || response.code >= 500) throw IOException("Artwork server unavailable")
+            if (response.code == 304 && cached != null && old != null) {
+                synchronized(this) { if (revision == invalidationRevision) save(record, old) }
+                return
+            }
+            if (response.code == 404 && old != null) {
+                synchronized(this) {
+                    if (revision == invalidationRevision) {
                         record.delete()
                         cached?.delete()
                         changed.value++
-                        return@use
                     }
-                    if (!response.isSuccessful || !response.header("Content-Type").orEmpty().startsWith("image/")) return@use
-                    val temporary = File.createTempFile("artwork-", ".part", directory)
-                    try {
-                        temporary.outputStream().use { output ->
-                            response.body.byteStream().use { it.copyTo(output) }
-                            output.fd.sync()
-                        }
-                        if (temporary.length() == 0L) return@use
-                        val target = File(directory, record.nameWithoutExtension + "-" + hash(temporary.readBytes()))
-                        Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-                        save(record, Entry(target.name, response.header("ETag")))
-                        if (old?.file != target.name) {
-                            changed.value++
-                            cached?.delete()
-                        }
-                    } finally { temporary.delete() }
                 }
-            } catch (_: IOException) {
-                // Retry after reconnect/resume; never block audio or publish a partial image.
                 return
             }
+            if (!response.isSuccessful || !response.header("Content-Type").orEmpty().startsWith("image/")) return
+            val temporary = File.createTempFile("artwork-", ".part", directory)
+            try {
+                temporary.outputStream().use { output ->
+                    response.body.byteStream().use { it.copyTo(output) }
+                    output.fd.sync()
+                }
+                if (temporary.length() == 0L) return
+                val target = File(directory, record.nameWithoutExtension + "-" + hash(temporary.readBytes()))
+                synchronized(this) {
+                    if (revision != invalidationRevision) return
+                    Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+                    save(record, Entry(target.name, response.header("ETag")))
+                    if (old?.file != target.name) {
+                        changed.value++
+                        cached?.delete()
+                    }
+                }
+            } finally { temporary.delete() }
         }
     }
 

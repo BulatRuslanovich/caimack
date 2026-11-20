@@ -33,8 +33,11 @@ class CaimackApp : Application(), SingletonImageLoader.Factory {
         app.caimack.sync.SyncScheduler.observe(this)
     }
 
-    override fun newImageLoader(context: PlatformContext): ImageLoader = ImageLoader.Builder(context)
-        .components { add(OkHttpNetworkFetcherFactory(callFactory = { container.http })) }
-        .crossfade(true)
-        .build()
+    override fun newImageLoader(context: PlatformContext): ImageLoader {
+        val artwork = container.http.newBuilder().dispatcher(okhttp3.Dispatcher()).build()
+        return ImageLoader.Builder(context)
+            .components { add(OkHttpNetworkFetcherFactory(callFactory = { artwork })) }
+            .crossfade(true)
+            .build()
+    }
 }

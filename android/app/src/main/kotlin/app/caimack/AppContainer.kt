@@ -74,6 +74,7 @@ import app.caimack.sync.PlaybackSync
 import app.caimack.sync.SyncScheduler
 import app.caimack.session.SessionState
 import java.io.IOException
+import okhttp3.Dispatcher
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
@@ -128,10 +129,22 @@ class AppContainer(context: Context) {
         PlaybackSync(File(context.filesDir, "playback-sync"), json, api, ::playbackOwner)
     }
 
+    private data class LocalCatalogVersion(
+        val downloads: Map<String, app.caimack.playback.Offline>,
+        val library: Long,
+        val sync: Long,
+        val catalog: Long,
+        val artwork: Long,
+    )
+
     val libraryCache by lazy { app.caimack.playback.LibraryCache(File(context.filesDir, "library-cache"),
         { (session.state.value as? SessionState.SignedIn)?.let { "${server.url.value}|${it.user.id}" } },
         { downloadedCatalog.localSnapshot() }, json, edits = playbackSync::edits,
-        confirmed = playbackSync::confirmed, observed = playbackSync::observed) }
+        confirmed = playbackSync::confirmed, observed = playbackSync::observed,
+        localVersion = {
+            LocalCatalogVersion(downloads.state.value, downloads.library.revision.value, syncStore.catalogRevision.value,
+                downloadedCatalog.catalogRevision.value, downloadedCatalog.revision.value)
+        }, probeConnection = ::probeLibraryConnection) }
 
     val http: OkHttpClient = OkHttpClient.Builder()
         .followSslRedirects(false)
@@ -145,9 +158,14 @@ class AppContainer(context: Context) {
         .authenticator(SessionAuthenticator(server, { http }) { session.expire() })
         .build()
 
+    private val offlineReadsHttp = http.newBuilder().dispatcher(Dispatcher()).build()
+
     private val retrofit = Retrofit.Builder()
         .baseUrl(Server.PLACEHOLDER)
-        .client(http)
+        .callFactory { request ->
+            val client = if (libraryCache.isOfflineRead(request)) offlineReadsHttp else http
+            client.newCall(request)
+        }
         .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
         .build()
 
@@ -225,7 +243,7 @@ class AppContainer(context: Context) {
     val downloadedCatalog by lazy { app.caimack.playback.DownloadedCatalog(File(context.filesDir, "downloaded-catalog"), json,
         { server.url.value?.toString() },
         { synchronizedTracks() + downloads.tracks() },
-        { if (syncStore.active) app.caimack.sync.OfflineCatalog.view(syncStore.snapshot ?: kotlinx.serialization.json.buildJsonObject {}, syncStore.edits()) else null },
+        syncStore::catalogView,
         { (session.state.value as? SessionState.SignedIn)?.let { "${server.url.value}|${it.user.id}" } },
         legacyArtworkDirectory = File(context.filesDir, "downloaded-artwork")) }
 
@@ -308,6 +326,7 @@ class AppContainer(context: Context) {
         connectionPreferences.setAllowLocalHttp(value)
         if (!value && server.url.value?.scheme == "http") {
             http.dispatcher.cancelAll()
+            offlineReadsHttp.dispatcher.cancelAll()
             http.connectionPool.evictAll()
             libraryCache.offline.value = true
         } else if (value) {
@@ -320,6 +339,10 @@ class AppContainer(context: Context) {
     fun refreshLibraryConnection() {
         playbackSync.request()
         if (audiobooksEnabled.value) audiobookStore.requestRefresh()
+        probeLibraryConnection()
+    }
+
+    private fun probeLibraryConnection() {
         scope.launch {
             if (session.state.value !is SessionState.SignedIn || !connectionProbe.tryLock()) return@launch
             try { withTimeoutOrNull(5_000) { runCatching { api.me() } } }

@@ -9,13 +9,10 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.json.*
 import okhttp3.*
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.ResponseBody.Companion.toResponseBody
 
 /** Account-bound metadata cache. Audio availability is checked separately. */
 class LibraryCache(private val directory: File, private val identity: () -> String?,
@@ -24,14 +21,17 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
     private val clock: () -> Long = { System.nanoTime() / 1_000_000 },
     private val edits: (String) -> List<SyncAction> = { emptyList() },
     private val confirmed: (String) -> List<SyncAction> = { emptyList() },
-    private val observed: (String, Set<String>) -> Unit = { _, _ -> }) {
+    private val observed: (String, Set<String>) -> Unit = { _, _ -> },
+    private val localVersion: () -> Any? = { null },
+    private val probeConnection: () -> Unit = {}) {
     val offline = MutableStateFlow(true)
     private var loadedFor: String? = null
     private data class Entry(val value: JsonElement, val bytes: Long)
     private val responses = linkedMapOf<String, Entry>()
     private var lastWrite = 0L
     private var lastAccountUse = 0L
-    private val probing = AtomicBoolean()
+    private data class CatalogView(val version: Any, val actions: List<SyncAction>, val data: JsonObject)
+    private var catalog: CatalogView? = null
     private val retryAt = AtomicLong(clock() + limits.retryAfterMs)
 
     private fun hash(key: String) = MessageDigest.getInstance("SHA-256")
@@ -39,9 +39,10 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
     private fun folder(key: String) = File(directory, hash(key))
     private fun file(key: String, path: String) = File(folder(key), hash(path) + ".json")
 
-    @Synchronized private fun stored(key: String): Map<String, JsonElement> {
+    private fun load(key: String) {
         if (loadedFor != key) {
             responses.clear()
+            catalog = null
             loadedFor = key
             val folder = folder(key)
             folder.mkdirs()
@@ -67,11 +68,20 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
             touch(key)
             pruneAccounts(key)
         }
-        return responses.mapValues { it.value.value }
+    }
+
+    @Synchronized private fun catalog(key: String): JsonObject {
+        load(key)
+        val version = localVersion()
+        val actions = edits(key)
+        catalog?.let { if (it.version == version && it.actions == actions) return it.data }
+        val data = merge(local(), responses.mapValues { it.value.value }, actions)
+        if (version != null) catalog = CatalogView(version, actions, data)
+        return data
     }
 
     @Synchronized private fun remember(key: String, path: String, value: JsonElement) {
-        stored(key)
+        load(key)
         save(key, path, value)
         touch(key)
     }
@@ -92,6 +102,7 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
             lastWrite = maxOf(System.currentTimeMillis(), lastWrite + 1)
             file(key, path).setLastModified(lastWrite)
         } finally { temporary.delete() }
+        catalog = null
         responses.remove(path)
         responses[path] = Entry(value, data.size.toLong())
         trim(key)
@@ -128,6 +139,11 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
         offline.value = true
     }
 
+    // Retrofit must choose the dispatcher before OkHttp can run the cache interceptor.
+    fun isOfflineRead(request: Request): Boolean =
+        offline.value && request.method == "GET" &&
+            cacheable(request.url.encodedPath.substringAfter("/api/", ""))
+
     val interceptor = Interceptor { chain ->
         val request = chain.request()
         val path = request.url.encodedPath.substringAfter("/api/", "")
@@ -135,24 +151,21 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
         val readable = request.method == "GET" && cacheable(path) && key != null
         fun fallback(): Response? {
             if (!readable || identity() != key) return null
-            val data = merge(local(), stored(key), edits(key))
-            val result = OfflineCatalog.read(path, request.url, buildJsonObject {}, data) ?: return null
-            return Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(result.code)
-                .message("Offline library").body(result.value.toString().toResponseBody("application/json".toMediaType())).build()
+            val result = OfflineCatalog.read(path, request.url, buildJsonObject {}, catalog(key)) ?: return null
+            if (identity() != key) return null
+            return OfflineCatalog.response(request, result)
         }
-        var probe = false
         if (offline.value && readable) {
             fallback()?.let { cached ->
-                if (clock() < retryAt.get() || !probing.compareAndSet(false, true)) return@Interceptor cached
-                probe = true
-                cached.close()
+                val now = clock()
+                val retry = retryAt.get()
+                if (now >= retry && retryAt.compareAndSet(retry, now + limits.retryAfterMs)) probeConnection()
+                return@Interceptor cached
             }
         }
         try {
             val sent = if (readable) confirmed(key) else emptyList()
-            val network = if (probe) chain.withConnectTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
-                .withReadTimeout(3, java.util.concurrent.TimeUnit.SECONDS) else chain
-            val response = network.proceed(request)
+            val response = chain.proceed(request)
             if (response.code >= 500 && readable) {
                 disconnected()
                 fallback()?.let { response.close(); return@Interceptor it }
@@ -180,8 +193,6 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
         } catch (error: IOException) {
             if (readable || path == "auth/me") disconnected()
             fallback() ?: throw error
-        } finally {
-            if (probe) probing.set(false)
         }
     }
 
@@ -201,7 +212,9 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
         }
 
         fun cacheable(path: String): Boolean = path in setOf("home/feed", "home/mixes/daily", "home/mixes/new", "home/mixes/top", "me/library", "me/library/folders", "me/library/order", "favorites", "history/recent", "genres") ||
-            Regex("(tracks|albums|artists|playlists)(/[^/]+)?(/top-tracks)?").matches(path) || path.startsWith("search")
+            collectionPath.matches(path) || path.startsWith("search")
+
+        private val collectionPath = Regex("(tracks|albums|artists|playlists)(/[^/]+)?(/top-tracks)?|genres/[^/]+/tracks")
 
         fun merge(local: JsonObject, responses: Map<String, JsonElement>, edits: List<SyncAction> = emptyList()): JsonObject {
             fun rows(value: JsonElement?): List<JsonObject> = when (value) {

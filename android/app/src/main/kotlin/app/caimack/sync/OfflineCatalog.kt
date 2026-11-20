@@ -43,17 +43,19 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
             changed()
             return@Interceptor response(
                 request,
-                mutationResult(mutation, view(snapshot, store.edits())),
+                mutationResult(mutation, store.catalogView() ?: throw IOException("Sync account changed")),
             )
         }
-        val local = read(path, request.url, body, view(snapshot, store.edits()), request.method)
-        if (local != null && path.startsWith("home/mixes/")) store.offlineQueue = true
-        if (local != null && path != "auth/me" && path != "config")
+        fun local() = read(path, request.url, body, request.method, store::catalogView)
+        if (path != "auth/me" && path != "config") {
+            val local = local() ?: return@Interceptor chain.proceed(request)
+            if (path.startsWith("home/mixes/")) store.offlineQueue = true
             return@Interceptor response(request, local)
+        }
         try {
             chain.proceed(request)
         } catch (error: IOException) {
-            local?.let { response(request, it) } ?: throw error
+            local()?.let { response(request, it) } ?: throw error
         }
     }
 
@@ -128,6 +130,8 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
         }
 
     companion object {
+        internal const val MAX_PAGE_SIZE = 10_000
+
         internal fun response(request: Request, result: Result): Response =
             Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
                 .code(result.code).message("Offline library")
@@ -245,10 +249,13 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
                 )
             }
             val editedPlaylists = actions.filter { it.kind in setOf("playlistCreate", "playlistAdd", "playlistRemove", "playlistOrder") }.mapNotNull { it.entityId }.toSet()
+            val sources = mutableMapOf<String, Map<String, JsonObject>>()
             savedLibrary = savedLibrary.mapNotNull { saved ->
                 val kind = saved.string("kind")
-                val source = (if (kind == "playlist") playlists else snapshot.objects(kind + "s"))
-                    .find { it.string("id") == saved.string("id") } ?: return@mapNotNull null
+                val byId = sources.getOrPut(kind) {
+                    (if (kind == "playlist") playlists else snapshot.objects(kind + "s")).associateBy { it.string("id") }
+                }
+                val source = byId[saved.string("id")] ?: return@mapNotNull null
                 // Downloaded subsets describe availability; saved summaries describe the full collection.
                 // Pending playlist edits supply newly calculated totals instead.
                 fun metadata(key: String): JsonElement {
@@ -285,33 +292,40 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
             body: JsonObject,
             data: JsonObject,
             method: String = "GET",
+        ): Result? = read(path, url, body, method) { data }
+
+        private fun read(
+            path: String,
+            url: HttpUrl,
+            body: JsonObject,
+            method: String,
+            catalog: () -> JsonObject?,
         ): Result? {
             if (method != "GET" && !(method == "POST" && path == "tracks/lookup")) return null
             val parts = path.split('/')
             val id = parts.getOrNull(1)
+            val data by lazy { catalog() ?: throw IOException("Sync account changed") }
             val query = url.queryParameter("q").orEmpty().lowercase().trim()
-            val tracks = data.objects("tracks")
+            val tracks by lazy { data.objects("tracks") }
             fun matches(value: JsonObject) =
                 query.isEmpty() ||
                     listOf("title", "name", "artistName", "albumTitle").any {
                         value.string(it).lowercase().contains(query)
                     }
-            val ordered =
-                tracks
-                    .filter(::matches)
-                    .sortedWith(
-                        compareBy<JsonObject> { it.string("title").lowercase() }
-                            .thenBy { it.string("id") }
-                    )
-            val albums = data.objects("albums").filter(::matches)
-            val artists = data.objects("artists").filter(::matches)
+            val ordered by lazy {
+                tracks.filter(::matches).sortedWith(
+                    compareBy<JsonObject> { it.string("title").lowercase() }.thenBy { it.string("id") }
+                )
+            }
+            val albums by lazy { data.objects("albums").filter(::matches) }
+            val artists by lazy { data.objects("artists").filter(::matches) }
             fun page(items: List<JsonElement>): Result {
-                val size = (url.queryParameter("pageSize")?.toIntOrNull() ?: 50).coerceIn(1, 10_000)
+                val size = (url.queryParameter("pageSize")?.toIntOrNull() ?: 50).coerceIn(1, MAX_PAGE_SIZE)
                 val page = (url.queryParameter("page")?.toIntOrNull() ?: 1).coerceAtLeast(1)
                 val start = ((page.toLong() - 1) * size).coerceAtMost(items.size.toLong()).toInt()
                 return Result(
                     buildJsonObject {
-                        put("items", JsonArray(items.drop(start).take(size)))
+                        put("items", JsonArray(items.subList(start, start + size.coerceAtMost(items.size - start))))
                         put("total", items.size)
                         put("page", page)
                         put("pageSize", size)
@@ -333,7 +347,7 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
             }
             fun result(value: JsonElement?) =
                 if (value == null) Result(code = 404) else Result(value)
-            val playlists = data.objects("playlists")
+            val playlists by lazy { data.objects("playlists") }
             return when {
                 path == "me/library" -> result(data["savedLibrary"] ?: JsonArray(emptyList()))
                 path == "me/library/order" -> result(data["libraryOrder"] ?: buildJsonObject {})
@@ -438,19 +452,15 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
                                 )
                             )
                         )
-                    else
+                    else {
+                        val albumIds = artistTracks.mapTo(hashSetOf()) { it.string("albumId") }
                         result(
-                            find(data.objects("artists"), id)
-                                ?.with(
-                                    "tracks" to page(artistTracks).value,
-                                    "albums" to
-                                        JsonArray(
-                                            data.objects("albums").filter {
-                                                it.string("id") in artistTracks.map { track -> track.string("albumId") }.toSet()
-                                            }
-                                        ),
-                                )
+                            find(data.objects("artists"), id)?.with(
+                                "tracks" to page(artistTracks).value,
+                                "albums" to JsonArray(data.objects("albums").filter { it.string("id") in albumIds }),
+                            )
                         )
+                    }
                 }
                 path == "genres" -> result(data["genres"])
                 parts.size == 3 && parts[0] == "genres" && parts[2] == "tracks" -> {
