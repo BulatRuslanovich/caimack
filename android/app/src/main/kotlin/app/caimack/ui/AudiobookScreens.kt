@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.progressSemantics
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -144,6 +145,24 @@ private fun BookLoading() {
 }
 
 @Composable
+private fun BoxScope.BookBackdrop(cover: String?, title: String, palette: Palette) {
+    if (cover == null) return
+    Cover(cover, title, Modifier.matchParentSize().blur(14.dp), book = true)
+    Box(
+        Modifier.matchParentSize()
+            .background(Brush.horizontalGradient(
+                0f to palette.background.copy(alpha = .62f),
+                .34f to palette.background.copy(alpha = .84f),
+                1f to palette.background.copy(alpha = .97f),
+            ))
+            .background(Brush.verticalGradient(
+                .35f to palette.background.copy(alpha = 0f),
+                1f to palette.background.copy(alpha = .82f),
+            )),
+    )
+}
+
+@Composable
 private fun BookHero(book: Audiobook, catalog: AudiobookCatalog) {
     val palette = LocalPalette.current
     val hero = if (palette.dark) palette else paletteOf(LocalColorway.current, dark = true)
@@ -159,21 +178,7 @@ private fun BookHero(book: Audiobook, catalog: AudiobookCatalog) {
         Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(Radius.hero).background(hero.raised)
             .clickable { navigate(AudiobookRoute(book.id)) },
     ) {
-        if (cover != null) {
-            Cover(cover, book.title, Modifier.matchParentSize().blur(14.dp), book = true)
-            Box(
-                Modifier.matchParentSize()
-                    .background(Brush.horizontalGradient(
-                        0f to hero.background.copy(alpha = .62f),
-                        .34f to hero.background.copy(alpha = .84f),
-                        1f to hero.background.copy(alpha = .97f),
-                    ))
-                    .background(Brush.verticalGradient(
-                        .35f to hero.background.copy(alpha = 0f),
-                        1f to hero.background.copy(alpha = .82f),
-                    )),
-            )
-        }
+        BookBackdrop(cover, book.title, hero)
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Cover(cover, book.title, Modifier.size(72.dp), book = true)
@@ -331,46 +336,48 @@ fun AudiobookDetail(id: String) {
     val chapterId = active?.chapterId ?: book.progress?.chapterId
     val cover = container.audiobookStore.cover(book)
     val playable = catalog.canPlay(book)
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(bottom = 24.dp)) {
-        item("header") {
-            DetailHeader(
-                kind = stringResource(R.string.audiobook_kind),
-                title = book.title,
-                facts = listOfNotNull(
-                    book.author,
-                    book.narrator?.let { stringResource(R.string.audiobook_narrator, it) },
-                    pluralStringResource(R.plurals.audiobook_chapter_count, book.chapters.size, book.chapters.size),
-                    bookTime(book.durationMs),
-                ),
-                backdrop = cover,
-            ) { Cover(cover, book.title, it, book = true) }
-        }
-        item("actions") { BookDetailActions(book, active, catalog) }
-        if (active != null || book.progress != null) {
-            item("listening-position") { BookListeningPosition(book, active) }
-        }
-        item("chapter-header") { SectionHeader(stringResource(R.string.audiobook_chapters)) }
-        itemsIndexed(book.chapters, key = { _, chapter -> chapter.id }) { index, chapter ->
-            val palette = LocalPalette.current
-            val density = LocalLibraryDensity.current
-            val current = chapter.id == chapterId
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 8.dp).clip(Radius.row)
-                    .then(if (current) Modifier.background(palette.card) else Modifier)
-                    .alpha(if (playable) 1f else .38f)
-                    .clickable(enabled = playable) { container.audiobookPlayback.play(book, chapter.id) }
-                    .heightIn(min = 48.dp)
-                    .padding(start = 8.dp, end = 12.dp, top = density.rowPadding, bottom = density.rowPadding),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Box(Modifier.width(26.dp), contentAlignment = Alignment.CenterEnd) {
-                    if (current && active?.playing == true) NowPlayingBars(palette.primary)
-                    else Text((index + 1).toString(), style = Type.small, color = if (current) palette.primary else palette.faint)
+    Box(Modifier.fillMaxSize()) {
+        BookBackdrop(cover, book.title, LocalPalette.current)
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(bottom = 24.dp)) {
+            item("header") {
+                DetailHeader(
+                    kind = stringResource(R.string.audiobook_kind),
+                    title = book.title,
+                    facts = listOfNotNull(
+                        book.author,
+                        book.narrator?.let { stringResource(R.string.audiobook_narrator, it) },
+                        pluralStringResource(R.plurals.audiobook_chapter_count, book.chapters.size, book.chapters.size),
+                        bookTime(book.durationMs),
+                    ),
+                ) { Cover(cover, book.title, it, book = true) }
+            }
+            item("actions") { BookDetailActions(book, active, catalog) }
+            if (active != null || book.progress != null) {
+                item("listening-position") { BookListeningPosition(book, active) }
+            }
+            item("chapter-header") { SectionHeader(stringResource(R.string.audiobook_chapters)) }
+            itemsIndexed(book.chapters, key = { _, chapter -> chapter.id }) { index, chapter ->
+                val palette = LocalPalette.current
+                val density = LocalLibraryDensity.current
+                val current = chapter.id == chapterId
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 8.dp).clip(Radius.row)
+                        .then(if (current) Modifier.background(palette.card) else Modifier)
+                        .alpha(if (playable) 1f else .38f)
+                        .clickable(enabled = playable) { container.audiobookPlayback.play(book, chapter.id) }
+                        .heightIn(min = 48.dp)
+                        .padding(start = 8.dp, end = 12.dp, top = density.rowPadding, bottom = density.rowPadding),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Box(Modifier.width(26.dp), contentAlignment = Alignment.CenterEnd) {
+                        if (current && active?.playing == true) NowPlayingBars(palette.primary)
+                        else Text((index + 1).toString(), style = Type.small, color = if (current) palette.primary else palette.faint)
+                    }
+                    Text(chapter.title, Modifier.weight(1f), style = Type.body.copy(fontWeight = FontWeight.Medium),
+                        color = if (current) palette.primary else palette.foreground, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(bookTime(chapter.durationMs), style = Type.tiny, color = palette.faint)
                 }
-                Text(chapter.title, Modifier.weight(1f), style = Type.body.copy(fontWeight = FontWeight.Medium),
-                    color = if (current) palette.primary else palette.foreground, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(bookTime(chapter.durationMs), style = Type.tiny, color = palette.faint)
             }
         }
     }
