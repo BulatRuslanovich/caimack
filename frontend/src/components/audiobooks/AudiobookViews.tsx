@@ -7,7 +7,6 @@ import {
   BookHeadphonesIcon,
   BookmarkIcon,
   CheckIcon,
-  ChevronRightIcon,
   EllipsisIcon,
   ListMusicIcon,
   PauseIcon,
@@ -267,32 +266,11 @@ export function AudiobookRow({ book }: { book: Audiobook }) {
   );
 }
 
-function BookSection({
-  title,
-  books,
-  viewAll,
-  id,
-}: {
-  title: string;
-  books: Audiobook[];
-  viewAll?: boolean;
-  id?: string;
-}) {
-  const t = useT();
+function BookSection({ title, books }: { title: string; books: Audiobook[] }) {
   if (!books.length) return null;
   return (
-    <section id={id} className="flex min-w-0 flex-col gap-3.5">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="min-w-0 text-heading font-semibold wrap-anywhere">{title}</h2>
-        {viewAll && (
-          <PrefetchLink
-            href="/audiobooks"
-            className="inline-flex shrink-0 items-center gap-1 text-sm whitespace-nowrap text-primary"
-          >
-            {t("action.seeAll")} <ChevronRightIcon size={16} />
-          </PrefetchLink>
-        )}
-      </div>
+    <section className="flex min-w-0 flex-col gap-3.5">
+      <h2 className="min-w-0 text-heading font-semibold wrap-anywhere">{title}</h2>
       <ul className="divide-y divide-border">
         {books.map((book) => (
           <AudiobookRow key={book.id} book={book} />
@@ -340,23 +318,9 @@ function listeningBooks(books: Audiobook[]) {
 }
 
 export function AudiobookHome() {
-  const t = useT();
   const { books } = useAudiobooks();
-  const listening = listeningBooks(books).slice(0, 3);
-  const unplayed = books.filter((book) => !book.progress).slice(0, 3);
-  if (!listening.length && !unplayed.length) return null;
-
-  return (
-    <section className="flex min-w-0 flex-col gap-5" aria-labelledby="home-audiobooks">
-      <h2 id="home-audiobooks" className="font-display text-heading">
-        {t("nav.audiobooks")}
-      </h2>
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <BookSection title={t("audiobooks.listening")} books={listening} viewAll />
-        <BookSection title={t("audiobooks.unplayed")} books={unplayed} viewAll />
-      </div>
-    </section>
-  );
+  const latest = listeningBooks(books)[0];
+  return latest ? <ContinueBook book={latest} /> : null;
 }
 
 export function LibraryAudiobookCard({ book, grid }: { book: Audiobook; grid: boolean }) {

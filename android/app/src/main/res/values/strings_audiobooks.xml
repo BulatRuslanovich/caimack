@@ -8,9 +8,7 @@
     <string name="audiobook_by_duration">By duration</string>
     <string name="audiobook_all">All audiobooks</string>
     <string name="audiobook_in_progress">In progress</string>
-    <string name="audiobook_unplayed">Not started</string>
     <string name="audiobook_saved_section">Saved audiobooks</string>
-    <string name="audiobook_browse_all">View all</string>
     <string name="audiobook_empty">No audiobooks here</string>
     <string name="audiobook_empty_saved">No saved audiobooks here</string>
     <string name="audiobook_narrator">Read by %1$s</string>

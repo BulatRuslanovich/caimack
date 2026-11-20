@@ -77,13 +77,13 @@ fun HomeScreen(nav: NavController) {
         if (mode == "audiobooks") {
             AudiobookBrowse()
         } else {
-            MusicHome(nav, catalog.takeIf { mode == "all" }) { mode = "audiobooks" }
+            MusicHome(nav, catalog.takeIf { mode == "all" })
         }
     }
 }
 
 @Composable
-private fun MusicHome(nav: NavController, audiobooks: AudiobookCatalog?, openBooks: () -> Unit) {
+private fun MusicHome(nav: NavController, audiobooks: AudiobookCatalog?) {
     val container = LocalContainer.current
     Load(
         key = "home",
@@ -91,14 +91,14 @@ private fun MusicHome(nav: NavController, audiobooks: AudiobookCatalog?, openBoo
             container.flushSignals()
             container.api.homeFeed().blocks
         },
-        error = { retry -> HomeFeed(emptyList(), nav, audiobooks, openBooks) { Failure(retry) } },
+        error = { retry -> HomeFeed(emptyList(), nav, audiobooks) { Failure(retry) } },
         loading = {
-            HomeFeed(emptyList(), nav, audiobooks, openBooks) {
+            HomeFeed(emptyList(), nav, audiobooks) {
                 Box(Modifier.fillMaxWidth().padding(vertical = 64.dp), contentAlignment = Alignment.Center) { RecordLoading(44.dp) }
             }
         },
     ) { blocks ->
-        HomeFeed(blocks, nav, audiobooks, openBooks, if (blocks.isEmpty()) {
+        HomeFeed(blocks, nav, audiobooks, if (blocks.isEmpty()) {
             { Empty(stringResource(R.string.home_empty_title)) }
         } else null)
     }
@@ -109,7 +109,6 @@ private fun HomeFeed(
     blocks: List<HomeBlock>,
     nav: NavController,
     audiobooks: AudiobookCatalog?,
-    openBooks: () -> Unit,
     status: (@Composable () -> Unit)?,
 ) {
     val container = LocalContainer.current
@@ -128,8 +127,6 @@ private fun HomeFeed(
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         if (recommendations && status == null) item("personal-radio") { RadioHero(blocks.flatMap { it.tracks.orEmpty() }) }
-        audiobooks?.let { homeAudiobooks(it, openBooks) }
-        if (status != null) item("music-status") { status() }
 
         val quick = blocks.filter { it.zone == "Quick" }
         if (quick.isNotEmpty()) {
@@ -144,8 +141,14 @@ private fun HomeFeed(
 
         if (recommendations && status == null) item("recap") { RecapBanner() }
         val browse = blocks.filter { it.zone == "Browse" }
-        browse.firstOrNull()?.let { block -> item(block.key) { Block(block, nav, shown, seen) } }
-        browse.drop(1).forEach { block -> item(block.key) { Block(block, nav, shown, seen) } }
+        val audiobookAnchor = browse.firstOrNull { it.baseKey == "newArrivals" }
+            ?: browse.firstOrNull { it.baseKey == "newAlbums" }
+        if (audiobookAnchor == null) audiobooks?.let { homeAudiobook(it) }
+        if (status != null) item("music-status") { status() }
+        browse.forEach { block ->
+            item(block.key) { Block(block, nav, shown, seen) }
+            if (block == audiobookAnchor) audiobooks?.let { homeAudiobook(it) }
+        }
     }
 }
 

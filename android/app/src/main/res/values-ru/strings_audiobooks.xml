@@ -8,9 +8,7 @@
     <string name="audiobook_by_duration">По длительности</string>
     <string name="audiobook_all">Все аудиокниги</string>
     <string name="audiobook_in_progress">Прослушиваемые аудиокниги</string>
-    <string name="audiobook_unplayed">Ещё не начаты</string>
     <string name="audiobook_saved_section">В медиатеке</string>
-    <string name="audiobook_browse_all">Все</string>
     <string name="audiobook_empty">Здесь пока нет аудиокниг</string>
     <string name="audiobook_empty_saved">Здесь пока нет сохранённых аудиокниг</string>
     <string name="audiobook_narrator">Читает %1$s</string>

@@ -30,7 +30,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -112,13 +111,12 @@ fun AudiobookBrowse() {
     }
 }
 
-internal fun LazyListScope.homeAudiobooks(catalog: AudiobookCatalog, open: () -> Unit) {
-    if (catalog.books.isEmpty()) return
-    item("audiobook-home-title") { BookHeader(R.string.nav_audiobooks, open) }
-    val inProgress = catalog.books.inProgress()
-    inProgress.firstOrNull()?.let { book -> item("audiobook-home-continue") { BookHero(book, catalog) } }
-    bookSection("home-progress", R.string.audiobook_in_progress, inProgress.take(3), catalog)
-    bookSection("home-unplayed", R.string.audiobook_unplayed, catalog.books.filter { it.progress == null }.take(3), catalog)
+internal fun LazyListScope.homeAudiobook(catalog: AudiobookCatalog) {
+    val latest = catalog.books.inProgress().firstOrNull() ?: return
+    item("audiobook-home-continue") {
+        BookHeader(R.string.audiobook_continue)
+        BookHero(latest, catalog)
+    }
 }
 
 private fun LazyListScope.bookSection(key: String, title: Int, books: List<Audiobook>, catalog: AudiobookCatalog) {
@@ -131,17 +129,12 @@ private fun List<Audiobook>.inProgress(): List<Audiobook> =
     filter { it.progress?.completed == false }.sortedByDescending { it.progress?.updatedAtMs }
 
 @Composable
-private fun BookHeader(title: Int, open: (() -> Unit)? = null) {
-    Row(
+private fun BookHeader(title: Int) {
+    Text(
+        stringResource(title),
         Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(stringResource(title), Modifier.weight(1f), style = Type.section)
-        if (open != null) TextButton(onClick = open) {
-            Text(stringResource(R.string.audiobook_browse_all), color = LocalPalette.current.primary, style = Type.small)
-            Icon(Lucide.ChevronRight, null, Modifier.size(16.dp), tint = LocalPalette.current.primary)
-        }
-    }
+        style = Type.section,
+    )
 }
 
 @Composable

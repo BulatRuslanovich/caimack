@@ -34,7 +34,6 @@ export function HomePage() {
 
   return (
     <>
-      <AudiobookHome />
       <Query
         result={feed}
         isEmpty={(data) => data.blocks.length === 0}
@@ -49,6 +48,7 @@ export function HomePage() {
       >
         {({ blocks }) => <Blocks blocks={blocks} />}
       </Query>
+      {!feed.data?.blocks.length && <AudiobookHome />}
     </>
   );
 }
@@ -74,6 +74,9 @@ function Blocks({ blocks }: { blocks: HomeBlock[] }) {
 
   const seen = new Set(shown);
   const browse = [];
+  const audiobookAnchor =
+    blocks.find((block) => block.zone === "Browse" && block.baseKey === "newArrivals") ??
+    blocks.find((block) => block.zone === "Browse" && block.baseKey === "newAlbums");
 
   for (const block of blocks) {
     if (block.zone !== "Browse") continue;
@@ -96,6 +99,7 @@ function Blocks({ blocks }: { blocks: HomeBlock[] }) {
 
     for (const track of visible.tracks ?? []) seen.add(track.id);
     browse.push(<Block key={block.key} block={visible} shown={before} />);
+    if (block === audiobookAnchor) browse.push(<AudiobookHome key="last-audiobook" />);
   }
 
   return (
@@ -112,9 +116,8 @@ function Blocks({ blocks }: { blocks: HomeBlock[] }) {
 
       <RecapBanner />
 
-      {browse[0]}
-
-      {browse.slice(1)}
+      {!audiobookAnchor && <AudiobookHome />}
+      {browse}
     </div>
   );
 }

@@ -61,7 +61,6 @@ export const en = {
 
   "audiobooks.listening": "In progress",
   "audiobooks.kind": "Audiobook",
-  "audiobooks.unplayed": "Unplayed audiobooks",
   "audiobooks.saved": "In your library",
   "audiobooks.downloaded": "Downloaded",
   "audiobooks.catalog": "All audiobooks",
