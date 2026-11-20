@@ -112,13 +112,14 @@ import kotlinx.coroutines.CancellationException
 private enum class Panel { None, Lyrics, Queue }
 @Composable
 fun FullPlayer(state: PlayerState, onClose: () -> Unit) {
+    val savedColor = LocalPalette.current.primary
     CaimackTheme(dark = true, palette = PlayerPalette) {
-        FullPlayerContent(state, onClose)
+        FullPlayerContent(state, savedColor, onClose)
     }
 }
 
 @Composable
-private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
+private fun FullPlayerContent(state: PlayerState, savedColor: Color, onClose: () -> Unit) {
     val haptic = rememberPlayerHaptics()
     val palette = LocalPalette.current
     val container = LocalContainer.current
@@ -209,7 +210,7 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
                 IconAction(
                     if (liked) Lucide.HeartFilled else Lucide.Heart,
                     stringResource(if (liked) R.string.menu_unlike else R.string.menu_like),
-                    tint = if (liked) palette.primary else palette.muted,
+                    tint = if (liked) savedColor else palette.muted,
                 ) { haptic(PlayerHaptic.Favorite); container.favorites.toggle(track) }
             }
             if (panel != Panel.Queue) {

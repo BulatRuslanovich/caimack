@@ -360,7 +360,7 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
               <Button
                 variant="ghost"
                 size="icon-lg"
-                className={cn("shrink-0", track.isFavorite && "text-primary hover:text-primary")}
+                className={cn("library-save-control shrink-0", track.isFavorite && "text-primary hover:text-primary")}
                 onClick={onToggleFavorite}
                 aria-label={
                   track.isFavorite ? t("tracks.removeFromFavorites") : t("tracks.addToFavorites")

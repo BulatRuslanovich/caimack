@@ -80,8 +80,9 @@ internal fun AudiobookFullPlayer(
     onOpenBook: () -> Unit,
     onClose: () -> Unit,
 ) {
+    val libraryPalette = LocalPalette.current
     CaimackTheme(dark = true, palette = PlayerPalette) {
-        BookPlayerContent(book, playback, cover, onOpenBook, onClose)
+        BookPlayerContent(book, playback, cover, libraryPalette, onOpenBook, onClose)
     }
 }
 
@@ -90,6 +91,7 @@ private fun BookPlayerContent(
     book: Audiobook,
     playback: AudiobookPlaybackState,
     cover: String?,
+    libraryPalette: Palette,
     onOpenBook: () -> Unit,
     onClose: () -> Unit,
 ) {
@@ -145,7 +147,7 @@ private fun BookPlayerContent(
                         haptic(PlayerHaptic.Favorite)
                         container.audiobookStore.setSaved(book.id, !book.saved)
                     }, contentAlignment = Alignment.Center) {
-                        LibrarySaveIcon(book.saved, stringResource(if (book.saved) R.string.collection_remove else R.string.collection_add))
+                        LibrarySaveIcon(book.saved, stringResource(if (book.saved) R.string.collection_remove else R.string.collection_add), savedPalette = libraryPalette)
                     }
                 }
                 if (!chapters && duration > 0) {

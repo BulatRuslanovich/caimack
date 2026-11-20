@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
 
 /** Keep one mark on screen while its strokes become a check, rather than swapping icons. */
 @Composable
-internal fun LibrarySaveIcon(saved: Boolean, label: String?) {
+internal fun LibrarySaveIcon(saved: Boolean, label: String?, savedPalette: Palette = LocalPalette.current) {
     val palette = LocalPalette.current
     val motion = systemMotionEnabled()
     val progress by animateFloatAsState(if (saved) 1f else 0f, tween(320), label = "library check")
@@ -51,15 +51,15 @@ internal fun LibrarySaveIcon(saved: Boolean, label: String?) {
     }
     Canvas(Modifier.size(24.dp).semantics { if (label != null) contentDescription = label }) {
         val unit = size.minDimension / 24f
-        val color = lerp(palette.muted, palette.primary, progress)
+        val color = lerp(palette.muted, savedPalette.primary, progress)
         if (saved && ripple.value < 1f) {
-            drawCircle(palette.primary.copy(alpha = (1f - ripple.value) * 0.5f),
+            drawCircle(savedPalette.primary.copy(alpha = (1f - ripple.value) * 0.5f),
                 radius = (9f + 3f * ripple.value) * unit, style = Stroke(unit))
         }
         scale(bounce.value) {
-            drawCircle(palette.primary.copy(alpha = progress), radius = 9f * unit)
+            drawCircle(savedPalette.primary.copy(alpha = progress), radius = 9f * unit)
             drawCircle(color, radius = 9f * unit, style = Stroke(2f * unit))
-            val ink = lerp(palette.muted, palette.onPrimary, progress)
+            val ink = lerp(palette.muted, savedPalette.onPrimary, progress)
             fun point(x: Float, y: Float) = Offset(x * unit, y * unit)
             if (progress < 1f) drawLine(
                 ink.copy(alpha = 1f - progress), point(12f, 8f), point(12f, 16f),

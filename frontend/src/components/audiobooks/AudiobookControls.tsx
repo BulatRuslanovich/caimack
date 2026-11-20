@@ -141,7 +141,7 @@ export function AudiobookSaveButton({
     <Button
       variant="ghost"
       size={size}
-      className={cn(current.saved && "text-primary hover:text-primary", className)}
+      className={cn("library-save-control", current.saved && "text-primary hover:text-primary", className)}
       aria-label={label}
       aria-pressed={current.saved}
       aria-busy={saving}

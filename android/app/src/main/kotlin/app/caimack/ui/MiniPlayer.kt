@@ -243,11 +243,7 @@ internal fun MiniPlayerLayout(
                     }
                     .clickable(role = Role.Button) { haptic(PlayerHaptic.Favorite); save() },
                     contentAlignment = Alignment.Center) {
-                    if (saved) {
-                        Box(Modifier.size(24.dp).clip(CircleShape).background(palette.success), contentAlignment = Alignment.Center) {
-                            Icon(Lucide.Check, null, tint = palette.background, modifier = Modifier.size(16.dp))
-                        }
-                    } else Icon(Lucide.CirclePlus, null, tint = foreground, modifier = Modifier.size(24.dp))
+                    LibrarySaveIcon(saved, null)
                 }
                 Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                     IconAction(if (playing) Lucide.Pause else Lucide.Play,

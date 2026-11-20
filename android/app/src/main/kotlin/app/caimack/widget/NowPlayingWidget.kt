@@ -38,6 +38,8 @@ import app.caimack.ui.Colorway
 import app.caimack.ui.Palette
 import app.caimack.ui.artistsOf
 import app.caimack.ui.color
+import app.caimack.ui.coverPalette
+import app.caimack.ui.coverPaletteSeed
 import app.caimack.ui.coverCrop
 import app.caimack.ui.playerBackdropTone
 import app.caimack.ui.PlayerBackdropSettings
@@ -230,16 +232,19 @@ class NowPlayingWidget : AppWidgetProvider() {
             val idle = title == null
             val playing = stored.getBoolean(PLAYING, false)
             val liked = stored.getBoolean(LIKED, false)
-            val tone = cover?.takeIf { look.coverTone }?.let { bitmap ->
+            val tone = cover?.takeIf { look.coverTone || look.colorway == Colorway.Cover }?.let { bitmap ->
                 val edge = PlayerBackdropSettings.sampleEdge
                 val sample = Bitmap.createScaledBitmap(bitmap, edge, edge, true)
                 IntArray(edge * edge).also { sample.getPixels(it, 0, edge, 0, 0, edge, edge) }
-                    .let(::playerBackdropTone)?.let { CoverTone(it.hue, it.chroma) }
+                    .let(::playerBackdropTone)
             }
+
+            val washTone = tone?.takeIf { look.coverTone }?.let { CoverTone(it.hue, it.chroma) }
+            val savedSeed = tone?.takeIf { look.colorway == Colorway.Cover && liked }?.let(::coverPaletteSeed)
 
             return RemoteViews(context.packageName, layout).apply {
                 tint(R.id.widget_root, "setBackgroundTintList", look) { it.card }
-                icon(R.id.widget_wash, look) { palette -> wash(tone?.color(palette, look.colorway)) }
+                icon(R.id.widget_wash, look) { palette -> wash(washTone?.color(palette, look.colorway)) }
                 artwork(this)
 
                 setTextViewText(R.id.widget_title, title ?: "Caimack")
@@ -277,7 +282,13 @@ class NowPlayingWidget : AppWidgetProvider() {
                 tint(R.id.widget_secondary, "setBackgroundTintList", look) { it.raised }
                 colorInt(R.id.widget_secondary, "setColorFilter", look) { it.foreground }
                 colorInt(R.id.widget_previous, "setColorFilter", look) { it.foreground }
-                colorInt(R.id.widget_like, "setColorFilter", look) { if (liked) it.primary else it.muted }
+                colorInt(R.id.widget_like, "setColorFilter", look) { palette ->
+                    when {
+                        !liked -> palette.muted
+                        savedSeed != null -> coverPalette(palette.dark, savedSeed).primary
+                        else -> palette.primary
+                    }
+                }
 
                 val playingParts = if (idle) View.GONE else View.VISIBLE
                 setViewVisibility(R.id.widget_previous, playingParts)

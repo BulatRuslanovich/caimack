@@ -62,7 +62,7 @@ export function Player() {
     <Button
       variant="ghost"
       size="icon"
-      className={cn(className, currentTrack.isFavorite && "text-primary")}
+      className={cn(className, currentTrack.isFavorite && "text-primary hover:text-primary")}
       onClick={likeCurrent}
       aria-label={favoriteLabel}
       aria-pressed={currentTrack.isFavorite}
