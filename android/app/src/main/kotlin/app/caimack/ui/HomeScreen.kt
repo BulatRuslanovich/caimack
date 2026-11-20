@@ -3,6 +3,9 @@
 
 package app.caimack.ui
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -75,14 +78,28 @@ fun HomeScreen(nav: NavController) {
         mode = if (category == selected) "all" else category
         downloads = false
     }
+    // Keep motion and the horizontal position as the selected feed changes its LazyColumn.
+    val scroll = rememberLazyListState()
+    val duration = if (systemMotionEnabled()) 240 else 0
+    val music by animateFloatAsState(if (selected == "music") 1f else 0f, tween(duration), label = "music category")
+    val books by animateFloatAsState(if (selected == "audiobooks") 1f else 0f, tween(duration), label = "book category")
+    val emphasis by animateFloatAsState(if (downloads) 1f else 0f, tween(duration), label = "downloads selection")
+    LaunchedEffect(selected) {
+        val index = when (selected) {
+            "music" -> 1
+            "audiobooks" -> 2
+            else -> 0
+        }
+        if (duration == 0) scroll.scrollToItem(index) else scroll.animateScrollToItem(index)
+    }
     val filters: @Composable () -> Unit = {
-        CategoryFilterRow(selected, false, {}, focusIndex = when (selected) { "music" -> 1; "audiobooks" -> 2; else -> 0 }) {
+        CategoryFilterRow(selected, false, {}, scroll = scroll, autoReset = false) {
             item("all") { CategoryFilter(R.string.home_filter_all, selected == "all") { select("all") } }
             item("music") {
-                HomeCategory(R.string.home_filter_music, selected == "music", downloads, { select("music") }, { downloads = !downloads })
+                HomeCategory(R.string.home_filter_music, selected == "music", downloads, music, emphasis, { select("music") }, { downloads = !downloads })
             }
             if (enabled) item("audiobooks") {
-                HomeCategory(R.string.nav_audiobooks, selected == "audiobooks", downloads, { select("audiobooks") }, { downloads = !downloads })
+                HomeCategory(R.string.nav_audiobooks, selected == "audiobooks", downloads, books, emphasis, { select("audiobooks") }, { downloads = !downloads })
             }
         }
     }

@@ -78,7 +78,7 @@ fun AudiobookBrowse(downloadedOnly: Boolean, homeFilters: @Composable () -> Unit
     val inProgress = books.inProgress()
     LazyColumn(
         Modifier.fillMaxSize(),
-        contentPadding = playerContentPadding(top = 12.dp, bottom = 20.dp),
+        contentPadding = playerContentPadding(top = 16.dp, bottom = 20.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         item("home-filters") { homeFilters() }
