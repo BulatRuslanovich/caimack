@@ -3,6 +3,7 @@
 "use client";
 
 import { useAudiobooks } from "@/contexts/AudiobookContext";
+import { PlaybackDevices } from "../PlaybackDevices";
 import { useT } from "@/contexts/I18nContext";
 import { audiobookHref } from "@/lib/audiobooks";
 import { cn } from "@/lib/cn";
@@ -89,6 +90,7 @@ export function AudiobookFullScreenPlayer({
             <AudiobookTransport size="full" />
 
             <div className="flex items-center justify-between gap-2">
+              <PlaybackDevices compact transferBook={player.transferTo} />
               <AudiobookSpeed />
               <div className="ml-auto flex w-[12.5rem] max-w-[50%] items-center gap-2 pointer-coarse:hidden">
                 <VolumeControls {...player} size="icon-lg" />

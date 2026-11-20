@@ -26,6 +26,7 @@ export const en = {
   "collection.noResults": "No matches in your library",
   "collection.failed": "Could not update your library. Try again.",
   "connect.title": "Playback devices",
+  "connect.audiobookDescription": "Continue this chapter on another device from your current position.",
   "connect.description": "Choose where the music plays. Use this player to control it.",
   "connect.thisDevice": "This device",
   "connect.playingOn": "Playing on {device}",

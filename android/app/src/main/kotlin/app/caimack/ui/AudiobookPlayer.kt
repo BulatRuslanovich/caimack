@@ -51,7 +51,6 @@ internal fun AudiobookMiniPlayer(
     playback: AudiobookPlaybackState,
     cover: String?,
     onOpen: () -> Unit,
-    onBook: () -> Unit,
 ) {
     val container = LocalContainer.current
     val chapter = book.chapters.firstOrNull { it.id == playback.chapterId }
@@ -66,7 +65,7 @@ internal fun AudiobookMiniPlayer(
         onOpen = onOpen,
         toggle = { container.audiobookPlayback.toggle(book) },
         save = { container.audiobookStore.setSaved(book.id, !book.saved) },
-        leadingControl = { _, secondary -> IconAction(Lucide.LibraryBig, stringResource(R.string.audiobook_open_book), tint = secondary, onClick = onBook) },
+        leadingControl = { _, secondary -> PlaybackDevicesButton(compact = true, iconTint = secondary, audiobook = true) },
     ) { modifier ->
         MiniPlayerText(book.title, chapter?.title ?: book.author.orEmpty(), null, modifier.testTag("mini-player-tracks"))
     }
@@ -191,7 +190,7 @@ private fun BookPlayerContent(
                     },
                 )
                 Row(Modifier.fillMaxWidth().testTag("full-player-footer"), verticalAlignment = Alignment.CenterVertically) {
-                    Spacer(Modifier.weight(1f))
+                    PlaybackDevicesButton(Modifier.weight(1f), audiobook = true)
                     Box(Modifier.semantics { selected = chapters }) {
                         IconAction(Lucide.ListVideo, stringResource(R.string.audiobook_chapters),
                             tint = if (chapters) palette.primary else palette.muted) { chapters = !chapters }

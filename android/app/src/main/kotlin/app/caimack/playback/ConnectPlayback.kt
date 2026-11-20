@@ -29,6 +29,7 @@ import okhttp3.Request
 data class ConnectUiState(
     val devices: List<ConnectDevice> = emptyList(),
     val selectedId: String? = null,
+    val bookDeviceId: String? = null,
     val selectedNameHint: String? = null,
     val connected: Boolean = false,
     val playback: ConnectState? = null,
@@ -53,6 +54,11 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
     private var fallback: Job? = null
     private var defaultNetwork: Network? = null
     private var call: Call? = null
+    private var sentBook: app.caimack.api.ConnectBook? = null
+    private var sentBookSession: Long? = null
+    private var sentBookConnection: String? = null
+    private var bookReceivedAt = 0L
+    private val bookReports = Mutex()
     private var connectionId: String? = null
     private var account: String? = null
     private var generation = 0L
@@ -122,6 +128,9 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
                 connectionId = null
                 selection++
                 snapshot = ConnectSnapshot()
+                sentBook = null
+                sentBookSession = null
+                container.audiobookPlayback.showRemote(null)
                 current.value = ConnectUiState()
                 remoteTracks = emptyList()
                 wantsLocal = false
@@ -143,6 +152,7 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
                     while (isActive && epoch == generation) {
                         try {
                             if (beats++ % 5 == 0) connectionId?.let { container.api.connectHeartbeat(ConnectHeartbeat(container.deviceId, it)) }
+                            reportBook()
                             report()
                         }
                         catch (cancelled: CancellationException) { throw cancelled }
@@ -195,7 +205,8 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
     private fun transportLost() {
         connectionId = null
         if (disconnectedAt == null) disconnectedAt = SystemClock.elapsedRealtime()
-        current.value = current.value.copy(devices = emptyList(), connected = false, pending = false)
+        container.audiobookPlayback.showRemote(snapshot.audiobook?.takeIf { container.audiobooksEnabled.value }?.copy(playing = false))
+        current.value = current.value.copy(devices = emptyList(), bookDeviceId = null, connected = false, pending = false)
         if (isRemote && fallback == null) {
             // A change of default network may still leave the same renderer reachable.
             fallback = container.scope.launch(Dispatchers.Main) {
@@ -212,6 +223,7 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
                 val url = container.server.resolve("api/playback/connect/events")?.newBuilder()
                     ?.addQueryParameter("deviceId", container.deviceId)
                     ?.addQueryParameter("deviceName", container.deviceName)
+                    ?.addQueryParameter("audiobooks", "true")
                     ?.addQueryParameter("deviceKind", "android")?.build() ?: return
                 val next = client.newCall(Request.Builder().url(url).header("Accept", "text/event-stream").build())
                 call = next
@@ -258,15 +270,23 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
 
     private suspend fun accept(next: ConnectSnapshot, transport: Boolean = false) {
         if (next.epoch == snapshot.epoch && next.version < snapshot.version) return
+        val previousBook = snapshot.audiobook
         snapshot = next
         connectionId = next.devices.find { it.id == container.deviceId }?.connectionId
         if (transport) {
             fallback?.cancel()
             fallback = null
         }
+        val book = next.audiobook?.takeIf { container.audiobooksEnabled.value }
+        if (book != previousBook) bookReceivedAt = SystemClock.elapsedRealtime()
+        val remoteBook = book?.takeIf { it.deviceId != container.deviceId || container.audiobookPlayback.localState == null }
+        if (previousBook?.deviceId == container.deviceId && book?.deviceId != container.deviceId && (book != null || next.playback?.isPlaying == true) &&
+            container.audiobookPlayback.localState != null) container.audiobookPlayback.pauseForMusic()
+        if (remoteBook != null && previousBook?.deviceId != remoteBook.deviceId && container.player.localState.playing) container.player.pauseLocal()
+        container.audiobookPlayback.showRemote(remoteBook)
         val selected = current.value.selectedId
         val selectedDevice = next.devices.find { it.id == selected }
-        current.value = current.value.copy(devices = next.devices, connected = transport || current.value.connected,
+        current.value = current.value.copy(devices = next.devices, bookDeviceId = remoteBook?.deviceId?.takeIf { id -> id != container.deviceId && next.devices.any { it.id == id } }, connected = transport || current.value.connected,
             selectedNameHint = selectedDevice?.name ?: current.value.selectedNameHint)
         if (selected != null && selectedDevice == null) {
             returnToPhone(offline = false)
@@ -274,6 +294,7 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
             return
         }
         if (transport) disconnectedAt = null
+        if (book != null) return
         val active = next.playback ?: return
         if (active.deviceId == container.deviceId) return
         val device = next.devices.find { it.id == active.deviceId } ?: return
@@ -449,6 +470,52 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
         }
     }
 
+    private suspend fun reportBook() = bookReports.withLock {
+        val connection = connectionId ?: return@withLock
+        val player = container.audiobookPlayback
+        val local = player.localState?.takeIf { container.audiobooksEnabled.value }
+        val value = local?.let { app.caimack.api.ConnectBook(it.bookId, it.chapterId, it.positionMs, it.playing) }
+        val claim = value != null && (sentBook == null || sentBookSession != player.sessionId || (value.playing && sentBookConnection != connection))
+        if (!claim && value == sentBook && (value == null || sentBookConnection == connection)) return@withLock
+        val session = player.sessionId
+        container.api.connectBookReport(app.caimack.api.ConnectBookReport(container.deviceId, connection, value, claim))
+        sentBook = value
+        sentBookSession = session
+        sentBookConnection = connection
+    }
+
+    fun routeBook(command: ConnectCommand.PlayAudiobook): Boolean {
+        val device = current.value.bookDeviceId ?: return false
+        if (!current.value.connected || current.value.devices.none { it.id == device }) return false
+        container.scope.launch(Dispatchers.Main) {
+            try { sendBook(device, command) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { failure() }
+        }
+        return true
+    }
+
+    private suspend fun sendBook(device: String, command: ConnectCommand.PlayAudiobook) {
+        accept(container.api.connectCommand(ConnectRequest(UUID.randomUUID().toString(), device, command)))
+    }
+
+    suspend fun transferAudiobook(target: String?) {
+        val player = container.audiobookPlayback
+        if (target == current.value.bookDeviceId) return
+        val book = snapshot.audiobook
+        if (book != null && player.localState == null) {
+            val elapsed = if (book.playing) SystemClock.elapsedRealtime() - bookReceivedAt else 0L
+            val command = ConnectCommand.PlayAudiobook(book.bookId, book.chapterId, book.positionMs + elapsed, book.playing)
+            if (target == null) {
+                player.receiveHandoff(command)
+                reportBook()
+            } else sendBook(target, command)
+        } else if (target != null) {
+            check(current.value.connected && current.value.devices.any { it.id == target && it.audiobooks })
+            player.transfer { command -> sendBook(target, command) }
+        }
+    }
+
     private suspend fun execute(envelope: ConnectEnvelope) {
         if (envelope.connectionId != connectionId) return
         var failure: String? = null
@@ -456,6 +523,14 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
             val remaining = Instant.parse(envelope.expiresAt).toEpochMilli() - System.currentTimeMillis()
             check(remaining > 0) { "Playback command expired" }
             if (envelope.id !in executed) withTimeout(remaining) {
+                if (envelope.command is ConnectCommand.PlayAudiobook) {
+                    check(container.audiobooksEnabled.value)
+                    container.audiobookPlayback.receiveHandoff(envelope.command)
+                    reportBook()
+                    executed.add(envelope.id)
+                    if (executed.size > 128) executed.remove(executed.first())
+                    return@withTimeout
+                }
                 if (envelope.queueRevision != null) report()
                 check(envelope.queueRevision == null || snapshot.playback?.queueRevision == envelope.queueRevision) { "Playback queue changed" }
                 if (envelope.command is ConnectCommand.Play || envelope.command is ConnectCommand.StartRadio) {

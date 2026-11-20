@@ -1,6 +1,7 @@
 <resources>
     <string name="connect_title">Playback devices</string>
     <string name="connect_this_device">This device</string>
+    <string name="connect_audiobook_description">Continue this chapter on another device from your current position.</string>
     <string name="connect_description">Choose where the music plays. Use this player to control it.</string>
     <string name="connect_playing_on">Playing on %1$s</string>
     <string name="connect_unavailable">%1$s is unavailable</string>

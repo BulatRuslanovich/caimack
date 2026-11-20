@@ -17,6 +17,7 @@ export interface ConnectDevice {
   name: string;
   connectionId: string;
   kind?: "web" | "android";
+  audiobooks?: boolean;
 }
 
 export interface ConnectPlayback {
@@ -41,14 +42,31 @@ export interface ConnectPlayback {
   sleepTimer: SleepTimer | null;
 }
 
+export type BookPlayback = Omit<AudiobookHandoff, "type">;
+export interface ActiveBook extends BookPlayback {
+  deviceId: string;
+  reportedAt: string;
+}
+
 export interface ConnectSnapshot {
+  audiobook?: ActiveBook | null;
   epoch: string;
   version: number;
   devices: ConnectDevice[];
   playback: ConnectPlayback | null;
 }
 
+export interface AudiobookHandoff {
+  keepPosition?: boolean;
+  type: "playAudiobook";
+  bookId: string;
+  chapterId: string;
+  positionMs: number;
+  playing: boolean;
+}
+
 export type ConnectCommand =
+  | AudiobookHandoff
   | { type: "setPlaying"; playing: boolean }
   | { type: "next" | "previous" | "clear" | "clearUpcoming" }
   | { type: "seek"; positionSeconds: number }

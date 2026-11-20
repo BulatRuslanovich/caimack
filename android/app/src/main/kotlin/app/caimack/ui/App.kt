@@ -309,7 +309,7 @@ private fun AppContent(
         miniPlayer = {
             if (activeAudiobook != null && bookPlayback != null) {
                 AudiobookMiniPlayer(activeAudiobook, bookPlayback, bookCover,
-                    onOpen = { expanded = true }, onBook = { navigate(AudiobookRoute(activeAudiobook.id)) })
+                    onOpen = { expanded = true })
             } else MiniPlayer(playback) { expanded = true }
         },
     ) { padding ->

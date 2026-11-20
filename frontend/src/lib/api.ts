@@ -61,7 +61,12 @@ import type {
   YandexSearch,
 } from "@/lib/types";
 import { yandexMusicToken } from "@/lib/yandexMusic";
-import type { ConnectCommand, ConnectPlayback, ConnectSnapshot } from "@/lib/playback/connect";
+import type {
+  BookPlayback,
+  ConnectCommand,
+  ConnectPlayback,
+  ConnectSnapshot,
+} from "@/lib/playback/connect";
 
 const SECTION_SIZE = 12;
 const EVENTS_FLUSH_WAIT_MS = 1500;
@@ -123,6 +128,17 @@ export const api = {
       method: "PUT",
       body: { deviceId, connectionId, state },
       signal: signal ?? AbortSignal.timeout(8000),
+    }),
+  connectBookReport: (
+    deviceId: string,
+    connectionId: string,
+    state: BookPlayback | null,
+    claim: boolean,
+  ) =>
+    request<void>("/playback/connect/audiobook", {
+      method: "PUT",
+      body: { deviceId, connectionId, state, claim },
+      signal: AbortSignal.timeout(5000),
     }),
   connectCommand: (id: string, deviceId: string, command: ConnectCommand, queueRevision?: number) =>
     request<ConnectSnapshot>("/playback/connect/commands", {

@@ -1,6 +1,7 @@
 <resources>
     <string name="connect_title">Устройства воспроизведения</string>
     <string name="connect_this_device">Это устройство</string>
+    <string name="connect_audiobook_description">Продолжите эту главу на другом устройстве с текущей позиции.</string>
     <string name="connect_description">Выберите, где звучит музыка. Управляйте ей в этом плеере.</string>
     <string name="connect_playing_on">Играет на %1$s</string>
     <string name="connect_unavailable">%1$s недоступно</string>

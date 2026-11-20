@@ -771,6 +771,7 @@ class PlaybackService : MediaLibraryService() {
             return resolve(container, track.toMediaItem(container.media))
         }
         when (command) {
+            is ConnectCommand.PlayAudiobook -> error("Audiobook command reached the music renderer")
             is ConnectCommand.SetPlaying -> {
                 check(!command.playing || player.mediaItemCount > 0) { "Playback queue is empty" }
                 if (command.playing && player.playbackState == Player.STATE_IDLE) player.prepare()

@@ -12,6 +12,7 @@ import { PrefetchLink } from "@/components/PrefetchLink";
 import { VolumeControls } from "@/components/PlayerVolume";
 import { Button } from "@/components/ui/button";
 import { useAudiobookClock, useAudiobooks } from "@/contexts/AudiobookContext";
+import { PlaybackDevices } from "../PlaybackDevices";
 import { useT } from "@/contexts/I18nContext";
 import { isTypingTarget, resolveShortcut } from "@/lib/shortcuts";
 import { AudiobookCover, useAudiobookArtwork } from "./AudiobookViews";
@@ -65,6 +66,11 @@ function AudiobookPlayer({ book }: { book: Audiobook }) {
         }
         mobileControls={
           <>
+            <PlaybackDevices
+              compact
+              transferBook={player.transferTo}
+              className="relative md:hidden"
+            />
             <AudiobookSaveButton book={book} className="relative shrink-0 md:hidden" />
             <div className="relative flex items-center gap-0.5 md:hidden">
               <PlayPauseButton
@@ -90,6 +96,7 @@ function AudiobookPlayer({ book }: { book: Audiobook }) {
         progressLine={<AudiobookProgress line />}
         actions={
           <div className="flex shrink-0 items-center gap-0.5">
+            <PlaybackDevices compact transferBook={player.transferTo} />
             <AudiobookSpeed />
             <AudiobookSaveButton book={book} className="max-lg:hidden" />
             <div className="flex items-center gap-1">

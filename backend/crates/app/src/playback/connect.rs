@@ -127,6 +127,14 @@ pub enum Command {
         order: Option<Vec<usize>>,
         radio: Option<serde_json::Value>,
     },
+    PlayAudiobook {
+        book_id: Uuid,
+        chapter_id: Uuid,
+        position_ms: u64,
+        playing: bool,
+        #[serde(default)]
+        keep_position: bool,
+    },
     Enqueue {
         track_id: Uuid,
         next: bool,
@@ -192,6 +200,7 @@ impl Command {
                     })
                     && radio.as_ref().is_none_or(|value| value.is_object() && value.to_string().len() <= 256_000)
             }
+            Self::PlayAudiobook { position_ms, .. } => *position_ms <= i64::MAX as u64,
             Self::SetRadioFocus { focus } => ["closer", "balanced", "wider"].contains(&focus.as_str()),
             Self::SetSleepTimer { minutes, .. } => minutes.is_none_or(|minutes| (1..=1440).contains(&minutes)),
             _ => true,
@@ -230,6 +239,7 @@ pub struct Device {
     pub name: String,
     pub connection_id: Uuid,
     pub kind: String,
+    pub audiobooks: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -242,6 +252,24 @@ pub struct ActivePlayback {
     pub state: Playback,
 }
 
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookPlayback {
+    pub book_id: Uuid,
+    pub chapter_id: Uuid,
+    pub position_ms: u64,
+    pub playing: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActiveBook {
+    pub device_id: String,
+    pub reported_at: DateTime<Utc>,
+    #[serde(flatten)]
+    pub state: BookPlayback,
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
@@ -249,6 +277,7 @@ pub struct Snapshot {
     pub version: u64,
     pub devices: Vec<Device>,
     pub playback: Option<ActivePlayback>,
+    pub audiobook: Option<ActiveBook>,
 }
 
 type Outcome = Option<Result<(), String>>;
@@ -269,6 +298,8 @@ struct Connected {
 struct Account {
     devices: HashMap<String, Connected>,
     playback: Option<ActivePlayback>,
+    audiobook: Option<ActiveBook>,
+    media_known: bool,
     version: u64,
     changed: watch::Sender<u64>,
     pending: HashMap<Uuid, Pending>,
@@ -280,6 +311,8 @@ impl Default for Account {
         Self {
             devices: HashMap::new(),
             playback: None,
+            audiobook: None,
+            media_known: false,
             version: 0,
             changed: watch::channel(0).0,
             pending: HashMap::new(),
@@ -300,6 +333,11 @@ impl Account {
             return;
         }
         self.devices.remove(device_id);
+        if let Some(book) = self.audiobook.as_mut().filter(|book| book.device_id == device_id) {
+            book.device_id.clear();
+            book.reported_at = Utc::now();
+            book.state.playing = false;
+        }
         for pending in self.pending.values() {
             if pending.connection_id == connection_id && pending.outcome.borrow().is_none() {
                 pending.outcome.send_replace(Some(Err("Playback device disconnected.".into())));
@@ -333,10 +371,17 @@ impl ConnectRegistry {
     }
 
     pub fn register(&self, user: Uuid, device_id: &str, name: &str) -> AppResult<Connection> {
-        self.register_device(user, device_id, name, "web")
+        self.register_device(user, device_id, name, "web", false)
     }
 
-    pub fn register_device(&self, user: Uuid, device_id: &str, name: &str, kind: &str) -> AppResult<Connection> {
+    pub fn register_device(
+        &self,
+        user: Uuid,
+        device_id: &str,
+        name: &str,
+        kind: &str,
+        audiobooks: bool,
+    ) -> AppResult<Connection> {
         super::require_device(Some(device_id))?;
         if device_id.len() > 128 {
             return Err(AppError::validation("Invalid deviceId."));
@@ -359,6 +404,7 @@ impl ConnectRegistry {
                     id: device_id.to_owned(),
                     name: super::device_name(Some(name)),
                     connection_id: id,
+                    audiobooks,
                     kind: if kind == "android" { "android" } else { "web" }.to_owned(),
                 },
                 commands,
@@ -412,7 +458,73 @@ impl ConnectRegistry {
         }
         let mut devices: Vec<_> = account.devices.values().map(|device| device.device.clone()).collect();
         devices.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.id.cmp(&b.id)));
-        Ok(Snapshot { epoch: self.epoch, version: account.version, devices, playback: account.playback.clone() })
+        Ok(Snapshot {
+            epoch: self.epoch,
+            version: account.version,
+            devices,
+            playback: account.playback.clone(),
+            audiobook: account.audiobook.clone(),
+        })
+    }
+
+    pub async fn restore_book(&self, db: &sqlx::PgPool, user: Uuid) -> AppResult<()> {
+        if self.lock()?.get(&user).is_none_or(|account| account.media_known) {
+            return Ok(());
+        }
+        // A delayed offline bookmark must not replace music that was played more recently.
+        let last: Option<(Uuid, Uuid, i64)> = sqlx::query_as(
+            "SELECT book_id, chapter_id, position_ms FROM audiobook_state
+             WHERE user_id = $1 AND chapter_id IS NOT NULL
+               AND EXISTS (SELECT 1 FROM server_experiments WHERE name = 'audiobooks' AND enabled)
+               AND NOT EXISTS (SELECT 1 FROM playback_events e WHERE e.user_id = $1
+                 AND e.type IN (1,2,3,4,6) AND e.occurred_at >= to_timestamp(updated_at_ms / 1000.0))
+             ORDER BY updated_at_ms DESC LIMIT 1",
+        )
+        .bind(user)
+        .fetch_optional(db)
+        .await?;
+        let mut accounts = self.lock()?;
+        if let Some(account) = accounts.get_mut(&user).filter(|a| !a.media_known) {
+            account.media_known = true;
+            if let Some((book_id, chapter_id, position_ms)) = last {
+                account.audiobook = Some(ActiveBook {
+                    device_id: String::new(),
+                    reported_at: Utc::now(),
+                    state: BookPlayback { book_id, chapter_id, position_ms: position_ms as u64, playing: false },
+                });
+                account.notify();
+            }
+        }
+        Ok(())
+    }
+
+    pub fn report_book(
+        &self,
+        user: Uuid,
+        device: &str,
+        connection: Uuid,
+        state: Option<BookPlayback>,
+        claim: bool,
+    ) -> AppResult<()> {
+        let mut accounts = self.lock()?;
+        let account = accounts.get_mut(&user).ok_or_else(|| AppError::conflict("Playback device disconnected."))?;
+        if !account.devices.get(device).is_some_and(|entry| {
+            entry.device.connection_id == connection && entry.device.audiobooks && entry.seen.elapsed() < DEVICE_LEASE
+        }) {
+            return Err(AppError::conflict("Playback device disconnected."));
+        }
+        let owns = account.audiobook.as_ref().is_some_and(|book| book.device_id == device);
+        if !owns && !(claim && state.is_some()) {
+            return Ok(());
+        }
+        if state.as_ref().is_some_and(|book| book.position_ms > i64::MAX as u64) {
+            return Err(AppError::validation("Invalid audiobook position."));
+        }
+        account.media_known = true;
+        account.audiobook =
+            state.map(|state| ActiveBook { device_id: device.to_owned(), reported_at: Utc::now(), state });
+        account.notify();
+        Ok(())
     }
 
     pub fn report(&self, user: Uuid, device_id: &str, connection_id: Uuid, state: Playback) -> AppResult<()> {
@@ -421,6 +533,10 @@ impl ConnectRegistry {
         let account = accounts.get_mut(&user).ok_or_else(|| AppError::conflict("Playback device disconnected."))?;
         if !account.devices.get(device_id).is_some_and(|device| device.device.connection_id == connection_id) {
             return Err(AppError::conflict("Playback device disconnected."));
+        }
+        if state.is_playing {
+            account.media_known = true;
+            account.audiobook = None;
         }
         let previous = account.playback.as_ref();
         let changed = previous.is_none_or(|previous| {
@@ -467,6 +583,9 @@ impl ConnectRegistry {
             .get(&request.device_id)
             .filter(|device| device.seen.elapsed() < DEVICE_LEASE)
             .ok_or_else(|| AppError::not_found("Playback device is offline."))?;
+        if matches!(request.command, Command::PlayAudiobook { .. }) && !device.device.audiobooks {
+            return Err(AppError::conflict("This device cannot play audiobooks."));
+        }
         if request.command.edits_queue()
             && !account.playback.as_ref().is_some_and(|active| {
                 active.device_id == request.device_id && Some(active.queue_revision) == request.queue_revision
@@ -549,6 +668,54 @@ mod tests {
         assert_eq!(received.id, command.id);
         assert!(hub.acknowledge(user, "phone", old.id, command.id, None).is_err());
         assert!(hub.acknowledge(user, "phone", new.id, command.id, None).is_ok());
+    }
+
+    #[tokio::test]
+    async fn audiobook_transfer_requires_a_capable_device_and_keeps_the_music_queue_intact() {
+        let hub = ConnectRegistry::default();
+        let user = Uuid::now_v7();
+        let legacy = hub.register(user, "phone", "Phone").unwrap();
+        let mut transfer = request("phone");
+        transfer.command = Command::PlayAudiobook {
+            book_id: Uuid::now_v7(),
+            chapter_id: Uuid::now_v7(),
+            position_ms: 23_141,
+            playing: false,
+            keep_position: false,
+        };
+        assert!(hub.send(user, transfer.clone()).is_err());
+        hub.unregister(user, "phone", legacy.id);
+        let mut phone = hub.register_device(user, "phone", "Phone", "android", true).unwrap();
+        let _receipt = hub.send(user, transfer.clone()).unwrap();
+        assert_eq!(phone.commands.recv().await.unwrap().command, transfer.command);
+        assert!(hub.snapshot(user).unwrap().playback.is_none());
+    }
+
+    #[test]
+    fn last_book_survives_idle_music_reports_and_disconnect_until_music_actually_plays() {
+        let hub = ConnectRegistry::default();
+        let user = Uuid::now_v7();
+        let phone = hub.register_device(user, "phone", "Phone", "android", true).unwrap();
+        let web = hub.register_device(user, "web", "Browser", "web", true).unwrap();
+        let mut music =
+            Playback { track_ids: vec![Uuid::now_v7()], order: vec![0], is_playing: true, ..Default::default() };
+        hub.report(user, "phone", phone.id, music.clone()).unwrap();
+        let mut book =
+            BookPlayback { book_id: Uuid::now_v7(), chapter_id: Uuid::now_v7(), position_ms: 42_310, playing: true };
+        hub.report_book(user, "web", web.id, Some(book.clone()), true).unwrap();
+        music.is_playing = false;
+        hub.report(user, "phone", phone.id, music.clone()).unwrap();
+        hub.report_book(user, "phone", phone.id, None, false).unwrap();
+        assert_eq!(hub.snapshot(user).unwrap().audiobook.unwrap().state, book);
+        hub.unregister(user, "web", web.id);
+        book.playing = false;
+        let remembered = hub.snapshot(user).unwrap().audiobook.unwrap();
+        assert!(remembered.device_id.is_empty());
+        assert_eq!(remembered.state, book);
+        assert!(hub.report_book(user, "web", web.id, Some(book), true).is_err());
+        music.is_playing = true;
+        hub.report(user, "phone", phone.id, music).unwrap();
+        assert!(hub.snapshot(user).unwrap().audiobook.is_none());
     }
 
     #[tokio::test]

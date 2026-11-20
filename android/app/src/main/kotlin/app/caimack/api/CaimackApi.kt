@@ -47,6 +47,9 @@ interface CaimackApi {
     @PUT("api/playback/connect/state")
     suspend fun connectReport(@Body report: ConnectReport): ConnectSnapshot
 
+    @PUT("api/playback/connect/audiobook")
+    suspend fun connectBookReport(@Body report: ConnectBookReport)
+
     @POST("api/playback/connect/commands")
     suspend fun connectCommand(@Body request: ConnectRequest): ConnectSnapshot
 

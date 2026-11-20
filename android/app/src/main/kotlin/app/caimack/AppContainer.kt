@@ -287,7 +287,7 @@ class AppContainer(context: Context) {
     internal val audiobookPlayback by lazy {
         AudiobookPlayback(context.applicationContext, scope, audiobookStore, {
             if (audiobooksEnabled.value) audiobookAccount() else null
-        }, connect::pauseForAudiobook)
+        }, connect::pauseForAudiobook, connect::routeBook)
     }
 
     private fun applyAudiobookExperiment(enabled: Boolean) {

@@ -2,6 +2,10 @@
 
 "use client";
 
+import { deviceId } from "@/lib/events";
+import { api } from "@/lib/api";
+import { useConnect } from "@/lib/playback/useConnectPlayback";
+import type { AudiobookHandoff } from "@/lib/playback/connect";
 import { useT } from "@/contexts/I18nContext";
 import { useDesktopStatus } from "@/desktop/api";
 import { useAudiobookExperiment } from "@/lib/audiobookExperiment";
@@ -12,6 +16,7 @@ import {
   removeDownloadedAudiobook,
 } from "@/lib/audiobookDownloads";
 import {
+  audiobookApi,
   audiobookHref,
   audiobookTarget,
   pausedAudiobookTarget,
@@ -57,6 +62,7 @@ interface AudiobookPlayer {
   setVolume: (volume: number) => void;
   toggleMute: () => void;
   close: () => void;
+  transferTo: (id: string | null) => Promise<void>;
 }
 
 interface AudiobookState {
@@ -173,7 +179,12 @@ function AudiobookSession({
 
   const catalog = useAudiobookCatalog(scope, online, enabled);
   const downloaded = new Set(catalog.downloads.data?.map((book) => book.id));
-  const { notify } = useToast();
+  const { notify, notifyError } = useToast();
+  const { audiobookReceiverRef, activeBook, devices, connected } = useConnect();
+  const ownDevice = typeof window === "undefined" ? null : deviceId();
+  const connectionId = devices.find((device) => device.id === ownDevice)?.connectionId;
+  const bookOwner = devices.find((device) => device.id === activeBook?.deviceId);
+  const [remoteClock] = useState(createClock);
   const t = useT();
 
   const [active, setActive] = useState<PlayingBook | null>(null);
@@ -192,6 +203,49 @@ function AudiobookSession({
   const waitingForGesture = useRef(false);
   const controller = useRef<AbortController | null>(null);
   const storeProgress = useRef(catalog.checkpoint);
+  const bookReports = useRef(Promise.resolve());
+  const lastBookReport = useRef<{ key: string; connection: string; selection: number } | null>(
+    null,
+  );
+  const reportLocal = useCallback(() => {
+    if (!connected || !connectionId || !ownDevice) return Promise.resolve();
+    const send = async () => {
+      const session = current.current;
+      const audio = audioRef.current;
+      if (session && (!audio?.readyState || selecting.current)) return;
+      const value =
+        session && audio
+          ? {
+              bookId: session.book.id,
+              chapterId: session.book.chapters[session.chapterIndex].id,
+              playing: !audio.paused && !audio.ended,
+              positionMs: Math.round(audio.currentTime * 1000),
+            }
+          : null;
+      const selection = loadId.current;
+      const prior = lastBookReport.current;
+      if (!value && !prior) return;
+      const claim =
+        !!value &&
+        (!prior ||
+          prior.selection !== selection ||
+          (value.playing && prior.connection !== connectionId));
+      const key = JSON.stringify(value);
+      if (!claim && key === prior?.key && prior.connection === connectionId) return;
+      await api.connectBookReport(ownDevice, connectionId, value, claim);
+      lastBookReport.current = value ? { key, selection, connection: connectionId } : null;
+    };
+    const task = bookReports.current.then(send);
+    bookReports.current = task.catch(() => {});
+    return task;
+  }, [connected, connectionId, ownDevice]);
+  useEffect(() => {
+    if (pending) return;
+    void reportLocal().catch(() => {});
+    if (!active) return;
+    const timer = window.setInterval(() => void reportLocal().catch(() => {}), 1000);
+    return () => window.clearInterval(timer);
+  }, [active, playing, pending, reportLocal]);
   const abortDownload = () => controller.current?.abort();
 
   useEffect(() => {
@@ -304,7 +358,13 @@ function AudiobookSession({
     notify(t("audiobooks.playFailed"), "error");
   };
 
-  const start = async (book: Audiobook, chapterId?: string, restartChapter = false) => {
+  const start = async (
+    book: Audiobook,
+    chapterId?: string,
+    restartChapter = false,
+    handoff?: AudiobookHandoff,
+    signal?: AbortSignal,
+  ) => {
     const audio = audioRef.current;
     if (!audio || !scope) {
       setPending(false);
@@ -324,8 +384,13 @@ function AudiobookSession({
     }
 
     const { chapter, index } = target;
-    const position = restartChapter ? 0 : target.positionMs;
+    const position = handoff
+      ? Math.min(handoff.positionMs, chapter.durationMs)
+      : restartChapter
+        ? 0
+        : target.positionMs;
     if (
+      !handoff &&
       session?.book.id === book.id &&
       session.book.chapters[session.chapterIndex]?.id === chapter.id &&
       Math.abs(Math.round(audio.currentTime * 1000) - position) <= 100 &&
@@ -365,22 +430,199 @@ function AudiobookSession({
           src = downloadedChapterUrl(scope, book.id, chapter.id);
         } else {
           const blob = await downloadedAudio(scope, book.id, chapter.id);
-          if (request !== loadId.current) return;
+          if (request !== loadId.current) {
+            if (handoff) throw new Error(t("connect.changed"));
+            return;
+          }
           if (blob) src = objectUrl.current = URL.createObjectURL(blob);
         }
       }
 
+      signal?.throwIfAborted();
       audio.src = src;
       audio.playbackRate = speed;
       audio.currentTime = position / 1000;
-      await audio.play();
+      if (handoff?.playing === false) {
+        // A paused transfer is still acknowledged only after the destination opens the chapter.
+        await new Promise<void>((resolve, reject) => {
+          const events = new AbortController();
+          const done = (error?: unknown) => {
+            events.abort();
+            signal?.removeEventListener("abort", interrupted);
+            if (error) reject(error);
+            else resolve();
+          };
+          const interrupted = () => done(new Error("Audiobook transfer interrupted."));
+          signal?.addEventListener("abort", interrupted, { once: true });
+          audio.addEventListener("loadedmetadata", () => done(), { signal: events.signal });
+          audio.addEventListener("error", interrupted, { signal: events.signal });
+        });
+        if (request !== loadId.current) throw new Error(t("connect.changed"));
+        checkpoint(true, position);
+      } else {
+        await audio.play();
+      }
+      signal?.throwIfAborted();
     } catch (error) {
+      if (handoff) {
+        if (request === loadId.current) close();
+        throw error;
+      }
       if (request !== loadId.current) return;
       reportPlayError(error);
     } finally {
       if (request === loadId.current) setPending(false);
     }
   };
+
+  const receiveBook = async (command: AudiobookHandoff, signal: AbortSignal) => {
+    if (!enabled || !scope || !online) throw new Error(t("audiobooks.offlineUnavailable"));
+    if (command.keepPosition) {
+      const session = current.current;
+      const audio = audioRef.current;
+      if (
+        !session ||
+        !audio ||
+        session.book.id !== command.bookId ||
+        session.book.chapters[session.chapterIndex]?.id !== command.chapterId
+      )
+        throw new Error(t("connect.changed"));
+      if (command.playing) await audio.play();
+      else audio.pause();
+      await reportLocal();
+      return;
+    }
+    const book = await audiobookApi.detail(command.bookId, signal);
+    signal.throwIfAborted();
+    if (!book.chapters.some((chapter) => chapter.id === command.chapterId))
+      throw new Error(t("audiobooks.playFailed"));
+    selectionId.current++;
+    selecting.current = false;
+    const request = loadId.current + 1;
+    const cancel = () => {
+      if (loadId.current === request) close();
+    };
+    signal.addEventListener("abort", cancel, { once: true });
+    try {
+      await start(book, command.chapterId, false, command, signal);
+      await reportLocal();
+    } finally {
+      signal.removeEventListener("abort", cancel);
+    }
+  };
+  const receiveEvent = useEffectEvent(receiveBook);
+  useEffect(() => {
+    audiobookReceiverRef.current = receiveEvent;
+    return () => {
+      audiobookReceiverRef.current = null;
+    };
+  }, [audiobookReceiverRef]);
+
+  const remote = enabled && !active ? activeBook : null;
+  const remoteBook = remote && catalog.books.find((book) => book.id === remote.bookId);
+  const remoteIndex = remoteBook
+    ? remoteBook.chapters.findIndex((chapter) => chapter.id === remote?.chapterId)
+    : -1;
+  const remoteChapter = remoteIndex >= 0 && remoteBook ? remoteBook.chapters[remoteIndex] : null;
+  const remoteTarget =
+    remote && connected && bookOwner && bookOwner.id !== ownDevice ? bookOwner.id : null;
+  const remotePlaying = !!(remoteTarget && remote?.playing);
+  const reportedAt = remote?.reportedAt,
+    position = remote?.positionMs;
+  useEffect(() => {
+    if (!remoteChapter || position === undefined) return;
+    const since = performance.now();
+    const update = () =>
+      remoteClock.update({
+        durationMs: remoteChapter.durationMs,
+        positionMs: Math.min(
+          remoteChapter.durationMs,
+          position + (remotePlaying ? performance.now() - since : 0),
+        ),
+      });
+    update();
+    if (remotePlaying) {
+      const timer = window.setInterval(update, 250);
+      return () => clearInterval(timer);
+    }
+  }, [remoteChapter, remoteClock, remotePlaying, reportedAt, position]);
+
+  const commandFor = (
+    book: Audiobook,
+    chapterId: string,
+    positionMs: number,
+    playing: boolean,
+  ): AudiobookHandoff => ({
+    type: "playAudiobook",
+    bookId: book.id,
+    chapterId,
+    positionMs: Math.round(positionMs),
+    playing,
+  });
+  const remoteAction = async (command: AudiobookHandoff, device = remoteTarget) => {
+    if (device) await api.connectCommand(crypto.randomUUID(), device, command);
+    else if (online) await receiveBook(command, AbortSignal.timeout(12_000));
+    else if (remoteBook) await start(remoteBook, command.chapterId, false, command);
+  };
+  const transferTo = async (device: string | null) => {
+    if (remote && remoteBook && remoteChapter) {
+      if (device === remoteTarget) return;
+      try {
+        await remoteAction(
+          commandFor(
+            remoteBook,
+            remoteChapter.id,
+            remoteClock.getSnapshot().positionMs,
+            remotePlaying,
+          ),
+          device,
+        );
+      } catch (error) {
+        notifyError(error);
+        throw error;
+      }
+      return;
+    }
+    if (!device) return;
+    const session = current.current;
+    const audio = audioRef.current;
+    if (!session || !audio || pending) throw new Error(t("audiobooks.playFailed"));
+    const playing = !audio.paused;
+    const selection = selectionId.current;
+    const positionMs = audio.readyState
+      ? Math.round(audio.currentTime * 1000)
+      : clock.getSnapshot().positionMs;
+    audio.pause();
+    try {
+      await api.connectCommand(crypto.randomUUID(), device, {
+        type: "playAudiobook",
+        bookId: session.book.id,
+        chapterId: session.book.chapters[session.chapterIndex].id,
+        playing,
+        positionMs,
+      });
+      if (selection === selectionId.current && current.current?.book.id === session.book.id)
+        close();
+    } catch (error) {
+      if (playing && selection === selectionId.current && audio.src)
+        await audio.play().catch(reportPlayError);
+      notifyError(error);
+      throw error;
+    }
+  };
+
+  const previousOwner = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      previousOwner.current === ownDevice &&
+      ownDevice &&
+      connected &&
+      activeBook?.deviceId !== ownDevice &&
+      current.current
+    )
+      close();
+    previousOwner.current = activeBook?.deviceId ?? null;
+  }, [activeBook, ownDevice, connected, close]);
 
   const alignPaused = useCallback(
     (book: Audiobook) => {
@@ -587,29 +829,78 @@ function AudiobookSession({
     }
   };
 
+  const mirrored =
+    remote && remoteBook && remoteChapter
+      ? {
+          book: remoteBook,
+          chapterIndex: remoteIndex,
+          progress: remoteBook.progress,
+          publishStart: false,
+        }
+      : null;
+  const controlRemote = (
+    book: Audiobook,
+    chapter: string,
+    ms: number,
+    run: boolean,
+    keepPosition = false,
+  ) =>
+    void remoteAction({ ...commandFor(book, chapter, ms, run), keepPosition }).catch(notifyError);
+  const displayedPlay = (book: Audiobook, chapterId?: string) => {
+    if (!mirrored || !remote || (!remoteTarget && book.id !== remote.bookId))
+      return play(book, chapterId);
+    const same = book.id === mirrored.book.id && (!chapterId || chapterId === remote.chapterId);
+    const target = audiobookTarget(book, chapterId);
+    if (target)
+      controlRemote(
+        book,
+        same ? remote.chapterId : target.chapter.id,
+        same ? remoteClock.getSnapshot().positionMs : target.positionMs,
+        same ? !remotePlaying : true,
+        same && !!remoteTarget,
+      );
+  };
+  const displayedSeek = (ms: number) => {
+    if (mirrored && remote && remoteChapter)
+      controlRemote(
+        mirrored.book,
+        remote.chapterId,
+        Math.max(0, Math.min(ms, remoteChapter.durationMs)),
+        remotePlaying,
+      );
+    else seek(ms);
+  };
   return (
     <AudiobookContext.Provider
       value={{
         enabled,
         experimentReady,
         player: {
-          active: enabled ? active : null,
-          playing: enabled && playing,
+          active: enabled ? (active ?? mirrored) : null,
+          playing: enabled && (mirrored ? remotePlaying : playing),
           pending: enabled && pending,
           speed,
-          play,
-          toggle,
-          seek,
-          skip,
-          changeChapter,
+          play: displayedPlay,
+          toggle: mirrored ? () => displayedPlay(mirrored.book) : toggle,
+          seek: displayedSeek,
+          skip: mirrored
+            ? (delta) => displayedSeek(remoteClock.getSnapshot().positionMs + delta)
+            : skip,
+          changeChapter: mirrored
+            ? (delta) => {
+                const chapter = mirrored.book.chapters[remoteIndex + delta];
+                if (chapter) controlRemote(mirrored.book, chapter.id, 0, remotePlaying);
+              }
+            : changeChapter,
           setSpeed,
           volume,
           muted,
           setVolume,
           toggleMute,
+          transferTo,
           close,
         },
-        clock,
+        clock: mirrored ? remoteClock : clock,
         scope,
         online,
         books: enabled ? catalog.books : [],

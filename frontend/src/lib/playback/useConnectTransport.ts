@@ -26,6 +26,7 @@ export interface ConnectRenderer {
   connected: boolean;
 }
 interface TransportInput {
+  audiobookReceiverRef: RefObject<import("./useConnectPlayback").AudiobookReceiver | null>;
   userId: string | null;
   ownRef: RefObject<string | null>;
   connectionRef: RefObject<string | null>;
@@ -42,6 +43,7 @@ interface TransportInput {
 
 export function useConnectTransport({
   userId,
+  audiobookReceiverRef,
   ownRef,
   connectionRef,
   currentSnapshotRef,
@@ -65,7 +67,7 @@ export function useConnectTransport({
     const open = () => {
       if (stopped) return;
       source = new EventSource(
-        `${API_BASE}/playback/connect/events${qs({ deviceId: ownRef.current ?? undefined, deviceName: deviceName() })}`,
+        `${API_BASE}/playback/connect/events${qs({ deviceId: ownRef.current ?? undefined, deviceName: deviceName(), audiobooks: true })}`,
       );
       source.addEventListener("snapshot", (event) => {
         if (stopped) return;
@@ -104,42 +106,50 @@ export function useConnectTransport({
                   currentSnapshotRef.current.playback?.queueRevision !== envelope.queueRevision
                 )
                   throw new Error("The playback queue changed.");
-                await applyConnectCommand(
-                  envelope.command,
-                  latestRef.current.local,
-                  latestRef.current.localActions,
-                  (tracks, command) => {
-                    cancellation.signal.throwIfAborted();
+                if (envelope.command.type === "playAudiobook") {
+                  const receiveBook = audiobookReceiverRef.current;
+                  if (!receiveBook) throw new Error("Audiobooks unavailable.");
+                  await receiveBook(envelope.command, cancellation.signal);
+                } else {
+                  await applyConnectCommand(
+                    envelope.command,
+                    latestRef.current.local,
+                    latestRef.current.localActions,
+                    (tracks, command) => {
+                      cancellation.signal.throwIfAborted();
+                      wantsLocalRef.current = true;
+                      flushSync(() => {
+                        setSelectedId(null);
+                        setLease(true);
+                        latestRef.current.output(true);
+                        latestRef.current.load(tracks, command);
+                      });
+                    },
+                    cancellation.signal,
+                  );
+                  if (envelope.command.type === "startRadio") {
                     wantsLocalRef.current = true;
                     flushSync(() => {
                       setSelectedId(null);
                       setLease(true);
                       latestRef.current.output(true);
-                      latestRef.current.load(tracks, command);
                     });
-                  },
-                  cancellation.signal,
-                );
-                if (envelope.command.type === "startRadio") {
-                  wantsLocalRef.current = true;
-                  flushSync(() => {
-                    setSelectedId(null);
-                    setLease(true);
-                    latestRef.current.output(true);
-                  });
+                  }
                 }
                 executed.add(envelope.id);
                 if (executed.size > 128) executed.delete(executed.values().next().value!);
-                // Let React commit the renderer state before publishing it and acknowledging.
-                await new Promise<void>((resolve) => setTimeout(resolve, 0));
-                for (let attempt = 0; ; attempt++) {
-                  cancellation.signal.throwIfAborted();
-                  try {
-                    await report(cancellation.signal);
-                    break;
-                  } catch (reason) {
-                    if (attempt >= 9) throw reason;
-                    await new Promise((resolve) => setTimeout(resolve, 100));
+                if (envelope.command.type !== "playAudiobook") {
+                  // Let React commit the renderer state before publishing it and acknowledging.
+                  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+                  for (let attempt = 0; ; attempt++) {
+                    cancellation.signal.throwIfAborted();
+                    try {
+                      await report(cancellation.signal);
+                      break;
+                    } catch (reason) {
+                      if (attempt >= 9) throw reason;
+                      await new Promise((resolve) => setTimeout(resolve, 100));
+                    }
                   }
                 }
               }
@@ -176,6 +186,7 @@ export function useConnectTransport({
     };
   }, [
     userId,
+    audiobookReceiverRef,
     ownRef,
     connectionRef,
     currentSnapshotRef,

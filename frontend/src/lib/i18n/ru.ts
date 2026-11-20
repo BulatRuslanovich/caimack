@@ -26,6 +26,7 @@ export const ru: Dictionary = {
   "collection.noResults": "В медиатеке ничего не найдено",
   "collection.failed": "Не удалось изменить медиатеку. Попробуйте ещё раз.",
   "connect.title": "Устройства воспроизведения",
+  "connect.audiobookDescription": "Продолжите эту главу на другом устройстве с текущей позиции.",
   "connect.description": "Выберите, где звучит музыка. Управляйте ей в этом плеере.",
   "connect.thisDevice": "Это устройство",
   "connect.playingOn": "Играет на {device}",
