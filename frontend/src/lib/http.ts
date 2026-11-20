@@ -83,6 +83,8 @@ interface RequestOptions {
   method?: string;
   body?: unknown;
   signal?: AbortSignal;
+  keepalive?: boolean;
+  onResponse?: (headers: Headers) => void;
   isRetry?: boolean;
   allowUnauthenticated?: boolean;
   sessionless?: boolean;
@@ -149,13 +151,14 @@ async function send(path: string, options: RequestOptions = {}): Promise<Respons
     method = "GET",
     body,
     signal,
+    keepalive,
     isRetry = false,
     allowUnauthenticated = false,
     sessionless = false,
     headers: extraHeaders,
   } = options;
 
-  const init: RequestInit = { method, credentials: "include", signal };
+  const init: RequestInit = { method, credentials: "include", signal, keepalive };
 
   const url = `${API_BASE}${path}`;
   const server = serverRequest();
@@ -209,6 +212,7 @@ async function send(path: string, options: RequestOptions = {}): Promise<Respons
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const response = await send(path, options);
+  options.onResponse?.(response.headers);
 
   if (response.status === 204) {
     return undefined as T;

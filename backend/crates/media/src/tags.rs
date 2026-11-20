@@ -3,8 +3,8 @@
 use std::path::Path;
 
 use anyhow::Context;
-use lofty::config::WriteOptions;
-use lofty::file::{AudioFile, FileType, TaggedFileExt};
+use lofty::config::{ParseOptions, WriteOptions};
+use lofty::file::{AudioFile, FileType, TaggedFile, TaggedFileExt};
 use lofty::picture::{MimeType, Picture, PictureType};
 use lofty::probe::Probe;
 use lofty::tag::{Accessor, ItemKey, ItemValue, Tag, TagItem, TagType};
@@ -29,16 +29,7 @@ pub struct AudioMetadata {
 }
 
 pub fn read(path: &Path) -> Option<AudioMetadata> {
-    let opened = Probe::open(path).map_err(|error| error.to_string());
-    let guessed = opened.and_then(|probe| probe.guess_file_type().map_err(|error| error.to_string()));
-    let tagged = match guessed.and_then(|probe| probe.read().map_err(|error| error.to_string())) {
-        Ok(tagged) => tagged,
-        Err(error) => {
-            tracing::debug!("No readable audio in {}: {error}", path.display());
-            return None;
-        }
-    };
-
+    let tagged = read_tagged(path, ParseOptions::default())?;
     let properties = tagged.properties();
     let codec = match tagged.file_type() {
         FileType::Mpeg => Some("mp3"),
@@ -65,6 +56,54 @@ pub fn read(path: &Path) -> Option<AudioMetadata> {
     Some(metadata)
 }
 
+#[derive(Default)]
+pub struct AudiobookMetadata {
+    pub duration_ms: i64,
+    pub title: Option<String>,
+    pub album: Option<String>,
+    pub author: Option<String>,
+    pub narrator: Option<String>,
+    pub cover: Option<Vec<u8>>,
+}
+
+pub fn read_audiobook(path: &Path, with_cover: bool) -> Option<AudiobookMetadata> {
+    let tagged = read_tagged(path, ParseOptions::new().read_cover_art(with_cover))?;
+    let duration_ms = i64::try_from(tagged.properties().duration().as_millis()).ok()?;
+    if duration_ms <= 0 {
+        return None;
+    }
+
+    let mut metadata = AudiobookMetadata { duration_ms, ..AudiobookMetadata::default() };
+    if let Some(tag) = tagged.primary_tag().or_else(|| tagged.first_tag()) {
+        metadata.title = clean(tag.title().as_deref());
+        metadata.album = book_tag(tag.album().as_deref(), "unknown album");
+        metadata.author = book_tag(tag.get_string(ItemKey::AlbumArtist), "unknown artist")
+            .or_else(|| book_tag(tag.artist().as_deref(), "unknown artist"));
+        metadata.narrator = clean(tag.get_string(ItemKey::Performer));
+        metadata.cover = with_cover.then(|| front_cover(tag)).flatten();
+    }
+    Some(metadata)
+}
+
+fn book_tag(value: Option<&str>, placeholder: &str) -> Option<String> {
+    clean(value).filter(|name| {
+        let lower = name.to_ascii_lowercase();
+        lower != placeholder && !lower.strip_prefix(placeholder).is_some_and(|suffix| suffix.starts_with(" ("))
+    })
+}
+
+fn read_tagged(path: &Path, options: ParseOptions) -> Option<TaggedFile> {
+    let opened = Probe::open(path).map_err(|error| error.to_string());
+    let guessed = opened.and_then(|probe| probe.guess_file_type().map_err(|error| error.to_string()));
+    match guessed.and_then(|probe| probe.options(options).read().map_err(|error| error.to_string())) {
+        Ok(tagged) => Some(tagged),
+        Err(error) => {
+            tracing::debug!("No readable audio in {}: {error}", path.display());
+            None
+        }
+    }
+}
+
 fn fill_from_tag(metadata: &mut AudioMetadata, tag: &Tag) {
     metadata.title = clean(tag.title().as_deref());
     metadata.artists = clean_all(tag.get_strings(ItemKey::TrackArtist));
@@ -76,9 +115,13 @@ fn fill_from_tag(metadata: &mut AudioMetadata, tag: &Tag) {
     metadata.disc_number = tag.disk().filter(|&n| n > 0).and_then(|n| i32::try_from(n).ok());
     metadata.lyrics = clean(tag.get_string(ItemKey::UnsyncLyrics)).or_else(|| clean(tag.get_string(ItemKey::Lyrics)));
 
+    metadata.cover = front_cover(tag);
+}
+
+fn front_cover(tag: &Tag) -> Option<Vec<u8>> {
     let pictures = tag.pictures();
     let cover = pictures.iter().find(|p| p.pic_type() == PictureType::CoverFront).or_else(|| pictures.first());
-    metadata.cover = cover.map(|p| p.data().to_vec()).filter(|data| !data.is_empty());
+    cover.map(|p| p.data().to_vec()).filter(|data| !data.is_empty())
 }
 
 fn year(tag: &Tag) -> Option<i32> {

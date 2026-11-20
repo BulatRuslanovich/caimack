@@ -22,10 +22,16 @@ use crate::state::AppState;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/sync/snapshot", get(snapshot))
+        .route("/api/sync/identity", get(identity))
         .route("/api/sync/vectors", get(vectors))
         .route("/api/sync/actions", post(actions))
         .route("/api/sync/tracks/{id}/tags", get(tags))
         .route("/api/sync/tracks/{id}/audio", get(audio))
+}
+
+async fn identity(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> ApiResult<impl IntoResponse> {
+    let server_id: Uuid = sqlx::query_scalar("SELECT id FROM sync_identity").fetch_one(&state.db).await?;
+    Ok(([("Cache-Control", "private, no-store")], Json(json!({"serverId":server_id,"userId":user.user_id}))))
 }
 
 async fn snapshot(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> ApiResult<impl IntoResponse> {

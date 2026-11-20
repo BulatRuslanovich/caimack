@@ -3,19 +3,13 @@
 "use client";
 
 import { useRecommendations } from "@/lib/useRecommendations";
+import { useAudiobooks } from "@/contexts/AudiobookContext";
 import { useMutation } from "@tanstack/react-query";
 import { LogOutIcon } from "lucide-react";
 import { PrefetchLink as Link } from "@/components/PrefetchLink";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
-import {
-  catalogNav,
-  isActivePath,
-  libraryNav,
-  primaryNav,
-  serviceNav,
-  type NavEntry,
-} from "@/lib/navigation";
+import { isActivePath, libraryNav, primaryNav, serviceNav, type NavEntry } from "@/lib/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUpload } from "@/contexts/UploadContext";
 import { useT } from "@/contexts/I18nContext";
@@ -34,9 +28,7 @@ export function NavLink({
 }) {
   const t = useT();
   const pathname = usePathname();
-  const active =
-    isActivePath(pathname, entry.href) ||
-    (entry.href === "/library" && catalogNav.some(({ href }) => isActivePath(pathname, href)));
+  const active = isActivePath(pathname, entry.href);
   const Icon = entry.icon;
 
   return (
@@ -129,6 +121,7 @@ function NavGroup({
 
 export function Sidebar() {
   const recommendations = useRecommendations();
+  const { enabled: audiobooks } = useAudiobooks();
 
   const t = useT();
   const { isAdmin } = useAuth();
@@ -155,7 +148,7 @@ export function Sidebar() {
         aria-label={t("nav.main")}
         className="flex flex-1 flex-col gap-6 [@media(max-height:52rem)]:gap-3"
       >
-        <NavGroup entries={primaryNav} />
+        <NavGroup entries={primaryNav(audiobooks)} />
         <NavGroup
           label={t("nav.quickAccess")}
           entries={libraryNav.filter((entry) => entry.href !== "/map" || recommendations)}

@@ -58,7 +58,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.caimack.R
-import app.caimack.api.Track
 import app.caimack.haptics.PlayerHaptic
 import app.caimack.playback.PlayerState
 import kotlin.math.abs
@@ -83,7 +82,6 @@ internal fun clock(ms: Long) = durationOf((ms / 1000).toInt())
 fun MiniPlayer(state: PlayerState, onOpen: () -> Unit) {
     val haptic = rememberPlayerHaptics()
     val motion = playerMotionEnabled()
-    val palette = LocalPalette.current
     val container = LocalContainer.current
     val player = container.player
     val connect by container.connect.state.collectAsStateWithLifecycle()
@@ -103,31 +101,23 @@ fun MiniPlayer(state: PlayerState, onOpen: () -> Unit) {
     val saved = container.favorites.isFavorite(track)
     val saveLabel = stringResource(if (saved) R.string.collection_remove else R.string.collection_add)
 
-    val loaded = LocalNowPlayingCoverTone.current
-    val resolved = loaded?.let { cover -> cover.tone?.let {
-        oklch(if (palette.dark) 0.33 else 0.88, min(it.chroma * 0.85, if (palette.dark) 0.09 else 0.065), it.hue)
-    } ?: palette.raised }
-    // Keep the previous colour while the next cover loads, including uncached radio tracks.
-    var lastBackground by remember(palette.dark) { mutableStateOf(palette.raised) }
-    SideEffect { if (resolved != null) lastBackground = resolved }
-    val background by key(palette.dark) {
-        animateColorAsState(resolved ?: lastBackground, tween(if (motion) 450 else 0), label = "mini-player-background")
-    }
-    val foreground = palette.foreground
-    val secondary = foreground.copy(alpha = 0.76f)
     val connection = if (connect.selectedId == null) null else stringResource(
         if (connect.available) R.string.connect_playing_on else R.string.connect_unavailable,
         connect.selectedName ?: stringResource(R.string.connect_title),
     )
 
-    Box(
-        Modifier
-            .padding(horizontal = 8.dp, vertical = 4.dp)
-            .clip(Radius.panel)
-            .background(background)
-            .onSizeChanged { barWidth = it.width }
-            .testTag("mini-player")
-            .clickable(onClick = onOpen)
+    MiniPlayerLayout(
+        artwork = PlayerArtworkRef(track.id, trackCover(track), track.albumTitle ?: track.title),
+        position = position,
+        duration = duration,
+        playing = state.playing,
+        buffering = state.buffering,
+        saved = saved,
+        saveLabel = saveLabel,
+        onOpen = onOpen,
+        toggle = player::toggle,
+        save = { container.favorites.toggle(track) },
+        gestures = Modifier.onSizeChanged { barWidth = it.width }
             .pointerInput(scene, motion, skipPx, flingPx, openPx) {
                 var total = Offset.Zero
                 var gestureKey = scene.current.key
@@ -181,43 +171,84 @@ fun MiniPlayer(state: PlayerState, onOpen: () -> Unit) {
                     }
                 }
             },
+        leadingControl = { foreground, secondary ->
+            PlaybackDevicesButton(Modifier.size(48.dp).testTag("mini-player-devices"), style = PlaybackDevicesStyle.Icon,
+                iconTint = if (connect.selectedId != null) foreground else secondary)
+        },
+    ) { modifier ->
+        Box(modifier.onSizeChanged { metadataWidth = it.width }.clipToBounds().testTag("mini-player-tracks")) {
+            scene.frames.forEach { frame -> key(frame.key) {
+                Box(Modifier.fillMaxWidth().graphicsLayer { translationX = scene.position(frame.key) }) {
+                    frame.state.current?.let { item ->
+                        MiniPlayerText(item.title, artistsOf(item), connection, Modifier.fillMaxWidth().testTag("mini-track-${frame.key}"))
+                    }
+                }
+            } }
+        }
+    }
+}
+
+internal data class PlayerArtworkRef(val id: String, val url: String?, val title: String, val book: Boolean = false)
+
+@Composable
+internal fun MiniPlayerLayout(
+    artwork: PlayerArtworkRef,
+    position: Long,
+    duration: Long,
+    playing: Boolean,
+    buffering: Boolean,
+    saved: Boolean,
+    saveLabel: String,
+    onOpen: () -> Unit,
+    toggle: () -> Unit,
+    save: () -> Unit,
+    gestures: Modifier = Modifier,
+    leadingControl: (@Composable (Color, Color) -> Unit)? = null,
+    metadata: @Composable (Modifier) -> Unit,
+) {
+    val palette = LocalPalette.current
+    val motion = playerMotionEnabled()
+    val haptic = rememberPlayerHaptics()
+    val loaded = LocalNowPlayingCoverTone.current
+    val resolved = loaded?.let { cover -> cover.tone?.let {
+        oklch(if (palette.dark) 0.33 else 0.88, min(it.chroma * 0.85, if (palette.dark) 0.09 else 0.065), it.hue)
+    } ?: palette.raised }
+    // Keep the previous colour while the next cover loads, including uncached radio tracks.
+    var lastBackground by remember(palette.dark) { mutableStateOf(palette.raised) }
+    SideEffect { if (resolved != null) lastBackground = resolved }
+    val background by key(palette.dark) {
+        animateColorAsState(resolved ?: lastBackground, tween(if (motion) 450 else 0), label = "mini-player-background")
+    }
+    val foreground = palette.foreground
+    val secondary = foreground.copy(alpha = 0.76f)
+
+    Box(
+        Modifier.padding(horizontal = 8.dp, vertical = 4.dp).clip(Radius.panel)
+            .background(background).testTag("mini-player").clickable(onClick = onOpen).then(gestures),
     ) {
         Row(
-            Modifier
-                .fillMaxWidth()
-                .heightIn(min = 60.dp)
-                .padding(start = 4.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+            Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(start = 4.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            MiniPlayerCover(track, onOpen)
-            Box(Modifier.weight(1f).onSizeChanged { metadataWidth = it.width }.clipToBounds().testTag("mini-player-tracks")) {
-                scene.frames.forEach { frame -> key(frame.key) {
-                    Box(Modifier.fillMaxWidth().graphicsLayer { translationX = scene.position(frame.key) }) {
-                        MiniPlayerText(frame.state, connection, Modifier.fillMaxWidth().testTag("mini-track-${frame.key}"))
-                    }
-                } }
-            }
+            MiniPlayerCover(artwork, onOpen)
+            metadata(Modifier.weight(1f))
             Row(Modifier.testTag("mini-player-controls"), verticalAlignment = Alignment.CenterVertically) {
-                PlaybackDevicesButton(Modifier.size(48.dp).testTag("mini-player-devices"), style = PlaybackDevicesStyle.Icon, iconTint = if (connect.selectedId != null) foreground else secondary)
+                leadingControl?.invoke(foreground, secondary)
                 Box(Modifier.size(48.dp).testTag("mini-player-save").clip(CircleShape)
                     .semantics {
                         selected = saved
                         contentDescription = saveLabel
                     }
-                    .clickable(role = Role.Button) { haptic(PlayerHaptic.Favorite); container.favorites.toggle(track) },
+                    .clickable(role = Role.Button) { haptic(PlayerHaptic.Favorite); save() },
                     contentAlignment = Alignment.Center) {
-                    if (saved) {
-                        Box(Modifier.size(24.dp).clip(CircleShape).background(palette.success), contentAlignment = Alignment.Center) {
-                            Icon(Lucide.Check, null, tint = palette.background, modifier = Modifier.size(16.dp))
-                        }
-                    } else Icon(Lucide.CirclePlus, null, tint = foreground, modifier = Modifier.size(24.dp))
+                    LibrarySaveIcon(saved, null)
                 }
                 Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                    IconAction(if (state.playing) Lucide.Pause else Lucide.Play,
-                        stringResource(if (state.playing) R.string.action_pause else R.string.action_play),
-                        tint = foreground, size = 25) { haptic(PlayerHaptic.Button); player.toggle() }
-                    BufferingRing(state.buffering, Modifier.size(32.dp))
+                    IconAction(if (playing) Lucide.Pause else Lucide.Play,
+                        stringResource(if (playing) R.string.action_pause else R.string.action_play),
+                        tint = foreground, size = 25) { haptic(PlayerHaptic.Button); toggle() }
+                    BufferingRing(buffering, Modifier.size(32.dp))
                 }
             }
         }
@@ -230,7 +261,7 @@ fun MiniPlayer(state: PlayerState, onOpen: () -> Unit) {
 }
 
 @Composable
-private fun MiniPlayerCover(track: Track, onOpen: () -> Unit) {
+private fun MiniPlayerCover(artwork: PlayerArtworkRef, onOpen: () -> Unit) {
     val motion = playerMotionEnabled()
     val transition = LocalNowPlayingTransition.current
     val openLabel = stringResource(R.string.player_open_full)
@@ -238,29 +269,34 @@ private fun MiniPlayerCover(track: Track, onOpen: () -> Unit) {
         androidx.compose.animation.AnimatedVisibility(visible = transition?.full != true,
             enter = fadeIn(tween(if (motion) NOW_PLAYING_TRANSITION_MS else 0)),
             exit = fadeOut(tween(if (motion) NOW_PLAYING_TRANSITION_MS else 0))) {
-            AnimatedContent(targetState = track, contentKey = { it.id }, label = "mini-player-artwork",
+            AnimatedContent(targetState = artwork, contentKey = { it.id }, label = "mini-player-artwork",
                 modifier = Modifier.size(40.dp).nowPlayingCover(this),
-                transitionSpec = { fadeIn(tween(if (motion) 180 else 0)) togetherWith fadeOut(tween(if (motion) 120 else 0)) }) { artwork ->
-                Cover(trackCover(artwork), artwork.albumTitle ?: artwork.title, Modifier.size(40.dp), fadeIn = false)
+                transitionSpec = { fadeIn(tween(if (motion) 180 else 0)) togetherWith fadeOut(tween(if (motion) 120 else 0)) }) { picture ->
+                Cover(picture.url, picture.title, Modifier.size(40.dp), fadeIn = false, book = picture.book)
             }
         }
     }
 }
 
 @Composable
-private fun MiniPlayerText(state: PlayerState, connection: String?, modifier: Modifier) {
-    val track = state.current ?: return
+internal fun MiniPlayerText(title: String, subtitle: String, connection: String?, modifier: Modifier) {
     val palette = LocalPalette.current
     Column(modifier.heightIn(min = 48.dp), verticalArrangement = Arrangement.Center) {
-        Text(track.title, style = Type.small.copy(fontWeight = FontWeight.SemiBold, lineHeight = 18.sp), color = palette.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        val artist = artistsOf(track)
-        Text(if (connection == null) artist else "$artist · $connection", style = Type.tiny,
+        Text(title, style = Type.small.copy(fontWeight = FontWeight.SemiBold, lineHeight = 18.sp), color = palette.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(if (connection == null) subtitle else "$subtitle · $connection", style = Type.tiny,
             color = palette.foreground.copy(alpha = 0.76f), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 @Composable
-internal fun IconAction(icon: ImageVector, label: String, tint: Color = LocalPalette.current.foreground, size: Int = 22, onClick: () -> Unit) {
-    Box(Modifier.size(48.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, label, tint = tint, modifier = Modifier.size(size.dp))
+internal fun IconAction(
+    icon: ImageVector,
+    label: String,
+    tint: Color = LocalPalette.current.foreground,
+    size: Int = 22,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    Box(Modifier.size(48.dp).clip(CircleShape).clickable(enabled = enabled, onClick = onClick), contentAlignment = Alignment.Center) {
+        Icon(icon, label, tint = if (enabled) tint else tint.copy(alpha = tint.alpha * .38f), modifier = Modifier.size(size.dp))
     }
 }

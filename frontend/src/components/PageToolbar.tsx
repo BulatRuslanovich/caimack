@@ -28,10 +28,6 @@ export function PageToolbar({
   mobileFilters?: { active: boolean };
   children?: ReactNode;
 }) {
-  const t = useT();
-  const controlsId = useId();
-  const [filtersOpen, setFiltersOpen] = useState(false);
-
   return (
     <div className="library-toolbar flex flex-wrap items-center gap-2.5 max-md:gap-2">
       <SearchField
@@ -41,9 +37,29 @@ export function PageToolbar({
         autoFocus={autoFocus}
         className="min-w-0 flex-[1_1_16rem] max-md:flex-1 max-md:basis-0"
       />
-      {mobileFilters && children && (
+      {children && <ToolbarFilters mobileFilters={mobileFilters}>{children}</ToolbarFilters>}
+    </div>
+  );
+}
+
+export function ToolbarFilters({
+  mobileFilters,
+  children,
+  compact = false,
+}: {
+  mobileFilters?: { active: boolean };
+  children: ReactNode;
+  compact?: boolean;
+}) {
+  const t = useT();
+  const controlsId = useId();
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  return (
+    <>
+      {mobileFilters && (
         <Button
-          size="icon-lg"
+          size={compact ? "icon" : "icon-lg"}
           className={cn(
             "shrink-0 rounded-lg md:hidden min-[24rem]:w-auto min-[24rem]:px-3",
             (filtersOpen || mobileFilters.active) && "border-primary bg-primary-soft text-primary",
@@ -57,18 +73,16 @@ export function PageToolbar({
           <span className="max-[24rem]:sr-only">{t("filter.options")}</span>
         </Button>
       )}
-      {children && (
-        <div
-          id={mobileFilters ? controlsId : undefined}
-          className={cn(
-            "flex flex-wrap items-center gap-2.5 max-md:order-2 max-md:w-full max-md:gap-2",
-            mobileFilters && !filtersOpen && "max-md:hidden",
-          )}
-        >
-          {children}
-        </div>
-      )}
-    </div>
+      <div
+        id={mobileFilters ? controlsId : undefined}
+        className={cn(
+          "flex flex-wrap items-center gap-2.5 max-md:order-2 max-md:w-full max-md:gap-2",
+          mobileFilters && !filtersOpen && "max-md:hidden",
+        )}
+      >
+        {children}
+      </div>
+    </>
   );
 }
 
@@ -104,9 +118,11 @@ export function SortSelect<T extends string>({
 export function Pagination({
   result,
   onChange,
+  scrollOnChange = scrollContentToTop,
 }: {
   result: Paged<unknown>;
   onChange: (page: number) => void;
+  scrollOnChange?: () => void;
 }) {
   const t = useT();
   const { page, totalPages } = result;
@@ -115,7 +131,7 @@ export function Pagination({
 
   const goTo = (next: number) => {
     onChange(next);
-    scrollContentToTop();
+    scrollOnChange();
   };
 
   return (

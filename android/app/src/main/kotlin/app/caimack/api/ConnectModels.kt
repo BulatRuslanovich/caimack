@@ -8,7 +8,7 @@ import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
 
 @Serializable
-data class ConnectDevice(val id: String, val name: String, val connectionId: String, val kind: String = "web")
+data class ConnectDevice(val id: String, val name: String, val connectionId: String, val kind: String = "web", val audiobooks: Boolean = false)
 
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
@@ -46,7 +46,13 @@ data class ConnectState(
 )
 
 @Serializable
-data class ConnectSnapshot(val epoch: String = "", val version: Long = 0, val devices: List<ConnectDevice> = emptyList(), val playback: ConnectState? = null)
+data class ConnectBook(val bookId: String, val chapterId: String, val positionMs: Long, val playing: Boolean, val deviceId: String = "")
+
+@Serializable
+data class ConnectBookReport(val deviceId: String, val connectionId: String, val state: ConnectBook?, val claim: Boolean)
+
+@Serializable
+data class ConnectSnapshot(val epoch: String = "", val version: Long = 0, val devices: List<ConnectDevice> = emptyList(), val playback: ConnectState? = null, val audiobook: ConnectBook? = null)
 
 @Serializable
 sealed interface ConnectCommand {
@@ -62,6 +68,10 @@ sealed interface ConnectCommand {
         val trackIds: List<String>, val index: Int, val positionSeconds: Double,
         val playing: Boolean, val shuffle: Boolean, val repeat: String, val source: String? = null,
         val order: List<Int>? = null, val radio: ConnectRadio? = null,
+    ) : ConnectCommand
+    @Serializable @SerialName("playAudiobook") data class PlayAudiobook(
+        val bookId: String, val chapterId: String, val positionMs: Long, val playing: Boolean,
+        val keepPosition: Boolean = false,
     ) : ConnectCommand
     @Serializable @SerialName("enqueue") data class Enqueue(val trackId: String, val next: Boolean) : ConnectCommand
     @Serializable @SerialName("remove") data class Remove(val index: Int, val trackId: String) : ConnectCommand

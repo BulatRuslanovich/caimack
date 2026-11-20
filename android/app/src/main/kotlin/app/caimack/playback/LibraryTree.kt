@@ -60,6 +60,24 @@ class LibraryTree(
             MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS,
         )
 
+    @Suppress("OVERRIDE_DEPRECATION")
+    override fun onPlayerCommandRequest(
+        session: MediaSession,
+        controller: MediaSession.ControllerInfo,
+        playerCommand: Int,
+    ): Int {
+        // Platform media bridges can keep the music session even after the audiobook takes over.
+        // A play request to that paused session must not take audio focus from the book.
+        if (playerCommand == Player.COMMAND_PLAY_PAUSE &&
+            controller.controllerVersion == MediaSession.ControllerInfo.LEGACY_CONTROLLER_VERSION &&
+            !session.player.playWhenReady &&
+            !session.isAutomotiveController(controller) && !session.isAutoCompanionController(controller)) {
+            val book = container.audiobookPlayback.state.value
+            if (book != null && (book.playing || book.buffering)) return SessionError.ERROR_INVALID_STATE
+        }
+        return SessionResult.RESULT_SUCCESS
+    }
+
     override fun onCustomCommand(
         session: MediaSession,
         controller: MediaSession.ControllerInfo,
@@ -257,7 +275,7 @@ class LibraryTree(
                 .firstOrNull { it.key == parentId.removePrefix(PICK_SHELF) }?.tracks.orEmpty()
             parentId == FAVORITES -> container.api.favorites(1, LIMIT).items
             parentId == RECENT -> container.api.recentlyPlayed(1, LIMIT).items
-            parentId == DOWNLOADS -> (container.syncStore.tracks()+container.downloads.tracks()).distinctBy { it.id }
+            parentId == DOWNLOADS -> (container.synchronizedTracks()+container.downloads.tracks()).distinctBy { it.id }
             parentId.startsWith(PLAYLIST) -> container.api.playlist(parentId.removePrefix(PLAYLIST)).tracks
             parentId.startsWith(ALBUM) -> container.api.album(parentId.removePrefix(ALBUM)).tracks
             else -> emptyList()

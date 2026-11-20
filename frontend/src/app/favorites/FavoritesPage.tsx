@@ -58,7 +58,7 @@ export function FavoritesPage() {
           title: t("favorites.emptyTitle"),
           action: (
             <Button variant="primary" asChild>
-              <Link href="/tracks">{t("favorites.browseTracks")}</Link>
+              <Link href="/search?tab=tracks">{t("action.browseTracks")}</Link>
             </Button>
           ),
         }}

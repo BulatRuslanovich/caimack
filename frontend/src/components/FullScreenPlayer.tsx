@@ -22,9 +22,7 @@ import { reasonLabel } from "@/lib/recommendationReason";
 import { SEEK_STEP } from "@/lib/shortcuts";
 import type { Track } from "@/lib/types";
 import { useIdle } from "@/lib/useIdle";
-import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
-  ChevronDownIcon,
   EllipsisVerticalIcon,
   HeartIcon,
   ImageIcon,
@@ -43,7 +41,6 @@ import { PlayerTransport } from "./PlayerTransport";
 import { PlayerPanelTransport } from "./PlayerPanelTransport";
 import { PlayerOptionsMenu } from "./PlayerOptionsMenu";
 import { PlayerVolume } from "./PlayerVolume";
-import { QueueList } from "./QueueList";
 import { RecordTransition } from "./RecordTransition";
 import { SleepTimerButton } from "./SleepTimerButton";
 import { StreamQuality } from "./StreamQuality";
@@ -51,12 +48,12 @@ import { TrackMenu } from "./TrackMenu";
 import { Button } from "./ui/button";
 import { WaveformSeekbar } from "./WaveformSeekbar";
 import { Loading } from "./Loading";
+import { FullPlayerLayout, fullPlayerStage, fullPlayerControls } from "./FullPlayerLayout";
 
 const IDLE_MS = 2500;
 
-const SWIPE_CLOSE_PX = 120;
-
 // A cold panel chunk must suspend locally, keeping the fullscreen dialog mounted.
+import { QueueList } from "./QueueList";
 const LyricsPane = dynamic(() => import("./LyricsPane").then((m) => m.LyricsPane), {
   loading: () => <Loading />,
 });
@@ -173,7 +170,6 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
   const trackDuration = track?.durationSeconds;
   const idle = useIdle(IDLE_MS, panel === "art" && !menuOpen && !optionsOpen);
   const stage = useRef<HTMLDivElement>(null);
-  const swipeFrom = useRef<number | null>(null);
 
   useEffect(() => {
     if (!trackId || trackDuration === undefined || connect.selectedId) return;
@@ -184,21 +180,6 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
       releaseVinylDeck();
     };
   }, [trackId, trackDuration, connect.selectedId]);
-
-  useEffect(() => {
-    let lock: Promise<WakeLockSentinel | undefined> | undefined;
-    const acquire = () => {
-      if (document.visibilityState !== "visible") return;
-      lock = navigator.wakeLock?.request("screen").catch(() => undefined);
-    };
-
-    acquire();
-    document.addEventListener("visibilitychange", acquire);
-    return () => {
-      document.removeEventListener("visibilitychange", acquire);
-      void lock?.then((sentinel) => sentinel?.release());
-    };
-  }, []);
 
   const chrome = cn(
     "transition-opacity duration-300 ease-brand focus-within:opacity-100",
@@ -233,292 +214,248 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
   );
 
   return (
-    <DialogPrimitive.Root open onOpenChange={(next) => !next && onClose()}>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Content asChild aria-describedby={undefined}>
-          <div
-            data-player-fullscreen="true"
-            data-aura-host
-            onTouchStart={(event) => {
-              const target = event.target as Element;
-              const interactive = target.closest(
-                "button, a, input, select, textarea, [role='slider'], [role='menu']",
-              );
-              const atTop = (stage.current?.scrollTop ?? 0) === 0;
-              const insidePlayer =
-                target.closest("[data-player-fullscreen]") === event.currentTarget;
-              swipeFrom.current =
-                panel === "art" && atTop && !interactive && insidePlayer
-                  ? event.touches[0].clientY
-                  : null;
-            }}
-            onTouchCancel={() => {
-              swipeFrom.current = null;
-            }}
-            onTouchEnd={(event) => {
-              const from = swipeFrom.current;
-              swipeFrom.current = null;
-              if (from !== null && event.changedTouches[0].clientY - from > SWIPE_CLOSE_PX)
-                onClose();
-            }}
-            className="fixed inset-0 z-90 flex flex-col overflow-hidden bg-background px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))]"
-          >
-            <DialogPrimitive.Title className="sr-only">
-              {t("player.nowPlaying")}
-            </DialogPrimitive.Title>
-
-            <PlayerBackdrop />
-            <PlayerEffectsBackdrop playing={player.isPlaying && !player.buffering} />
-
-            <header
-              className={cn(
-                "relative z-1 grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 max-sm:flex max-sm:justify-between max-sm:gap-0",
-                chrome,
+    <FullPlayerLayout
+      onClose={onClose}
+      stage={stage}
+      artworkShown={panel === "art"}
+      chrome={chrome}
+      backdrop={
+        <>
+          <PlayerBackdrop />
+          <PlayerEffectsBackdrop playing={player.isPlaying && !player.buffering} />
+        </>
+      }
+      actions={
+        <>
+          <div className="hidden justify-self-end max-lg:block">
+            <PlayerOptionsMenu track={track} onOpenChange={setOptionsOpen}>
+              {(close) => (
+                <>
+                  <div className="flex min-h-12 items-center justify-between gap-3">
+                    <span>{t("share.card")}</span>
+                    <ShareCardButton track={track} />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    className="h-auto min-h-11 whitespace-normal py-3"
+                    onClick={() => {
+                      close();
+                      setMenuOpen(true);
+                    }}
+                  >
+                    {t("tracks.moreActions", { title: track.title })}
+                  </Button>
+                </>
               )}
+            </PlayerOptionsMenu>
+          </div>
+          <div className="flex items-center gap-1 justify-self-end max-lg:hidden">
+            <PlaybackDevices compact />
+            <StreamQuality track={track} className="mr-1 max-sm:hidden" />
+
+            <SleepTimerButton size="icon-lg" />
+
+            <ShareCardButton track={track} />
+
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              className="max-sm:hidden pointer-coarse:hidden"
+              onClick={() => {
+                onClose();
+                leanBack.show();
+              }}
+              aria-label={t("leanBack.open")}
+              title={t("leanBack.open")}
             >
+              <SofaIcon size={20} />
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              className={cn(panel === "lyrics" && "text-primary")}
+              onClick={() => setPanel((open) => (open === "lyrics" ? "art" : "lyrics"))}
+              aria-label={panel === "lyrics" ? t("lyrics.hide") : t("lyrics.show")}
+              aria-pressed={panel === "lyrics"}
+              title={t("lyrics.title")}
+            >
+              <MicVocalIcon size={20} />
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              className={cn(panel === "queue" && "text-primary")}
+              onClick={() => setPanel((open) => (open === "queue" ? "art" : "queue"))}
+              aria-label={t("queue.label")}
+              aria-pressed={panel === "queue"}
+            >
+              <ListVideoIcon size={20} />
+            </Button>
+          </div>
+        </>
+      }
+    >
+      <div
+        ref={stage}
+        data-panel={panel}
+        className={cn(
+          "fullscreen-player-stage",
+          fullPlayerStage,
+          panel === "art" ? "max-lg:overflow-y-auto" : "max-lg:gap-0 max-lg:overflow-hidden",
+        )}
+      >
+        {panel === "art" && (
+          <div className="fullscreen-player-art flex min-h-0 flex-[1.2] items-center justify-end pr-[min(40%,20vh)] max-lg:flex-[1_0_auto] max-lg:justify-center max-lg:pr-0">
+            <RecordTransition
+              out
+              spinning={player.isPlaying && !player.buffering}
+              scratchable
+              aura
+              axis="responsive"
+              sizes="(orientation: landscape) and (min-width: 34rem) and (max-height: 36rem) min(22vw, 54vh, 18rem), (max-width: 1023px) min(76vw, 22rem), min(48vh, 28rem)"
+              transitionCover
+              className="w-(--player-art-size)"
+            />
+          </div>
+        )}
+
+        <div
+          className={cn(
+            "fullscreen-player-controls flex min-h-0 flex-1 flex-col justify-center gap-6 max-lg:flex-none max-lg:pb-4",
+            panel !== "art" && "max-lg:hidden lg:max-w-[50%] lg:flex-none lg:basis-1/2",
+          )}
+        >
+          <div
+            className={cn(
+              "fullscreen-player-details",
+              fullPlayerControls,
+              panel !== "art" && "lg:mx-auto",
+            )}
+          >
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="fullscreen-player-caption flex min-w-0 flex-1 flex-col gap-2">
+                <h2
+                  className={cn("text-balance wrap-anywhere", displayTitleClass(track.title))}
+                  title={track.title}
+                >
+                  {track.title}
+                </h2>
+                <p className="fullscreen-player-byline wrap-anywhere text-muted-foreground">
+                  <ArtistLinks
+                    track={track}
+                    onNavigate={onClose}
+                    className="fullscreen-player-artist font-medium text-foreground"
+                  />
+                  {track.albumId && (
+                    <>
+                      <span className="fullscreen-player-divider">{", "}</span>
+                      <Link
+                        href={`/albums/${track.albumId}`}
+                        onClick={onClose}
+                        className="fullscreen-player-album"
+                        title={track.albumTitle ?? undefined}
+                      >
+                        {track.albumTitle}
+                      </Link>
+                    </>
+                  )}
+                </p>
+                {reason && <p className="text-sm text-faint">{reasonLabel(reason, t)}</p>}
+              </div>
               <Button
                 variant="ghost"
                 size="icon-lg"
-                className="justify-self-start max-sm:size-10"
-                onClick={onClose}
-                aria-label={t("player.closeFull")}
-              >
-                <ChevronDownIcon size={22} />
-              </Button>
-
-              <span className="min-w-0 truncate text-sm text-muted-foreground">
-                {t("player.nowPlaying")}
-              </span>
-
-              <div className="hidden justify-self-end max-lg:block">
-                <PlayerOptionsMenu track={track} onOpenChange={setOptionsOpen}>
-                  {(close) => (
-                    <>
-                      <div className="flex min-h-12 items-center justify-between gap-3">
-                        <span>{t("share.card")}</span>
-                        <ShareCardButton track={track} />
-                      </div>
-                      <Button
-                        variant="ghost"
-                        className="h-auto min-h-11 whitespace-normal py-3"
-                        onClick={() => {
-                          close();
-                          setMenuOpen(true);
-                        }}
-                      >
-                        {t("tracks.moreActions", { title: track.title })}
-                      </Button>
-                    </>
-                  )}
-                </PlayerOptionsMenu>
-              </div>
-              <div className="flex items-center gap-1 justify-self-end max-lg:hidden">
-                <PlaybackDevices compact />
-                <StreamQuality track={track} className="mr-1 max-sm:hidden" />
-
-                <SleepTimerButton size="icon-lg" />
-
-                <ShareCardButton track={track} />
-
-                <Button
-                  variant="ghost"
-                  size="icon-lg"
-                  className="max-sm:hidden pointer-coarse:hidden"
-                  onClick={() => {
-                    onClose();
-                    leanBack.show();
-                  }}
-                  aria-label={t("leanBack.open")}
-                  title={t("leanBack.open")}
-                >
-                  <SofaIcon size={20} />
-                </Button>
-
-                <Button
-                  variant="ghost"
-                  size="icon-lg"
-                  className={cn(panel === "lyrics" && "text-primary")}
-                  onClick={() => setPanel((open) => (open === "lyrics" ? "art" : "lyrics"))}
-                  aria-label={panel === "lyrics" ? t("lyrics.hide") : t("lyrics.show")}
-                  aria-pressed={panel === "lyrics"}
-                  title={t("lyrics.title")}
-                >
-                  <MicVocalIcon size={20} />
-                </Button>
-
-                <Button
-                  variant="ghost"
-                  size="icon-lg"
-                  className={cn(panel === "queue" && "text-primary")}
-                  onClick={() => setPanel((open) => (open === "queue" ? "art" : "queue"))}
-                  aria-label={t("queue.label")}
-                  aria-pressed={panel === "queue"}
-                >
-                  <ListVideoIcon size={20} />
-                </Button>
-              </div>
-            </header>
-
-            <div
-              ref={stage}
-              data-panel={panel}
-              className={cn(
-                "fullscreen-player-stage relative z-1 flex min-h-0 flex-1 gap-[clamp(2rem,5vw,5rem)] max-lg:-mx-5 max-lg:flex-col max-lg:overflow-x-hidden max-lg:px-5",
-                panel === "art" ? "max-lg:overflow-y-auto" : "max-lg:gap-0 max-lg:overflow-hidden",
-              )}
-            >
-              {panel === "art" && (
-                <div className="fullscreen-player-art flex min-h-0 flex-[1.2] items-center justify-end pr-[min(40%,20vh)] max-lg:flex-[1_0_auto] max-lg:justify-center max-lg:pr-0">
-                  <RecordTransition
-                    out
-                    spinning={player.isPlaying && !player.buffering}
-                    scratchable
-                    aura
-                    axis="responsive"
-                    sizes="(orientation: landscape) and (min-width: 34rem) and (max-height: 36rem) min(22vw, 54vh, 18rem), (max-width: 1023px) min(76vw, 22rem), min(48vh, 28rem)"
-                    transitionCover
-                    className="w-(--player-art-size)"
-                  />
-                </div>
-              )}
-
-              <div
                 className={cn(
-                  "fullscreen-player-controls flex min-h-0 flex-1 flex-col justify-center gap-6 max-lg:flex-none max-lg:pb-4",
-                  panel !== "art" && "max-lg:hidden lg:max-w-[50%] lg:flex-none lg:basis-1/2",
+                  "library-save-control shrink-0",
+                  track.isFavorite && "text-primary hover:text-primary",
+                )}
+                onClick={onToggleFavorite}
+                aria-label={
+                  track.isFavorite ? t("tracks.removeFromFavorites") : t("tracks.addToFavorites")
+                }
+                aria-pressed={track.isFavorite}
+              >
+                <HeartIcon className={track.isFavorite ? "fill-current" : undefined} />
+              </Button>
+            </div>
+
+            <FullScreenProgress track={track} chrome={chrome} />
+
+            <PlayerTransport size="full" />
+            {secondaryActions}
+
+            {player.nextTrack && (
+              <button
+                type="button"
+                onClick={() => setPanel("queue")}
+                className={cn(
+                  "fullscreen-player-up-next -mt-2 truncate text-center text-sm text-muted-foreground hover:text-foreground",
+                  chrome,
                 )}
               >
-                <div
-                  className={cn(
-                    "fullscreen-player-details flex w-full max-w-[34rem] flex-col gap-6 max-lg:mx-auto",
-                    panel !== "art" && "lg:mx-auto",
-                  )}
-                >
-                  <div className="flex min-w-0 items-start gap-3">
-                    <div className="fullscreen-player-caption flex min-w-0 flex-1 flex-col gap-2">
-                      <h2
-                        className={cn("text-balance wrap-anywhere", displayTitleClass(track.title))}
-                        title={track.title}
-                      >
-                        {track.title}
-                      </h2>
-                      <p className="fullscreen-player-byline wrap-anywhere text-muted-foreground">
-                        <ArtistLinks
-                          track={track}
-                          onNavigate={onClose}
-                          className="fullscreen-player-artist font-medium text-foreground"
-                        />
-                        {track.albumId && (
-                          <>
-                            <span className="fullscreen-player-divider">{", "}</span>
-                            <Link
-                              href={`/albums/${track.albumId}`}
-                              onClick={onClose}
-                              className="fullscreen-player-album"
-                              title={track.albumTitle ?? undefined}
-                            >
-                              {track.albumTitle}
-                            </Link>
-                          </>
-                        )}
-                      </p>
-                      {reason && <p className="text-sm text-faint">{reasonLabel(reason, t)}</p>}
-                    </div>
+                {t("player.upNextNamed", {
+                  title: `${player.nextTrack.title} — ${formatArtists(player.nextTrack)}`,
+                })}
+              </button>
+            )}
+
+            <div className={cn("fullscreen-player-tools flex items-center gap-2", chrome)}>
+              <Suspense fallback={null}>
+                <TrackMenu
+                  track={track}
+                  open={menuOpen}
+                  onOpenChange={setMenuOpen}
+                  onNavigate={onClose}
+                  isFavorite={track.isFavorite}
+                  onToggleFavorite={onToggleFavorite}
+                  trigger={
                     <Button
                       variant="ghost"
                       size="icon-lg"
-                      className={cn(
-                        "shrink-0",
-                        track.isFavorite && "text-primary hover:text-primary",
-                      )}
-                      onClick={onToggleFavorite}
-                      aria-label={
-                        track.isFavorite
-                          ? t("tracks.removeFromFavorites")
-                          : t("tracks.addToFavorites")
-                      }
-                      aria-pressed={track.isFavorite}
+                      className="max-lg:hidden"
+                      aria-label={t("tracks.moreActions", { title: track.title })}
                     >
-                      <HeartIcon className={track.isFavorite ? "fill-current" : undefined} />
+                      <EllipsisVerticalIcon />
                     </Button>
-                  </div>
+                  }
+                />
+              </Suspense>
 
-                  <FullScreenProgress track={track} chrome={chrome} />
-
-                  <PlayerTransport size="full" />
-                  {secondaryActions}
-
-                  {player.nextTrack && (
-                    <button
-                      type="button"
-                      onClick={() => setPanel("queue")}
-                      className={cn(
-                        "fullscreen-player-up-next -mt-2 truncate text-center text-sm text-muted-foreground hover:text-foreground",
-                        chrome,
-                      )}
-                    >
-                      {t("player.upNextNamed", {
-                        title: `${player.nextTrack.title} — ${formatArtists(player.nextTrack)}`,
-                      })}
-                    </button>
-                  )}
-
-                  <div className={cn("fullscreen-player-tools flex items-center gap-2", chrome)}>
-                    <Suspense fallback={null}>
-                      <TrackMenu
-                        track={track}
-                        open={menuOpen}
-                        onOpenChange={setMenuOpen}
-                        onNavigate={onClose}
-                        isFavorite={track.isFavorite}
-                        onToggleFavorite={onToggleFavorite}
-                        trigger={
-                          <Button
-                            variant="ghost"
-                            size="icon-lg"
-                            className="max-lg:hidden"
-                            aria-label={t("tracks.moreActions", { title: track.title })}
-                          >
-                            <EllipsisVerticalIcon />
-                          </Button>
-                        }
-                      />
-                    </Suspense>
-
-                    <div className="ml-auto flex w-[12.5rem] max-w-[50%] items-center gap-2 pointer-coarse:hidden">
-                      <PlayerVolume size="icon-lg" />
-                    </div>
-                  </div>
-                </div>
+              <div className="ml-auto flex w-[12.5rem] max-w-[50%] items-center gap-2 pointer-coarse:hidden">
+                <PlayerVolume size="icon-lg" />
               </div>
-
-              {panel === "lyrics" && (
-                <div className="min-h-0 flex-1 overflow-y-auto scroll-smooth px-4 [scrollbar-width:none] motion-reduce:scroll-auto [&::-webkit-scrollbar]:hidden">
-                  <LyricsPane
-                    key={track.id}
-                    track={track}
-                    onSeek={player.seek}
-                    onLyricsKnown={(hasLyrics) => player.patchTrack(track.id, { hasLyrics })}
-                  />
-                </div>
-              )}
-
-              {panel === "queue" && (
-                <div className="flex min-h-0 flex-1 flex-col pt-3 lg:max-w-[36rem]">
-                  <QueueList />
-                </div>
-              )}
             </div>
-
-            {panel !== "art" && (
-              <div className="relative z-1 -mx-5 shrink-0 border-t border-border bg-background/95 px-5 pt-2 lg:hidden">
-                <PlayerPanelTransport onShowArtwork={() => setPanel("art")} />
-                {secondaryActions}
-              </div>
-            )}
           </div>
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+        </div>
+
+        {panel === "lyrics" && (
+          <div className="min-h-0 flex-1 overflow-y-auto scroll-smooth px-4 [scrollbar-width:none] motion-reduce:scroll-auto [&::-webkit-scrollbar]:hidden">
+            <LyricsPane
+              key={track.id}
+              track={track}
+              onSeek={player.seek}
+              onLyricsKnown={(hasLyrics) => player.patchTrack(track.id, { hasLyrics })}
+            />
+          </div>
+        )}
+
+        {panel === "queue" && (
+          <div className="flex min-h-0 flex-1 flex-col pt-3 lg:max-w-[36rem]">
+            <QueueList />
+          </div>
+        )}
+      </div>
+
+      {panel !== "art" && (
+        <div className="relative z-1 -mx-5 shrink-0 border-t border-border bg-background/95 px-5 pt-2 lg:hidden">
+          <PlayerPanelTransport onShowArtwork={() => setPanel("art")} />
+          {secondaryActions}
+        </div>
+      )}
+    </FullPlayerLayout>
   );
 }
+
+export { AudiobookFullScreenPlayer } from "./audiobooks/AudiobookFullScreenPlayer";

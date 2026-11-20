@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,15 +40,25 @@ import app.caimack.sync.SyncStatus
 fun DownloadsScreen(play: (List<Track>, Int) -> Unit) {
     val container = LocalContainer.current
     val offline by container.downloads.state.collectAsStateWithLifecycle()
+    val libraryRevision by container.downloads.library.revision.collectAsStateWithLifecycle()
     val synchronized by container.syncStore.status.collectAsStateWithLifecycle()
     val catalog by container.localLibrary.collectAsStateWithLifecycle()
     val local = catalog.takeIf { it.account == container.accountKey }
     val library = local?.syncedTracks.orEmpty()
-    val libraryIds = library.map { it.id }.toSet()
-    val individual = offline.values.filter { it.track != null && container.downloads.visible(it) }
-    val entries = individual.filter { it.track!!.id !in libraryIds }.sortedBy { it.track!!.title.lowercase() }
-    // Two stored copies occupy space even when their track only appears once in the list.
-    val occupiedBytes = (local?.syncedBytes ?: 0L) + individual.sumOf { it.download.bytesDownloaded.coerceAtLeast(0L) }
+    val owner = container.syncStore.downloadOwner
+    val managingLibrary = synchronized.enabled && container.syncStore.active
+    val privateDownloads = remember(owner, libraryRevision) { container.downloads.libraryEntries() }
+    val individual = remember(offline, container.accountKey) {
+        offline.values.filter { it.track != null && container.downloads.visible(it) }
+    }
+    val entries = remember(library, privateDownloads, individual, managingLibrary) {
+        val libraryIds = library.mapTo(hashSetOf()) { it.id }
+        val listed = if (managingLibrary) individual else privateDownloads.filter { it.done } + individual
+        listed.filter { it.track!!.id !in libraryIds }.groupBy { it.track!!.id }.values
+            .map { copies -> copies.firstOrNull { it.done } ?: copies.first() }
+            .sortedBy { it.track!!.title.lowercase() }
+    }
+    val occupiedBytes = (local?.syncedBytes ?: 0L) + (individual + privateDownloads).sumOf { it.download.bytesDownloaded.coerceAtLeast(0L) }
     DownloadsContent(library, entries, occupiedBytes, synchronized, play, container.downloads::remove)
 }
 
@@ -96,7 +107,7 @@ internal fun DownloadsContent(
                     Text(pluralStringResource(R.plurals.count_tracks, ready.size, ready.size), style = Type.small, color = palette.muted)
                     if (pending > 0) Text(pluralStringResource(R.plurals.downloads_pending, pending, pending), style = Type.small, color = palette.muted)
                 }
-                TextButton(onClick = { remove(entries.map { it.download.request.id }) }) {
+                TextButton(onClick = { remove(entries.map { it.track!!.id }) }) {
                     Text(stringResource(R.string.downloads_remove_all), color = palette.muted)
                 }
             }

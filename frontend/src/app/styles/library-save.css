@@ -1,4 +1,14 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
+:root {
+  --library-saved: var(--primary);
+  --library-saved-foreground: var(--primary-foreground);
+}
+
+.library-save-control {
+  --primary: var(--library-saved);
+  --primary-foreground: var(--library-saved-foreground);
+}
+
 .library-save-icon {
   overflow: visible;
 }

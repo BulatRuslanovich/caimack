@@ -1,0 +1,34 @@
+appId: app.caimack.desktop
+productName: Caimack
+executableName: caimack
+directories:
+  output: release
+files:
+  - app/**
+  - renderer/**
+  - package.json
+extraResources:
+  - from: ../LICENSE
+    to: COPYING
+linux:
+  icon: renderer/icons/icon-512.png
+  syncDesktopName: true
+  category: AudioVideo
+  target:
+    - AppImage
+    - deb
+    - tar.xz
+  artifactName: caimack-desktop-${version}-linux-${arch}.${ext}
+  maintainer: Caimack contributors <noreply@github.com>
+win:
+  icon: renderer/icons/icon-512.png
+  target:
+    - nsis
+    - portable
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: caimack-desktop-${version}-windows-${arch}-setup.${ext}
+portable:
+  artifactName: caimack-desktop-${version}-windows-${arch}-portable.${ext}

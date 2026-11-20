@@ -2,6 +2,8 @@
 
 package app.caimack.ui
 
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import android.service.dreams.DreamService
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
@@ -118,7 +120,12 @@ private fun DreamScreen() {
     val palette = LocalPalette.current
     val container = LocalContainer.current
     val state by container.player.state.collectAsState()
-    val track = state.current
+    val playback by container.audiobookPlayback.state.collectAsState()
+    val catalog by container.audiobookStore.state.collectAsState()
+    val enabled by container.audiobooksEnabled.collectAsState()
+    val book = if (enabled) catalog.books.find { it.id == playback?.bookId } else null
+    val track = state.current.takeIf { book == null }
+    val bookCover = book?.let(container.audiobookStore::cover)
 
     var drift by remember { mutableStateOf(IntOffset.Zero) }
     var clock by remember { mutableStateOf(now()) }
@@ -142,7 +149,9 @@ private fun DreamScreen() {
     val line = lyrics?.lines?.lastOrNull { it.at <= position }?.text?.trim()?.ifEmpty { null }
 
     Box(Modifier.fillMaxSize().background(palette.background)) {
-        track?.let { ArtBackdrop(trackCover(it), BackdropMode.Stage, Modifier.fillMaxSize(), grainStrength = 0.6f) }
+        (bookCover ?: track?.let { trackCover(it) })?.let {
+            ArtBackdrop(it, BackdropMode.Stage, Modifier.fillMaxSize(), grainStrength = 0.6f)
+        }
 
         BoxWithConstraints(Modifier.fillMaxSize().offset(drift.x.dp, drift.y.dp).padding(32.dp)) {
             val wide = maxWidth > maxHeight
@@ -155,6 +164,11 @@ private fun DreamScreen() {
             ) {
                 Text(clock, style = Type.display.copy(fontSize = 44.sp), color = palette.foreground.copy(alpha = 0.85f))
 
+                if (book != null) {
+                    Cover(bookCover, book.title, Modifier.size(disc).clip(RoundedCornerShape(18.dp)), book = true)
+                    Text(book.title, style = displayStyle(book.title), textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    return@Column
+                }
                 if (track == null) {
                     BrandMark(palette.foreground, palette.primary, Modifier.size(disc * 0.4f))
                     return@Column

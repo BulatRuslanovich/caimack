@@ -22,18 +22,21 @@ dimmed and cannot be played. Starting a collection while the server is
 unavailable queues only its completed downloads, preserving their order.
 Downloaded audio from another server is excluded from the active server's list.
 **Library → Downloads** always provides access to individual transfers and their
-removal. The storage total at the top includes both individual downloads and
-full-library synchronized audio, including embedded tags and artwork. It is
-available for existing synchronized files without downloading them again.
+removal. The storage total includes both individual downloads and audio from
+full-library synchronization. Completed copies from full sync remain playable
+and can be removed from Downloads when sync is turned off.
 
 Previously unseen pages require a connection. Open an older playlist online
 once to retain its membership and ordering. A download's own metadata is enough
 to browse its album and credited artists, including collaborators.
 
-Catalog and folder editing require the server. Changes are never queued for
-later synchronization in individual-download mode. With full library sync
-enabled, supported offline edits use its durable action queue instead. A successful connection check restores normal requests
-and playback availability.
+Listening to downloaded tracks, including tracks in a saved playlist, records
+plays and skips for the signed-in account. Likes, unlikes and new recommendation
+rules also use a private queue that survives app restarts. The app retries these
+actions when it can reach the server, using the same action receipts as full
+library sync. The server updates the recommendation profile after applying them.
+Catalog and folder editing in individual-download mode require the server.
+The lightweight sync identity endpoint requires an updated server.
 
 ## Artwork and startup
 

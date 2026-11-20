@@ -2,6 +2,9 @@
 
 package app.caimack.ui
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -21,6 +24,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Icon
@@ -28,7 +32,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -49,6 +56,7 @@ import androidx.compose.ui.graphics.Color
 import app.caimack.R
 import app.caimack.api.HomeBlock
 import app.caimack.api.Track
+import app.caimack.audiobooks.AudiobookCatalog
 import app.caimack.playback.matchesCollection
 
 private const val HERO_PREVIEW = 3
@@ -59,48 +67,130 @@ private const val MIN_DISTINCT = 3
 
 @Composable
 fun HomeScreen(nav: NavController) {
+    var mode by rememberSaveable { mutableStateOf("all") }
     val container = LocalContainer.current
-    val recommendations = recommendationsEnabled()
+    val enabled by container.audiobooksEnabled.collectAsStateWithLifecycle()
+    val catalog by container.audiobookStore.state.collectAsStateWithLifecycle()
+    var downloads by rememberSaveable { mutableStateOf(false) }
+    val selected = if (mode == "audiobooks" && !enabled) "all" else mode
+    fun select(category: String) {
+        mode = if (category == selected) "all" else category
+        downloads = false
+    }
+    // Keep motion and the horizontal position as the selected feed changes its LazyColumn.
+    val scroll = rememberLazyListState()
+    val duration = if (systemMotionEnabled()) 240 else 0
+    val music by animateFloatAsState(if (selected == "music") 1f else 0f, tween(duration), label = "music category")
+    val books by animateFloatAsState(if (selected == "audiobooks") 1f else 0f, tween(duration), label = "book category")
+    val emphasis by animateFloatAsState(if (downloads) 1f else 0f, tween(duration), label = "downloads selection")
+    LaunchedEffect(selected) {
+        val index = when (selected) {
+            "music" -> 1
+            "audiobooks" -> 2
+            else -> 0
+        }
+        if (duration == 0) scroll.scrollToItem(index) else scroll.animateScrollToItem(index)
+    }
+    val filters: @Composable () -> Unit = {
+        CategoryFilterRow(selected, false, {}, scroll = scroll, autoReset = false) {
+            item("all") { CategoryFilter(R.string.home_filter_all, selected == "all") { select("all") } }
+            item("music") {
+                HomeCategory(R.string.home_filter_music, selected == "music", downloads, music, emphasis, { select("music") }, { downloads = !downloads })
+            }
+            if (enabled) item("audiobooks") {
+                HomeCategory(R.string.nav_audiobooks, selected == "audiobooks", downloads, books, emphasis, { select("audiobooks") }, { downloads = !downloads })
+            }
+        }
+    }
+    when {
+        selected == "audiobooks" -> AudiobookBrowse(downloads, filters)
+        selected == "music" && downloads -> DownloadedMusicHome(filters)
+        else -> MusicHome(nav, catalog.takeIf { enabled && selected == "all" }, filters)
+    }
+}
 
+@Composable
+private fun DownloadedMusicHome(filters: @Composable () -> Unit) {
+    val container = LocalContainer.current
+    val library by container.localLibrary.collectAsStateWithLifecycle()
+    val tracks = library.takeIf { it.account == container.accountKey }?.availableTracks.orEmpty()
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(top = 16.dp, bottom = 16.dp)) {
+        item("home-filters") { filters() }
+        if (tracks.isEmpty()) item { Empty(stringResource(R.string.downloads_empty_title)) }
+        itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
+            TrackRow(track, onClick = { container.player.play(tracks, index, "home:downloads") })
+        }
+    }
+}
+
+@Composable
+private fun MusicHome(nav: NavController, audiobooks: AudiobookCatalog?, filters: (@Composable () -> Unit)?) {
+    val container = LocalContainer.current
     Load(
         key = "home",
         load = {
             container.flushSignals()
             container.api.homeFeed().blocks
         },
-        isEmpty = { it.isEmpty() },
-        empty = { Empty(stringResource(R.string.home_empty_title)) },
-    ) { blocks ->
-        val shown = blocks
-            .filter { it.zone != "Browse" && it.layout != "Tile" }
-            .flatMap { if (it.layout == "Hero") it.tracks.orEmpty().take(HERO_PREVIEW) else it.tracks.orEmpty() }
-            .map { it.id }
-            .toSet()
-
-        val seen = remember { mutableSetOf<String>() }
-
-        LazyColumn(
-            Modifier.fillMaxSize(),
-            contentPadding = playerContentPadding(top = 16.dp, bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-        ) {
-            if (recommendations) item("personal-radio") { RadioHero(blocks.flatMap { it.tracks.orEmpty() }) }
-
-            val quick = blocks.filter { it.zone == "Quick" }
-            if (quick.isNotEmpty()) {
-                item("quick") {
-                    val source = "home:quickTiles"
-                    Shown(source, seen)
-                    QuickTiles(quick, nav) { tracks, index -> container.playable(tracks).takeIf { it.isNotEmpty() }?.let { ready -> container.player.play(ready, ready.indexOfFirst { it.id == tracks.getOrNull(index)?.id }.coerceAtLeast(0), source) }; Unit }
-                }
+        error = { retry -> HomeFeed(emptyList(), nav, audiobooks, filters) { Failure(retry) } },
+        loading = {
+            HomeFeed(emptyList(), nav, audiobooks, filters) {
+                Box(Modifier.fillMaxWidth().padding(vertical = 64.dp), contentAlignment = Alignment.Center) { RecordLoading(44.dp) }
             }
+        },
+    ) { blocks ->
+        HomeFeed(blocks, nav, audiobooks, filters, if (blocks.isEmpty()) {
+            { Empty(stringResource(R.string.home_empty_title)) }
+        } else null)
+    }
+}
 
-            blocks.filter { it.zone == "Lead" }.forEach { block -> item(block.key) { Block(block, nav, shown, seen) } }
+@Composable
+private fun HomeFeed(
+    blocks: List<HomeBlock>,
+    nav: NavController,
+    audiobooks: AudiobookCatalog?,
+    filters: (@Composable () -> Unit)?,
+    status: (@Composable () -> Unit)?,
+) {
+    val container = LocalContainer.current
+    val recommendations = recommendationsEnabled()
+    val shown = blocks
+        .filter { it.zone != "Browse" && it.layout != "Tile" }
+        .flatMap { if (it.layout == "Hero") it.tracks.orEmpty().take(HERO_PREVIEW) else it.tracks.orEmpty() }
+        .map { it.id }
+        .toSet()
 
-            if (recommendations) item("recap") { RecapBanner() }
-            val browse = blocks.filter { it.zone == "Browse" }
-            browse.firstOrNull()?.let { block -> item(block.key) { Block(block, nav, shown, seen) } }
-            browse.drop(1).forEach { block -> item(block.key) { Block(block, nav, shown, seen) } }
+    val seen = remember { mutableSetOf<String>() }
+
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding = playerContentPadding(top = 16.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+    ) {
+        if (filters != null) item("home-filters") { filters() }
+        if (recommendations && status == null) item("personal-radio") { RadioHero(blocks.flatMap { it.tracks.orEmpty() }) }
+
+        val quick = blocks.filter { it.zone == "Quick" }
+        if (quick.isNotEmpty()) {
+            item("quick") {
+                val source = "home:quickTiles"
+                Shown(source, seen)
+                QuickTiles(quick, nav) { tracks, index -> container.playable(tracks).takeIf { it.isNotEmpty() }?.let { ready -> container.player.play(ready, ready.indexOfFirst { it.id == tracks.getOrNull(index)?.id }.coerceAtLeast(0), source) }; Unit }
+            }
+        }
+
+        blocks.filter { it.zone == "Lead" }.forEach { block -> item(block.key) { Block(block, nav, shown, seen) } }
+
+        if (recommendations && status == null) item("recap") { RecapBanner() }
+        val browse = blocks.filter { it.zone == "Browse" }
+        val audiobookAnchor = browse.firstOrNull { it.baseKey == "newArrivals" }
+            ?: browse.firstOrNull { it.baseKey == "newAlbums" }
+        if (audiobookAnchor == null) audiobooks?.let { homeAudiobook(it) }
+        if (status != null) item("music-status") { status() }
+        browse.forEach { block ->
+            item(block.key) { Block(block, nav, shown, seen) }
+            if (block == audiobookAnchor) audiobooks?.let { homeAudiobook(it) }
         }
     }
 }
@@ -244,18 +334,28 @@ private fun Collage(collage: List<Track>, lead: Track, modifier: Modifier) {
 
 @Composable
 internal fun CollectionPlayButton(trackIds: List<String>, enabled: Boolean = true, size: Dp = 52.dp, iconSize: Dp = 22.dp, onPlay: () -> Unit) {
-    val palette = LocalPalette.current
     val player = LocalContainer.current.player
     val state by player.state.collectAsStateWithLifecycle()
     val available = LocalAvailableTracks.current
     val collection = if (LocalOfflineLibrary.current) trackIds.filter { it in available } else trackIds
     val automatic = displayedRadio().notes.keys
     val active = matchesCollection(collection, state.queue.map { it.id }, state.current?.id, automatic)
-    val playing = active && state.playing
+    CollectionTransportButton(active && state.playing, enabled, size, iconSize) {
+        if (active) player.toggle() else onPlay()
+    }
+}
+
+@Composable
+internal fun CollectionTransportButton(
+    playing: Boolean,
+    enabled: Boolean,
+    size: Dp = 52.dp,
+    iconSize: Dp = 22.dp,
+    onClick: () -> Unit,
+) {
+    val palette = LocalPalette.current
     Box(
-        Modifier.size(size).clip(CircleShape).background(palette.action).clickable(enabled = enabled, role = Role.Button) {
-            if (active) player.toggle() else onPlay()
-        },
+        Modifier.size(size).clip(CircleShape).background(palette.action).clickable(enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(if (playing) Lucide.Pause else Lucide.Play,
@@ -405,9 +505,9 @@ private fun blockLink(block: HomeBlock): Any? = when (block.baseKey) {
     "quickTiles" -> RecentRoute
     "newArrivals" -> MixRoute("new")
     "topTracks" -> MixRoute("top")
-    "newAlbums" -> AlbumsRoute
-    "yourPlaylists" -> PlaylistsRoute
-    "artistsForYou" -> ArtistsRoute
+    "newAlbums" -> SearchRoute(SearchCategory.Albums)
+    "yourPlaylists" -> SearchRoute(SearchCategory.Playlists)
+    "artistsForYou" -> SearchRoute(SearchCategory.Artists)
     else -> null
 }
 

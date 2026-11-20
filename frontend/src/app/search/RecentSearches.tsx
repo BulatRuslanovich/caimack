@@ -17,6 +17,7 @@ export function RecentSearches() {
 
   return (
     <Section
+      className="gap-2.5"
       title={t("search.recent")}
       actions={
         <Button variant="text" size="auto" className="text-sm" onClick={clearSearches}>

@@ -25,7 +25,7 @@ export function YandexSearchResults({ query }: { query: string }) {
       {(data) => (
         <>
           {data.tracks.length > 0 && (
-            <Section title={t("nav.tracks")}>
+            <Section title={t("nav.tracks")} className="gap-2.5">
               <ul className="flex flex-col">
                 {data.tracks.map((track) => (
                   <TrackRow key={track.id} track={track} />
@@ -34,7 +34,7 @@ export function YandexSearchResults({ query }: { query: string }) {
             </Section>
           )}
           {data.albums.length > 0 && (
-            <Section title={t("nav.albums")}>
+            <Section title={t("nav.albums")} className="gap-2.5">
               <CardGrid>
                 {data.albums.map((album) => (
                   <AlbumCard key={album.id} album={album} />
@@ -71,28 +71,26 @@ function TrackRow({ track }: { track: YandexTrack }) {
         </span>
         <span className="library-secondary truncate">{track.artist}</span>
         {track.album && (
-          <span className="library-tertiary truncate text-xs md:hidden">{track.album}</span>
+          <span className="library-tertiary truncate text-xs lg:hidden">{track.album}</span>
         )}
       </span>
-      {track.album && (
-        <span className="library-secondary min-w-0 flex-1 truncate max-lg:hidden">
-          {track.album}
-        </span>
-      )}
-      <span className="mr-3 shrink-0 text-muted-foreground tabular-nums max-md:hidden">
+      <span className="library-secondary min-w-0 flex-1 truncate max-lg:hidden">{track.album}</span>
+      <span className="w-10 shrink-0 text-right text-muted-foreground tabular-nums max-md:hidden">
         {formatDuration(track.durationSeconds)}
       </span>
-      <YandexImportButton
-        source={{
-          kind: "Track",
-          id: track.id,
-          title: track.title,
-          artist: track.artist,
-          coverUrl: track.coverUrl,
-        }}
-        inLibrary={track.inLibrary}
-        unavailable={!track.available && !track.inLibrary}
-      />
+      <div className="w-32 shrink-0 max-sm:w-24 [&>span]:items-stretch">
+        <YandexImportButton
+          source={{
+            kind: "Track",
+            id: track.id,
+            title: track.title,
+            artist: track.artist,
+            coverUrl: track.coverUrl,
+          }}
+          inLibrary={track.inLibrary}
+          unavailable={!track.available && !track.inLibrary}
+        />
+      </div>
     </li>
   );
 }

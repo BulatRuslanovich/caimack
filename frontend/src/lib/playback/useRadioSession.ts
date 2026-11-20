@@ -2,6 +2,8 @@
 
 "use client";
 
+import { useDesktopOfflinePlayback } from "@/desktop/api";
+
 import { useRecommendations } from "@/lib/useRecommendations";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
@@ -65,6 +67,7 @@ export function useRadioSession({
 }: RadioSessionInput): RadioSession {
   const { notify, notifyError } = useToast();
   const recommendations = useRecommendations();
+  const offlineQueue = useDesktopOfflinePlayback();
   const t = useT();
 
   const [session, setSession] = useState<RadioSessionState | null>(null);
@@ -165,6 +168,10 @@ export function useRadioSession({
   const start = useCallback(
     async (seedTrack: Track | null = null, signal?: AbortSignal) => {
       if (!recommendations) return null;
+      if (seedTrack && offlineQueue) {
+        notify(t("radio.empty"), "info");
+        return null;
+      }
       const generation = ++generationRef.current;
       radioRef.current = { inFlight: false, seed: null };
       setStarting(true);
@@ -199,12 +206,13 @@ export function useRadioSession({
         setStarting(false);
       }
     },
-    [notify, notifyError, t, recommendations],
+    [notify, notifyError, t, recommendations, offlineQueue],
   );
 
   useEffect(() => {
     if (
       !recommendations ||
+      offlineQueue ||
       starting ||
       currentIndex < 0 ||
       repeat !== "off" ||
@@ -320,6 +328,7 @@ export function useRadioSession({
     orderRef,
     revision,
     recommendations,
+    offlineQueue,
     setCurrentIndex,
   ]);
 

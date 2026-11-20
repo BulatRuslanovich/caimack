@@ -24,3 +24,10 @@ export function DeferredFullPlayer(
   const Component = loaded?.FullScreenPlayer;
   return Component ? <Component {...props} /> : null;
 }
+
+export function DeferredAudiobookFullPlayer(
+  props: ComponentProps<typeof import("./FullScreenPlayer").AudiobookFullScreenPlayer>,
+) {
+  const Component = loaded?.AudiobookFullScreenPlayer;
+  return Component ? <Component {...props} /> : null;
+}

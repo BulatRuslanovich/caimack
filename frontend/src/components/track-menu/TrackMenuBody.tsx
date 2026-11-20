@@ -26,6 +26,8 @@ import {
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Loading } from "../Loading";
+import { isDesktop } from "@/desktop/api";
+import { DesktopTrackDownload } from "@/desktop/offline";
 
 import type { TrackMenuProps } from "../TrackMenu";
 import { MenuContent, MenuItem, MenuSeparator, MenuSub } from "./MenuPrimitives";
@@ -102,6 +104,8 @@ export function TrackMenuBody({
         >
           <ListVideoIcon size={16} /> {t("menu.addToQueue")}
         </MenuItem>
+
+        {isDesktop && <DesktopTrackDownload track={track} />}
 
         {recommendations && (
           <MenuItem disabled={radio.isPending} onSelect={stayOpen(() => radio.mutate())}>
@@ -192,10 +196,12 @@ export function TrackMenuBody({
           </MenuItem>
         )}
 
-        <MenuItem disabled={download.isPending} onSelect={stayOpen(() => download.mutate())}>
-          <DownloadIcon size={16} />{" "}
-          {download.isPending ? t("menu.downloading") : t("menu.download")}
-        </MenuItem>
+        {!isDesktop && (
+          <MenuItem disabled={download.isPending} onSelect={stayOpen(() => download.mutate())}>
+            <DownloadIcon size={16} />{" "}
+            {download.isPending ? t("menu.downloading") : t("menu.download")}
+          </MenuItem>
+        )}
 
         <MenuSeparator />
 

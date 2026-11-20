@@ -16,6 +16,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use anyhow::Context;
+use app::audiobooks::Audiobooks;
 use app::auth::AuthService;
 use app::auth::sessions::LiveSessions;
 use app::auth::tokens::TokenService;
@@ -137,6 +138,13 @@ async fn run() -> anyhow::Result<()> {
         .with_file_renaming(config.rename_music_files)
         .with_metadata_export(config.export_music_metadata);
     workers.push(library.clone().spawn(config.library_scan_interval, background.clone()));
+    let audiobooks = Audiobooks::default();
+    workers.push(audiobooks.spawn(
+        db.clone(),
+        storage.audiobooks_root(),
+        config.library_scan_interval,
+        background.clone(),
+    ));
 
     let yandex_client = YandexClient::new(config.yandex_music.clone());
     let (imports, import_jobs) = ImportQueue::new();
@@ -154,6 +162,7 @@ async fn run() -> anyhow::Result<()> {
         hashes,
         uploads,
         library,
+        audiobooks,
         playback: Default::default(),
         yandex,
         recommendations,

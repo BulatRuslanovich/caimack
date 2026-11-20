@@ -43,16 +43,20 @@ class Downloads(
     private val http: OkHttpClient,
     private val server: Server,
     private val json: Json,
+    private val libraryOwner: () -> String?,
     private val canDownload: () -> Boolean,
 ) {
     private val database = StandaloneDatabaseProvider(context)
     private val cache = SimpleCache(File(context.filesDir, "downloads"), NoOpCacheEvictor(), database)
     private val upstream = OkHttpDataSource.Factory(http)
+    private val executor = Executors.newFixedThreadPool(2)
+    private val libraryDelegate = lazy { LibraryDownloads(context, database, cache, executor, json) }
+    internal val library by libraryDelegate
     private val current = MutableStateFlow<Map<String, Offline>>(emptyMap())
 
     val state: StateFlow<Map<String, Offline>> = current
 
-    val manager = DownloadManager(context, database, cache, upstream, Executors.newFixedThreadPool(2)).apply {
+    val manager = DownloadManager(context, database, cache, upstream, executor).apply {
         maxParallelDownloads = 2
         addListener(object : DownloadManager.Listener {
             override fun onDownloadChanged(downloadManager: DownloadManager, download: Download, finalException: Exception?) {
@@ -81,9 +85,15 @@ class Downloads(
     fun visible(entry: Offline): Boolean = server.url.value?.toString()
         ?.let { entry.download.request.uri.toString().startsWith(it) } == true
 
-    fun completed(trackId: String): Download? = current.value[trackId]?.takeIf { it.done && visible(it) }?.download
+    internal fun libraryEntries(): List<Offline> = libraryOwner()?.let(library::entries).orEmpty()
 
-    fun tracks(): List<Track> = current.value.values.filter { it.done && visible(it) }.mapNotNull { it.track }.sortedBy { it.title.lowercase() }
+    fun entry(trackId: String, manual: Map<String, Offline> = current.value): Offline? =
+        libraryOwner()?.let { library.completed(it, trackId) } ?: manual[trackId]?.takeIf(::visible)
+
+    fun completed(trackId: String): Download? = entry(trackId)?.takeIf { it.done }?.download
+
+    fun tracks(): List<Track> = (libraryEntries() + current.value.values.filter(::visible))
+        .filter { it.done }.mapNotNull { it.track }.distinctBy { it.id }.sortedBy { it.title.lowercase() }
 
     suspend fun add(tracks: List<Track>, settings: UserSettings) {
         for (track in missing(tracks)) {
@@ -112,23 +122,11 @@ class Downloads(
 
     fun removeInBackground(trackIds: Collection<String>) = trackIds.forEach { manager.removeDownload(it) }
 
-    suspend fun awaitIdle() = withContext(Dispatchers.Main) {
-        if (manager.isIdle) return@withContext
-        suspendCancellableCoroutine { continuation ->
-            val listener = object : DownloadManager.Listener {
-                override fun onIdle(downloadManager: DownloadManager) {
-                    downloadManager.removeListener(this)
-                    if (continuation.isActive) continuation.resume(Unit)
-                }
-            }
-            manager.addListener(listener)
-            continuation.invokeOnCancellation { manager.removeListener(listener) }
-        }
-    }
+    suspend fun awaitIdle() = withContext(Dispatchers.Main) { awaitIdle(manager) }
 
     private fun missing(tracks: List<Track>) =
         if (!canDownload()) emptyList()
-        else tracks.filter { current.value[it.id]?.download?.state.let { state -> state == null || state == Download.STATE_FAILED } }
+        else tracks.filter { entry(it.id)?.download?.state.let { state -> state == null || state == Download.STATE_FAILED } }
 
     private suspend fun request(track: Track, settings: UserSettings): DownloadRequest {
         val (uri, mime) = sourceOf(track, settings)
@@ -138,8 +136,19 @@ class Downloads(
             .build()
     }
 
-    fun remove(trackIds: Collection<String>) = trackIds.forEach {
-        DownloadService.sendRemoveDownload(context, OfflineService::class.java, it, false)
+    fun remove(trackIds: Collection<String>) {
+        if (canDownload()) libraryOwner()?.let { library.remove(it, trackIds) }
+        trackIds.filter { current.value[it]?.let(::visible) == true }.forEach {
+            DownloadService.sendRemoveDownload(context, OfflineService::class.java, it, false)
+        }
+    }
+
+    internal fun release() {
+        if (libraryDelegate.isInitialized()) library.release()
+        manager.release()
+        executor.shutdownNow()
+        cache.release()
+        database.close()
     }
 
     private suspend fun sourceOf(track: Track, settings: UserSettings): Pair<String, String?> {
@@ -172,5 +181,20 @@ class Downloads(
 
     private companion object {
         val BANDWIDTH = Regex("BANDWIDTH=(\\d+)")
+    }
+}
+
+@OptIn(UnstableApi::class)
+internal suspend fun awaitIdle(manager: DownloadManager) {
+    if (manager.isIdle) return
+    suspendCancellableCoroutine { continuation ->
+        val listener = object : DownloadManager.Listener {
+            override fun onIdle(downloadManager: DownloadManager) {
+                downloadManager.removeListener(this)
+                if (continuation.isActive) continuation.resume(Unit)
+            }
+        }
+        manager.addListener(listener)
+        continuation.invokeOnCancellation { manager.removeListener(listener) }
     }
 }

@@ -67,7 +67,11 @@ fun TrackSheet(track: Track, onRemoveFromPlaylist: (() -> Unit)? = null, positio
         container.scope.launch {
             val rule = runCatching { container.api.addTasteRule(TasteRuleRequest("block", targetType, targetId)) }.getOrNull()
             withContext(Dispatchers.Main) {
-                say(rule?.let { resources.getString(R.string.rules_blocked, it.name) } ?: resources.getString(R.string.rules_failed))
+                say(when {
+                    rule == null -> resources.getString(R.string.rules_failed)
+                    rule.name.isBlank() -> resources.getString(R.string.rules_saved_for_sync)
+                    else -> resources.getString(R.string.rules_blocked, rule.name)
+                })
             }
         }
     }

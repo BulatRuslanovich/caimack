@@ -4,55 +4,52 @@
 
 import { cn } from "@/lib/cn";
 import type { Route } from "next";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useMemo, type ReactNode } from "react";
-import type { SearchTab, SearchTabResult } from "@/lib/api";
-import { queries, SEARCH_MIN_LENGTH } from "@/lib/queries";
+import { Activity, Suspense, useMemo, useState } from "react";
+import { prefetchSearchCategory, queries, SEARCH_MIN_LENGTH } from "@/lib/queries";
 import { rememberSearch } from "@/lib/recentSearches";
-import { usePage } from "@/lib/usePage";
+import { isCatalogTab, type CatalogTab } from "@/lib/searchNavigation";
 import { AlbumCard, ArtistCard } from "@/components/MediaCard";
-import { CardGrid, PageHeader, Section } from "@/components/PageHeader";
-import { Pagination, PageToolbar } from "@/components/PageToolbar";
+import { PageHeader, Section } from "@/components/PageHeader";
+import { AudiobookRow } from "@/components/audiobooks/AudiobookViews";
+import { SearchField } from "@/components/SearchField";
 import { Query } from "@/components/Query";
 import { TrackList } from "@/components/TrackList";
 import { SearchIcon } from "lucide-react";
-import { hiddenScrollbar } from "@/components/Shelf";
+import { hiddenScrollbar, Shelf } from "@/components/Shelf";
+import { RankedList } from "@/components/collection/RankedList";
 import { ToggleGroup, ToggleGroupButton } from "@/components/ui/toggle-group";
 import { useT } from "@/contexts/I18nContext";
 import { useYandexMusicSettings } from "@/lib/useYandexMusic";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAudiobooks } from "@/contexts/AudiobookContext";
+import { filterAudiobooks, type Audiobook } from "@/lib/audiobooks";
 import { YandexSearchWorkspace } from "@/components/yandex/YandexSearchWorkspace";
 import { YandexActivityButton } from "@/components/yandex/YandexImports";
+import { TracksPage } from "@/app/tracks/TracksPage";
+import { AlbumsPage } from "@/app/albums/(list)/AlbumsPage";
+import { ArtistsPage } from "@/app/artists/(list)/ArtistsPage";
+import { PlaylistsPage } from "@/app/playlists/(list)/PlaylistsPage";
+import { GenresPage } from "@/app/genres/GenresPage";
 import { GenreCategories, GenreChips } from "./GenreChips";
-import Link from "next/link";
 import { RecentSearches } from "./RecentSearches";
+import { SearchTabs } from "./SearchTabs";
 import { TopResult } from "./TopResult";
-
-const PAGE_SIZE = 50;
 
 const PREVIEW = 5;
 
 const START_GENRES = 8;
 
-const TABS: SearchTab[] = ["tracks", "albums", "artists", "genres"];
-
 const YANDEX_TAB = "yandex";
 
-type Tab = SearchTab | typeof YANDEX_TAB;
+type Tab = CatalogTab | typeof YANDEX_TAB;
 
 const previewRow = cn(
-  "grid grid-cols-5 gap-5 max-xl:gap-4",
-  "max-md:-mx-4 max-md:grid-flow-col max-md:grid-cols-none max-md:auto-cols-[7.5rem] max-md:gap-3 max-md:overflow-x-auto max-md:px-4",
+  "grid grid-cols-5 gap-3",
+  "max-md:grid-flow-col max-md:grid-cols-none max-md:auto-cols-[7.5rem] max-md:overflow-x-auto",
   hiddenScrollbar,
 );
-
-const TAB_LABELS = {
-  tracks: "nav.tracks",
-  albums: "nav.albums",
-  artists: "nav.artists",
-  genres: "nav.genres",
-} as const;
 
 export default function SearchPage() {
   const t = useT();
@@ -64,38 +61,34 @@ export default function SearchPage() {
   );
 }
 
-function isTab(value: string | null): value is SearchTab {
-  return value !== null && (TABS as string[]).includes(value);
-}
-
 function SearchView() {
   const t = useT();
   const params = useSearchParams();
+  const client = useQueryClient();
 
   const { isAdmin } = useAuth();
+  const { enabled: audiobooksEnabled, books, result: audiobookCatalog } = useAudiobooks();
   const yandexSettings = useYandexMusicSettings();
   const yandex = isAdmin && yandexSettings.enabled;
 
   const query = (params.get("q") ?? "").trim();
   const tabParam = params.get("tab");
   const yandexTab = yandex && tabParam === YANDEX_TAB;
-  const tab = isTab(tabParam) ? tabParam : null;
+  const tab =
+    isCatalogTab(tabParam) && (tabParam !== "audiobooks" || audiobooksEnabled) ? tabParam : null;
+  const [visited, setVisited] = useState<CatalogTab[]>([]);
+  if (tab && tab !== "audiobooks" && !visited.includes(tab)) setVisited([...visited, tab]);
 
-  const navigate = useCallback((next: string, nextTab: Tab | null) => {
-    if (!next) {
-      window.history.replaceState(
-        null,
-        "",
-        nextTab === YANDEX_TAB ? "/search?tab=yandex" : "/search",
-      );
-      return;
-    }
-
-    const search = new URLSearchParams({ q: next });
+  const navigate = (next: string, nextTab: Tab | null, push = false, genreId?: string | null) => {
+    const search = new URLSearchParams();
+    if (next) search.set("q", next);
     if (nextTab) search.set("tab", nextTab);
-
-    window.history.replaceState(null, "", `/search?${search}`);
-  }, []);
+    if (genreId) search.set("id", genreId);
+    const href = search.size ? `/search?${search}` : "/search";
+    if (href !== window.location.pathname + window.location.search) {
+      window.history[push ? "pushState" : "replaceState"](null, "", href);
+    }
+  };
 
   const results = useQuery({
     ...queries.search(query),
@@ -103,186 +96,206 @@ function SearchView() {
   });
 
   const previewTracks = useMemo(() => results.data?.tracks.slice(0, PREVIEW) ?? [], [results.data]);
+  const bookMatches = useMemo(() => filterAudiobooks(books, query), [books, query]);
+  const searchPlaceholder = yandexTab
+    ? "yandex.searchPlaceholder"
+    : tab === "audiobooks"
+      ? "search.audiobookPlaceholder"
+      : audiobooksEnabled
+        ? "search.placeholderWithAudiobooks"
+        : "search.placeholder";
 
   return (
-    <div className="flex min-w-0 flex-col gap-6">
-      <div className="search-controls flex flex-col gap-4 max-md:gap-3">
+    <div className="search-page flex min-w-0 flex-col gap-3">
+      <div className="search-controls flex min-w-0 flex-col gap-3 [&>header]:items-center">
         <PageHeader title={t("nav.search")} actions={yandex && <YandexActivityButton />} />
 
         {yandex && (
           <ToggleGroup aria-label={t("search.source")}>
-            <ToggleGroupButton active={!yandexTab} onClick={() => navigate(query, null)}>
+            <ToggleGroupButton
+              active={!yandexTab}
+              onClick={() => yandexTab && navigate(query, null, true)}
+            >
               {t("search.source.library")}
             </ToggleGroupButton>
-            <ToggleGroupButton active={yandexTab} onClick={() => navigate(query, YANDEX_TAB)}>
+            <ToggleGroupButton
+              active={yandexTab}
+              onClick={() => !yandexTab && navigate(query, YANDEX_TAB, true)}
+            >
               {t("yandex.title")}
             </ToggleGroupButton>
           </ToggleGroup>
         )}
 
-        <PageToolbar
-          search={query}
-          onSearch={(next) => navigate(next, yandexTab ? YANDEX_TAB : tab)}
-          placeholder={t(yandexTab ? "yandex.searchPlaceholder" : "search.placeholder")}
+        <SearchField
+          value={query}
+          onChange={(next) => navigate(next, yandexTab ? YANDEX_TAB : tab)}
+          placeholder={t(searchPlaceholder)}
           autoFocus
         />
       </div>
 
-      {query.length < SEARCH_MIN_LENGTH && !yandexTab ? (
-        <SearchStart />
-      ) : (
-        <>
-          {!yandexTab && (
-            <ToggleGroup aria-label={t("search.tabs")}>
-              <ToggleGroupButton
-                active={tab === null && !yandexTab}
-                onClick={() => navigate(query, null)}
-              >
-                {t("search.tab.all")}
-              </ToggleGroupButton>
-              {TABS.map((value) => (
-                <ToggleGroupButton
-                  key={value}
-                  active={tab === value}
-                  onClick={() => navigate(query, value)}
-                >
-                  {t(TAB_LABELS[value])}
-                </ToggleGroupButton>
-              ))}
-            </ToggleGroup>
-          )}
-
-          <div
-            className="contents"
-            onClickCapture={(event) => {
-              if ((event.target as Element).closest("a, button")) rememberSearch(query);
-            }}
-          >
-            {yandexTab ? (
-              <YandexSearchWorkspace query={query} />
-            ) : tab === null ? (
-              <Query
-                result={results}
-                isEmpty={(data) =>
-                  data.artists.length === 0 &&
-                  data.albums.length === 0 &&
-                  data.tracks.length === 0 &&
-                  data.genres.length === 0
-                }
-                empty={{ icon: <SearchIcon size={24} />, title: t("search.nothingFound") }}
-              >
-                {(data) => (
-                  <>
-                    <div
-                      data-beside={data.top && data.tracks.length > 0 ? "" : undefined}
-                      className="group/top grid gap-x-8 gap-y-11 max-md:gap-y-8 lg:data-beside:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]"
-                    >
-                      {data.top && <TopResult top={data.top} />}
-
-                      {data.tracks.length > 0 && (
-                        <Section
-                          title={t("nav.tracks")}
-                          href={seeAll(query, "tracks", data.tracks.length)}
-                        >
-                          <TrackList tracks={previewTracks} showAlbum={!data.top} />
-                        </Section>
-                      )}
-                    </div>
-
-                    {data.albums.length > 0 && (
-                      <Section
-                        title={t("nav.albums")}
-                        href={seeAll(query, "albums", data.albums.length)}
-                      >
-                        <div className={previewRow}>
-                          {data.albums.slice(0, PREVIEW).map((album) => (
-                            <AlbumCard key={album.id} album={album} />
-                          ))}
-                        </div>
-                      </Section>
-                    )}
-
-                    {data.artists.length > 0 && (
-                      <Section
-                        title={t("nav.artists")}
-                        href={seeAll(query, "artists", data.artists.length)}
-                      >
-                        <div className={previewRow}>
-                          {data.artists.slice(0, PREVIEW).map((artist) => (
-                            <ArtistCard key={artist.id} artist={artist} />
-                          ))}
-                        </div>
-                      </Section>
-                    )}
-
-                    {data.genres.length > 0 && (
-                      <Section
-                        title={t("nav.genres")}
-                        href={seeAll(query, "genres", data.genres.length)}
-                      >
-                        <GenreChips genres={data.genres.slice(0, PREVIEW * 2)} />
-                      </Section>
-                    )}
-                  </>
-                )}
-              </Query>
-            ) : (
-              <TabResults tab={tab} query={query} />
-            )}
-          </div>
-        </>
+      {!yandexTab && (
+        <SearchTabs
+          tab={tab}
+          audiobooksEnabled={audiobooksEnabled}
+          onSelect={(value) => tab !== value && navigate(query, value, true)}
+          onIntent={(value) => {
+            if (tab !== value) void prefetchSearchCategory(client, value, query || undefined);
+          }}
+        />
       )}
+
+      <div
+        className="contents"
+        onClickCapture={(event) => {
+          if (query.length >= SEARCH_MIN_LENGTH && (event.target as Element).closest("a, button")) {
+            rememberSearch(query);
+          }
+        }}
+      >
+        {yandexTab && <YandexSearchWorkspace query={query} />}
+        {!yandexTab &&
+          tab === null &&
+          (query.length < SEARCH_MIN_LENGTH ? (
+            <SearchStart showPopular={query === ""} />
+          ) : (
+            <Query
+              result={results}
+              isEmpty={(data) =>
+                bookMatches.length === 0 &&
+                (!audiobooksEnabled || !audiobookCatalog.isPending) &&
+                data.artists.length === 0 &&
+                data.albums.length === 0 &&
+                data.tracks.length === 0 &&
+                data.genres.length === 0
+              }
+              empty={{ icon: <SearchIcon size={24} />, title: t("search.nothingFound") }}
+            >
+              {(data) => (
+                <>
+                  <div
+                    data-beside={data.top && data.tracks.length > 0 ? "" : undefined}
+                    className="grid min-w-0 items-start gap-3 lg:data-beside:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]"
+                  >
+                    {data.top && <TopResult top={data.top} />}
+
+                    {data.tracks.length > 0 && (
+                      <Section
+                        title={t("nav.tracks")}
+                        href={seeAll(query, "tracks", data.tracks.length)}
+                        className="min-w-0 gap-2.5"
+                      >
+                        <TrackList tracks={previewTracks} showAlbum={!data.top} />
+                      </Section>
+                    )}
+                  </div>
+
+                  {data.albums.length > 0 && (
+                    <Section
+                      title={t("nav.albums")}
+                      href={seeAll(query, "albums", data.albums.length)}
+                      className="gap-2.5"
+                    >
+                      <div className={previewRow}>
+                        {data.albums.slice(0, PREVIEW).map((album) => (
+                          <AlbumCard key={album.id} album={album} />
+                        ))}
+                      </div>
+                    </Section>
+                  )}
+
+                  {data.artists.length > 0 && (
+                    <Section
+                      title={t("nav.artists")}
+                      href={seeAll(query, "artists", data.artists.length)}
+                      className="gap-2.5"
+                    >
+                      <div className={previewRow}>
+                        {data.artists.slice(0, PREVIEW).map((artist) => (
+                          <ArtistCard key={artist.id} artist={artist} />
+                        ))}
+                      </div>
+                    </Section>
+                  )}
+
+                  {data.genres.length > 0 && (
+                    <Section
+                      title={t("nav.genres")}
+                      href={seeAll(query, "genres", data.genres.length)}
+                      className="gap-2.5"
+                    >
+                      <GenreChips genres={data.genres.slice(0, PREVIEW * 2)} />
+                    </Section>
+                  )}
+                </>
+              )}
+            </Query>
+          ))}
+        {!yandexTab &&
+          tab === null &&
+          query.length >= SEARCH_MIN_LENGTH &&
+          bookMatches.length > 0 && (
+            <Section
+              title={t("nav.audiobooks")}
+              href={seeAll(query, "audiobooks", bookMatches.length)}
+            >
+              <AudiobookMatches books={bookMatches.slice(0, PREVIEW)} />
+            </Section>
+          )}
+        {!yandexTab &&
+          tab === "audiobooks" &&
+          (bookMatches.length > 0 ? (
+            <AudiobookMatches books={bookMatches} />
+          ) : (
+            <Query
+              result={audiobookCatalog}
+              isEmpty={() => true}
+              empty={{
+                icon: <SearchIcon size={24} />,
+                title: t(query ? "search.nothingFound" : "audiobooks.empty"),
+              }}
+            >
+              {() => null}
+            </Query>
+          ))}
+        {visited.map((category) => (
+          <Activity key={category} mode={tab === category && !yandexTab ? "visible" : "hidden"}>
+            {category === "tracks" && <TracksPage query={query} />}
+            {category === "albums" && <AlbumsPage query={query} />}
+            {category === "artists" && <ArtistsPage query={query} />}
+            {category === "playlists" && <PlaylistsPage query={query} />}
+            {category === "genres" && (
+              <GenresPage
+                query={query}
+                selected={tab === "genres" ? params.get("id") : null}
+                onSelect={(id) => navigate(query, "genres", true, id)}
+              />
+            )}
+          </Activity>
+        ))}
+      </div>
     </div>
   );
 }
 
-function seeAll(query: string, tab: SearchTab, shown: number): Route | undefined {
-  return shown > PREVIEW ? `/search?q=${encodeURIComponent(query)}&tab=${tab}` : undefined;
-}
-
-const tabItems: { [T in SearchTab]: (items: SearchTabResult[T]["items"]) => ReactNode } = {
-  tracks: (tracks) => <TrackList tracks={tracks} />,
-  albums: (albums) => (
-    <CardGrid>
-      {albums.map((album) => (
-        <AlbumCard key={album.id} album={album} />
-      ))}
-    </CardGrid>
-  ),
-  artists: (artists) => (
-    <CardGrid>
-      {artists.map((artist) => (
-        <ArtistCard key={artist.id} artist={artist} />
-      ))}
-    </CardGrid>
-  ),
-  genres: (genres) => <GenreChips genres={genres} />,
-};
-
-function TabResults<T extends SearchTab>({ tab, query }: { tab: T; query: string }) {
-  const t = useT();
-  const [page, setPage] = usePage([tab, query]);
-  const result = useQuery(queries.searchTab(tab, query, { page, pageSize: PAGE_SIZE }));
-
+function AudiobookMatches({ books }: { books: Audiobook[] }) {
   return (
-    <Query
-      result={result}
-      empty={{ icon: <SearchIcon size={24} />, title: t("search.nothingFound") }}
-    >
-      {(data) => (
-        <>
-          {tabItems[tab](data.items)}
-          <Pagination result={data} onChange={setPage} />
-        </>
-      )}
-    </Query>
+    <ul className="min-w-0 divide-y divide-border">
+      {books.map((book) => (
+        <AudiobookRow key={book.id} book={book} />
+      ))}
+    </ul>
   );
 }
 
-function SearchStart() {
+function seeAll(query: string, tab: CatalogTab, shown: number): Route | undefined {
+  return shown > PREVIEW ? `/search?q=${encodeURIComponent(query)}&tab=${tab}` : undefined;
+}
+
+function SearchStart({ showPopular }: { showPopular: boolean }) {
   const t = useT();
   const genres = useQuery(queries.genres());
-
   const top = useMemo(
     () =>
       [...(genres.data ?? [])].sort((a, b) => b.trackCount - a.trackCount).slice(0, START_GENRES),
@@ -298,17 +311,46 @@ function SearchStart() {
         empty={{ title: t("search.browseEmpty"), description: t("search.browseEmptyHint") }}
       >
         {() => (
-          <Section title={t("search.browseGenres")} className="pt-1">
+          <Section title={t("search.browseGenres")} className="gap-2.5">
             <GenreCategories genres={top} />
-            <Link
-              href="/genres"
-              className="w-fit rounded-sm py-2 text-sm text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring"
-            >
-              {t("search.allGenres")}
-            </Link>
           </Section>
         )}
       </Query>
+
+      {showPopular && <PopularSearch />}
     </>
+  );
+}
+
+function PopularSearch() {
+  const t = useT();
+  const result = useQuery(queries.searchPopular());
+
+  return (
+    <Query result={result}>
+      {({ tracks, albums, artists }) => (
+        <>
+          {tracks.length > 0 && (
+            <Section title={t("search.mostPlayedTracks")}>
+              <RankedList tracks={tracks} ranked={false} density="compact" />
+            </Section>
+          )}
+          {albums.length > 0 && (
+            <Shelf title={t("search.mostPlayedAlbums")} className="gap-2.5">
+              {albums.map((album) => (
+                <AlbumCard key={album.id} album={album} />
+              ))}
+            </Shelf>
+          )}
+          {artists.length > 0 && (
+            <Shelf title={t("search.mostPlayedArtists")} className="gap-2.5">
+              {artists.map((artist) => (
+                <ArtistCard key={artist.id} artist={artist} bare />
+              ))}
+            </Shelf>
+          )}
+        </>
+      )}
+    </Query>
   );
 }

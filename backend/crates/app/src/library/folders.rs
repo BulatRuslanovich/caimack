@@ -99,6 +99,12 @@ pub async fn apply(db: &mut PgConnection, user: Uuid, change: &Change, at: DateT
             }
             if folder_id.is_none() {
                 allowed.extend(["favorites".to_owned(), "downloads".to_owned()]);
+                let saved_books: Vec<Uuid> =
+                    sqlx::query_scalar("SELECT book_id FROM audiobook_state WHERE user_id=$1 AND saved")
+                        .bind(user)
+                        .fetch_all(&mut *db)
+                        .await?;
+                allowed.extend(saved_books.into_iter().map(|id| format!("audiobook:{id}")));
             }
             if order.iter().any(|key| !allowed.contains(key)) {
                 return Err(AppError::validation("Order must contain only entries from this library folder."));

@@ -24,6 +24,8 @@ import { RadioButton } from "@/components/RadioButton";
 import { ShuffleButton } from "@/components/ShuffleButton";
 import { Query } from "@/components/Query";
 import { TrackList } from "@/components/TrackList";
+import { isDesktop } from "@/desktop/api";
+import { DesktopCollectionDownload } from "@/desktop/offline";
 import { Button } from "@/components/ui/button";
 import { PencilIcon } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -84,7 +86,18 @@ export function ArtistPage() {
                 {detail.tracks.items.length > 0 && (
                   <RadioButton seed={topTracks[0] ?? detail.tracks.items[0]} />
                 )}
+              </>
+            }
+            trailingActions={
+              <>
                 <LibrarySaveButton kind="artist" id={id} />
+                {isDesktop && (
+                  <DesktopCollectionDownload
+                    tracks={detail.tracks.items}
+                    artist={detail.id}
+                    total={detail.tracks.total}
+                  />
+                )}
                 {isAdmin && (
                   <Button
                     variant="ghost"

@@ -5,8 +5,7 @@
 import { genreName } from "@/lib/format";
 import { useQuery } from "@tanstack/react-query";
 import { TagsIcon } from "lucide-react";
-import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { TRACK_PAGE_SIZE } from "@/lib/pageSizes";
 import { coverUrl } from "@/lib/media";
 import { queries } from "@/lib/queries";
@@ -15,73 +14,68 @@ import { usePage } from "@/lib/usePage";
 import type { Genre } from "@/lib/types";
 import { AlbumMosaic } from "@/components/collection/CoverMosaic";
 import { Card } from "@/components/MediaCard";
-import { CardGrid, CardGridSkeleton, PageHeader, Section } from "@/components/PageHeader";
+import { CardGrid, CardGridSkeleton, Section } from "@/components/PageHeader";
+import { CatalogToolbar } from "@/app/search/CatalogToolbar";
 import { Pagination } from "@/components/PageToolbar";
 import { PlayAllButton } from "@/components/PlayAllButton";
 import { Query } from "@/components/Query";
 import { TrackList } from "@/components/TrackList";
 import { useT } from "@/contexts/I18nContext";
-import { LibraryNavigation } from "@/components/LibraryNavigation";
 
-export function GenresPage() {
+export function GenresPage({
+  query,
+  selected,
+  onSelect,
+}: {
+  query: string;
+  selected: string | null;
+  onSelect: (id: string | null) => void;
+}) {
   const t = useT();
 
-  return (
-    <Suspense fallback={<PageHeader title={t("nav.genres")} />}>
-      <GenresView />
-    </Suspense>
-  );
-}
-
-function GenresView() {
-  const t = useT();
-
-  const initial = useSearchParams().get("id");
-  const [selected, setSelected] = useState<string | null>(initial);
   const [page, setPage] = usePage([selected]);
 
   const tracksRef = useRef<HTMLElement>(null);
 
-  useEffect(() => {
-    if (selected === null) return;
-
-    tracksRef.current?.scrollIntoView({
-      block: "start",
-      behavior: smoothUnlessReduced(),
-    });
-  }, [selected]);
-
   const genres = useQuery(queries.genres());
   const tracks = useQuery(queries.genreTracks(selected, { page, pageSize: TRACK_PAGE_SIZE }));
+  const term = query.toLocaleLowerCase();
+  const matching = term
+    ? genres.data?.filter(
+        ({ name }) =>
+          name.toLocaleLowerCase().includes(term) ||
+          genreName(name).toLocaleLowerCase().includes(term),
+      )
+    : genres.data;
+  const selectedGenre = matching?.find((genre) => genre.id === selected);
+  const scrollToTracks = () => tracksRef.current?.scrollIntoView({ block: "start" });
 
-  const selectedGenre = genres.data?.find((genre) => genre.id === selected) ?? null;
+  useEffect(() => {
+    if (selectedGenre)
+      tracksRef.current?.scrollIntoView({ block: "start", behavior: smoothUnlessReduced() });
+  }, [selectedGenre]);
 
   return (
-    <div className="flex min-w-0 flex-col gap-6 max-md:gap-5">
-      <PageHeader
-        title={t("nav.genres")}
-        subtitle={genres.data ? t("count.genres", { count: genres.data.length }) : undefined}
-        actions={
-          tracks.data && tracks.data.items.length > 0 ? (
-            <PlayAllButton tracks={tracks.data.items} />
-          ) : undefined
-        }
-      />
+    <div className="flex min-w-0 flex-col gap-3">
+      <CatalogToolbar summary={matching && t("count.genres", { count: matching.length })} />
 
-      <LibraryNavigation />
       <Query
         result={genres}
+        isEmpty={() => !matching?.length}
         skeleton={<CardGridSkeleton />}
-        empty={{ icon: <TagsIcon size={24} />, title: t("genres.empty") }}
+        empty={{
+          icon: <TagsIcon size={24} />,
+          title: t(query ? "search.nothingFound" : "genres.empty"),
+        }}
       >
-        {(list) => (
+        {() => (
           <CardGrid>
-            {list.map((genre) => (
+            {matching?.map((genre) => (
               <GenreCard
                 key={genre.id}
                 genre={genre}
                 active={selected === genre.id}
-                onSelect={() => setSelected(selected === genre.id ? null : genre.id)}
+                onSelect={() => onSelect(selected === genre.id ? null : genre.id)}
               />
             ))}
           </CardGrid>
@@ -89,13 +83,26 @@ function GenresView() {
       </Query>
 
       {selectedGenre ? (
-        <Section title={genreName(selectedGenre.name)} ref={tracksRef}>
+        <Section
+          title={genreName(selectedGenre.name)}
+          ref={tracksRef}
+          className="gap-2.5"
+          actions={
+            tracks.data &&
+            tracks.data.items.length > 0 && (
+              <PlayAllButton
+                tracks={tracks.data.items}
+                className="size-10 pointer-coarse:size-11"
+              />
+            )
+          }
+        >
           <Query result={tracks}>
             {(result) =>
               result === null ? null : (
                 <>
                   <TrackList tracks={result.items} />
-                  <Pagination result={result} onChange={setPage} />
+                  <Pagination result={result} onChange={setPage} scrollOnChange={scrollToTracks} />
                 </>
               )
             }

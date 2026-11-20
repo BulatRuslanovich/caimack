@@ -45,6 +45,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -78,24 +79,27 @@ import androidx.navigation.toRoute
 import app.caimack.R
 import app.caimack.api.Track
 import app.caimack.api.User
+import app.caimack.audiobooks.Audiobook
 import app.caimack.playback.PlayerState
 import kotlin.reflect.KClass
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 
 @Serializable data object HomeRoute
-@Serializable data object SearchRoute
-@Serializable data object TracksRoute
-@Serializable data object PlaylistsRoute
+@Serializable
+data class SearchRoute(val category: String = "") {
+    constructor(category: SearchCategory) : this(category.name)
+
+    fun initialCategory(): SearchCategory? = SearchCategory.entries.firstOrNull { it.name == category }
+}
 @Serializable data object FavoritesRoute
-@Serializable data object AlbumsRoute
-@Serializable data object ArtistsRoute
-@Serializable data object GenresRoute
 @Serializable data object RecentRoute
 @Serializable data object SettingsRoute
 @Serializable data class ListeningRoute(val week: String = "", val view: String = "overview")
 @Serializable data object DownloadsRoute
 @Serializable data object LibraryRoute
+@Serializable data object SavedAudiobooksRoute
+@Serializable data class AudiobookRoute(val id: String)
 @Serializable data class SettingsSectionRoute(val section: String)
 @Serializable data class AlbumRoute(val id: String)
 @Serializable data class ArtistRoute(val id: String)
@@ -106,19 +110,14 @@ import kotlinx.serialization.Serializable
 private data class Tab(val route: Any, val type: KClass<*>, val label: Int, val icon: ImageVector)
 
 private val library = listOf(
-    Tab(PlaylistsRoute, PlaylistsRoute::class, R.string.nav_playlists, Lucide.ListMusic),
-    Tab(AlbumsRoute, AlbumsRoute::class, R.string.nav_albums, Lucide.Disc3),
-    Tab(ArtistsRoute, ArtistsRoute::class, R.string.nav_artists, Lucide.UsersRound),
-    Tab(TracksRoute, TracksRoute::class, R.string.nav_tracks, Lucide.AudioLines),
     Tab(FavoritesRoute, FavoritesRoute::class, R.string.nav_favorites, Lucide.Heart),
     Tab(RecentRoute, RecentRoute::class, R.string.nav_recently_played, Lucide.History),
-    Tab(GenresRoute, GenresRoute::class, R.string.nav_genres, Lucide.Tags),
     Tab(DownloadsRoute, DownloadsRoute::class, R.string.downloads_title, Lucide.Download),
 )
 
 private val tabs = listOf(
     Tab(HomeRoute, HomeRoute::class, R.string.nav_home, Lucide.House),
-    Tab(SearchRoute, SearchRoute::class, R.string.nav_search, Lucide.Search),
+    Tab(SearchRoute(), SearchRoute::class, R.string.nav_search, Lucide.Search),
     Tab(LibraryRoute, LibraryRoute::class, R.string.nav_library, Lucide.LibraryBig),
 )
 
@@ -130,8 +129,8 @@ internal fun NavController.openSection(route: Any) {
     if (currentDestination?.hasRoute(route::class) == true) return
 
     // Reselecting an open section returns to its root without duplicating it.
-    if (route != HomeRoute && runCatching { getBackStackEntry(route) }.isSuccess) {
-        popBackStack(route, inclusive = false)
+    if (route != HomeRoute && runCatching { getBackStackEntry(route::class) }.isSuccess) {
+        popBackStack(route::class, inclusive = false)
         return
     }
 
@@ -147,15 +146,30 @@ internal fun NavController.openSection(route: Any) {
 fun App(user: User, dark: Boolean, colorway: Colorway) {
     val container = LocalContainer.current
     val playback by container.player.state.collectAsStateWithLifecycle()
+    val audiobookPlayback by container.audiobookPlayback.state.collectAsStateWithLifecycle()
+    val audiobookCatalog by container.audiobookStore.state.collectAsStateWithLifecycle()
+    val audiobooksEnabled by container.audiobooksEnabled.collectAsStateWithLifecycle()
+    val activeAudiobook by remember(container) {
+        derivedStateOf { if (audiobooksEnabled) audiobookCatalog.books.firstOrNull { it.id == audiobookPlayback?.bookId } else null }
+    }
+    val activeBookDownloaded by remember(container) {
+        derivedStateOf { activeAudiobook?.id in audiobookCatalog.downloaded }
+    }
+    val bookCover = remember(activeAudiobook?.id, activeAudiobook?.coverUrl, activeBookDownloaded) {
+        activeAudiobook?.let(container.audiobookStore::cover)
+    }
     val toneEnabled by container.appearance.coverTone.collectAsStateWithLifecycle()
     val artworkRevision by container.downloadedCatalog.revision.collectAsStateWithLifecycle()
-    val resolveArtwork = remember(container, user.id) { container.downloadedCatalog::cachedUrl }
+    val syncArtworkRevision by container.syncStore.artworkRevision.collectAsStateWithLifecycle()
+    val resolveArtwork = remember(container, user.id) { container::cachedArtwork }
     CompositionLocalProvider(
-        LocalArtworkRevision provides artworkRevision,
+        LocalArtworkRevision provides (artworkRevision + syncArtworkRevision),
         LocalArtworkResolver provides resolveArtwork,
     ) {
         val adaptive = colorway == Colorway.Cover
-        val cover = playback.current?.takeIf { toneEnabled || adaptive }?.let { trackCover(it) }
+        val cover = if (toneEnabled || adaptive) {
+            if (activeAudiobook != null) bookCover else playback.current?.let { trackCover(it) }
+        } else null
         val loadedTone = rememberLoadedPlayerTone(cover)
         val palette = if (adaptive) {
             rememberCoverPalette(dark, cover, loadedTone)
@@ -164,7 +178,7 @@ fun App(user: User, dark: Boolean, colorway: Colorway) {
         }
         CaimackTheme(dark = dark, colorway = colorway, palette = palette) {
             Surface(Modifier.fillMaxSize()) {
-                AppContent(user, playback, toneEnabled, loadedTone.takeIf { toneEnabled })
+                AppContent(user, playback, activeAudiobook, bookCover, toneEnabled, loadedTone.takeIf { toneEnabled })
             }
         }
     }
@@ -175,6 +189,8 @@ fun App(user: User, dark: Boolean, colorway: Colorway) {
 private fun AppContent(
     user: User,
     playback: PlayerState,
+    activeAudiobook: Audiobook?,
+    bookCover: String?,
     toneEnabled: Boolean,
     loadedTone: LoadedPlayerTone?,
 ) {
@@ -187,6 +203,10 @@ private fun AppContent(
     val focus = LocalFocusManager.current
     var expanded by rememberSaveable { mutableStateOf(false) }
     val offlineLibrary by container.libraryCache.offline.collectAsStateWithLifecycle()
+    val audiobooksEnabled by container.audiobooksEnabled.collectAsStateWithLifecycle()
+    val audiobookPlayback by container.audiobookPlayback.state.collectAsStateWithLifecycle()
+    val openAudiobook by container.audiobookPlayback.openFromNotification.collectAsStateWithLifecycle()
+    val bookPlayback = audiobookPlayback?.takeIf { it.bookId == activeAudiobook?.id }
     val catalog by container.localLibrary.collectAsStateWithLifecycle()
     val localLibrary = catalog.takeIf { it.account == container.accountKey } ?: app.caimack.playback.LocalLibrary()
     val availableTracks = localLibrary.trackIds
@@ -200,7 +220,8 @@ private fun AppContent(
         }
     }
 
-    val full = expanded && playback.current != null
+    val hasPlayback = bookPlayback != null || playback.current != null
+    val full = expanded && hasPlayback
     val libraryDensity by container.appearance.libraryDensity.collectAsStateWithLifecycle()
 
     val colorway = LocalColorway.current
@@ -211,8 +232,8 @@ private fun AppContent(
 
     LaunchedEffect(Unit) { container.player.connect() }
 
-    LaunchedEffect(playback.current == null) {
-        if (playback.current == null) expanded = false
+    LaunchedEffect(hasPlayback) {
+        if (!hasPlayback) expanded = false
     }
 
     LaunchedEffect(user.id) {
@@ -224,6 +245,15 @@ private fun AppContent(
         account = false
         expanded = false
         nav.navigate(route) { launchSingleTop = true }
+    }
+
+    LaunchedEffect(openAudiobook, activeAudiobook?.id) {
+        if (openAudiobook && activeAudiobook != null) {
+            container.audiobookPlayback.openFromNotification.value = false
+            focus.clearFocus()
+            account = false
+            expanded = true
+        }
     }
 
     SharedTransitionLayout {
@@ -246,6 +276,7 @@ private fun AppContent(
             SettingsMenu(user, onClose = { focus.clearFocus(); account = false }, onSignOut = {
                 account = false
                 Remote.cache.clear()
+                container.audiobookPlayback.pauseForMusic()
                 container.player.stop()
                 scope.launch { container.session.logout() }
             })
@@ -274,7 +305,12 @@ private fun AppContent(
             }
         },
         bottomBar = { BottomBar(nav) },
-        miniPlayer = { MiniPlayer(playback) { expanded = true } },
+        miniPlayer = {
+            if (activeAudiobook != null && bookPlayback != null) {
+                AudiobookMiniPlayer(activeAudiobook, bookPlayback, bookCover,
+                    onOpen = { expanded = true })
+            } else MiniPlayer(playback) { expanded = true }
+        },
     ) { padding ->
         NavHost(
             nav,
@@ -282,14 +318,14 @@ private fun AppContent(
             modifier = Modifier.padding(padding).fillMaxSize().background(palette.background),
         ) {
             composable<HomeRoute> { HomeScreen(nav) }
-            composable<SearchRoute> { SearchScreen(nav, play) }
-            composable<TracksRoute> { LibraryCatalogFrame(nav, TracksRoute) { TracksScreen(play) } }
+            composable<SearchRoute> { SearchScreen(nav, play, it.toRoute<SearchRoute>().initialCategory()) }
             composable<LibraryRoute> { LibraryScreen(nav) }
-            composable<PlaylistsRoute> { LibraryCatalogFrame(nav, PlaylistsRoute) { PlaylistsScreen(nav) } }
+            composable<SavedAudiobooksRoute> { LibraryScreen(nav, initialFilter = if (audiobooksEnabled) "audiobook" else "all") }
+            composable<AudiobookRoute> {
+                if (audiobooksEnabled) AudiobookDetail(it.toRoute<AudiobookRoute>().id)
+                else LaunchedEffect(nav) { nav.popBackStack() }
+            }
             composable<FavoritesRoute> { FavoritesScreen(play) }
-            composable<AlbumsRoute> { LibraryCatalogFrame(nav, AlbumsRoute) { AlbumsScreen(nav) } }
-            composable<ArtistsRoute> { LibraryCatalogFrame(nav, ArtistsRoute) { ArtistsScreen(nav) } }
-            composable<GenresRoute> { LibraryCatalogFrame(nav, GenresRoute) { GenresScreen(nav) } }
             composable<RecentRoute> { RecentScreen(play) }
             composable<ListeningRoute> { entry ->
                 val route = entry.toRoute<ListeningRoute>()
@@ -311,7 +347,10 @@ private fun AppContent(
         exit = slideOutVertically(tween(if (motion) NOW_PLAYING_TRANSITION_MS else 0, easing = FastOutSlowInEasing)) { it },
     ) {
         CompositionLocalProvider(LocalFullPlayerVisibility provides this) {
-            FullPlayer(playback) { expanded = false }
+            if (activeAudiobook != null && bookPlayback != null) {
+                AudiobookFullPlayer(activeAudiobook, bookPlayback, bookCover,
+                    onOpenBook = { navigate(AudiobookRoute(activeAudiobook.id)) }, onClose = { expanded = false })
+            } else FullPlayer(playback) { expanded = false }
         }
     }
     }
@@ -401,7 +440,7 @@ internal fun BottomBar(nav: NavController) {
         entry?.destination?.takeIf { destination -> sections.any { destination.hasRoute(it.type) } }
             // Home stays at the bottom of every stack, so check it last.
             ?: (library + tabs.asReversed()).firstNotNullOfOrNull { tab ->
-                runCatching { nav.getBackStackEntry(tab.route).destination }.getOrNull()
+                runCatching { nav.getBackStackEntry(tab.type).destination }.getOrNull()
             }
     }
     val inLibrary = section?.hasRoute(LibraryRoute::class) == true || library.any { section?.hasRoute(it.type) == true }
@@ -458,7 +497,6 @@ private fun sourceOf(entry: NavBackStackEntry?): String? {
         destination.hasRoute(FavoritesRoute::class) -> "favorites"
         destination.hasRoute(RecentRoute::class) -> "history"
         destination.hasRoute(SearchRoute::class) -> "search"
-        destination.hasRoute(TracksRoute::class) -> "tracks"
         destination.hasRoute(DownloadsRoute::class) -> "downloads"
         else -> null
     }

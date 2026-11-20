@@ -2,6 +2,8 @@
 
 package app.caimack.api
 
+import kotlinx.serialization.json.JsonObject
+import okhttp3.HttpUrl
 import okhttp3.MultipartBody
 import retrofit2.Response
 import retrofit2.http.Body
@@ -14,6 +16,7 @@ import retrofit2.http.Part
 import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
+import retrofit2.http.Url
 
 interface CaimackApi {
     @GET("api/me/listening-stats")
@@ -43,6 +46,9 @@ interface CaimackApi {
     @PUT("api/playback/connect/state")
     suspend fun connectReport(@Body report: ConnectReport): ConnectSnapshot
 
+    @PUT("api/playback/connect/audiobook")
+    suspend fun connectBookReport(@Body report: ConnectBookReport)
+
     @POST("api/playback/connect/commands")
     suspend fun connectCommand(@Body request: ConnectRequest): ConnectSnapshot
 
@@ -52,6 +58,9 @@ interface CaimackApi {
     @GET("api/config")
     suspend fun capabilities(): ServerCapabilities
 
+    @GET("api/experiments/audiobooks")
+    suspend fun audiobookExperiment(): AudiobookExperiment
+
     @POST("api/auth/login")
     suspend fun login(@Body request: LoginRequest): User
 
@@ -60,6 +69,14 @@ interface CaimackApi {
 
     @GET("api/auth/me")
     suspend fun me(): User
+
+    @Headers("X-Caimack-Sync: 1")
+    @GET
+    suspend fun syncIdentity(@Url url: HttpUrl): JsonObject
+
+    @Headers("X-Caimack-Sync: 1")
+    @POST
+    suspend fun syncActions(@Url url: HttpUrl, @Body batch: JsonObject): JsonObject
 
     @GET("api/tracks/{id}/lyrics")
     suspend fun lyrics(@Path("id") id: String): Response<Lyrics>
@@ -106,13 +123,13 @@ interface CaimackApi {
     suspend fun shuffleTracks(@Query("q") query: String? = null): List<Track>
 
     @GET("api/albums")
-    suspend fun albums(@Query("page") page: Int, @Query("pageSize") pageSize: Int): Paged<Album>
+    suspend fun albums(@Query("page") page: Int, @Query("pageSize") pageSize: Int, @Query("q") query: String? = null): Paged<Album>
 
     @GET("api/albums/{id}")
     suspend fun album(@Path("id") id: String): AlbumDetail
 
     @GET("api/artists")
-    suspend fun artists(@Query("page") page: Int, @Query("pageSize") pageSize: Int): Paged<Artist>
+    suspend fun artists(@Query("page") page: Int, @Query("pageSize") pageSize: Int, @Query("q") query: String? = null): Paged<Artist>
 
     @GET("api/artists/{id}")
     suspend fun artist(@Path("id") id: String, @Query("page") page: Int = 1, @Query("pageSize") pageSize: Int = 50): ArtistDetail

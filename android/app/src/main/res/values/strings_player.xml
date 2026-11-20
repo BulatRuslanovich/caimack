@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="player_seek_position">Playback position</string>
     <string name="player_open_full">Open the full player</string>
     <string name="player_close_full">Close the full player</string>
     <string name="player_previous">Previous track</string>
@@ -68,6 +69,7 @@
     <string name="rules_block_track">Don’t suggest this track</string>
     <string name="rules_block_artist">Don’t suggest %1$s</string>
     <string name="rules_blocked">“%1$s” won’t be suggested</string>
+    <string name="rules_saved_for_sync">Preference saved for synchronization</string>
     <string name="rules_failed">Couldn’t save that</string>
     <string name="sleep_title">Sleep timer</string>
     <string name="sleep_minutes">%1$d min</string>

@@ -37,7 +37,7 @@ describe("adaptive playback selection", () => {
   });
 });
 
-describe("a destroyed AdaptivePlayback", () => {
+describe("AdaptivePlayback source lifecycle", () => {
   function stubAudio() {
     (globalThis as { HTMLMediaElement?: unknown }).HTMLMediaElement ??= { HAVE_METADATA: 1 };
 
@@ -46,6 +46,7 @@ describe("a destroyed AdaptivePlayback", () => {
       src: "",
       readyState: 0,
       currentTime: 0,
+      paused: true,
       pause: vi.fn(),
       load: vi.fn(),
       play: vi.fn(() => Promise.resolve()),
@@ -129,6 +130,43 @@ describe("a destroyed AdaptivePlayback", () => {
     ) as unknown as [string, () => void];
     playback.destroy();
     expect(audio.removeEventListener).toHaveBeenCalledWith("loadedmetadata", metadata[1]);
+  });
+
+  it("reports a browser playback block when the current source starts after loading", async () => {
+    const audio = stubAudio();
+    const blocked = vi.fn();
+    audio.play.mockRejectedValue(new DOMException("Playback blocked", "NotAllowedError"));
+    const playback = new AdaptivePlayback(audio as unknown as HTMLAudioElement, {
+      onFatalError: vi.fn(),
+      onPlayBlocked: blocked,
+    });
+
+    await playback.load({ ...request });
+    const metadata = audio.addEventListener.mock.calls[0] as unknown as [string, () => void];
+    metadata[1]();
+    await Promise.resolve();
+
+    expect(blocked).toHaveBeenCalledOnce();
+  });
+
+  it("ignores a play rejection from a superseded load on the same element", async () => {
+    const audio = stubAudio();
+    audio.readyState = 1;
+    const blocked = vi.fn();
+    const firstPlay = Promise.withResolvers<void>();
+    audio.play.mockReturnValueOnce(firstPlay.promise);
+    const playback = new AdaptivePlayback(audio as unknown as HTMLAudioElement, {
+      onFatalError: vi.fn(),
+      onPlayBlocked: blocked,
+    });
+
+    await playback.load({ ...request });
+    await playback.load({ ...request, trackId: "22222222-2222-7222-8222-222222222222" });
+    firstPlay.reject(new DOMException("Playback blocked", "NotAllowedError"));
+    await Promise.resolve();
+
+    expect(audio.play).toHaveBeenCalledTimes(2);
+    expect(blocked).not.toHaveBeenCalled();
   });
 
   it("uses native HLS when the browser supports it and reports reduced Original honestly", async () => {

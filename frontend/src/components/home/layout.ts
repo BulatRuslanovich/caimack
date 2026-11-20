@@ -2,6 +2,10 @@
 
 export const capFourOnMobile = "max-md:[&>*:nth-child(n+5)]:hidden";
 export const capFiveOnMobile = "max-md:[&>*:nth-child(n+6)]:hidden";
+export const dropOrphanRow = [
+  "xl:[&>li:nth-child(3n+1):not(:first-child):nth-last-child(-n+2)]:hidden",
+  "xl:[&>li:nth-child(3n+1):not(:first-child):nth-last-child(-n+2)~li]:hidden",
+];
 
 export const deferredSection = "[content-visibility:auto] [contain-intrinsic-size:auto_18rem]";
 

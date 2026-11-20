@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { displayTitleClass } from "@/lib/format";
 import { ArtBackdrop } from "./ArtBackdrop";
+import { isDesktop } from "@/desktop/runtime";
 
 export function DetailHeader({
   kind,
@@ -14,6 +15,7 @@ export function DetailHeader({
   facts = [],
   description,
   actions,
+  trailingActions,
   round = false,
   record = false,
   backdrop = null,
@@ -24,6 +26,7 @@ export function DetailHeader({
   facts?: ReactNode[];
   description?: ReactNode;
   actions?: ReactNode;
+  trailingActions?: ReactNode;
   round?: boolean;
   record?: boolean;
   backdrop?: string | null;
@@ -33,7 +36,7 @@ export function DetailHeader({
   );
 
   return (
-    <header className="grid grid-cols-[auto_minmax(0,1fr)] items-end gap-8 pt-2 [--art:clamp(15rem,20vw,18rem)] max-md:grid-cols-1 max-md:gap-4 max-md:[--art:12rem]">
+    <header className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-end gap-8 pt-2 [--art:clamp(15rem,20vw,18rem)] max-md:grid-cols-1 max-md:gap-4 max-md:[--art:12rem]">
       <ArtBackdrop src={backdrop} mode="header" />
 
       <div
@@ -50,7 +53,7 @@ export function DetailHeader({
         <h1
           className={cn(
             displayTitleClass(title),
-            "text-balance max-md:text-[clamp(1.75rem,7.7vw,2rem)] max-md:leading-tight",
+            "text-balance wrap-anywhere max-md:text-[clamp(1.75rem,7.7vw,2rem)] max-md:leading-tight",
           )}
         >
           {title}
@@ -61,14 +64,24 @@ export function DetailHeader({
         {shown.length > 0 && (
           <p className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground">
             {shown.map((fact, index) => (
-              <span key={index}>{fact}</span>
+              <span key={index} className="min-w-0 wrap-anywhere">
+                {fact}
+              </span>
             ))}
           </p>
         )}
-        {actions && (
-          <div className="mt-2 flex flex-wrap items-center gap-2.5 max-sm:gap-2 max-sm:[&_button]:px-3">
-            {actions}
+        {isDesktop && trailingActions ? (
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-5 gap-y-2.5">
+            <div className="flex flex-wrap items-center gap-2.5">{actions}</div>
+            <div className="ml-auto flex items-center gap-1">{trailingActions}</div>
           </div>
+        ) : (
+          (actions || trailingActions) && (
+            <div className="mt-2 flex flex-wrap items-center gap-2.5 max-sm:gap-2 max-sm:[&_button]:px-3">
+              {actions}
+              {trailingActions}
+            </div>
+          )
         )}
       </div>
     </header>

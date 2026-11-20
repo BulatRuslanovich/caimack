@@ -28,20 +28,32 @@ export function PlaybackDeviceStatus() {
 export function PlaybackDevices({
   compact = false,
   onlyRemote = false,
+  transferBook,
   className,
 }: {
   compact?: boolean;
   onlyRemote?: boolean;
+  transferBook?: (id: string | null) => Promise<void>;
   className?: string;
 }) {
   const connect = useConnect();
   const t = useT();
+  const selectedId = transferBook
+    ? connect.activeBook?.deviceId === deviceId()
+      ? null
+      : (connect.devices.find((d) => d.id === connect.activeBook?.deviceId)?.id ?? null)
+    : connect.selectedId;
+  const selectedName = transferBook
+    ? (connect.devices.find(({ id }) => id === selectedId)?.name ?? t("player.anotherDevice"))
+    : connect.selectedName;
   const [open, setOpen] = useState(false);
   const [choosing, setChoosing] = useState(false);
   const select = async (id: string | null) => {
     setChoosing(true);
     try {
-      await connect.select(id);
+      if (transferBook) {
+        await transferBook(id);
+      } else await connect.select(id);
       setOpen(false);
     } catch {
       /* The player reports command failures. Keep the device list open. */
@@ -49,12 +61,12 @@ export function PlaybackDevices({
       setChoosing(false);
     }
   };
-  const label = connect.selectedId
+  const label = selectedId
     ? t(connect.available ? "connect.playingOn" : "connect.unavailable", {
-        device: connect.selectedName,
+        device: selectedName,
       })
     : t("connect.title");
-  if (onlyRemote && !connect.selectedId) return null;
+  if (onlyRemote && !selectedId) return null;
   return (
     <>
       <Button
@@ -62,7 +74,7 @@ export function PlaybackDevices({
         size={compact ? "icon" : "auto"}
         className={cn(
           "min-h-10 gap-2",
-          connect.selectedId && "text-primary",
+          selectedId && "text-primary",
           !compact && "max-w-full px-2 text-xs",
           className,
         )}
@@ -72,13 +84,13 @@ export function PlaybackDevices({
       >
         <MonitorSpeakerIcon className="size-4 shrink-0" />
         {!compact && (
-          <span className="truncate">{connect.selectedId ? label : t("connect.thisDevice")}</span>
+          <span className="truncate">{selectedId ? label : t("connect.thisDevice")}</span>
         )}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
           title={t("connect.title")}
-          description={t("connect.description")}
+          description={t(transferBook ? "connect.audiobookDescription" : "connect.description")}
           className="max-w-md"
         >
           <div
@@ -91,27 +103,27 @@ export function PlaybackDevices({
               type="button"
               disabled={choosing}
               className="flex min-h-16 items-center gap-3 rounded-md px-3 py-3 text-left hover:bg-raised disabled:opacity-50"
-              aria-pressed={connect.selectedId === null}
+              aria-pressed={selectedId === null}
               onClick={() => void select(null)}
             >
               <SmartphoneIcon className="size-5 shrink-0 text-muted-foreground" />
               <span className="min-w-0 flex-1">
                 <span className="block font-medium">{t("connect.thisDevice")}</span>
                 <span className="block text-xs text-muted-foreground">
-                  {connect.selectedId ? t("connect.transferHere") : t("connect.selected")}
+                  {selectedId ? t("connect.transferHere") : t("connect.selected")}
                 </span>
               </span>
-              {connect.selectedId === null && <CheckIcon className="size-4 text-primary" />}
+              {selectedId === null && <CheckIcon className="size-4 text-primary" />}
             </button>
             {connect.devices
-              .filter((device) => device.id !== deviceId())
+              .filter((device) => device.id !== deviceId() && (!transferBook || device.audiobooks))
               .map((device) => (
                 <button
                   key={device.id}
                   type="button"
                   disabled={choosing || !connect.connected}
                   className="flex min-h-16 items-center gap-3 rounded-md px-3 py-3 text-left hover:bg-raised disabled:opacity-50"
-                  aria-pressed={connect.selectedId === device.id}
+                  aria-pressed={selectedId === device.id}
                   onClick={() => void select(device.id)}
                 >
                   <MonitorSpeakerIcon className="size-5 shrink-0 text-muted-foreground" />
@@ -120,14 +132,10 @@ export function PlaybackDevices({
                       {device.name || t("player.anotherDevice")}
                     </span>
                     <span className="block text-xs text-muted-foreground">
-                      {connect.selectedId === device.id
-                        ? t("connect.selected")
-                        : t("connect.listenHere")}
+                      {selectedId === device.id ? t("connect.selected") : t("connect.listenHere")}
                     </span>
                   </span>
-                  {connect.selectedId === device.id && (
-                    <CheckIcon className="size-4 text-primary" />
-                  )}
+                  {selectedId === device.id && <CheckIcon className="size-4 text-primary" />}
                 </button>
               ))}
             {choosing && (

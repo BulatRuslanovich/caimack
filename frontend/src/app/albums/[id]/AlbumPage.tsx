@@ -25,6 +25,8 @@ import { RadioButton } from "@/components/RadioButton";
 import { ShuffleButton } from "@/components/ShuffleButton";
 import { Query } from "@/components/Query";
 import { TrackList } from "@/components/TrackList";
+import { isDesktop } from "@/desktop/api";
+import { DesktopCollectionDownload } from "@/desktop/offline";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePlayerState } from "@/contexts/PlayerContext";
@@ -112,7 +114,12 @@ export function AlbumPage() {
                 <PlayAllButton tracks={detail.tracks} name={detail.title} />
                 {detail.tracks.length > 1 && <ShuffleButton tracks={detail.tracks} />}
                 {detail.tracks.length > 0 && <RadioButton seed={detail.tracks[0]} />}
+              </>
+            }
+            trailingActions={
+              <>
                 <LibrarySaveButton kind="album" id={id} />
+                {isDesktop && <DesktopCollectionDownload tracks={detail.tracks} />}
                 {isAdmin && (
                   <Button
                     variant="ghost"

@@ -5,6 +5,9 @@ package app.caimack.sync
 import android.content.Context
 import android.net.Uri
 import android.util.AtomicFile
+import app.caimack.R
+import app.caimack.api.Lyrics
+import app.caimack.api.Track
 import app.caimack.api.User
 import app.caimack.session.Server
 import java.io.File
@@ -59,13 +62,10 @@ data class FileIndex(
     val files: Map<String, SyncedFile> = emptyMap(),
     val assets: Map<String, String> = emptyMap(),
     val vectorVersion: String = "",
-    val exports: Map<String, String> = emptyMap(),
-    val garbage: List<String> = emptyList(),
 )
 
 data class SyncStatus(
     val enabled: Boolean = false,
-    val folder: String? = null,
     val running: Boolean = false,
     val completed: Int = 0,
     val total: Int = 0,
@@ -77,18 +77,17 @@ data class SyncStatus(
     val lastSync: Long = 0,
 )
 
-/**
- * Private index plus a durable account-scoped action log. Public music is kept in the user's SAF
- * folder; no cache eviction policy can remove it.
- */
+/** Private metadata and action log. The old document index is used during migration. */
 @OptIn(ExperimentalSerializationApi::class)
 class SyncStore(private val context: Context, val json: Json, private val server: Server) {
     val catalogRevision = MutableStateFlow(0L)
+    val artworkRevision = MutableStateFlow(0L)
     private var tracksRevision = -1L
-    private var cachedTracks = emptyList<app.caimack.api.Track>()
+    private var cachedAvailability = emptySet<String>()
+    private var cachedTracks = emptyList<Track>()
     private var sourceRevision = 0L
     private var decodedRevision = -1L
-    private var decodedTracks = emptyList<app.caimack.api.Track>()
+    private var decodedTracks = emptyList<Track>()
     private fun catalogChanged(metadata: Boolean = false) {
         if (metadata) sourceRevision++
         catalogRevision.update { it + 1 }
@@ -97,6 +96,7 @@ class SyncStore(private val context: Context, val json: Json, private val server
     val directory = File(context.filesDir, "library-sync").apply { mkdirs() }
     private val snapshotFile = AtomicFile(File(directory, "snapshot.json"))
     private val indexFile = AtomicFile(File(directory, "files.json"))
+    internal val vectorFile = AtomicFile(File(directory, "vectors.json"))
     private val actionsFile = AtomicFile(File(directory, "actions.json"))
     private val confirmedFile = AtomicFile(File(directory, "confirmed.json"))
     private val rejectedFile = AtomicFile(File(directory, "rejected.json"))
@@ -119,11 +119,13 @@ class SyncStore(private val context: Context, val json: Json, private val server
     private var rejected: List<JsonObject> =
         read(rejectedFile) ?: emptyList()
     @Volatile private var signedIn: String? = null
+    @Volatile private var ownerKey: String? = boundAddress?.let { address ->
+        boundUser?.let { owner(address, it) }
+    }
     val status =
         MutableStateFlow(
             SyncStatus(
                 enabled = enabled,
-                folder = folder,
                 pending = actions.size,
                 rejected = rejected.size,
                 completed = index.files.size,
@@ -140,21 +142,19 @@ class SyncStore(private val context: Context, val json: Json, private val server
             prefs.edit().putBoolean("paused", value).commit()
         }
 
-    val folder
-        get() = prefs.getString("folder", null)
-
     val boundAddress
         get() = prefs.getString("address", null)
 
     val boundUser
         get() = prefs.getString("user", null)
 
-    val active
-        get() =
-            enabled &&
-                signedIn != null &&
-                signedIn == boundUser &&
-                server.url.value?.toString() == boundAddress
+    internal val downloadOwner: String?
+        get() = ownerKey.takeIf {
+            signedIn != null && signedIn == boundUser && server.url.value?.toString() == boundAddress &&
+                !prefs.getBoolean("signedOut", false)
+        }
+
+    val active: Boolean get() = enabled && downloadOwner != null
 
     var offlineQueue: Boolean
         get() = prefs.getBoolean("offlineQueue", false)
@@ -191,15 +191,12 @@ class SyncStore(private val context: Context, val json: Json, private val server
     }
 
     @Synchronized
-    fun configure(uri: Uri, user: User) {
+    fun configure(user: User) {
         val address = server.url.value?.toString() ?: throw IOException("No server address")
-        // A different account/folder starts a new manifest, never claims the old
-        // account's files. Keep its private log so pending actions are not lost.
-        if (boundUser != user.id || boundAddress != address || folder != uri.toString()) {
+        if (boundUser != user.id || boundAddress != address) {
+            check(!status.value.running) { context.getString(R.string.sync_change_while_running) }
             if (actions.isNotEmpty())
-                throw IOException(
-                    context.getString(app.caimack.R.string.sync_pending_before_change)
-                )
+                throw IOException(context.getString(R.string.sync_pending_before_change))
             val archive =
                 File(directory, "archive-${System.currentTimeMillis()}").apply { mkdirs() }
             listOf(
@@ -216,6 +213,7 @@ class SyncStore(private val context: Context, val json: Json, private val server
                         file.baseFile.copyTo(File(archive, file.baseFile.name))
                     file.delete()
                 }
+            vectorFile.delete()
             snapshot = null
             index = FileIndex()
             actions = emptyList()
@@ -224,29 +222,24 @@ class SyncStore(private val context: Context, val json: Json, private val server
         }
         prefs
             .edit()
-            .putString("folder", uri.toString())
+            .remove("folder")
             .putString("address", address)
             .putString("user", user.id)
             .putBoolean("signedOut", false)
             .commit()
+        ownerKey = owner(address, user.id)
         signedIn = user.id
         catalogChanged(metadata = true)
         status.value =
             status.value.copy(
-                folder = folder,
                 completed = index.files.size,
                 total = snapshot?.objects("tracks")?.size ?: 0,
             )
     }
 
     fun enable(value: Boolean) {
-        if (
-            value &&
-                (folder == null ||
-                    signedIn != boundUser ||
-                    server.url.value?.toString() != boundAddress)
-        )
-            throw IOException(context.getString(app.caimack.R.string.sync_choose_folder))
+        if (value && downloadOwner == null)
+            throw IOException(context.getString(R.string.sync_sign_in_again))
         prefs.edit().putBoolean("enabled", value).commit()
         catalogChanged()
         status.value = status.value.copy(enabled = value, message = null)
@@ -314,7 +307,7 @@ class SyncStore(private val context: Context, val json: Json, private val server
         require(value["user"]?.jsonObject?.string("id") == boundUser) { "Different sync account" }
         val prior = snapshot?.string("serverId")
         require(prior.isNullOrEmpty() || prior == value.string("serverId")) {
-            "Different sync server; choose a new folder"
+            "Different sync server"
         }
         require(
             value.string("serverId").isNotEmpty() &&
@@ -345,10 +338,10 @@ class SyncStore(private val context: Context, val json: Json, private val server
     fun updateIndex(transform: (FileIndex) -> FileIndex) {
         val before = index
         val next = transform(before)
+        if (next == before) return
         write(indexFile, next)
         index = next
         if (next.files != before.files) catalogChanged()
-        status.value = status.value.copy(completed = index.files.size)
     }
 
     fun finish() {
@@ -357,31 +350,42 @@ class SyncStore(private val context: Context, val json: Json, private val server
         status.value = status.value.copy(lastSync = now, message = null)
     }
 
+    fun reportAvailable(count: Int) {
+        if (active) status.update { if (it.running) it else it.copy(completed = count) }
+    }
+
     fun audio(id: String): Uri? = if (active) index.files[id]?.uri?.let(Uri::parse) else null
 
-    /** Verified audio sizes are already indexed; no SAF traversal is needed for the UI. */
+    /** The legacy index keeps previously exported audio playable while local downloads are prepared. */
     @Synchronized fun audioBytes(): Long = if (active) index.files.values.sumOf { it.sizeBytes } else 0L
 
-    @Synchronized fun tracks(): List<app.caimack.api.Track> {
+    @Synchronized fun tracks(available: Set<String> = emptySet()): List<Track> {
         if (!active) return emptyList()
         val revision = catalogRevision.value
-        if (tracksRevision != revision) {
+        if (tracksRevision != revision || cachedAvailability != available) {
             if (decodedRevision != sourceRevision) {
                 decodedTracks = snapshot?.let {
-                    json.decodeFromJsonElement<List<app.caimack.api.Track>>(
+                    json.decodeFromJsonElement<List<Track>>(
                         OfflineCatalog.view(it, edits()).getValue("tracks")
                     )
                 }.orEmpty()
                 decodedRevision = sourceRevision
             }
-            cachedTracks = decodedTracks.filter { track -> track.id in index.files }
+            cachedTracks = decodedTracks.filter { track -> track.id in index.files || track.id in available }
+            cachedAvailability = available
             tracksRevision = revision
         }
         return cachedTracks
     }
 
+    fun lyrics(id: String): Lyrics? = if (downloadOwner != null) {
+        (snapshot?.get("lyrics") as? JsonObject)?.get(id)?.let { json.decodeFromJsonElement<Lyrics>(it) }
+    } else null
+
+    internal fun assetFile(path: String, version: String) = File(directory, "asset-${sha256(path.toByteArray())}-$version")
+
     fun asset(path: String): String? {
-        if (!active) return null
+        if (downloadOwner == null) return null
         val resolved =
             if (path.startsWith("api/tracks/")) {
                 val track =
@@ -391,11 +395,13 @@ class SyncStore(private val context: Context, val json: Json, private val server
                 "api/albums/${track?.string("albumId")}/cover"
             } else path
         val version = index.assets[resolved] ?: return null
-        return File(directory, "asset-${sha256(resolved.toByteArray())}-$version")
+        return assetFile(resolved, version)
             .takeIf { it.isFile }
             ?.toURI()
             ?.toString()
     }
+
+    private fun owner(address: String, user: String) = sha256("$address\n$user".toByteArray())
 
     private inline fun <reified T> read(file: AtomicFile): T? =
         if (!file.baseFile.exists() && !File(file.baseFile.path + ".bak").exists()) null

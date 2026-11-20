@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 package app.caimack.ui
 
-import androidx.compose.animation.core.Spring
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -20,8 +18,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -50,10 +47,13 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.caimack.R
 import app.caimack.api.LibraryItem
 import app.caimack.api.LibraryFolder
 import app.caimack.api.LibraryChange
+import app.caimack.audiobooks.Audiobook
+import app.caimack.audiobooks.AudiobookCatalog
 import java.time.Instant
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -66,21 +66,25 @@ internal const val SAVED_LIBRARY = "saved-library"
 internal val libraryMutation = Mutex()
 
 @Composable
-fun LibraryScreen(nav: NavController) {
+fun LibraryScreen(nav: NavController, initialFilter: String = "all") {
     val api = LocalContainer.current.api
     Load(LIBRARY_FOLDERS, { api.libraryFolders() }) { folders ->
-        Load(LIBRARY_ORDER, { api.libraryOrder() }) { order -> LibraryBrowser(nav, folders, order) }
+        Load(LIBRARY_ORDER, { api.libraryOrder() }) { order -> LibraryBrowser(nav, folders, order, initialFilter) }
     }
 }
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
-internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, order: Map<String, List<String>>) {
+internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, order: Map<String, List<String>>, initialFilter: String = "all") {
     val container = LocalContainer.current
     val local = LocalOfflineLibrary.current
     val api = catalogApi()
     val palette = LocalPalette.current
-    var filter by rememberSaveable { mutableStateOf("all") }
+    var selectedFilter by rememberSaveable { mutableStateOf(initialFilter) }
+    val audiobookCatalog by container.audiobookStore.state.collectAsStateWithLifecycle()
+    val audiobooksEnabled by container.audiobooksEnabled.collectAsStateWithLifecycle()
+    val filter = if (!audiobooksEnabled && selectedFilter == "audiobook") "all" else selectedFilter
+    val savedBooks = if (audiobooksEnabled) audiobookCatalog.books.filter { it.saved } else emptyList()
     var downloadedOnly by rememberSaveable { mutableStateOf(false) }
     val available = LocalAvailableCollections.current
     val availableTracks = LocalAvailableTracks.current
@@ -192,7 +196,6 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
                 }
             }
         }
-        LibraryScopeSelector(nav, saved = true)
         AnimatedVisibility(searchExpanded,
             enter = expandVertically(tween(220)) + fadeIn(tween(160)),
             exit = shrinkVertically(tween(180)) + fadeOut(tween(120)),
@@ -216,7 +219,7 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
                 )
             }
         }
-        LibraryFilters(filter, downloadedOnly, { filter = it }, { downloadedOnly = it })
+        LibraryFilters(filter, downloadedOnly, audiobooksEnabled, { selectedFilter = it }, { downloadedOnly = it })
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = { sort = when (sort) { "manual" -> "recent"; "recent" -> "name"; else -> "manual" } }, modifier = Modifier.weight(1f)) { Text(stringResource(when (sort) { "name" -> R.string.collection_name; "recent" -> R.string.collection_recent; else -> R.string.collection_manual }), maxLines = 1, overflow = TextOverflow.Ellipsis) }
             TextButton(onClick = { nav.navigate(RecentRoute) }) {
@@ -230,13 +233,15 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
             val eligible = if (downloadedOnly) library.filter { (it.kind to it.id) in available } else library
             val availableFolders = remember(eligible, folders) { libraryFolderAncestors(eligible, folders) }
             val shown = eligible.filter { (query.isNotEmpty() || it.folderId == folderId) && (filter == "all" || it.kind == filter) && "${it.title} ${it.subtitle}".contains(query, ignoreCase = true) }
-                .let { if (alphabetical) it.sortedBy { item -> item.title.lowercase() } else it.sortedByDescending { item -> Instant.parse(item.savedAt) } }
-            val shownFolders = folders.filter { !downloadedOnly || it.id in availableFolders }.filter { if (query.isEmpty()) it.parentId == folderId else it.name.contains(query, ignoreCase = true) }
+            val shownBooks = if ((filter == "all" || filter == "audiobook") && (folderId == null || query.isNotEmpty())) {
+                savedBooks.filter { !downloadedOnly || it.id in audiobookCatalog.downloaded }.matchingAudiobooks(query)
+            } else emptyList()
+            val shownFolders = folders.filter { filter != "audiobook" && (!downloadedOnly || it.id in availableFolders) }.filter { if (query.isEmpty()) it.parentId == folderId else it.name.contains(query, ignoreCase = true) }
                 .let { if (alphabetical) it.sortedBy { folder -> folder.name.lowercase() } else it.sortedByDescending { folder -> folder.createdAt } }
             val defaultKeys = buildList {
                 if (folderId == null) add("favorites")
                 addAll(folders.filter { it.parentId == folderId }.sortedByDescending { it.createdAt }.map { "folder:${it.id}" })
-                addAll(library.filter { it.folderId == folderId }.sortedByDescending { Instant.parse(it.savedAt) }.map { "${it.kind}:${it.id}" })
+                addAll(libraryItemKeys(library.filter { it.folderId == folderId }, savedBooks.takeIf { folderId == null }.orEmpty(), false))
                 if (folderId == null) add("downloads")
             }
             val fullOrder = orderedLibraryKeys(defaultKeys, order[folderId ?: "root"].orEmpty())
@@ -244,8 +249,8 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
             val visibleKeys = buildList {
                 if (showFavorites) add("favorites")
                 addAll(shownFolders.map { "folder:${it.id}" })
-                addAll(shown.map { "${it.kind}:${it.id}" })
-                if (folderId == null && downloadsTitle.contains(query, ignoreCase = true)) add("downloads")
+                addAll(libraryItemKeys(shown, shownBooks, alphabetical))
+                if (folderId == null && filter != "audiobook" && downloadsTitle.contains(query, ignoreCase = true)) add("downloads")
             }.let { keys -> if (sort == "manual" && query.isEmpty()) keys.sortedBy { ranks[it] ?: Int.MAX_VALUE } else keys }
             suspend fun change(request: LibraryChange) {
                 if (organizing) return
@@ -290,6 +295,7 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
                 canDrop = { moving, target ->
                     val destination = if (target == "up") currentFolder?.parentId else target.removePrefix("folder:")
                     moving !in listOf("favorites", "downloads") &&
+                        !moving.startsWith("audiobook:") &&
                         (target == "up" || target.startsWith("folder:")) &&
                         (!moving.startsWith("folder:") || folderTrail(folders, destination).none { "folder:${it.id}" == moving })
                 },
@@ -311,6 +317,7 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
                         filter == "album" -> R.string.collection_empty_albums
                         filter == "artist" -> R.string.collection_empty_artists
                         filter == "playlist" -> R.string.collection_empty_playlists
+                        filter == "audiobook" -> R.string.audiobook_empty_saved
                         else -> R.string.collection_empty
                     }), stringResource(if (currentFolder != null) R.string.folders_empty_hint else R.string.collection_hint))
                 },
@@ -330,11 +337,36 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
                         folders.find { "folder:${it.id}" == key }?.let { folder ->
                             LibraryFolderView(folder, folders, eligible.count { it.folderId == folder.id } + folders.count { it.parentId == folder.id && (!downloadedOnly || it.id in availableFolders) }, grid) { selectedFolder = folder.id }
                         }
+                    } else if (key.startsWith("audiobook:")) {
+                        shownBooks.find { it.id == key.substringAfter(':') }?.let { book ->
+                            LibraryAudiobookCard(book, audiobookCatalog, grid) { nav.navigate(AudiobookRoute(book.id)) }
+                        }
                     } else library.find { "${it.kind}:${it.id}" == key }?.let { item -> LibraryItemView(item, library, folders, nav, grid) }
                 }
             }
         }
     }
+}
+
+private data class LibraryEntryOrder(val key: String, val title: String, val savedAtMs: Long)
+
+private fun libraryItemKeys(items: List<LibraryItem>, books: List<Audiobook>, alphabetical: Boolean): List<String> {
+    val entries = items.map { LibraryEntryOrder("${it.kind}:${it.id}", it.title, Instant.parse(it.savedAt).toEpochMilli()) } +
+        books.map { LibraryEntryOrder("audiobook:${it.id}", it.title, it.savedAtMs ?: 0L) }
+    return (if (alphabetical) entries.sortedBy { it.title.lowercase() } else entries.sortedByDescending { it.savedAtMs })
+        .map { it.key }
+}
+
+@Composable
+private fun LibraryAudiobookCard(book: Audiobook, catalog: AudiobookCatalog, grid: Boolean, open: () -> Unit) {
+    val cover = LocalContainer.current.audiobookStore.cover(book)
+    val subtitle = listOfNotNull(
+        stringResource(R.string.audiobook_kind), book.author,
+        book.narrator?.let { stringResource(R.string.audiobook_narrator, it) },
+    ).joinToString(" · ")
+    Card(book.title, subtitle, open, toneUrl = cover, list = !grid, details = bookTime(book.durationMs),
+        menu = { BookMenu(book, catalog) },
+    ) { Cover(cover, book.title, it, book = true) }
 }
 
 @Composable
@@ -454,55 +486,21 @@ internal fun LibraryEntry(title: String, hint: String?, icon: ImageVector, grid:
 }
 
 @Composable
-internal fun LibraryFilters(filter: String, downloadedOnly: Boolean, onFilter: (String) -> Unit, onDownloaded: (Boolean) -> Unit) {
-    val palette = LocalPalette.current
-    val scroll = rememberLazyListState()
-    LaunchedEffect(filter, downloadedOnly) { scroll.animateScrollToItem(0) }
-    val downloadedChip: @Composable (Modifier) -> Unit = { modifier ->
-        FilterChip(
-            modifier = modifier,
-            selected = downloadedOnly,
-            onClick = { onDownloaded(!downloadedOnly) },
-            label = { Text(stringResource(R.string.collection_downloaded)) },
-            shape = CircleShape, border = null,
-            colors = FilterChipDefaults.filterChipColors(
-                containerColor = palette.raised, labelColor = palette.foreground,
-                selectedContainerColor = palette.selection, selectedLabelColor = palette.primary,
-            ),
-        )
+internal fun LibraryFilters(filter: String, downloadedOnly: Boolean, audiobooksEnabled: Boolean, onFilter: (String) -> Unit, onDownloaded: (Boolean) -> Unit) {
+    val downloadedChip: LazyListScope.() -> Unit = {
+        item(key = "downloaded") {
+            CategoryFilter(R.string.collection_downloaded, downloadedOnly, Modifier.animateItem()) { onDownloaded(!downloadedOnly) }
+        }
     }
-    LazyRow(state = scroll, contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (filter != "all" || downloadedOnly) item(key = "clear") {
-            IconButton(
-                onClick = { onFilter("all"); onDownloaded(false) },
-                modifier = Modifier.animateItem(
-                    fadeInSpec = tween(220),
-                    placementSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
-                    fadeOutSpec = tween(140),
-                ),
-            ) {
-                Icon(Lucide.X, stringResource(R.string.collection_clear_filter), tint = palette.muted)
-            }
+    CategoryFilterRow(filter to downloadedOnly, filter != "all" || downloadedOnly, { onFilter("all"); onDownloaded(false) }) {
+        if (downloadedOnly) downloadedChip()
+        val categories = listOf(
+            "audiobook" to R.string.nav_audiobooks, "playlist" to R.string.nav_playlists,
+            "album" to R.string.nav_albums, "artist" to R.string.nav_artists,
+        )
+        items(categories.filter { (filter == "all" || it.first == filter) && (audiobooksEnabled || it.first != "audiobook") }, key = { it.first }) { (kind, label) ->
+            CategoryFilter(label, filter == kind) { onFilter(if (filter == kind) "all" else kind) }
         }
-        if (downloadedOnly) item(key = "downloaded") { downloadedChip(Modifier.animateItem()) }
-        items(listOf("playlist" to R.string.nav_playlists, "album" to R.string.nav_albums, "artist" to R.string.nav_artists).filter { filter == "all" || it.first == filter }, key = { it.first }) { (kind, label) ->
-            FilterChip(
-                modifier = Modifier.animateItem(
-                    fadeInSpec = tween(220),
-                    placementSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
-                    fadeOutSpec = tween(140),
-                ),
-                selected = filter == kind,
-                onClick = { onFilter(if (filter == kind) "all" else kind) },
-                label = { Text(stringResource(label)) },
-                shape = CircleShape,
-                border = null,
-                colors = FilterChipDefaults.filterChipColors(
-                    containerColor = palette.raised, labelColor = palette.foreground,
-                    selectedContainerColor = palette.selection, selectedLabelColor = palette.primary,
-                ),
-            )
-        }
-        if (!downloadedOnly) item(key = "downloaded") { downloadedChip(Modifier.animateItem()) }
+        if (!downloadedOnly) downloadedChip()
     }
 }

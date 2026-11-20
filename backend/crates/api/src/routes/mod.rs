@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 mod account;
+mod audiobooks;
 mod auth;
 mod catalog;
 mod connect;
@@ -32,6 +33,7 @@ pub fn router(state: AppState) -> Router {
     let protected = Router::new()
         .merge(auth::protected())
         .merge(account::router())
+        .merge(audiobooks::router(state.clone()))
         .merge(catalog::router())
         .merge(integrations::router())
         .merge(library::router())

@@ -6,7 +6,6 @@
     <string name="collection_grid">Grid view</string>
     <string name="collection_list">List view</string>
     <string name="collection_empty">Nothing saved here yet</string>
-    <string name="collection_saved">Saved</string>
     <string name="search_all_genres">All genres</string>
     <string name="error_refresh">Could not refresh. Showing the last loaded data.</string>
     <string name="search_browse_empty">No genres in this catalog yet</string>
@@ -15,7 +14,6 @@
     <string name="collection_empty_artists">No saved artists yet</string>
     <string name="collection_empty_playlists">No saved playlists yet</string>
     <string name="collection_hint">Save albums, artists and playlists using the + button.</string>
-    <string name="collection_catalog">Browse catalog</string>
     <string name="collection_failed">Could not update your library. Try again.</string>
     <string name="collection_clear_filter">Clear filter selection</string>
     <string name="folders_new">New folder</string>

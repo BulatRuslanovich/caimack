@@ -185,9 +185,10 @@ export function usePlaybackEngine({
 
   const scrubRef = useRef<number | null>(null);
   const scrubTrackRef = useRef<string | undefined>(undefined);
-  const resumeAfterScrub = useRef({ muted, isPlaying });
+  const trackId = currentTrack?.id;
+  const resumeAfterScrub = useRef({ muted, isPlaying, trackId });
   useLayoutEffect(() => {
-    resumeAfterScrub.current = { muted, isPlaying };
+    resumeAfterScrub.current = { muted, isPlaying, trackId };
   });
 
   useLayoutEffect(() => {
@@ -195,7 +196,23 @@ export function usePlaybackEngine({
     scrubRef.current = null;
     scrubTrackRef.current = undefined;
     if (audioRef.current) audioRef.current.muted = resumeAfterScrub.current.muted;
-  }, [currentTrack?.id]);
+  }, [trackId]);
+
+  const reportPlayBlocked = useCallback(
+    (playback: AdaptivePlayback) => {
+      const intent = resumeAfterScrub.current;
+      if (
+        adaptiveRef.current !== playback ||
+        !intent.isPlaying ||
+        audioRef.current?.dataset.trackId !== intent.trackId
+      )
+        return;
+
+      setIsPlaying(false);
+      notify(t("player.autoplayBlocked"), "error");
+    },
+    [notify, setIsPlaying, t],
+  );
 
   const scrubBy = useCallback(
     (deltaSeconds: number) => {
@@ -238,7 +255,7 @@ export function usePlaybackEngine({
     if (!audio || audio.dataset.trackId !== scrubTrackRef.current) return;
     scrubTrackRef.current = undefined;
     seek(target);
-    if (audio && isPlaying && audio.paused) void audio.play().catch(() => {});
+    if (isPlaying) adaptiveRef.current?.setPlaying(true);
   }, [seek]);
 
   const startQueue = useCallback(() => {
@@ -298,6 +315,7 @@ export function usePlaybackEngine({
         onFatalError: () => {
           if (standbyRef.current === standby) dropStandby();
         },
+        onPlayBlocked: () => reportPlayBlocked(playback),
       });
       const standby: Standby = { trackId: track.id, sourceKey, playback, ready: false };
       standbyRef.current = standby;
@@ -322,7 +340,16 @@ export function usePlaybackEngine({
           if (standbyRef.current === standby) dropStandby();
         });
     },
-    [crossfader, recovery, quality, sourceRevision, normalizeVolume, dropStandby, spareAudio],
+    [
+      crossfader,
+      recovery,
+      quality,
+      sourceRevision,
+      normalizeVolume,
+      dropStandby,
+      spareAudio,
+      reportPlayBlocked,
+    ],
   );
 
   useEffect(() => {
@@ -432,6 +459,7 @@ export function usePlaybackEngine({
     adaptiveRef.current?.destroy();
     const playback = new AdaptivePlayback(audio, {
       onFatalError: () => reportLoadFailure(),
+      onPlayBlocked: () => reportPlayBlocked(playback),
     });
     adaptiveRef.current = playback;
 
@@ -459,6 +487,7 @@ export function usePlaybackEngine({
     tracker,
     recovery,
     failSource,
+    reportPlayBlocked,
     crossfader,
     dropStandby,
     spareAudio,
@@ -502,23 +531,11 @@ export function usePlaybackEngine({
 
     if (isPlaying && audio.dataset.sourceLoading !== "true") {
       crossfader.resume();
-      audio
-        .play()
-        .catch((reason: unknown) => {
-          const name = reason instanceof DOMException ? reason.name : "";
-          if (name !== "AbortError") {
-            setIsPlaying(false);
-
-            if (name === "NotAllowedError") notify(t("player.autoplayBlocked"), "error");
-          }
-        })
-        .catch(() => {});
     } else {
       tracker.checkpoint();
-      audio.pause();
       crossfader.pause();
     }
-  }, [isPlaying, currentTrack, notify, t, setIsPlaying, crossfader, recovery, tracker]);
+  }, [isPlaying, currentTrack, crossfader, recovery, tracker]);
 
   useEffect(() => {
     endVinylScratch();
@@ -611,12 +628,12 @@ export function usePlaybackEngine({
 
       if (currentTrack) tracker.begin(currentTrack);
 
-      void audioRef.current?.play().catch(() => setIsPlaying(false));
+      adaptiveRef.current?.setPlaying(true);
       return;
     }
 
     onTrackEnded();
-  }, [onTrackEnded, repeat, tracker, currentTrack, seek, setIsPlaying]);
+  }, [onTrackEnded, repeat, tracker, currentTrack, seek]);
 
   const { handleError, handleWaiting } = useProgressiveRecovery({
     audioRef,
@@ -648,6 +665,8 @@ export function usePlaybackEngine({
 
   const audioProps = useAudioEvents({
     audioRef,
+    currentTrackId: trackId,
+    isPlaying,
     scrubRef,
     tracker,
     recovery,

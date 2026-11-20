@@ -24,7 +24,8 @@ internal fun TrackDownloadAction(track: Track, onDismiss: () -> Unit) {
     if (synchronization.enabled && container.syncStore.active) return
 
     val downloads by container.downloads.state.collectAsStateWithLifecycle()
-    val entry = downloads[track.id]?.takeIf(container.downloads::visible)
+    val entry = if (track.id in LocalAvailableTracks.current) container.downloads.entry(track.id, downloads)
+        else downloads[track.id]?.takeIf(container.downloads::visible)
     if (entry?.download?.state == Download.STATE_REMOVING) return
     val complete = entry?.done == true
     val pending = entry != null && !complete && entry.download.state != Download.STATE_FAILED

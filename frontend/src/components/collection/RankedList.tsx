@@ -8,6 +8,8 @@ import { formatArtists, formatDuration } from "@/lib/format";
 import type { Track } from "@/lib/types";
 import { usePlayback } from "@/lib/playback/usePlayback";
 import { TrackCover } from "@/components/Cover";
+import { isDesktop } from "@/desktop/runtime";
+import { DownloadBadge } from "@/desktop/offline";
 
 export function RankedList({
   tracks,
@@ -30,7 +32,7 @@ export function RankedList({
     <ol
       className={cn(
         "grid grid-cols-2 gap-x-8 gap-y-0.5 max-md:grid-cols-1",
-        compact && ["gap-x-6 xl:grid-cols-3", dropOrphanRow],
+        compact && "gap-x-6 xl:grid-cols-3",
         className,
       )}
     >
@@ -93,8 +95,9 @@ export function RankedList({
                 </span>
               </span>
 
-              <span className="text-sm text-faint tabular-nums">
+              <span className="flex items-center gap-2 text-sm text-faint tabular-nums">
                 {formatDuration(track.durationSeconds)}
+                {isDesktop && <DownloadBadge id={track.id} />}
               </span>
             </button>
           </li>
@@ -103,8 +106,3 @@ export function RankedList({
     </ol>
   );
 }
-
-const dropOrphanRow = [
-  "xl:[&>li:nth-child(3n+1):not(:first-child):nth-last-child(-n+2)]:hidden",
-  "xl:[&>li:nth-child(3n+1):not(:first-child):nth-last-child(-n+2)~li]:hidden",
-];

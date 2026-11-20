@@ -2,6 +2,7 @@
 
 "use client";
 
+import { cn } from "@/lib/cn";
 import type { Track } from "@/lib/types";
 import { usePlayback } from "@/lib/playback/usePlayback";
 import { useT } from "@/contexts/I18nContext";
@@ -12,10 +13,12 @@ export function PlayAllButton({
   tracks,
   name,
   compact = false,
+  className,
 }: {
   tracks: Track[];
   name?: string;
   compact?: boolean;
+  className?: string;
 }) {
   const t = useT();
   const { isPlaying, playSet, setIsOnAir } = usePlayback();
@@ -26,7 +29,7 @@ export function PlayAllButton({
     <Button
       variant="play"
       size="play"
-      className={compact ? "max-md:size-11" : undefined}
+      className={cn(compact && "max-md:size-11", className)}
       disabled={tracks.length === 0}
       onClick={() => playSet(tracks)}
       aria-label={

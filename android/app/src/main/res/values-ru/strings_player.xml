@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="player_seek_position">Позиция воспроизведения</string>
     <string name="player_open_full">Открыть плеер на весь экран</string>
     <string name="player_close_full">Закрыть полноэкранный плеер</string>
     <string name="player_previous">Предыдущий трек</string>
@@ -70,6 +71,7 @@
     <string name="rules_block_track">Не предлагать этот трек</string>
     <string name="rules_block_artist">Не предлагать %1$s</string>
     <string name="rules_blocked">«%1$s» больше не будет предлагаться</string>
+    <string name="rules_saved_for_sync">Предпочтение сохранено и будет синхронизировано</string>
     <string name="rules_failed">Не удалось сохранить</string>
     <string name="sleep_title">Таймер сна</string>
     <string name="sleep_minutes">%1$d мин</string>

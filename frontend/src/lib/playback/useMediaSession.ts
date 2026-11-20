@@ -35,11 +35,16 @@ export function useMediaSession(
   isPlaying: boolean,
   duration: number,
   controls: MediaSessionControls,
+  enabled = true,
 ) {
   const { play, pause, next, previous, seek, seekBy, getPosition } = controls;
 
   useEffect(() => {
-    if (!("mediaSession" in navigator) || !track) return;
+    if (!enabled || !("mediaSession" in navigator)) return;
+    if (!track) {
+      navigator.mediaSession.metadata = null;
+      return;
+    }
 
     navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title,
@@ -47,16 +52,16 @@ export function useMediaSession(
       album: track.albumTitle ?? undefined,
       artwork: artworkFor(track),
     });
-  }, [track]);
+  }, [track, enabled]);
 
   useEffect(() => {
-    if (!("mediaSession" in navigator)) return;
+    if (!enabled || !("mediaSession" in navigator)) return;
 
     navigator.mediaSession.playbackState = !track ? "none" : isPlaying ? "playing" : "paused";
-  }, [track, isPlaying]);
+  }, [track, isPlaying, enabled]);
 
   useEffect(() => {
-    if (!("mediaSession" in navigator) || !track) return;
+    if (!enabled || !("mediaSession" in navigator) || !track) return;
 
     const handlers: [MediaSessionAction, MediaSessionActionHandler][] = [
       ["play", play],
@@ -82,10 +87,11 @@ export function useMediaSession(
         } catch {}
       }
     };
-  }, [track, play, pause, next, previous, seek, seekBy]);
+  }, [track, play, pause, next, previous, seek, seekBy, enabled]);
 
   useEffect(() => {
-    if (!("mediaSession" in navigator) || !navigator.mediaSession.setPositionState) return;
+    if (!enabled || !("mediaSession" in navigator) || !navigator.mediaSession.setPositionState)
+      return;
 
     if (!track || duration <= 0 || !Number.isFinite(duration)) {
       try {
@@ -108,5 +114,5 @@ export function useMediaSession(
 
     const timer = window.setInterval(publish, POSITION_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [track, duration, getPosition]);
+  }, [track, duration, getPosition, enabled]);
 }

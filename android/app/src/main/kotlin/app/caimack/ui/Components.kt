@@ -76,6 +76,10 @@ fun <T : Any> Load(
     load: suspend () -> T,
     isEmpty: (T) -> Boolean = { false },
     empty: @Composable () -> Unit = {},
+    error: @Composable (() -> Unit) -> Unit = { Failure(it) },
+    loading: @Composable () -> Unit = {
+        Box(Modifier.fillMaxWidth().padding(vertical = 64.dp), contentAlignment = Alignment.Center) { RecordLoading(44.dp) }
+    },
     content: @Composable (T) -> Unit,
 ) {
     val local = LocalOfflineLibrary.current
@@ -123,10 +127,8 @@ fun <T : Any> Load(
             RefreshFailure { attempt++ }
             if (isEmpty(shown)) empty() else content(shown)
         } else if (isEmpty(shown)) empty() else content(shown)
-        failed -> Failure { attempt++ }
-        else -> Box(Modifier.fillMaxWidth().padding(vertical = 64.dp), contentAlignment = Alignment.Center) {
-            RecordLoading(44.dp)
-        }
+        failed -> error { attempt++ }
+        else -> loading()
     }
 }
 

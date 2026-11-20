@@ -3,7 +3,6 @@
 package app.caimack.sync
 
 import android.content.ContextWrapper
-import android.net.Uri
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.test.platform.app.InstrumentationRegistry
 import app.caimack.api.User
@@ -114,7 +113,7 @@ class SnapshotJsonDeviceTest {
             }
             val baseline = usedHeap()
             val store = SyncStore(isolated, json, server)
-            store.configure(Uri.parse("content://test/folder"), user)
+            store.configure(user)
             store.enable(true)
             store.accept(source.inputStream().use { SnapshotJson(json).read(it) })
             val retained = usedHeap() - baseline

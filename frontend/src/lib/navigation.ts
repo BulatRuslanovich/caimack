@@ -3,23 +3,21 @@
 import type { Route } from "next";
 import type { TranslationKey } from "@/lib/i18n";
 import {
-  AudioLinesIcon,
+  BookHeadphonesIcon,
   CopyIcon,
-  Disc3Icon,
+  DownloadIcon,
   HeartIcon,
   HistoryIcon,
   HouseIcon,
   LibraryBigIcon,
-  ListMusicIcon,
   MapIcon,
   SearchIcon,
   SettingsIcon,
   ShieldCheckIcon,
-  TagsIcon,
   UploadIcon,
-  UsersRoundIcon,
   type LucideIcon,
 } from "lucide-react";
+import { isDesktop } from "@/desktop/runtime";
 
 export interface NavEntry {
   href: Route;
@@ -29,12 +27,7 @@ export interface NavEntry {
 
 const home: NavEntry = { href: "/", labelKey: "nav.home", icon: HouseIcon };
 const search: NavEntry = { href: "/search", labelKey: "nav.search", icon: SearchIcon };
-const tracks = { href: "/tracks", labelKey: "nav.tracks", icon: AudioLinesIcon } as const;
-const playlists = { href: "/playlists", labelKey: "nav.playlists", icon: ListMusicIcon } as const;
 const favorites: NavEntry = { href: "/favorites", labelKey: "nav.favorites", icon: HeartIcon };
-const albums = { href: "/albums", labelKey: "nav.albums", icon: Disc3Icon } as const;
-const artists = { href: "/artists", labelKey: "nav.artists", icon: UsersRoundIcon } as const;
-const genres = { href: "/genres", labelKey: "nav.genres", icon: TagsIcon } as const;
 const map: NavEntry = { href: "/map", labelKey: "nav.map", icon: MapIcon };
 const recent: NavEntry = {
   href: "/recently-played",
@@ -43,32 +36,23 @@ const recent: NavEntry = {
 };
 
 const library = { href: "/library", labelKey: "nav.mediaLibrary", icon: LibraryBigIcon } as const;
+const audiobooks = {
+  href: "/audiobooks",
+  labelKey: "nav.audiobooks",
+  icon: BookHeadphonesIcon,
+} as const;
 
-export const primaryNav: NavEntry[] = [home, search, library];
-
-export const libraryNav: NavEntry[] = [favorites, recent, map];
-
-export const catalogNav = [tracks, albums, artists, playlists, genres] satisfies NavEntry[];
-
-export type LibraryBrowsePath = typeof library.href | (typeof catalogNav)[number]["href"];
-
-export function isLibraryBrowsePath(pathname: string): pathname is LibraryBrowsePath {
-  return pathname === library.href || catalogNav.some(({ href }) => href === pathname);
+export function primaryNav(audiobooksEnabled: boolean): NavEntry[] {
+  return audiobooksEnabled ? [home, search, library, audiobooks] : [home, search, library];
 }
 
-export const mobileNav: NavEntry[] = [home, search, library];
+const downloads: NavEntry[] = isDesktop
+  ? [{ href: "/downloads" as Route, labelKey: "nav.downloads", icon: DownloadIcon }]
+  : [];
 
-export const libraryTabs: NavEntry[] = [
-  library,
-  playlists,
-  albums,
-  artists,
-  tracks,
-  favorites,
-  recent,
-  genres,
-  map,
-];
+export const libraryNav: NavEntry[] = [favorites, recent, ...downloads, map];
+
+export const libraryTabs: NavEntry[] = [library, ...libraryNav];
 
 export function serviceNav(isAdmin: boolean): NavEntry[] {
   return [

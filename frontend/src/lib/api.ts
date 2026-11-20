@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { deviceId, flushEvents } from "@/lib/events";
+import { isDesktop } from "@/desktop/runtime";
 import { fileForm, qs, request, requestFile } from "@/lib/http";
 import { markImageChanged } from "@/lib/media";
 import { WAVEFORM_VERSION } from "@/lib/waveform";
@@ -36,6 +37,7 @@ import type {
   RadioBatch,
   RecommendationStats,
   Recap,
+  SearchPopular,
   SearchResults,
   Track,
   AccountSession,
@@ -58,7 +60,12 @@ import type {
   YandexSearch,
 } from "@/lib/types";
 import { yandexMusicToken } from "@/lib/yandexMusic";
-import type { ConnectCommand, ConnectPlayback, ConnectSnapshot } from "@/lib/playback/connect";
+import type {
+  BookPlayback,
+  ConnectCommand,
+  ConnectPlayback,
+  ConnectSnapshot,
+} from "@/lib/playback/connect";
 
 const SECTION_SIZE = 12;
 const EVENTS_FLUSH_WAIT_MS = 1500;
@@ -121,6 +128,17 @@ export const api = {
       body: { deviceId, connectionId, state },
       signal: signal ?? AbortSignal.timeout(8000),
     }),
+  connectBookReport: (
+    deviceId: string,
+    connectionId: string,
+    state: BookPlayback | null,
+    claim: boolean,
+  ) =>
+    request<void>("/playback/connect/audiobook", {
+      method: "PUT",
+      body: { deviceId, connectionId, state, claim },
+      signal: AbortSignal.timeout(5000),
+    }),
   connectCommand: (id: string, deviceId: string, command: ConnectCommand, queueRevision?: number) =>
     request<ConnectSnapshot>("/playback/connect/commands", {
       method: "POST",
@@ -136,7 +154,7 @@ export const api = {
   login: (username: string, password: string, deviceName?: string) =>
     request<User>("/auth/login", {
       method: "POST",
-      body: { username, password, deviceName },
+      body: { username, password, deviceName, ...(isDesktop && { longLived: true }) },
       sessionless: true,
     }),
   logout: () => request<void>("/auth/logout", { method: "POST" }),
@@ -189,6 +207,7 @@ export const api = {
     request<Paged<Track>>(`/genres/${id}/tracks${qs(params)}`, { signal }),
   search: (q: string, limit: number, signal?: AbortSignal) =>
     request<SearchResults>(`/search${qs({ q, limit })}`, { signal }),
+  searchPopular: (signal?: AbortSignal) => request<SearchPopular>("/search/popular", { signal }),
   searchTab: <T extends SearchTab>(tab: T, q: string, params: PageParams, signal?: AbortSignal) =>
     request<SearchTabResult[T]>(`/search/${tab}${qs({ q, ...params })}`, { signal }),
   waveform: (trackId: string) =>

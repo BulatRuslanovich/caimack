@@ -17,7 +17,7 @@ export function PageHeader({
   actions,
   className,
 }: {
-  title: string;
+  title?: string;
   subtitle?: ReactNode;
   actions?: ReactNode;
   className?: string;
@@ -27,8 +27,10 @@ export function PageHeader({
       className={cn("flex flex-wrap items-end justify-between gap-5 max-md:items-start", className)}
     >
       <div className="min-w-0">
-        <h1 className="font-display text-title">{title}</h1>
-        {subtitle && <p className="mt-2 text-sm text-muted-foreground">{subtitle}</p>}
+        {title && <h1 className="font-display text-title">{title}</h1>}
+        {subtitle && (
+          <p className={cn("text-sm text-muted-foreground", title && "mt-2")}>{subtitle}</p>
+        )}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-3">{actions}</div>}
     </header>

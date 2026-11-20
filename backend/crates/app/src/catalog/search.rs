@@ -13,6 +13,8 @@ use crate::text::normalize_key;
 
 const MINIMUM_SEARCH_LENGTH: usize = 3;
 const MAX_LIMIT: i64 = 50;
+const TOP_TRACKS: i64 = 10;
+const TOP_CARDS: i64 = 5;
 
 #[derive(Debug, Clone)]
 pub struct SearchTerm {
@@ -100,6 +102,60 @@ pub struct SearchResult {
     pub tracks: Vec<TrackDto>,
     pub genres: Vec<GenreDto>,
     pub top: Option<SearchTopResult>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PopularSearch {
+    pub tracks: Vec<TrackDto>,
+    pub albums: Vec<AlbumDto>,
+    pub artists: Vec<ArtistDto>,
+}
+
+pub async fn popular(db: &PgPool, user: Uuid) -> AppResult<PopularSearch> {
+    // History is written for qualifying listens, including those synced from offline devices.
+    let (track_ids, album_ids, artist_ids) = sqlx::query_as::<_, (Vec<Uuid>, Vec<Uuid>, Vec<Uuid>)>(
+        "WITH track_plays AS (SELECT track_id, count(*) AS plays FROM listening_history GROUP BY track_id),
+              album_plays AS (
+                  SELECT t.album_id, sum(p.plays) AS plays FROM track_plays p JOIN tracks t ON t.id = p.track_id
+                  WHERE t.album_id IS NOT NULL GROUP BY t.album_id
+              ), artist_plays AS (
+                  SELECT COALESCE(ta.artist_id, t.artist_id) AS artist_id, sum(p.plays) AS plays
+                  FROM track_plays p JOIN tracks t ON t.id = p.track_id
+                  LEFT JOIN track_artists ta ON ta.track_id = t.id GROUP BY COALESCE(ta.artist_id, t.artist_id)
+              )
+         SELECT ARRAY(SELECT t.id FROM tracks t LEFT JOIN track_plays p ON p.track_id = t.id
+                      ORDER BY p.plays DESC NULLS LAST, t.title, t.id LIMIT $1),
+                ARRAY(SELECT a.id FROM albums a LEFT JOIN album_plays p ON p.album_id = a.id
+                      ORDER BY p.plays DESC NULLS LAST, a.title, a.id LIMIT $2),
+                ARRAY(SELECT a.id FROM artists a LEFT JOIN artist_plays p ON p.artist_id = a.id
+                      ORDER BY p.plays DESC NULLS LAST, a.name, a.id LIMIT $2)",
+    )
+    .bind(TOP_TRACKS)
+    .bind(TOP_CARDS)
+    .fetch_one(db)
+    .await?;
+
+    let mut album_query = albums::select();
+    album_query.push(" JOIN unnest(").push_bind(album_ids).push(
+        "::uuid[]) WITH ORDINALITY AS ranked(id, position)
+        ON a.id = ranked.id ORDER BY ranked.position",
+    );
+    let (tracks, albums, artists) = tokio::try_join!(
+        tracks::lookup(db, user, &track_ids),
+        albums::fetch(db, album_query),
+        artists::fetch_where(
+            db,
+            |query| {
+                query.push(" JOIN unnest(").push_bind(&artist_ids).push(
+                    "::uuid[]) WITH ORDINALITY AS ranked(id, position)
+                    ON a.id = ranked.id",
+                );
+            },
+            "ranked.position",
+            TOP_CARDS,
+        ),
+    )?;
+    Ok(PopularSearch { tracks, albums, artists })
 }
 
 pub async fn search(db: &PgPool, user: Uuid, query: Option<&str>, limit: i64) -> AppResult<SearchResult> {

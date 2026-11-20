@@ -35,7 +35,7 @@ export function ArtBackdrop({
   direction = "next",
 }: {
   src: string | null;
-  mode: "stage" | "header";
+  mode: "stage" | "header" | "player";
   direction?: ArtworkDirection;
 }) {
   if (src === null && mode === "header") return null;
@@ -53,10 +53,10 @@ function CoverBackdrop({
   direction,
 }: {
   src: string | null;
-  mode: "stage" | "header";
+  mode: "stage" | "header" | "player";
   direction: ArtworkDirection;
 }) {
-  const tone = useCoverTone(src, mode === "header" ? "player" : "backdrop");
+  const tone = useCoverTone(src, mode === "stage" ? "backdrop" : "player");
   const scene = useArtworkTransition({ key: src ?? "neutral", item: src, src, tone, direction });
   return <BackdropLayers {...scene} mode={mode} />;
 }

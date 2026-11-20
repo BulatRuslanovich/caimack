@@ -2,6 +2,8 @@
 
 "use client";
 
+import { canPlayLocally, isDesktop } from "@/desktop/api";
+
 import { api } from "@/lib/api";
 import { deviceId, recordEvent } from "@/lib/events";
 import { connectEqualizer } from "@/lib/playback/equalizer";
@@ -44,6 +46,7 @@ import React, {
   useState,
 } from "react";
 import { useAuth } from "./AuthContext";
+import { AudiobookProvider } from "./AudiobookContext";
 
 export type { RepeatMode } from "@/lib/playback/playerTypes";
 
@@ -96,6 +99,7 @@ function PlayerSessionProvider({
     restoreSession,
   } = useQueueState();
   const [isPlaying, setIsPlaying] = useState(false);
+  const [audiobookActive, setAudiobookActive] = useState(false);
   const {
     volume,
     setVolumeState,
@@ -233,6 +237,15 @@ function PlayerSessionProvider({
 
   const playQueue = useCallback(
     (tracks: Track[], startIndex = 0, options: { shuffle?: boolean } = {}) => {
+      if (isDesktop) {
+        const startingId = tracks[startIndex]?.id;
+        tracks = tracks.filter((track) => canPlayLocally(track.id));
+        if (!tracks.length) return;
+        startIndex = Math.max(
+          0,
+          tracks.findIndex((track) => track.id === startingId),
+        );
+      }
       stopRadioSession();
       replaceQueue(tracks, startIndex, options.shuffle);
     },
@@ -241,6 +254,7 @@ function PlayerSessionProvider({
 
   const playTrack = useCallback(
     (track: Track, contextTracks?: Track[]) => {
+      if (!canPlayLocally(track.id)) return;
       if (contextTracks && contextTracks.length > 0) {
         const index = contextTracks.findIndex((candidate) => candidate.id === track.id);
         playQueue(contextTracks, index >= 0 ? index : 0);
@@ -255,7 +269,12 @@ function PlayerSessionProvider({
   const advance = useCallback(
     (direction: 1 | -1, { auto = false }: { auto?: boolean } = {}) => {
       const { currentIndex, repeat } = live.current;
-      const step = advanceIn(orderRef.current, currentIndex, direction, repeat === "all");
+      const order = isDesktop
+        ? orderRef.current.filter(
+            (index) => index === currentIndex || canPlayLocally(queueRef.current[index].id),
+          )
+        : orderRef.current;
+      const step = advanceIn(order, currentIndex, direction, repeat === "all");
 
       switch (step.kind) {
         case "none":
@@ -276,7 +295,7 @@ function PlayerSessionProvider({
           setIsPlaying(true);
       }
     },
-    [orderRef, resetProgress, seek, setCurrentIndex],
+    [orderRef, queueRef, resetProgress, seek, setCurrentIndex],
   );
 
   const { choose: chooseSleepTimer } = sleep;
@@ -681,7 +700,12 @@ function PlayerSessionProvider({
     connected.progress.getPosition,
   );
 
-  usePlayerPlatform({ ...connected, actions: artwork.actions }, play, setIsPlaying);
+  usePlayerPlatform(
+    { ...connected, actions: artwork.actions },
+    play,
+    setIsPlaying,
+    !audiobookActive,
+  );
 
   const currentTrackId = connected.state.currentTrack?.id ?? null;
   const currentAlbumId = connected.state.currentTrack?.albumId ?? null;
@@ -713,7 +737,18 @@ function PlayerSessionProvider({
               <PlayerProgressContext.Provider value={connected.progress}>
                 <ArtworkDirectionContext.Provider value={artwork.direction}>
                   <PlayerQueueContext.Provider value={connected.state.queue}>
-                    {children}
+                    <AudiobookProvider
+                      userId={userId}
+                      musicPlaying={displayedPlaying}
+                      pauseMusic={connected.pauseForAudiobook}
+                      onActiveChange={setAudiobookActive}
+                      volume={volume}
+                      muted={muted}
+                      setVolume={setVolume}
+                      toggleMute={toggleMute}
+                    >
+                      {children}
+                    </AudiobookProvider>
                   </PlayerQueueContext.Provider>
                 </ArtworkDirectionContext.Provider>
               </PlayerProgressContext.Provider>

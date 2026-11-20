@@ -21,6 +21,7 @@ pub const ARTIST_IMAGE_DIRECTORY: &str = "artists";
 pub const PLAYLIST_COVER_DIRECTORY: &str = "playlists";
 pub const HLS_DIRECTORY: &str = "hls";
 pub const LIBRARY_DIRECTORY: &str = "library";
+pub const AUDIOBOOKS_DIRECTORY: &str = "audiobooks";
 
 const BUFFER_SIZE: usize = 64 * 1024;
 
@@ -93,6 +94,10 @@ impl Storage {
 
     pub fn library_root(&self) -> Option<PathBuf> {
         Some(self.root.join(LIBRARY_DIRECTORY)).filter(|path| path.is_dir())
+    }
+
+    pub fn audiobooks_root(&self) -> PathBuf {
+        self.root.join(AUDIOBOOKS_DIRECTORY)
     }
 
     pub fn delete(&self, relative: &str) {

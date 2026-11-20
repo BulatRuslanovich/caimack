@@ -7,7 +7,7 @@ the frontend has hidden tracks.
 
 ## Saved coordinates
 
-Migration `0013_library_map.sql` adds a PostgreSQL cache shared by API instances.
+Migration `0017_library_map.sql` adds a PostgreSQL cache shared by API instances.
 It stores full-precision coordinates, track IDs and SHA-256 fingerprints of the
 normalized audio vectors. The cache key includes the layout version, model and
 window strategy. Change `LAYOUT_VERSION` in `recommendations/map/persistence.rs`

@@ -3,6 +3,8 @@
 package app.caimack.playback
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
 import android.os.SystemClock
 import android.widget.Toast
 import app.caimack.AppContainer
@@ -20,11 +22,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.Call
+import okhttp3.ConnectionPool
 import okhttp3.Request
 
 data class ConnectUiState(
     val devices: List<ConnectDevice> = emptyList(),
     val selectedId: String? = null,
+    val bookDeviceId: String? = null,
     val selectedNameHint: String? = null,
     val connected: Boolean = false,
     val playback: ConnectState? = null,
@@ -39,12 +43,21 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
     private val current = MutableStateFlow(ConnectUiState())
     val state: StateFlow<ConnectUiState> = current
     val isRemote: Boolean get() = current.value.selectedId != null
-    private val client = container.http.newBuilder().readTimeout(0, TimeUnit.MILLISECONDS).build()
+    // The server sends a snapshot at least every 15 seconds. Bound the read when a socket goes silent.
+    private val client = container.http.newBuilder().readTimeout(25, TimeUnit.SECONDS)
+        .connectionPool(ConnectionPool(0, 1, TimeUnit.SECONDS)).build()
     private var observing: Job? = null
     private var stream: Job? = null
     private var reporting: Job? = null
     private var changed: Job? = null
-    @Volatile private var call: Call? = null
+    private var fallback: Job? = null
+    private var defaultNetwork: Network? = null
+    private var call: Call? = null
+    private var sentBook: app.caimack.api.ConnectBook? = null
+    private var sentBookSession: Long? = null
+    private var sentBookConnection: String? = null
+    private var bookReceivedAt = 0L
+    private val bookReports = Mutex()
     private var connectionId: String? = null
     private var account: String? = null
     private var generation = 0L
@@ -52,10 +65,17 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
     private var snapshot = ConnectSnapshot()
     private var wantsLocal = false
     private var receivedAt = 0L
+    private var disconnectedAt: Long? = null
     private var remoteTracks = emptyList<Track>()
     private val sending = Mutex()
     private val reports = Mutex()
-    private data class Outbound(val target: String, val selection: Long, val command: ConnectCommand, val revision: Long?)
+    private data class Outbound(
+        val target: String,
+        val selection: Long,
+        val command: ConnectCommand,
+        val revision: Long?,
+        val musicHandoff: (() -> Unit)?,
+    )
     private val outbound = Channel<Outbound>(32)
     private val executed = LinkedHashSet<String>()
     private var renderer: (suspend (ConnectCommand) -> Unit)? = null
@@ -65,11 +85,13 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
         container.scope.launch(Dispatchers.Main) {
             for (item in outbound) {
                 if (item.selection != selection || item.target != current.value.selectedId) continue
-                try { send(item.target, item.command, item.revision) }
-                catch (cancelled: CancellationException) { throw cancelled }
-                catch (_: Exception) {
-                    failure()
-                    while (outbound.tryReceive().isSuccess) { /* Discard stale queued controls. */ }
+                try { send(item.target, item.command, item.revision, item.musicHandoff) }
+                catch (error: Exception) {
+                    if (error is CancellationException && error !is TimeoutCancellationException) throw error
+                    if (item.selection == selection && current.value.available) {
+                        failure()
+                        while (outbound.tryReceive().isSuccess) { /* Discard stale queued controls. */ }
+                    }
                 }
             }
         }
@@ -77,6 +99,19 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
 
     fun start() {
         if (observing != null) return
+        val connectivity = context.getSystemService(ConnectivityManager::class.java)
+        defaultNetwork = connectivity.activeNetwork
+        connectivity.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                container.scope.launch(Dispatchers.Main) { networkChanged(network) }
+            }
+
+            override fun onLost(network: Network) {
+                container.scope.launch(Dispatchers.Main) {
+                    if (defaultNetwork == network) networkChanged(null)
+                }
+            }
+        })
         observing = container.scope.launch(Dispatchers.Main) {
             container.session.state.collect { session ->
                 val key = (session as? SessionState.SignedIn)?.let { "${container.server.url.value}|${it.user.id}" }
@@ -84,12 +119,17 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
                 val previousAccount = account
                 account = key
                 generation++
-                call?.cancel()
-                stream?.cancel()
+                stopStream()
                 reporting?.cancel()
+                fallback?.cancel()
+                fallback = null
+                disconnectedAt = null
                 connectionId = null
                 selection++
                 snapshot = ConnectSnapshot()
+                sentBook = null
+                sentBookSession = null
+                container.audiobookPlayback.showRemote(null)
                 current.value = ConnectUiState()
                 remoteTracks = emptyList()
                 wantsLocal = false
@@ -105,12 +145,13 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
                 }
                 container.player.connect()
                 val epoch = generation
-                stream = container.scope.launch(Dispatchers.IO) { watch(epoch) }
+                stream = container.scope.launch(Dispatchers.Main) { watch() }
                 reporting = container.scope.launch(Dispatchers.Main) {
                     var beats = 0
                     while (isActive && epoch == generation) {
                         try {
                             if (beats++ % 5 == 0) connectionId?.let { container.api.connectHeartbeat(ConnectHeartbeat(container.deviceId, it)) }
+                            reportBook()
                             report()
                         }
                         catch (cancelled: CancellationException) { throw cancelled }
@@ -145,73 +186,126 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
         }
     }
 
-    private suspend fun watch(epoch: Long) {
-        while (currentCoroutineContext().isActive && epoch == generation) {
+    private fun networkChanged(network: Network?) {
+        if (defaultNetwork == network) return
+        defaultNetwork = network
+        if (account == null) return
+        stopStream()
+        transportLost()
+        stream = container.scope.launch(Dispatchers.Main) { watch() }
+    }
+
+    private fun stopStream() {
+        stream?.cancel()
+        call?.cancel()
+        call = null
+    }
+
+    private fun transportLost() {
+        connectionId = null
+        if (disconnectedAt == null) disconnectedAt = SystemClock.elapsedRealtime()
+        container.audiobookPlayback.showRemote(snapshot.audiobook?.takeIf { container.audiobooksEnabled.value }?.copy(playing = false))
+        current.value = current.value.copy(devices = emptyList(), bookDeviceId = null, connected = false, pending = false)
+        if (isRemote && fallback == null) {
+            // A change of default network may still leave the same renderer reachable.
+            fallback = container.scope.launch(Dispatchers.Main) {
+                delay(3_000)
+                fallback = null
+                if (!current.value.connected) returnToPhone(offline = true)
+            }
+        }
+    }
+
+    private suspend fun watch() {
+        while (currentCoroutineContext().isActive) {
             try {
                 val url = container.server.resolve("api/playback/connect/events")?.newBuilder()
                     ?.addQueryParameter("deviceId", container.deviceId)
                     ?.addQueryParameter("deviceName", container.deviceName)
+                    ?.addQueryParameter("audiobooks", "true")
                     ?.addQueryParameter("deviceKind", "android")?.build() ?: return
                 val next = client.newCall(Request.Builder().url(url).header("Accept", "text/event-stream").build())
                 call = next
-                if (epoch != generation) { next.cancel(); return }
-                next.execute().use { response ->
-                    if (!response.isSuccessful) throw IOException("Playback connection unavailable")
-                    val source = response.body.source()
-                    var event = ""
-                    val data = StringBuilder()
-                    while (currentCoroutineContext().isActive && epoch == generation) {
-                        val line = source.readUtf8Line() ?: break
-                        when {
-                            line.isEmpty() -> {
-                                if (data.isNotEmpty()) {
-                                    val payload = data.toString()
-                                    withContext(Dispatchers.Main) {
-                                        if (epoch == generation) when (event) {
-                                            "snapshot" -> accept(container.json.decodeFromString<ConnectSnapshot>(payload), transport = true)
-                                            "command" -> execute(container.json.decodeFromString<ConnectEnvelope>(payload))
-                                        }
-                                    }
-                                }
-                                event = ""
-                                data.clear()
-                            }
-                            line.startsWith("event:") -> event = line.substringAfter(':').trim()
-                            line.startsWith("data:") -> {
-                                if (data.isNotEmpty()) data.append('\n')
-                                data.append(line.substringAfter(':').trimStart())
-                                check(data.length <= 1_000_000) { "Playback event is too large" }
-                            }
-                        }
-                    }
-                }
+                withContext(Dispatchers.IO) { readEvents(next) }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { }
-            withContext(Dispatchers.Main) {
-                if (epoch == generation) {
-                    connectionId = null
-                    current.value = current.value.copy(connected = false)
+            transportLost()
+            delay(1_500)
+        }
+    }
+
+    private suspend fun readEvents(call: Call) {
+        call.execute().use { response ->
+            if (!response.isSuccessful) throw IOException("Playback connection unavailable")
+            val source = response.body.source()
+            var event = ""
+            val data = StringBuilder()
+            while (currentCoroutineContext().isActive) {
+                val line = source.readUtf8Line() ?: break
+                when {
+                    line.isEmpty() -> {
+                        if (data.isNotEmpty()) {
+                            val payload = data.toString()
+                            withContext(Dispatchers.Main) {
+                                when (event) {
+                                    "snapshot" -> accept(container.json.decodeFromString<ConnectSnapshot>(payload), transport = true)
+                                    "command" -> execute(container.json.decodeFromString<ConnectEnvelope>(payload))
+                                }
+                            }
+                        }
+                        event = ""
+                        data.clear()
+                    }
+                    line.startsWith("event:") -> event = line.substringAfter(':').trim()
+                    line.startsWith("data:") -> {
+                        if (data.isNotEmpty()) data.append('\n')
+                        data.append(line.substringAfter(':').trimStart())
+                        check(data.length <= 1_000_000) { "Playback event is too large" }
+                    }
                 }
             }
-            delay(1_500)
         }
     }
 
     private suspend fun accept(next: ConnectSnapshot, transport: Boolean = false) {
         if (next.epoch == snapshot.epoch && next.version < snapshot.version) return
+        val previousBook = snapshot.audiobook
         snapshot = next
         connectionId = next.devices.find { it.id == container.deviceId }?.connectionId
-        current.value = current.value.copy(devices = next.devices, connected = transport || current.value.connected,
-            selectedNameHint = next.devices.find { it.id == current.value.selectedId }?.name ?: current.value.selectedName)
+        if (transport) {
+            fallback?.cancel()
+            fallback = null
+        }
+        val book = next.audiobook?.takeIf { container.audiobooksEnabled.value }
+        if (book != previousBook) bookReceivedAt = SystemClock.elapsedRealtime()
+        val remoteBook = book?.takeIf { it.deviceId != container.deviceId || container.audiobookPlayback.localState == null }
+        if (previousBook?.deviceId == container.deviceId && book?.deviceId != container.deviceId && (book != null || next.playback?.isPlaying == true) &&
+            container.audiobookPlayback.localState != null) container.audiobookPlayback.pauseForMusic()
+        if (remoteBook != null && previousBook?.deviceId != remoteBook.deviceId && container.player.localState.playing) container.player.pauseLocal()
+        container.audiobookPlayback.showRemote(remoteBook)
+        val selected = current.value.selectedId
+        val selectedDevice = next.devices.find { it.id == selected }
+        current.value = current.value.copy(devices = next.devices, bookDeviceId = remoteBook?.deviceId?.takeIf { id -> id != container.deviceId && next.devices.any { it.id == id } }, connected = transport || current.value.connected,
+            selectedNameHint = selectedDevice?.name ?: current.value.selectedNameHint)
+        if (selected != null && selectedDevice == null) {
+            returnToPhone(offline = false)
+            disconnectedAt = null
+            return
+        }
+        if (transport) disconnectedAt = null
+        if (book != null) return
         val active = next.playback ?: return
         if (active.deviceId == container.deviceId) return
+        val device = next.devices.find { it.id == active.deviceId } ?: return
         if (!isRemote && !container.player.localState.playing && !wantsLocal) {
-            current.value = current.value.copy(selectedId = active.deviceId, selectedNameHint = next.devices.find { it.id == active.deviceId }?.name)
+            selection++
+            current.value = current.value.copy(selectedId = device.id, selectedNameHint = device.name)
             container.player.pauseLocal()
         }
-        if (current.value.selectedId != active.deviceId) return
+        if (current.value.selectedId != device.id) return
+        val selectedAtLookup = selection
         val tracks = lookup(active.trackIds)
-        if (snapshot.playback?.reportedAt != active.reportedAt || current.value.selectedId != active.deviceId) return
+        if (selection != selectedAtLookup || !current.value.available || snapshot.playback != active) return
         if (current.value.playback?.reportedAt != active.reportedAt) receivedAt = SystemClock.elapsedRealtime()
         remoteTracks = tracks
         current.value = current.value.copy(playback = active)
@@ -235,8 +329,8 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
 
     fun position(): Long {
         val active = current.value.playback ?: return 0
-        val elapsed = if (current.value.available && active.isPlaying && !active.buffering)
-            (SystemClock.elapsedRealtime() - receivedAt).coerceAtLeast(0) else 0
+        val elapsed = if (active.isPlaying && !active.buffering)
+            ((disconnectedAt ?: SystemClock.elapsedRealtime()) - receivedAt).coerceAtLeast(0) else 0
         val duration = (remoteTracks.getOrNull(active.index)?.durationSeconds ?: 0) * 1000L
         return ((active.positionSeconds * 1000).toLong() + elapsed).coerceIn(0, duration.coerceAtLeast(0))
     }
@@ -255,54 +349,169 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
             is ConnectCommand.Remove, is ConnectCommand.Move, is ConnectCommand.Jump -> current.value.playback?.queueRevision
             else -> null
         }
-        if (!current.value.available || outbound.trySend(Outbound(target, selection, command, revision)).isFailure) failure()
+        if (!current.value.available ||
+            outbound.trySend(Outbound(target, selection, command, revision, command.musicHandoff())).isFailure) failure()
         return true
     }
 
     suspend fun command(command: ConnectCommand, revision: Long? = null) {
         val target = current.value.selectedId ?: error("No playback device selected")
-        send(target, command, revision)
+        send(target, command, revision, command.musicHandoff())
     }
 
-    private suspend fun send(target: String, command: ConnectCommand, revision: Long? = null) = sending.withLock {
-        check(current.value.connected && current.value.devices.any { it.id == target }) { "Playback device is offline" }
-        val epoch = generation
+    internal suspend fun pauseForAudiobook() {
+        val device = current.value
+        val target = device.selectedId
+        if (target == null) {
+            container.player.pauseLocal()
+        } else if (device.available) {
+            // Let the remote music session settle before the book takes audio focus.
+            withTimeoutOrNull(2_000) {
+                try { send(target, ConnectCommand.SetPlaying(false)) }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { /* Local playback can still start. */ }
+            }
+        }
+    }
+
+    private fun ConnectCommand.musicHandoff(): (() -> Unit)? {
+        val startsMusic = when (this) {
+            is ConnectCommand.Play -> playing
+            is ConnectCommand.SetPlaying -> playing
+            is ConnectCommand.StartRadio -> true
+            else -> false
+        }
+        return if (startsMusic) container.audiobookPlayback.prepareMusicHandoff() else null
+    }
+
+    private suspend fun send(
+        target: String,
+        command: ConnectCommand,
+        revision: Long? = null,
+        musicHandoff: (() -> Unit)? = null,
+        expectedSelection: Long = selection,
+    ) = sending.withLock {
+        val connection = connectionId
+        check(expectedSelection == selection && current.value.selectedId == target && current.value.available && connection != null) {
+            "Playback device is offline"
+        }
         current.value = current.value.copy(pending = true)
         try {
             val next = withTimeout(12_000) { container.api.connectCommand(ConnectRequest(UUID.randomUUID().toString(), target, command, revision)) }
-            if (epoch == generation) accept(next)
-        } finally { current.value = current.value.copy(pending = false) }
+            if (expectedSelection == selection && connection == connectionId) {
+                if (next.playback?.let { it.deviceId == target && (it.isPlaying || it.buffering) } == true) musicHandoff?.invoke()
+                accept(next)
+            }
+        } finally {
+            if (expectedSelection == selection && connection == connectionId) current.value = current.value.copy(pending = false)
+        }
+    }
+
+    private fun selectPhone() {
+        selection++
+        wantsLocal = true
+        remoteTracks = emptyList()
+        current.value = current.value.copy(selectedId = null, selectedNameHint = null, playback = null, pending = false)
+        container.player.showLocal()
+    }
+
+    private suspend fun returnToPhone(offline: Boolean) {
+        if (!isRemote) return
+        val command = current.value.playback?.let { active ->
+            val command = active.handoff(position() / 1000.0)
+            if (offline) command?.downloaded() else command
+        }
+        selectPhone()
+        val render = renderer ?: return
+        if (command == null) return
+        val phoneSelection = selection
+        render(command.copy(playing = false))
+        // The controller lets Media3 bring the service to the foreground before requesting audio focus.
+        if (command.playing && selection == phoneSelection) container.player.resume()
+    }
+
+    private fun ConnectState.handoff(position: Double) = takeIf { trackIds.isNotEmpty() }?.let {
+        ConnectCommand.Play(trackIds, index, position, isPlaying, shuffle, repeat, order = order, radio = radio)
+    }
+
+    private fun ConnectCommand.Play.downloaded(): ConnectCommand.Play? {
+        val saved = trackIds.indices.filter { container.locallyAvailable(trackIds[it]) }
+        val localIndex = saved.indexOf(index)
+        if (localIndex < 0) return null
+        val positions = saved.withIndex().associate { (new, old) -> old to new }
+        return copy(trackIds = saved.map { trackIds[it] }, index = localIndex, order = order?.mapNotNull(positions::get))
     }
 
     suspend fun select(device: String?) {
         val target = device?.takeUnless { it == container.deviceId }
         if (target == current.value.selectedId) return
-        selection++
-        val old = current.value.playback
-        val local = rendererState?.invoke()
-        val source = if (isRemote) old else local
-        val command = source?.takeIf { it.trackIds.isNotEmpty() }?.let {
-            ConnectCommand.Play(it.trackIds, it.index, if (isRemote) position() / 1000.0 else it.positionSeconds,
-                it.isPlaying, it.shuffle, it.repeat, order = it.order, radio = it.radio)
-        }
         if (target == null) {
-            wantsLocal = true
-            current.value = current.value.copy(selectedId = null, playback = null)
-            container.player.showLocal()
-            if (command != null) renderer?.invoke(command)
+            returnToPhone(offline = !current.value.connected)
             return
         }
-        check(current.value.devices.any { it.id == target }) { "Playback device is offline" }
+        val targetDevice = current.value.devices.find { it.id == target }
+        check(current.value.connected && targetDevice != null) { "Playback device is offline" }
+        val source = if (isRemote) current.value.playback else rendererState?.invoke()
+        val command = source?.handoff(if (isRemote) position() / 1000.0 else source.positionSeconds)
+        val selectedAtLookup = ++selection
         wantsLocal = false
-        current.value = current.value.copy(selectedId = target, selectedNameHint = current.value.devices.find { it.id == target }?.name)
+        current.value = current.value.copy(selectedId = target, selectedNameHint = targetDevice.name, pending = false)
         container.player.pauseLocal()
         if (snapshot.playback?.deviceId == target) accept(snapshot)
         else if (command != null) {
-            remoteTracks = lookup(command.trackIds)
+            val tracks = lookup(command.trackIds)
+            if (selection != selectedAtLookup || !current.value.available) return
+            remoteTracks = tracks
             receivedAt = SystemClock.elapsedRealtime()
             current.value = current.value.copy(playback = source.copy(deviceId = target))
             display()
             send(target, command)
+        }
+    }
+
+    private suspend fun reportBook() = bookReports.withLock {
+        val connection = connectionId ?: return@withLock
+        val player = container.audiobookPlayback
+        val local = player.localState?.takeIf { container.audiobooksEnabled.value }
+        val value = local?.let { app.caimack.api.ConnectBook(it.bookId, it.chapterId, it.positionMs, it.playing) }
+        val claim = value != null && (sentBook == null || sentBookSession != player.sessionId || (value.playing && sentBookConnection != connection))
+        if (!claim && value == sentBook && (value == null || sentBookConnection == connection)) return@withLock
+        val session = player.sessionId
+        container.api.connectBookReport(app.caimack.api.ConnectBookReport(container.deviceId, connection, value, claim))
+        sentBook = value
+        sentBookSession = session
+        sentBookConnection = connection
+    }
+
+    fun routeBook(command: ConnectCommand.PlayAudiobook): Boolean {
+        val device = current.value.bookDeviceId ?: return false
+        if (!current.value.connected || current.value.devices.none { it.id == device }) return false
+        container.scope.launch(Dispatchers.Main) {
+            try { sendBook(device, command) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { failure() }
+        }
+        return true
+    }
+
+    private suspend fun sendBook(device: String, command: ConnectCommand.PlayAudiobook) {
+        accept(container.api.connectCommand(ConnectRequest(UUID.randomUUID().toString(), device, command)))
+    }
+
+    suspend fun transferAudiobook(target: String?) {
+        val player = container.audiobookPlayback
+        if (target == current.value.bookDeviceId) return
+        val book = snapshot.audiobook
+        if (book != null && player.localState == null) {
+            val elapsed = if (book.playing) SystemClock.elapsedRealtime() - bookReceivedAt else 0L
+            val command = ConnectCommand.PlayAudiobook(book.bookId, book.chapterId, book.positionMs + elapsed, book.playing)
+            if (target == null) {
+                player.receiveHandoff(command)
+                reportBook()
+            } else sendBook(target, command)
+        } else if (target != null) {
+            check(current.value.connected && current.value.devices.any { it.id == target && it.audiobooks })
+            player.transfer { command -> sendBook(target, command) }
         }
     }
 
@@ -313,12 +522,18 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
             val remaining = Instant.parse(envelope.expiresAt).toEpochMilli() - System.currentTimeMillis()
             check(remaining > 0) { "Playback command expired" }
             if (envelope.id !in executed) withTimeout(remaining) {
+                if (envelope.command is ConnectCommand.PlayAudiobook) {
+                    check(container.audiobooksEnabled.value)
+                    container.audiobookPlayback.receiveHandoff(envelope.command)
+                    reportBook()
+                    executed.add(envelope.id)
+                    if (executed.size > 128) executed.remove(executed.first())
+                    return@withTimeout
+                }
                 if (envelope.queueRevision != null) report()
                 check(envelope.queueRevision == null || snapshot.playback?.queueRevision == envelope.queueRevision) { "Playback queue changed" }
                 if (envelope.command is ConnectCommand.Play || envelope.command is ConnectCommand.StartRadio) {
-                    wantsLocal = true
-                    current.value = current.value.copy(selectedId = null, playback = null)
-                    container.player.showLocal()
+                    selectPhone()
                 }
                 container.player.connect()
                 while (renderer == null) delay(20)

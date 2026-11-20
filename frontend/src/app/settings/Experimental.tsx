@@ -14,8 +14,36 @@ import { useYandexMusicSettings } from "@/lib/useYandexMusic";
 import { useT } from "@/contexts/I18nContext";
 import { useToast } from "@/lib/useToast";
 import { Panel } from "./Panel";
+import { useSetAudiobookExperiment } from "@/lib/audiobookExperiment";
+import { useAudiobooks } from "@/contexts/AudiobookContext";
 
 export function Experimental() {
+  const t = useT();
+  const { enabled, experimentReady, scope } = useAudiobooks();
+  const change = useSetAudiobookExperiment(scope);
+  return (
+    <Panel title={t("settings.experimental")}>
+      <label className="flex cursor-pointer items-start gap-3">
+        <Switch
+          className="mt-0.5"
+          checked={enabled}
+          disabled={!experimentReady || change.isPending}
+          aria-describedby="audiobooks-experiment-hint"
+          onCheckedChange={(value) => change.mutate(value)}
+        />
+        <span className="flex flex-col gap-1">
+          <span className="font-medium">{t("nav.audiobooks")}</span>
+          <span id="audiobooks-experiment-hint" className="text-sm text-muted-foreground">
+            {t("settings.audiobooksHint")}
+          </span>
+        </span>
+      </label>
+      <AdminExperiments />
+    </Panel>
+  );
+}
+
+function AdminExperiments() {
   const t = useT();
   const { notify } = useToast();
   const yandex = useYandexMusicSettings();
@@ -28,7 +56,7 @@ export function Experimental() {
   });
 
   return (
-    <Panel title={t("settings.experimental")}>
+    <>
       <label className="flex cursor-pointer items-center gap-3">
         <Switch checked={yandex.enabled} onCheckedChange={setYandexMusicEnabled} />
         <span className="font-medium">
@@ -86,6 +114,6 @@ export function Experimental() {
           </form>
         </div>
       )}
-    </Panel>
+    </>
   );
 }

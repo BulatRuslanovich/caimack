@@ -74,6 +74,11 @@ used by metadata export. Tag-only exports retain lyrics and provider backoff;
 changes to the recording, title, artist, album or duration invalidate matches and
 restart enrichment. Existing upstream migrations remain unchanged.
 
+Migration 0013 stores each account’s saved audiobooks and one progress checkpoint
+per book. Newer checkpoints win, including when a device uploads after listening
+offline. Checkpoints survive a temporary loss of the audiobook folder. Book and
+chapter identifiers derive from paths relative to that folder.
+
 The local fork previously shipped collections/folders as migrations 0008/0009.
 Use `caimack migrate` for its first upgrade: it recognizes the exact original
 checksums and atomically aligns those two ledger entries to 0009/0010 before
@@ -83,9 +88,12 @@ databases already using upstream numbering follow the normal migration path.
 Do not use `cargo sqlx migrate run` directly for this legacy upgrade, or run the
 old binary against a database after upgrading it.
 
-Migration 0013 adds `library_map_cache`, a shared projection cache keyed by layout
+Migration 0017 adds `library_map_cache`, a shared projection cache keyed by layout
 version, audio model and window strategy. Run `caimack migrate` before starting
-the updated backend. Coordinates and vector fingerprints survive restarts;
+the updated backend. Existing fork databases keep their audiobook migration
+numbers. On an upstream database with the matching library map migration at
+0013, `caimack migrate` moves that record to 0017 and applies the audiobook
+migrations without rebuilding the map cache. Coordinates and vector fingerprints survive restarts;
 metadata and listening statistics do not invalidate the projection. Builders
 serialize through a transaction advisory lock and publish the saved map atomically.
 Verify with `SQLX_OFFLINE=true cargo test -p app --lib --features integration-tests

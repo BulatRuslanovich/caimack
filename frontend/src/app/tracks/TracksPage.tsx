@@ -17,8 +17,8 @@ import { useRowSelection } from "@/lib/useRowSelection";
 import { useAuth } from "@/contexts/AuthContext";
 import { useT } from "@/contexts/I18nContext";
 import { useToast } from "@/lib/useToast";
-import { PageHeader, Section } from "@/components/PageHeader";
-import { Pagination, PageToolbar, SortSelect } from "@/components/PageToolbar";
+import { Section } from "@/components/PageHeader";
+import { Pagination, SortSelect, ToolbarFilters } from "@/components/PageToolbar";
 import {
   Select,
   SelectContent,
@@ -35,7 +35,6 @@ import { useTrackDisplay } from "@/lib/trackDisplay";
 import { Button } from "@/components/ui/button";
 import { CheckIcon } from "lucide-react";
 import { useConfirm } from "@/components/ui/alert-dialog";
-import { LibraryNavigation } from "@/components/LibraryNavigation";
 
 const sortKeys: Record<TrackSort, TranslationKey> = {
   Title: "sort.title",
@@ -56,7 +55,7 @@ const TEMPOS: Record<string, { phrase: TranslationKey; filter: TrackFilter }> = 
   veryFast: { phrase: "filter.tempo.veryFast", filter: { bpmMin: 150 } },
 };
 
-export function TracksPage() {
+export function TracksPage({ query }: { query: string }) {
   const t = useT();
   const display = useTrackDisplay();
   const format = useFormat();
@@ -64,10 +63,9 @@ export function TracksPage() {
   const [confirm, confirmDialog] = useConfirm();
 
   const [sort, setSort] = useState<TrackSort>("Title");
-  const [search, setSearch] = useState("");
   const [tempo, setTempo] = useState(ANY);
   const [key, setKey] = useState(ANY);
-  const [page, setPage] = usePage([sort, search, tempo, key]);
+  const [page, setPage] = usePage([sort, query, tempo, key]);
   const filter: TrackFilter = {
     ...TEMPOS[tempo]?.filter,
     key: key === ANY ? undefined : key,
@@ -78,17 +76,17 @@ export function TracksPage() {
       page,
       pageSize: TRACK_PAGE_SIZE,
       sort,
-      q: search || undefined,
+      q: query || undefined,
       ...filter,
     }),
   );
-  const filtered = Boolean(search) || tempo !== ANY || key !== ANY;
-  const stats = useQuery(queries.libraryOverview()).data?.stats;
+  const filtered = Boolean(query) || tempo !== ANY || key !== ANY;
+  const stats = useQuery({ ...queries.libraryOverview(), enabled: !filtered }).data?.stats;
 
   const items = useMemo(() => tracks.data?.items ?? [], [tracks.data]);
   const ids = useMemo(() => items.map((track) => track.id), [items]);
 
-  const selection = useRowSelection(ids, `${page}:${sort}:${search}:${tempo}:${key}`);
+  const selection = useRowSelection(ids, JSON.stringify([page, sort, query, tempo, key]));
 
   const [selecting, setSelecting] = useState(false);
   const { clear } = selection;
@@ -113,84 +111,77 @@ export function TracksPage() {
   }, [selecting, stopSelecting]);
 
   return (
-    <div className="flex min-w-0 flex-col gap-6 max-md:gap-3">
-      <PageHeader
-        className="tracks-page-heading"
-        title={t("nav.tracks")}
-        subtitle={
-          tracks.data && (
-            <>
-              <span className="whitespace-nowrap">
-                {t("count.tracksInLibrary", { count: tracks.data.total })}
-              </span>
-              {!filtered && stats && stats.totalDurationSeconds > 0 && (
-                <span className="whitespace-nowrap">
-                  {" · "}
-                  {format.totalDuration(stats.totalDurationSeconds)}
-                </span>
-              )}
-            </>
-          )
-        }
-        actions={
-          items.length > 0 && (
-            <>
-              <PlayAllButton tracks={items} compact />
-              <ShuffleButton tracks={items} compact />
-            </>
-          )
-        }
-      />
+    <div className="track-catalog flex min-w-0 flex-col gap-2.5">
+      {tracks.data && (
+        <p className="text-sm text-muted-foreground">
+          {t("count.tracksInLibrary", { count: tracks.data.total })}
+          {!filtered && stats && stats.totalDurationSeconds > 0 && (
+            <span className="whitespace-nowrap">
+              {" · "}
+              {format.totalDuration(stats.totalDurationSeconds)}
+            </span>
+          )}
+        </p>
+      )}
 
-      <LibraryNavigation />
-      <PageToolbar
-        search={search}
-        onSearch={setSearch}
-        placeholder={t("filter.tracks")}
-        mobileFilters={{ active: sort !== "Title" || tempo !== ANY || key !== ANY || selecting }}
-      >
-        <SortSelect value={sort} onChange={setSort} options={sortKeys} />
-        <Select value={tempo} onValueChange={setTempo}>
-          <SelectTrigger aria-label={t("sort.bpm")}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ANY}>{t("filter.anyTempo")}</SelectItem>
-            {Object.entries(TEMPOS).map(([value, { phrase }]) => (
-              <SelectItem key={value} value={value}>
-                {t(phrase)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={key} onValueChange={setKey}>
-          <SelectTrigger aria-label={t("sort.key")}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ANY}>{t("filter.anyKey")}</SelectItem>
-            {CAMELOT_KEYS.map(({ camelot, name }) => (
-              <SelectItem key={camelot} value={camelot}>
-                {camelot} · {name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <TrackDisplayMenu />
-        {isAdmin && (
-          <BulkActions
-            selection={selection}
-            selecting={selecting}
-            onStart={() => setSelecting(true)}
-            onStop={stopSelecting}
-            confirm={confirm}
-          />
+      <div className="library-toolbar flex flex-wrap items-center gap-2">
+        <ToolbarFilters
+          compact
+          mobileFilters={{ active: sort !== "Title" || tempo !== ANY || key !== ANY || selecting }}
+        >
+          <SortSelect value={sort} onChange={setSort} options={sortKeys} />
+          <Select value={tempo} onValueChange={setTempo}>
+            <SelectTrigger aria-label={t("sort.bpm")}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ANY}>{t("filter.anyTempo")}</SelectItem>
+              {Object.entries(TEMPOS).map(([value, { phrase }]) => (
+                <SelectItem key={value} value={value}>
+                  {t(phrase)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={key} onValueChange={setKey}>
+            <SelectTrigger aria-label={t("sort.key")}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ANY}>{t("filter.anyKey")}</SelectItem>
+              {CAMELOT_KEYS.map(({ camelot, name }) => (
+                <SelectItem key={camelot} value={camelot}>
+                  {camelot} · {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <TrackDisplayMenu />
+          {isAdmin && (
+            <BulkActions
+              selection={selection}
+              selecting={selecting}
+              onStart={() => setSelecting(true)}
+              onStop={stopSelecting}
+              confirm={confirm}
+            />
+          )}
+        </ToolbarFilters>
+        {items.length > 0 && (
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <PlayAllButton tracks={items} className="size-10 pointer-coarse:size-11" />
+            <ShuffleButton
+              tracks={items}
+              compact
+              className="rounded-lg px-3 max-md:size-10 pointer-coarse:h-11 pointer-coarse:max-md:w-11"
+            />
+          </div>
         )}
-      </PageToolbar>
+      </div>
 
       <Query result={tracks}>
         {(data) => (
-          <Section>
+          <Section className="gap-2">
             <TrackList
               tracks={data.items}
               showTempoKey={display.showTempoKey}
@@ -247,17 +238,15 @@ function BulkActions({
 
   if (!selecting) {
     return (
-      <div className="flex min-h-9 items-center">
-        <Button variant="text" size="auto" onClick={onStart}>
-          <CheckIcon size={16} />
-          {t("tracks.selectMode")}
-        </Button>
-      </div>
+      <Button variant="ghost" className="rounded-lg px-3 pointer-coarse:h-11" onClick={onStart}>
+        <CheckIcon size={16} />
+        {t("tracks.selectMode")}
+      </Button>
     );
   }
 
   return (
-    <div className="flex min-h-9 items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <span className="text-sm text-muted-foreground tabular-nums" aria-live="polite">
         {t("tracks.selectedCount", { count: selected.size })}
       </span>
@@ -265,6 +254,7 @@ function BulkActions({
       {selected.size > 0 && (
         <Button
           variant="destructive"
+          className="rounded-lg px-3 pointer-coarse:h-11"
           disabled={deleteSelected.isPending}
           onClick={() =>
             confirm({
@@ -280,7 +270,12 @@ function BulkActions({
         </Button>
       )}
 
-      <Button variant="text" size="auto" disabled={deleteSelected.isPending} onClick={onStop}>
+      <Button
+        variant="ghost"
+        className="rounded-lg px-3 pointer-coarse:h-11"
+        disabled={deleteSelected.isPending}
+        onClick={onStop}
+      >
         {t("tracks.exitSelectMode")}
       </Button>
     </div>

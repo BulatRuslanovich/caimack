@@ -146,7 +146,7 @@ class AndroidPolishUiTest {
                             when (page) {
                                 0 -> {
                                     Column(Modifier.padding(24.dp)) { QuickSettingsTile(added) { added = true } }
-                                    SettingsAbout { checks++ }
+                                    SettingsAbout()
                                 }
                                 1 -> UpdatesPanel(UpdateState(checked = true, published = true), { checks++ }, {})
                                 2 -> UpdatesPanel(UpdateState(checking = true), { checks++ }, {})

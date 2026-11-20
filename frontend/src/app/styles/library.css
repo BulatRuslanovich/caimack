@@ -73,7 +73,7 @@
   padding: 0.25rem 0;
 }
 
-.library-track-list > [role="row"]:first-child {
+.library-track-list > .library-track-list-header {
   margin-bottom: 0.5rem;
   padding-block: 0.75rem;
   border-color: var(--library-edge);
@@ -105,41 +105,34 @@
   font-size: 0.8125rem;
 }
 
-.library-display-trigger {
-  min-height: 2.75rem;
-}
-
 .library-toolbar {
   padding-block: 0.25rem;
 }
 
-@media (width < 56.25rem) {
-  .tracks-page-heading {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 0.25rem 0.5rem;
-  }
-  .tracks-page-heading > :first-child {
-    display: contents;
-  }
-  .tracks-page-heading > :nth-child(2) {
-    grid-area: 1 / 2;
-    gap: 0.5rem;
-  }
-  .tracks-page-heading p {
-    grid-column: 1 / -1;
-    margin-top: 0;
-  }
+.search-page .section-heading {
+  align-items: center;
 }
 
-@media (width < 360px) {
-  .library-catalog-tabs {
-    column-gap: 0.25rem;
-  }
-  .library-catalog-tabs a {
-    font-size: 0.75rem;
-  }
+.search-page .empty-state {
+  padding-block: 1.5rem;
+}
+
+.search-page .library-card-grid {
+  row-gap: min(var(--library-card-gap), 1rem);
+}
+
+.search-page .media-card .card-art.aspect-square {
+  margin-bottom: 0.5rem;
+}
+
+.track-catalog .library-toolbar,
+.search-page .library-track-list {
+  padding-block: 0;
+}
+
+.search-page .library-track-list > .library-track-list-header {
+  margin-bottom: 0.25rem;
+  padding-block: 0.5rem;
 }
 
 .library-search-panel {

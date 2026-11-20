@@ -22,6 +22,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.navigation.NavHostController
 import androidx.navigation.NavDestination.Companion.hasRoute
+import androidx.navigation.toRoute
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -45,9 +46,12 @@ class NavigationTest {
                 Column {
                     NavHost(nav, startDestination = HomeRoute, modifier = Modifier.weight(1f)) {
                         composable<HomeRoute> { Text("home-screen", Modifier.testTag("home")) }
-                        composable<SearchRoute> {
+                        composable<SearchRoute> { entry ->
                             var query by rememberSaveable { mutableStateOf("") }
-                            BasicTextField(query, { query = it }, Modifier.testTag("query"))
+                            Column {
+                                entry.toRoute<SearchRoute>().initialCategory()?.let { Text(it.name, Modifier.testTag("category")) }
+                                BasicTextField(query, { query = it }, Modifier.testTag("query"))
+                            }
                         }
                         composable<LibraryRoute> {
                             Column {
@@ -56,10 +60,8 @@ class NavigationTest {
                                 Text("library-screen", Modifier.testTag("library"))
                             }
                         }
-                        composable<PlaylistsRoute> { Text("playlists-screen", Modifier.testTag("playlists")) }
                         composable<FavoritesRoute> { Text("favorites-screen", Modifier.testTag("favorites")) }
                         composable<DownloadsRoute> { Text("downloads-screen", Modifier.testTag("downloads")) }
-                        composable<AlbumsRoute> { Text("albums-screen", Modifier.testTag("albums")) }
                         composable<SettingsRoute> { Text("settings-screen", Modifier.testTag("settings")) }
                         composable<SettingsSectionRoute> { Text("settings-detail", Modifier.testTag("settings-detail")) }
                         composable<ListeningRoute> { Text("listening-detail", Modifier.testTag("listening-detail")) }
@@ -127,12 +129,13 @@ class NavigationTest {
     @Test
     fun reselectingSearchFromADetailReturnsToSearchAndKeepsItsSelection() {
         start()
-        tapTab(R.string.nav_search)
+        compose.runOnIdle { nav.navigate(SearchRoute(SearchCategory.Albums)) }
         compose.runOnIdle { nav.navigate(AlbumRoute("album")) }
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         compose.onNodeWithText(context.getString(R.string.nav_search)).assertIsSelected()
         tapTab(R.string.nav_search)
         compose.onNodeWithTag("query").assertIsDisplayed()
+        compose.onNodeWithTag("category").assertTextEquals(SearchCategory.Albums.name)
     }
 
     @Test
@@ -150,8 +153,8 @@ class NavigationTest {
     fun libraryButtonReturnsToTheOverviewFromAnotherTabAndReselection() {
         start()
         tapTab(R.string.nav_library)
-        compose.runOnIdle { nav.openSection(AlbumsRoute) }
-        compose.onNodeWithTag("albums").assertIsDisplayed()
+        tapTab(R.string.nav_favorites)
+        compose.onNodeWithTag("favorites").assertIsDisplayed()
         tapTab(R.string.nav_search)
         tapTab(R.string.nav_library)
         compose.onNodeWithTag("library").assertIsDisplayed()

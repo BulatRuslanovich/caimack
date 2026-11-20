@@ -2,6 +2,7 @@
 
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from "react";
 import { recordEvent } from "@/lib/events";
+import { canPlayLocally } from "@/desktop/api";
 import { tagSource } from "@/lib/playback/playSource";
 import {
   appendTrack,
@@ -33,6 +34,7 @@ export function useQueueEditing({
 }: QueueEditingInput) {
   const addToQueue = useCallback(
     (track: Track) => {
+      if (!canPlayLocally(track.id)) return;
       recordEvent({ type: "trackAddedToQueue", trackId: track.id });
       tagSource([track.id], "queue");
       pinRadioTrack(track.id);
@@ -47,6 +49,7 @@ export function useQueueEditing({
 
   const playNext = useCallback(
     (track: Track) => {
+      if (!canPlayLocally(track.id)) return;
       const current = queueRef.current;
       const { currentIndex } = live.current;
       if (current.length === 0 || currentIndex < 0) {

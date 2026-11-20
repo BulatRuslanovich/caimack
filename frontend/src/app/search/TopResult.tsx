@@ -2,13 +2,12 @@
 
 "use client";
 
-import { genreName } from "@/lib/format";
+import { formatArtists, genreName } from "@/lib/format";
 import { useQuery } from "@tanstack/react-query";
 import type { Route } from "next";
 import { PrefetchLink as Link } from "@/components/PrefetchLink";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
-import { formatArtists } from "@/lib/format";
 import { queries } from "@/lib/queries";
 import type { SearchTopResult } from "@/lib/types";
 import { useT } from "@/contexts/I18nContext";
@@ -28,9 +27,21 @@ export function TopResult({ top }: { top: SearchTopResult }) {
   const artist = useQuery({ ...queries.artist(artistId ?? ""), enabled: artistId !== undefined });
 
   return (
-    <Section title={t("search.topResult")} className="h-full min-w-0">
+    <Section title={t("search.topResult")} className="min-w-0 gap-2.5">
       {top.kind === "Track" && top.track ? (
-        <TrackTop track={top.track} />
+        <Card
+          kind={t("nav.tracks")}
+          title={top.track.title}
+          subtitle={formatArtists(top.track)}
+          art={<TrackCover track={top.track} variant="full" />}
+          action={
+            <PlayAllButton
+              tracks={[top.track]}
+              name={top.track.title}
+              className="size-10 pointer-coarse:size-11"
+            />
+          }
+        />
       ) : top.kind === "Album" && top.album ? (
         <Card
           href={`/albums/${top.album.id}`}
@@ -38,7 +49,13 @@ export function TopResult({ top }: { top: SearchTopResult }) {
           title={top.album.title}
           subtitle={top.album.artistName}
           art={<AlbumCover album={top.album} />}
-          action={<PlayAllButton tracks={album.data?.tracks ?? []} name={top.album.title} />}
+          action={
+            <PlayAllButton
+              tracks={album.data?.tracks ?? []}
+              name={top.album.title}
+              className="size-10 pointer-coarse:size-11"
+            />
+          }
         />
       ) : top.kind === "Artist" && top.artist ? (
         <Card
@@ -48,11 +65,17 @@ export function TopResult({ top }: { top: SearchTopResult }) {
           subtitle={t("count.tracks", { count: top.artist.trackCount })}
           round
           art={<ArtistCover artist={top.artist} />}
-          action={<PlayAllButton tracks={artist.data?.tracks.items ?? []} name={top.artist.name} />}
+          action={
+            <PlayAllButton
+              tracks={artist.data?.tracks.items ?? []}
+              name={top.artist.name}
+              className="size-10 pointer-coarse:size-11"
+            />
+          }
         />
       ) : top.genre ? (
         <Card
-          href={`/genres?id=${top.genre.id}`}
+          href={`/search?tab=genres&id=${top.genre.id}`}
           kind={t("field.genre")}
           title={genreName(top.genre.name)}
           subtitle={t("count.tracks", { count: top.genre.trackCount })}
@@ -63,17 +86,6 @@ export function TopResult({ top }: { top: SearchTopResult }) {
   );
 }
 
-function Shell({ children }: { children: ReactNode }) {
-  return (
-    <div className="listening-panel relative flex min-w-0 flex-1 items-center gap-5 rounded-lg bg-card p-5 max-md:gap-4 max-md:p-4 lg:group-data-beside/top:flex-col lg:group-data-beside/top:items-start lg:group-data-beside/top:justify-between">
-      {children}
-    </div>
-  );
-}
-
-const actionClass =
-  "mt-2 lg:group-data-beside/top:absolute lg:group-data-beside/top:right-5 lg:group-data-beside/top:bottom-5 lg:group-data-beside/top:mt-0";
-
 function Card<T extends string>({
   href,
   kind,
@@ -83,7 +95,7 @@ function Card<T extends string>({
   round = false,
   action,
 }: {
-  href: Route<T>;
+  href?: Route<T>;
   kind: string;
   title: string;
   subtitle: ReactNode;
@@ -92,48 +104,24 @@ function Card<T extends string>({
   action?: ReactNode;
 }) {
   return (
-    <Shell>
+    <div className="listening-panel flex min-w-0 items-center gap-3 rounded-lg bg-card p-3">
       <span
         className={cn(
-          "size-28 shrink-0 overflow-hidden rounded-xs shadow-art max-md:size-20 lg:group-data-beside/top:size-32",
+          "size-16 shrink-0 overflow-hidden rounded-xs shadow-art max-sm:size-12",
           round && "rounded-full",
         )}
       >
         {art}
       </span>
 
-      <span className="flex min-w-0 max-w-full flex-1 flex-col gap-1 lg:group-data-beside/top:w-full lg:group-data-beside/top:pr-16">
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <Caption>{kind}</Caption>
-        <Link
-          href={href}
-          className="line-clamp-2 wrap-anywhere text-title font-semibold hover:no-underline"
-        >
-          {title}
-        </Link>
-        <span className="truncate text-muted-foreground">{subtitle}</span>
-        {action && <span className={actionClass}>{action}</span>}
-      </span>
-    </Shell>
-  );
-}
-
-function TrackTop({ track }: { track: NonNullable<SearchTopResult["track"]> }) {
-  const t = useT();
-
-  return (
-    <Shell>
-      <span className="size-28 shrink-0 overflow-hidden rounded-xs shadow-art max-md:size-20 lg:group-data-beside/top:size-32">
-        <TrackCover track={track} variant="full" />
-      </span>
-
-      <span className="flex min-w-0 max-w-full flex-1 flex-col gap-1 lg:group-data-beside/top:w-full lg:group-data-beside/top:pr-16">
-        <Caption>{t("nav.tracks")}</Caption>
-        <span className="line-clamp-2 wrap-anywhere text-title font-semibold">{track.title}</span>
-        <span className="truncate text-muted-foreground">{formatArtists(track)}</span>
-        <span className={actionClass}>
-          <PlayAllButton tracks={[track]} name={track.title} />
+        <span className="line-clamp-2 wrap-anywhere text-lg leading-tight font-semibold">
+          {href ? <Link href={href}>{title}</Link> : title}
         </span>
-      </span>
-    </Shell>
+        <span className="truncate text-sm text-muted-foreground">{subtitle}</span>
+      </div>
+      {action}
+    </div>
   );
 }

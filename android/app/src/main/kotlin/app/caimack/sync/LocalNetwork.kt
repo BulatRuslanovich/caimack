@@ -11,6 +11,7 @@ import app.caimack.session.SessionAuthenticator
 import java.io.IOException
 import java.net.InetAddress
 import java.util.concurrent.TimeUnit
+import okhttp3.Dispatcher
 import okhttp3.Dns
 import okhttp3.OkHttpClient
 
@@ -53,6 +54,7 @@ class LocalNetwork(context: Context, private val server: Server) {
             builder
                 .socketFactory(network.socketFactory)
                 .dns(dns)
+                .dispatcher(Dispatcher())
                 .connectionPool(okhttp3.ConnectionPool()) // never reuse a cellular/VPN connection
                 .followRedirects(false)
                 .followSslRedirects(false)

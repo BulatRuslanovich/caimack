@@ -3,7 +3,7 @@
 "use client";
 
 import { api } from "@/lib/api";
-import { onSessionExpired, refreshSession } from "@/lib/http";
+import { ApiError, GATEWAY_STATUSES, onSessionExpired, refreshSession } from "@/lib/http";
 import { describeDevice } from "@/lib/playback/deviceName";
 import { queries } from "@/lib/queries";
 import { cacheAppShell, clearStreamCache } from "@/lib/serviceWorker";
@@ -14,6 +14,7 @@ import { useRequiredContext } from "@/lib/useRequiredContext";
 import { useTimeZoneSync } from "@/lib/useTimeZoneSync";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import { isDesktop } from "@/desktop/api";
 import React, {
   createContext,
   useCallback,
@@ -52,7 +53,8 @@ export function AuthProvider({
   children: React.ReactNode;
   initialUser?: User | null;
 }) {
-  const hint = useSyncExternalStore(subscribeToHint, hintSnapshot, () => initialUser);
+  const cookieHint = useSyncExternalStore(subscribeToHint, hintSnapshot, () => initialUser);
+  const hint = isDesktop ? initialUser : cookieHint;
 
   const [resolved, setResolved] = useState<{ user: User | null } | null>(null);
   const router = useRouter();
@@ -73,9 +75,13 @@ export function AuthProvider({
       .then((me) => {
         if (!cancelled) setResolved({ user: me });
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!cancelled) {
-          setResolved({ user: navigator.onLine ? null : hint });
+          const unavailable =
+            error instanceof ApiError
+              ? GATEWAY_STATUSES.has(error.status)
+              : !navigator.onLine || error instanceof TypeError;
+          setResolved({ user: unavailable ? hint : null });
         }
       });
 
@@ -95,6 +101,19 @@ export function AuthProvider({
       }),
     [client, router],
   );
+
+  useEffect(() => {
+    if (!isDesktop) return;
+    const signedOut = () => {
+      cachedHint = null;
+      void clearStreamCache().catch(() => {});
+      client.clear();
+      setResolved({ user: null });
+      router.replace("/login");
+    };
+    window.addEventListener("caimack:signed-out", signedOut);
+    return () => window.removeEventListener("caimack:signed-out", signedOut);
+  }, [client, router]);
 
   useEffect(() => {
     if (user) void cacheAppShell();

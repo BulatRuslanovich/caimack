@@ -27,15 +27,18 @@ try {
   git("symbolic-ref", "--quiet", "HEAD");
 
   const changes = new Map();
-  const pkg = JSON.parse(read("frontend/package.json"));
-  pkg.version = version;
+  for (const directory of ["frontend", "desktop"]) {
+    const manifestPath = directory + "/package.json";
+    const lockPath = directory + "/package-lock.json";
+    const pkg = JSON.parse(read(manifestPath));
+    pkg.version = version;
+    changes.set(manifestPath, JSON.stringify(pkg, null, 2) + "\n");
 
-  changes.set("frontend/package.json", JSON.stringify(pkg, null, 2) + "\n");
-
-  const lock = JSON.parse(read("frontend/package-lock.json"));
-  lock.version = version;
-  lock.packages[""].version = version;
-  changes.set("frontend/package-lock.json", JSON.stringify(lock, null, 2) + "\n");
+    const lock = JSON.parse(read(lockPath));
+    lock.version = version;
+    lock.packages[""].version = version;
+    changes.set(lockPath, JSON.stringify(lock, null, 2) + "\n");
+  }
   const manifest = read("backend/Cargo.toml");
 
   if (!/\[workspace.package\]\r?\nversion = "[^"]+"/.test(manifest)) throw new Error("Workspace version not found.");

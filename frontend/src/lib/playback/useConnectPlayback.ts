@@ -16,10 +16,18 @@ import {
   useMemo,
   useRef,
   useState,
+  type RefObject,
 } from "react";
 import { flushSync } from "react-dom";
 import { CommandQueue } from "./commandQueue";
-import type { ConnectCommand, ConnectDevice, ConnectPlayback, ConnectSnapshot } from "./connect";
+import type {
+  ActiveBook,
+  AudiobookHandoff,
+  ConnectCommand,
+  ConnectDevice,
+  ConnectPlayback,
+  ConnectSnapshot,
+} from "./connect";
 import { positionAt, remoteState } from "./connect";
 import { lookupQueue } from "./connectCommands";
 import type { PlayerActions, PlayerProgress, PlayerState } from "./playerTypes";
@@ -27,7 +35,11 @@ import { queueEntries } from "./queueEntries";
 import { useConnectTransport, type ConnectRenderer } from "./useConnectTransport";
 import { useRemotePlaybackView, type RemoteView } from "./useRemotePlaybackView";
 
+export type AudiobookReceiver = (command: AudiobookHandoff, signal: AbortSignal) => Promise<void>;
+
 interface ConnectControls {
+  activeBook: ActiveBook | null;
+  audiobookReceiverRef: RefObject<AudiobookReceiver | null>;
   devices: ConnectDevice[];
   selectedId: string | null;
   selectedName: string;
@@ -87,6 +99,7 @@ export function useConnectPlayback(
   const [pending, setPending] = useState(0);
   const [lease, setLease] = useState(false);
   const own = useRef<string | null>(null);
+  const audiobookReceiverRef = useRef<AudiobookReceiver | null>(null);
   const connection = useRef<string | null>(null);
   const currentSnapshot = useRef(snapshot);
   const latest = useRef<ConnectRenderer>({
@@ -124,7 +137,16 @@ export function useConnectPlayback(
       next.version < currentSnapshot.current.version
     )
       return;
+    const oldBook = currentSnapshot.current.audiobook;
     currentSnapshot.current = next;
+    if (
+      next.audiobook &&
+      next.audiobook.deviceId !== own.current &&
+      next.audiobook.deviceId !== oldBook?.deviceId &&
+      latest.current.local.isPlaying
+    ) {
+      latest.current.localActions.pause();
+    }
     setSnapshot(next);
     connection.current =
       next.devices.find((device) => device.id === own.current)?.connectionId ?? null;
@@ -133,7 +155,7 @@ export function useConnectPlayback(
       (device) => device.id === (latest.current.selectedId ?? active?.deviceId),
     );
     if (named) setSelectedName(named.name);
-    if (!active || active.deviceId === own.current) return;
+    if (next.audiobook || !active || active.deviceId === own.current) return;
     if (!latest.current.selectedId && !latest.current.local.isPlaying && !wantsLocal.current) {
       latest.current.localActions.pause();
       latest.current.output(false);
@@ -202,6 +224,7 @@ export function useConnectPlayback(
 
   useConnectTransport({
     userId,
+    audiobookReceiverRef,
     ownRef: own,
     connectionRef: connection,
     currentSnapshotRef: currentSnapshot,
@@ -226,7 +249,7 @@ export function useConnectPlayback(
     connected &&
     (selectedId === null || snapshot.devices.some((device) => device.id === selectedId));
   const send = useCallback(
-    (command: ConnectCommand, queueRevision?: number): Promise<void> => {
+    (command: ConnectCommand, queueRevision?: number, reportError = true): Promise<void> => {
       const target = latest.current.selectedId;
       const epoch = selectionEpoch.current;
       if (!target) return Promise.reject(new Error("No playback device selected."));
@@ -257,7 +280,7 @@ export function useConnectPlayback(
           coalesce,
         )
         .catch((reason) => {
-          notifyError(reason);
+          if (reportError) notifyError(reason);
           throw reason;
         })
         .finally(() => setPending((value) => value - 1));
@@ -265,6 +288,19 @@ export function useConnectPlayback(
     },
     [commandQueue, notifyError, receive, t],
   );
+
+  const pauseForAudiobook = useCallback(() => {
+    const { selectedId, connected, localActions } = latest.current;
+    localActions.pause();
+    if (
+      selectedId &&
+      connected &&
+      currentSnapshot.current.devices.some(({ id }) => id === selectedId)
+    ) {
+      // This handoff is best-effort. A disconnected music device must not interrupt local playback.
+      void send({ type: "setPlaying", playing: false }, undefined, false).catch(() => {});
+    }
+  }, [send]);
 
   const select = useCallback(
     async (device: string | null) => {
@@ -378,6 +414,8 @@ export function useConnectPlayback(
   });
   const controls = useMemo<ConnectControls>(
     () => ({
+      audiobookReceiverRef,
+      activeBook: snapshot.audiobook ?? null,
       devices: snapshot.devices,
       selectedId,
       selectedName: selectedId
@@ -390,11 +428,22 @@ export function useConnectPlayback(
       pending: pending > 0,
       select,
     }),
-    [snapshot.devices, selectedId, selectedName, t, connected, available, pending, select],
+    [
+      snapshot.devices,
+      snapshot.audiobook,
+      selectedId,
+      selectedName,
+      t,
+      connected,
+      available,
+      pending,
+      select,
+    ],
   );
   return {
     ...view,
     controls,
+    pauseForAudiobook,
     shouldHold: !selectedId && (local.isPlaying || lease),
     report,
     claimed: () => setLease(true),

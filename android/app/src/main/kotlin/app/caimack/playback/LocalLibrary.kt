@@ -11,6 +11,7 @@ data class LocalLibrary(
     val syncedTracks: List<Track> = emptyList(),
     val collections: Set<Pair<String, String>> = emptySet(),
     val syncedBytes: Long = 0,
+    val availableTracks: List<Track> = emptyList(),
 )
 
 /** Build once per catalog change; rows only need constant-time membership lookups. */

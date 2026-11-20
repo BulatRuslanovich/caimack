@@ -36,8 +36,8 @@ class NavigationRippleUiTest {
                 val nav = rememberNavController()
                 Column(Modifier.width(360.dp).fillMaxSize().background(LocalPalette.current.background)) {
                     Box(Modifier.weight(1f)) {
-                        NavHost(nav, startDestination = TracksRoute) {
-                            composable<TracksRoute> { LibraryCatalogFrame(nav, TracksRoute) {} }
+                        NavHost(nav, startDestination = LibraryRoute) {
+                            composable<LibraryRoute> {}
                         }
                     }
                     BottomBar(nav)
@@ -46,22 +46,15 @@ class NavigationRippleUiTest {
         }
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         // Selected and unselected controls must use the same feedback geometry.
-        for ((label, kind) in listOf(
-            R.string.collection_catalog to "scope", R.string.collection_saved to "scope",
-            R.string.nav_tracks to "category", R.string.nav_albums to "category",
-            R.string.nav_library to "bottom", R.string.nav_search to "bottom",
-        )) {
+        for (label in listOf(R.string.nav_library, R.string.nav_search)) {
             val caption = context.getString(label)
             val node = compose.onNodeWithText(caption).assertHeightIsAtLeast(48.dp)
             val target = node.fetchSemanticsNode().boundsInRoot
             val text = compose.onNodeWithText(caption, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
                 .translate(-target.topLeft)
-            val fill = when (kind) {
-                "scope" -> Rect(text.left - 14 * density, text.top - 8 * density, text.right + 14 * density, text.bottom + 8 * density)
-                "category" -> Rect(text.left - 12 * density, text.top - 6 * density, text.right + 12 * density, text.bottom + 6 * density)
-                else -> Rect(target.width / 2 - 30 * density, text.top - 34 * density, target.width / 2 + 30 * density, text.top - 2 * density)
-            }
-            val radius = if (kind == "scope") 6 * density else fill.height / 2
+            val fill = Rect(target.width / 2 - 30 * density, text.top - 34 * density,
+                target.width / 2 + 30 * density, text.top - 2 * density)
+            val radius = fill.height / 2
             // Also press the extra touch area, outside the visible fill.
             for (extraTouchArea in listOf(false, true)) {
                 compose.waitForIdle()

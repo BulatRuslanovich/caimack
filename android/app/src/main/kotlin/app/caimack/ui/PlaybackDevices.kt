@@ -38,6 +38,7 @@ fun PlaybackDevicesButton(
     modifier: Modifier = Modifier,
     style: PlaybackDevicesStyle = PlaybackDevicesStyle.Inline,
     iconTint: Color? = null,
+    audiobook: Boolean = false,
 ) {
     val container = LocalContainer.current
     val context = LocalContext.current
@@ -47,13 +48,19 @@ fun PlaybackDevicesButton(
     var open by remember { mutableStateOf(false) }
     var choosing by remember { mutableStateOf(false) }
     val title = stringResource(R.string.connect_title)
-    val label = if (state.selectedId == null) stringResource(R.string.connect_this_device)
-        else stringResource(if (state.available) R.string.connect_playing_on else R.string.connect_unavailable,
-            state.selectedName ?: stringResource(R.string.connect_title))
+    val selectedId = if (audiobook) state.bookDeviceId else state.selectedId
+    val available = if (audiobook) state.connected else state.available
+    val label = if (selectedId == null) stringResource(R.string.connect_this_device)
+        else stringResource(if (available) R.string.connect_playing_on else R.string.connect_unavailable,
+            (if (audiobook) state.devices.firstOrNull { it.id == selectedId }?.name else state.selectedName) ?: title)
     val choose: (String?) -> Unit = { id ->
         if (!choosing) scope.launch {
             choosing = true
-            try { container.connect.select(id); open = false }
+            try {
+                if (audiobook) container.connect.transferAudiobook(id)
+                else container.connect.select(id)
+                open = false
+            }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { Toast.makeText(context, R.string.connect_failed, Toast.LENGTH_LONG).show() }
             finally { choosing = false }
@@ -65,7 +72,7 @@ fun PlaybackDevicesButton(
             modifier = modifier.size(48.dp).clip(CircleShape),
         ) {
             Icon(Lucide.MonitorSpeaker, title,
-                tint = iconTint ?: if (state.selectedId != null) palette.primary else palette.muted,
+                tint = iconTint ?: if (selectedId != null) palette.primary else palette.muted,
                 modifier = Modifier.size(22.dp))
         }
         PlaybackDevicesStyle.Inline -> Row(
@@ -76,10 +83,10 @@ fun PlaybackDevicesButton(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Icon(Lucide.MonitorSpeaker, title,
-                tint = iconTint ?: if (state.selectedId != null) palette.primary else palette.muted,
+                tint = iconTint ?: if (selectedId != null) palette.primary else palette.muted,
                 modifier = Modifier.size(18.dp))
             Text(label, style = Type.tiny,
-                color = if (state.selectedId != null) palette.primary else palette.muted,
+                color = if (selectedId != null) palette.primary else palette.muted,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         PlaybackDevicesStyle.Settings -> Row(
@@ -92,7 +99,7 @@ fun PlaybackDevicesButton(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            val unavailable = state.selectedId != null && !state.available
+            val unavailable = selectedId != null && !available
             val tint = if (unavailable) palette.warning else palette.primary
             Box(
                 Modifier.size(40.dp).clip(CircleShape).background(palette.primarySoft),
@@ -116,11 +123,11 @@ fun PlaybackDevicesButton(
     if (open) ModalBottomSheet(onDismissRequest = { open = false }, containerColor = palette.card) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, style = Type.heading)
-            Text(stringResource(R.string.connect_description), style = Type.small, color = palette.muted)
+            Text(stringResource(if (audiobook) R.string.connect_audiobook_description else R.string.connect_description), style = Type.small, color = palette.muted)
             HorizontalDivider(Modifier.padding(vertical = 8.dp), color = palette.border)
-            SheetRow(stringResource(R.string.connect_this_device), if (state.selectedId == null) Lucide.Check else Lucide.MonitorSpeaker) { choose(null) }
-            state.devices.filter { it.id != container.deviceId }.forEach { device ->
-                SheetRow(device.name, if (device.id == state.selectedId) Lucide.Check else Lucide.MonitorSpeaker) { choose(device.id) }
+            SheetRow(stringResource(R.string.connect_this_device), if (selectedId == null) Lucide.Check else Lucide.MonitorSpeaker) { choose(null) }
+            state.devices.filter { it.id != container.deviceId && (!audiobook || it.audiobooks) }.forEach { device ->
+                SheetRow(device.name, if (device.id == selectedId) Lucide.Check else Lucide.MonitorSpeaker) { choose(device.id) }
             }
             if (choosing || state.pending) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (!state.connected) Text(stringResource(R.string.connect_reconnecting), style = Type.small, color = palette.muted)

@@ -37,7 +37,7 @@ class OfflineAccountDeviceTest {
         val user = (session as SessionState.SignedIn).user
         val store = container.syncStore
         store.session(user)
-        assertTrue(store.active && store.tracks().size >= 2 && container.sync.network.available())
+        assertTrue(store.active && container.synchronizedTracks().size >= 2 && container.sync.network.available())
         val wasPaused = store.paused
         val oldOfflineQueue = store.offlineQueue
         val initialIds = store.pending().map { it.id }.toSet()
@@ -57,7 +57,7 @@ class OfflineAccountDeviceTest {
             assertEquals(store.snapshot!!.objects("tracks").size, tracks.total)
             assertTrue(container.api.homeFeed().blocks.isNotEmpty())
             container.api.publicPlaylists()
-            val ready = store.tracks().take(2)
+            val ready = container.synchronizedTracks().take(2)
             val p =
                 container.api.createPlaylist(
                     PlaylistChanges("Offline device test ${UUID.randomUUID()}")
@@ -76,7 +76,7 @@ class OfflineAccountDeviceTest {
             assertTrue(
                 restored.pending().any { it.kind == "playlistCreate" && it.entityId == p.id }
             )
-            assertEquals(store.audio(ready.first().id), restored.audio(ready.first().id))
+            assertTrue(container.locallyAvailable(ready.first().id))
             val batch = container.radio(RadioRequest(null, emptyList()))
             assertTrue(batch.tracks.isNotEmpty() && batch.tracks.size <= 100)
 

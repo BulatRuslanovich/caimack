@@ -30,7 +30,9 @@ vi.mock("./ArtistLinks", () => ({ ArtistLinks: () => null }));
 vi.mock("./PrefetchLink", () => ({
   PrefetchLink: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
-vi.mock("./TrackMenu", () => ({ TrackMenu: () => null }));
+vi.mock("./TrackMenu", () => ({
+  TrackMenu: ({ trigger }: { trigger: React.ReactNode }) => trigger,
+}));
 const tracks = ["First", "Second"].map(
   (title, index) =>
     ({
@@ -48,6 +50,12 @@ const tracks = ["First", "Second"].map(
 beforeEach(() => sortable.mockClear());
 
 describe("catalog track rows", () => {
+  it("places the time column before the trailing track menu", () => {
+    const markup = renderToStaticMarkup(<TrackList tracks={tracks.slice(0, 1)} />);
+    expect(markup).toMatch(/>column\.duration<.*aria-label="column\.actions"/);
+    expect(markup).toMatch(/data-track-duration="true">3:00<.*aria-label="tracks\.moreActions"/);
+  });
+
   it("renders read-only catalog rows without registering drag sensors", () => {
     const markup = renderToStaticMarkup(<TrackList tracks={tracks} />);
     expect(markup).toContain("First");

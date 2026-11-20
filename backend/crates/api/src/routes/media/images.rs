@@ -4,6 +4,7 @@ use app::covers::{self, MAX_IMAGE_BYTES, UploadedImage};
 use app::storage::CoverSize;
 use app::streaming::{self, ImageFile};
 use app::{AppError, AppResult};
+use axum::extract::multipart::Field;
 use axum::extract::{Multipart, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -101,26 +102,29 @@ pub(super) async fn playlist_cover(
 }
 
 async fn read_image(mut form: Multipart) -> AppResult<UploadedImage> {
-    while let Some(mut field) = form.next_field().await.map_err(AppError::internal)? {
-        if field.name() != Some("file") {
-            continue;
+    while let Some(field) = form.next_field().await.map_err(AppError::internal)? {
+        if field.name() == Some("file") {
+            return read_image_field(field).await;
         }
-        let file_name = field.file_name().unwrap_or_default().to_owned();
-        let content_type = field.content_type().map(str::to_owned);
-        let mut bytes = Vec::new();
-        while let Some(chunk) = field.chunk().await.map_err(AppError::internal)? {
-            bytes.extend_from_slice(&chunk);
-            if i64::try_from(bytes.len()).unwrap_or(i64::MAX) > MAX_IMAGE_BYTES {
-                return Err(AppError::payload_too_large("The file exceeds the {0} MB upload limit.")
-                    .arg(MAX_IMAGE_BYTES / (1024 * 1024)));
-            }
-        }
-        if bytes.is_empty() {
-            break;
-        }
-        return Ok(UploadedImage { bytes, content_type, file_name });
     }
     Err(AppError::validation("No image was provided."))
+}
+
+pub(in crate::routes) async fn read_image_field(mut field: Field<'_>) -> AppResult<UploadedImage> {
+    let file_name = field.file_name().unwrap_or_default().to_owned();
+    let content_type = field.content_type().map(str::to_owned);
+    let mut bytes = Vec::new();
+    while let Some(chunk) = field.chunk().await.map_err(AppError::internal)? {
+        if i64::try_from(bytes.len().saturating_add(chunk.len())).unwrap_or(i64::MAX) > MAX_IMAGE_BYTES {
+            return Err(AppError::payload_too_large("The file exceeds the {0} MB upload limit.")
+                .arg(MAX_IMAGE_BYTES / (1024 * 1024)));
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    if bytes.is_empty() {
+        return Err(AppError::validation("No image was provided."));
+    }
+    Ok(UploadedImage { bytes, content_type, file_name })
 }
 
 pub(super) async fn set_album_cover(

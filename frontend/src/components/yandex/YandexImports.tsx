@@ -60,8 +60,8 @@ export function YandexImports() {
         className="w-[min(38rem,100%)]"
         footer={
           <Button asChild variant="outline">
-            <Link href="/tracks" onClick={() => setActivityOpen(false)}>
-              {t("yandex.openLibrary")}
+            <Link href="/search?tab=tracks" onClick={() => setActivityOpen(false)}>
+              {t("action.browseTracks")}
             </Link>
           </Button>
         }

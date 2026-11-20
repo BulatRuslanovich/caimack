@@ -3,7 +3,6 @@
     <string name="auth_local_network_denied">Для подключения к этому серверу разрешите доступ к локальной сети. Разрешение можно выдать в системных настройках приложения.</string>
     <string name="settings_connection">Подключение</string>
     <string name="settings_local_http">Разрешить HTTP в локальной сети</string>
-    <string name="settings_local_http_hint">Разрешить подключение без шифрования только к локальному серверу. По умолчанию выключено.</string>
     <string name="auth_local_http_disabled">Локальный HTTP выключен. Используйте HTTPS или включите локальный HTTP в настройках подключения.</string>
     <string name="auth_non_local_http">HTTP разрешён только для локального IP-адреса или localhost. Для публичного сервера используйте HTTPS.</string>
 </resources>

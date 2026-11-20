@@ -320,6 +320,9 @@ const browser = spawn(
     "--headless=new",
     "--no-first-run",
     "--no-default-browser-check",
+    "--disable-extensions",
+    "--disable-features=HardwareMediaKeyHandling",
+    "--password-store=basic",
     "--mute-audio",
     "--disable-background-media-suspend",
     "--disable-backgrounding-occluded-windows",
@@ -420,6 +423,7 @@ const playing = (page) =>
 
 try {
   await until(async () => {
+    if (next.exitCode !== null) throw new Error(`Next.js exited during startup (${next.exitCode})`);
     try {
       const response = await fetch(`${frontendUrl}/login`);
       await response.body?.cancel();
@@ -508,6 +512,25 @@ try {
   assert.equal(mediaRace.advanced, true, "playback position advances after the race");
   assert.equal(mediaRace.displayedPlaying, true, "player state matches actual audio");
   console.log("Queued pause/play regression passed");
+  await renderer.page.eval(`(() => {
+    const audio = [...document.querySelectorAll('audio')].find(audio => !audio.paused);
+    audio.currentTime = audio.duration;
+  })()`);
+  await until(
+    () =>
+      renderer.page.eval(`[...document.querySelectorAll('audio')].some(audio =>
+      audio.currentSrc.includes(${JSON.stringify(tracks[1].id)}) && !audio.paused && audio.currentTime > 0.2
+    )`),
+    "the next track plays after the active audio reaches its end",
+  );
+  assert.equal(await renderer.page.eval("navigator.mediaSession.playbackState"), "playing");
+  await click(renderer.page, "Play First tone");
+  await until(
+    async () =>
+      (await text(renderer.page)).includes("First tone") && (await playing(renderer.page)),
+    "renderer restarted on the first track",
+  );
+  console.log("Automatic track advance passed");
   await until(
     async () => (await text(controller.page)).includes("First tone"),
     "controller mirrors the renderer",
@@ -564,6 +587,15 @@ try {
       `navigate to ${href}`,
     );
   };
+  const backToCatalog = async (href) => {
+    await controller.page.eval("history.back()");
+    await until(
+      () =>
+        controller.page.eval(`location.pathname === ${JSON.stringify(href)} &&
+        Boolean(document.querySelector('main a[href="/albums"]'))`),
+      `return to the catalog at ${href}`,
+    );
+  };
   const toggleCollection = async (scope, name) => {
     const pause = `${scope} button[aria-label="Pause"]`;
     const play = `${scope} button[aria-label="Play ${name}"]`;
@@ -593,6 +625,7 @@ try {
   };
   await navigate(`/albums/${albumId}`);
   await toggleCollection("#content header", "Test album");
+  await backToCatalog("/tracks");
   await navigate("/playlists");
   await until(
     () =>
@@ -601,7 +634,7 @@ try {
   );
   await navigate(`/playlists/${playlistId}`);
   await toggleCollection("#content header", "Test playlist");
-  await navigate("/playlists");
+  await backToCatalog("/playlists");
   await toggleCollection("#content .media-card", "Test playlist");
   await navigate("/albums");
   await toggleCollection("#content .media-card", "Test album");
@@ -701,6 +734,13 @@ try {
     "controller remained silent after transfer back",
   );
   await click(controller.page, "Playback queue");
+  await controller.page.eval(`(() => {
+    const edit = [...document.querySelectorAll('[data-queue-panel] button')].find(button =>
+      button.textContent.trim() === 'Edit queue'
+    );
+    if (!edit) throw Error('Missing queue edit button');
+    edit.click();
+  })()`);
   await until(
     () =>
       controller.page.eval(
@@ -824,6 +864,7 @@ try {
       passed: true,
       checks: [
         "queued pause/play events settle without feedback",
+        "automatic track advance keeps playing",
         "discovery",
         "mirrored player",
         "silent controller",

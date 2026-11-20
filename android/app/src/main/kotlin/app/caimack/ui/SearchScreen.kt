@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -32,7 +31,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,23 +46,51 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.caimack.R
 import app.caimack.api.SearchResults
 import app.caimack.api.Track
+import app.caimack.audiobooks.Audiobook
+import app.caimack.audiobooks.AudiobookCatalog
+import java.text.Normalizer
 import kotlinx.coroutines.delay
 
 private const val MIN_LENGTH = 3
 private const val LIMIT = 25
 private const val PREVIEW = 5
 
+enum class SearchCategory(val label: Int) {
+    Tracks(R.string.nav_tracks),
+    Audiobooks(R.string.nav_audiobooks),
+    Albums(R.string.nav_albums),
+    Artists(R.string.nav_artists),
+    Playlists(R.string.nav_playlists),
+    Genres(R.string.nav_genres),
+}
+
 @Composable
-fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit) {
-    val palette = LocalPalette.current
+internal fun SearchCategoryFilters(category: SearchCategory?, audiobooksEnabled: Boolean = true, onCategory: (SearchCategory?) -> Unit) {
+    CategoryFilterRow(category, category != null, { onCategory(null) }) {
+        val visible = category?.let(::listOf) ?: SearchCategory.entries.filter { audiobooksEnabled || it != SearchCategory.Audiobooks }
+        items(visible, key = { it.name }) { item ->
+            CategoryFilter(item.label, category == item) { onCategory(if (category == item) null else item) }
+        }
+    }
+}
+
+@Composable
+fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit, initialCategory: SearchCategory? = null) {
     val container = LocalContainer.current
     val focus = LocalFocusManager.current
     var input by rememberSaveable { mutableStateOf("") }
     var query by rememberSaveable { mutableStateOf("") }
-    var tab by rememberSaveable { mutableStateOf("all") }
+    var category by rememberSaveable { mutableStateOf(initialCategory) }
+    val categoryState = rememberSaveableStateHolder()
+    val catalog by container.audiobookStore.state.collectAsStateWithLifecycle()
+    val audiobooksEnabled by container.audiobooksEnabled.collectAsStateWithLifecycle()
+    val selected = category.takeUnless { it == SearchCategory.Audiobooks && !audiobooksEnabled }
+    val books = catalog.books.takeIf { audiobooksEnabled }.orEmpty()
+    val bookMatches = remember(books, query) { books.matchingAudiobooks(query) }
 
     LaunchedEffect(input) {
         delay(300)
@@ -83,13 +112,35 @@ fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit) {
         SearchInput(
             value = input,
             onValueChange = { input = it; if (it.isEmpty()) query = "" },
-            label = stringResource(R.string.search_placeholder),
+            label = stringResource(
+                when {
+                    selected == SearchCategory.Audiobooks -> R.string.search_audiobook_placeholder
+                    audiobooksEnabled -> R.string.search_with_audiobooks_placeholder
+                    else -> R.string.search_placeholder
+                },
+            ),
             modifier = Modifier.padding(horizontal = 16.dp),
             onSearch = {
                 query = input.trim()
                 if (query.length >= MIN_LENGTH) container.recentSearches.remember(query)
             },
         )
+
+        SearchCategoryFilters(selected, audiobooksEnabled) { category = it }
+
+        if (selected != null) {
+            categoryState.SaveableStateProvider(selected.name) {
+                when (selected) {
+                    SearchCategory.Tracks -> TracksScreen(query, playFound)
+                    SearchCategory.Audiobooks -> AudiobookSearchResults(bookMatches, catalog, query, open)
+                    SearchCategory.Albums -> AlbumsScreen(query, open)
+                    SearchCategory.Artists -> ArtistsScreen(query, open)
+                    SearchCategory.Playlists -> PlaylistsScreen(query, open)
+                    SearchCategory.Genres -> GenresScreen(query, open)
+                }
+            }
+            return@Column
+        }
 
         if (query.length < MIN_LENGTH) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 24.dp, bottom = 24.dp + LocalMiniPlayerInset.current)) {
@@ -98,40 +149,27 @@ fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit) {
                     query = recent
                     focus.clearFocus()
                 }
-                BrowseGenres(open)
+                BrowseGenres(open) { category = SearchCategory.Genres }
             }
             return@Column
         }
 
-        Tabs(Modifier.padding(top = 8.dp, bottom = 8.dp)) {
-            listOf("all" to R.string.search_tab_all, "tracks" to R.string.nav_tracks, "albums" to R.string.nav_albums, "artists" to R.string.nav_artists).forEach { (value, label) ->
-                Tab(stringResource(label), tab == value) { tab = value }
-            }
-        }
-
-        when (tab) {
-            "tracks" -> {
-                val pager = rememberPager("search-tracks:$query") { container.api.searchTracks(query, it, TRACK_PAGE_SIZE) }
-                PagedColumn(pager, stringResource(R.string.search_nothing_found), header = {}) { index, track -> TrackRow(track, { playFound(pager.items, index) }) }
-            }
-            "albums" -> {
-                val pager = rememberPager("search-albums:$query") { container.api.searchAlbums(query, it, CARD_PAGE_SIZE) }
-                PagedGrid(pager, stringResource(R.string.search_nothing_found), header = {}) { album ->
-                    val cover = container.media.albumCover(album, small = true)
-                    Card(album.title, album.artistName, { open(AlbumRoute(album.id)) }, toneUrl = cover) { Cover(cover, album.title, it) }
-                }
-            }
-            "artists" -> {
-                val pager = rememberPager("search-artists:$query") { container.api.searchArtists(query, it, CARD_PAGE_SIZE) }
-                PagedGrid(pager, stringResource(R.string.search_nothing_found), header = {}) { artist ->
-                    Card(artist.name, pluralStringResource(R.plurals.count_tracks, artist.trackCount, artist.trackCount), { open(ArtistRoute(artist.id)) }, round = true) {
-                        Cover(container.media.artistImage(artist.id, artist.hasImage, small = true), artist.name, it, round = true)
-                    }
-                }
-            }
-            else -> Load("search:$query", { container.api.search(query, LIMIT) }, isEmpty = { it.isEmpty() }, empty = { Empty(stringResource(R.string.search_nothing_found)) }) { results ->
-                AllResults(results, open, playFound)
-            }
+        val previewBooks = bookMatches.take(PREVIEW)
+        Load(
+            "search:$query",
+            { container.api.search(query, LIMIT) },
+            isEmpty = { it.isEmpty() && previewBooks.isEmpty() },
+            empty = { Empty(stringResource(R.string.search_nothing_found)) },
+            loading = {
+                if (previewBooks.isEmpty()) SearchLoading()
+                else AllResults(SearchResults(), previewBooks, catalog, open, playFound)
+            },
+            error = { retry ->
+                if (previewBooks.isEmpty()) Failure(retry)
+                else AllResults(SearchResults(), previewBooks, catalog, open, playFound)
+            },
+        ) { results ->
+            AllResults(results, previewBooks, catalog, open, playFound)
         }
     }
 }
@@ -139,7 +177,13 @@ fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit) {
 private fun SearchResults.isEmpty() = tracks.isEmpty() && albums.isEmpty() && artists.isEmpty() && genres.isEmpty()
 
 @Composable
-private fun AllResults(results: SearchResults, open: (Any) -> Unit, play: (List<Track>, Int) -> Unit) {
+private fun AllResults(
+    results: SearchResults,
+    books: List<Audiobook>,
+    catalog: AudiobookCatalog,
+    open: (Any) -> Unit,
+    play: (List<Track>, Int) -> Unit,
+) {
     val palette = LocalPalette.current
     val media = LocalContainer.current.media
 
@@ -170,6 +214,12 @@ private fun AllResults(results: SearchResults, open: (Any) -> Unit, play: (List<
         if (results.tracks.isNotEmpty()) {
             item { SectionHeader(stringResource(R.string.nav_tracks)) }
             itemsIndexed(results.tracks.take(PREVIEW)) { index, track -> TrackRow(track, { play(results.tracks, index) }) }
+        }
+        if (books.isNotEmpty()) {
+            item { SectionHeader(stringResource(R.string.nav_audiobooks)) }
+            items(books, key = { "book-${it.id}" }) { book ->
+                BookRow(book, catalog) { open(AudiobookRoute(book.id)) }
+            }
         }
         if (results.albums.isNotEmpty()) {
             item {
@@ -205,10 +255,49 @@ private fun AllResults(results: SearchResults, open: (Any) -> Unit, play: (List<
     }
 }
 
+@Composable
+private fun AudiobookSearchResults(
+    books: List<Audiobook>,
+    catalog: AudiobookCatalog,
+    query: String,
+    open: (Any) -> Unit,
+) {
+    if (books.isEmpty()) {
+        if (!catalog.ready) SearchLoading()
+        else Empty(stringResource(if (query.isBlank()) R.string.audiobook_empty else R.string.search_nothing_found))
+        return
+    }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(top = 12.dp, bottom = 24.dp)) {
+        items(books, key = { it.id }) { book ->
+            BookRow(book, catalog) { open(AudiobookRoute(book.id)) }
+        }
+    }
+}
+
+@Composable
+private fun SearchLoading() {
+    Box(Modifier.fillMaxWidth().padding(vertical = 64.dp), contentAlignment = Alignment.Center) { RecordLoading(44.dp) }
+}
+
+private val SEARCH_WORD = Regex("[\\p{L}\\p{N}]+")
+
+private fun searchWords(value: String) =
+    SEARCH_WORD.findAll(Normalizer.normalize(value, Normalizer.Form.NFC).lowercase().replace('ё', 'е')).map { it.value }
+
+internal fun List<Audiobook>.matchingAudiobooks(query: String): List<Audiobook> {
+    if (query.isBlank()) return this
+    val words = searchWords(query).toList()
+    if (words.isEmpty()) return emptyList()
+    return filter { book ->
+        val fields = searchWords(listOfNotNull(book.title, book.author, book.narrator).joinToString(" ")).joinToString(" ")
+        words.all(fields::contains)
+    }
+}
+
 private data class TopRow(val title: String, val subtitle: String, val url: String?, val round: Boolean, val open: () -> Unit)
 
 @Composable
-private fun BrowseGenres(open: (Any) -> Unit) {
+private fun BrowseGenres(open: (Any) -> Unit, openAll: () -> Unit) {
     val container = LocalContainer.current
     Load("genres", { container.api.genres() }, isEmpty = { it.isEmpty() }, empty = { Empty(stringResource(R.string.search_browse_empty), stringResource(R.string.search_browse_empty_hint)) }) { genres ->
         val palette = LocalPalette.current
@@ -230,7 +319,7 @@ private fun BrowseGenres(open: (Any) -> Unit) {
                     if (columns == 2 && row.size == 1) Box(Modifier.weight(1f))
                 }
             }
-            androidx.compose.material3.TextButton(onClick = { open(GenresRoute) }) {
+            androidx.compose.material3.TextButton(onClick = openAll) {
                 Text(stringResource(R.string.search_all_genres), color = LocalPalette.current.primary)
             }
         }

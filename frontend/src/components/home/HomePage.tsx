@@ -17,9 +17,10 @@ import { Section } from "@/components/PageHeader";
 import { Query } from "@/components/Query";
 import { Shelf } from "@/components/Shelf";
 import { Button } from "@/components/ui/button";
+import { AudiobookHome } from "@/components/audiobooks/AudiobookViews";
 import { blockHref, blockNote, blockSubjectHref, blockTitle } from "./blockMeta";
 import { DailyMix, HERO_PREVIEW_SIZE } from "./DailyMix";
-import { capFiveOnMobile, deferredSection, listPanel } from "./layout";
+import { capFiveOnMobile, deferredSection, dropOrphanRow, listPanel } from "./layout";
 import { MixCover } from "./MixCover";
 import { RecapBanner } from "./RecapBanner";
 import { QuickTiles } from "./QuickTiles";
@@ -31,20 +32,23 @@ export function HomePage() {
   const feed = useQuery(queries.homeFeed());
 
   return (
-    <Query
-      result={feed}
-      isEmpty={(data) => data.blocks.length === 0}
-      empty={{
-        title: t("home.emptyTitle"),
-        action: isAdmin && (
-          <Button variant="primary" asChild>
-            <Link href="/upload">{t("home.uploadMusic")}</Link>
-          </Button>
-        ),
-      }}
-    >
-      {({ blocks }) => <Blocks blocks={blocks} />}
-    </Query>
+    <>
+      <Query
+        result={feed}
+        isEmpty={(data) => data.blocks.length === 0}
+        empty={{
+          title: t("home.emptyTitle"),
+          action: isAdmin && (
+            <Button variant="primary" asChild>
+              <Link href="/upload">{t("home.uploadMusic")}</Link>
+            </Button>
+          ),
+        }}
+      >
+        {({ blocks }) => <Blocks blocks={blocks} />}
+      </Query>
+      {!feed.data?.blocks.length && <AudiobookHome />}
+    </>
   );
 }
 
@@ -69,6 +73,9 @@ function Blocks({ blocks }: { blocks: HomeBlock[] }) {
 
   const seen = new Set(shown);
   const browse = [];
+  const audiobookAnchor =
+    blocks.find((block) => block.zone === "Browse" && block.baseKey === "newArrivals") ??
+    blocks.find((block) => block.zone === "Browse" && block.baseKey === "newAlbums");
 
   for (const block of blocks) {
     if (block.zone !== "Browse") continue;
@@ -91,6 +98,7 @@ function Blocks({ blocks }: { blocks: HomeBlock[] }) {
 
     for (const track of visible.tracks ?? []) seen.add(track.id);
     browse.push(<Block key={block.key} block={visible} shown={before} />);
+    if (block === audiobookAnchor) browse.push(<AudiobookHome key="last-audiobook" />);
   }
 
   return (
@@ -107,9 +115,8 @@ function Blocks({ blocks }: { blocks: HomeBlock[] }) {
 
       <RecapBanner />
 
-      {browse[0]}
-
-      {browse.slice(1)}
+      {!audiobookAnchor && <AudiobookHome />}
+      {browse}
     </div>
   );
 }
@@ -152,7 +159,7 @@ function BlockBody({ block, shown }: { block: HomeBlock; shown: Set<string> }) {
             ranked={false}
             density="compact"
             tracks={fresh.length >= MIN_DISTINCT ? fresh : onePerAlbum(tracks)}
-            className={capFiveOnMobile}
+            className={cn(capFiveOnMobile, dropOrphanRow)}
           />
         </Section>
       );

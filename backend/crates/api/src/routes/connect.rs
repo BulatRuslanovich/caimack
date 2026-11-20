@@ -25,13 +25,14 @@ pub fn router() -> Router<AppState> {
 
 #[derive(Clone)]
 struct ConnectApiState {
+    db: sqlx::PgPool,
     playback: app::playback::registry::PlaybackRegistry,
     shutdown: tokio_util::sync::CancellationToken,
 }
 
 impl FromRef<AppState> for ConnectApiState {
     fn from_ref(state: &AppState) -> Self {
-        Self { playback: state.playback.clone(), shutdown: state.shutdown.clone() }
+        Self { db: state.db.clone(), playback: state.playback.clone(), shutdown: state.shutdown.clone() }
     }
 }
 
@@ -43,6 +44,7 @@ where
     Router::new()
         .route("/api/playback/connect/events", get(events))
         .route("/api/playback/connect/state", put(report))
+        .route("/api/playback/connect/audiobook", put(report_book))
         .route("/api/playback/connect/heartbeat", post(heartbeat))
         .route("/api/playback/connect/commands", post(command))
         .route("/api/playback/connect/commands/{id}/ack", post(acknowledge))
@@ -56,6 +58,8 @@ struct DeviceQuery {
     device_name: String,
     #[serde(default)]
     device_kind: String,
+    #[serde(default)]
+    audiobooks: bool,
 }
 
 struct Presence {
@@ -77,9 +81,17 @@ async fn events(
     Query(query): Query<DeviceQuery>,
 ) -> ApiResult<impl IntoResponse> {
     let registry = state.playback.connect;
-    let connection =
-        registry.register_device(user.user_id, &query.device_id, &query.device_name, &query.device_kind)?;
+    let connection = registry.register_device(
+        user.user_id,
+        &query.device_id,
+        &query.device_name,
+        &query.device_kind,
+        query.audiobooks,
+    )?;
     let presence = Presence { registry, user: user.user_id, device: query.device_id, connection };
+    if query.audiobooks {
+        presence.registry.restore_book(&state.db, presence.user).await?;
+    }
     let stream = futures_util::stream::unfold(
         (presence, true, state.shutdown),
         |(mut presence, initial, shutdown)| async move {
@@ -159,6 +171,31 @@ async fn report(
     }
     hub.report(user.user_id, &report.device_id, report.connection_id, report.state)?;
     Ok(Json(hub.snapshot(user.user_id)?))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BookReport {
+    device_id: String,
+    connection_id: Uuid,
+    state: Option<connect::BookPlayback>,
+    #[serde(default)]
+    claim: bool,
+}
+
+async fn report_book(
+    State(state): State<ConnectApiState>,
+    CurrentUser(user): CurrentUser,
+    Json(report): Json<BookReport>,
+) -> ApiResult<axum::http::StatusCode> {
+    state.playback.connect.report_book(
+        user.user_id,
+        &report.device_id,
+        report.connection_id,
+        report.state,
+        report.claim,
+    )?;
+    Ok(axum::http::StatusCode::NO_CONTENT)
 }
 
 async fn command(
@@ -253,7 +290,11 @@ mod tests {
     }
 
     async fn server() -> (String, reqwest::Client, tokio_util::sync::CancellationToken) {
-        let state = ConnectApiState { playback: Default::default(), shutdown: Default::default() };
+        let state = ConnectApiState {
+            db: sqlx::postgres::PgPoolOptions::new().connect_lazy("postgres://localhost/test").unwrap(),
+            playback: Default::default(),
+            shutdown: Default::default(),
+        };
         let shutdown = state.shutdown.clone();
         let user = Principal {
             user_id: Uuid::now_v7(),

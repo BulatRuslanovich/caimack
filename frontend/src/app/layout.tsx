@@ -3,16 +3,7 @@
 import type { Metadata, Viewport } from "next";
 import { Onest, Unbounded } from "next/font/google";
 import { cookies } from "next/headers";
-import { LucideProvider } from "lucide-react";
-import { AppShell } from "@/components/AppShell";
-import { QueryProvider } from "@/components/QueryProvider";
-import { AuthProvider } from "@/contexts/AuthContext";
-import { I18nProvider } from "@/contexts/I18nContext";
-import { PlayerProvider } from "@/contexts/PlayerContext";
-import { PlayerUiProvider } from "@/contexts/PlayerUiContext";
-import { YandexMusicProvider } from "@/contexts/YandexMusicContext";
-import { Toaster } from "@/components/ui/sonner";
-import { UploadProvider } from "@/contexts/UploadContext";
+import { Application } from "@/components/Application";
 import { EARLY_FETCH_SCRIPT, SESSION_HINT_COOKIE } from "@/lib/earlyFetch";
 import { DEFAULT_LOCALE, LOCALE_COOKIE, isLocale, loadDictionary } from "@/lib/i18n";
 import { parseSessionHint } from "@/lib/session/sessionHint";
@@ -74,24 +65,13 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: EARLY_FETCH_SCRIPT }} />
       </head>
       <body>
-        <LucideProvider size={20} strokeWidth={2} absoluteStrokeWidth>
-          <I18nProvider initialLocale={initialLocale} initialDictionary={initialDictionary}>
-            <QueryProvider>
-              <AuthProvider initialUser={initialUser}>
-                <PlayerProvider>
-                  <UploadProvider>
-                    <PlayerUiProvider>
-                      <YandexMusicProvider>
-                        <AppShell>{children}</AppShell>
-                      </YandexMusicProvider>
-                    </PlayerUiProvider>
-                  </UploadProvider>
-                </PlayerProvider>
-              </AuthProvider>
-            </QueryProvider>
-            <Toaster />
-          </I18nProvider>
-        </LucideProvider>
+        <Application
+          initialUser={initialUser}
+          initialLocale={initialLocale}
+          initialDictionary={initialDictionary}
+        >
+          {children}
+        </Application>
       </body>
     </html>
   );

@@ -3,8 +3,10 @@
 "use client";
 
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { isDesktop } from "@/desktop/api";
 import { useT } from "@/contexts/I18nContext";
+import { ApiError, GATEWAY_STATUSES } from "@/lib/http";
 import { useToast } from "@/lib/useToast";
 
 const STALE_MS = 5 * 60 * 1000;
@@ -19,7 +21,16 @@ export function QueryProvider({ children }: { children: ReactNode }) {
     () =>
       new QueryClient({
         queryCache: new QueryCache({
-          onError: (error) => notifyError(error, t("error.load")),
+          onError: (error, query) => {
+            if (query.meta?.handlesError) return;
+            if (
+              query.meta?.hasOfflineFallback &&
+              (error instanceof TypeError ||
+                (error instanceof ApiError && GATEWAY_STATUSES.has(error.status)))
+            )
+              return;
+            notifyError(error, t("error.load"));
+          },
         }),
         mutationCache: new MutationCache({
           onError: (error, _variables, _context, mutation) => {
@@ -39,6 +50,13 @@ export function QueryProvider({ children }: { children: ReactNode }) {
         },
       }),
   );
+
+  useEffect(() => {
+    if (!isDesktop) return;
+    const refresh = () => void client.invalidateQueries();
+    window.addEventListener("caimack:refetch", refresh);
+    return () => window.removeEventListener("caimack:refetch", refresh);
+  }, [client]);
 
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }

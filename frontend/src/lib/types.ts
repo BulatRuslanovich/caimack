@@ -147,6 +147,8 @@ export interface SearchResults {
   top?: SearchTopResult | null;
 }
 
+export type SearchPopular = Pick<SearchResults, "tracks" | "albums" | "artists">;
+
 export interface HistoryEntry {
   id: string;
   track: Track;

@@ -147,10 +147,9 @@ fun TrackRow(
     val density = LocalLibraryDensity.current
     val container = LocalContainer.current
     val playback = container.player.state.collectAsState().value
-    val downloads by container.downloads.state.collectAsState()
     val synchronization by container.syncStore.status.collectAsState()
     val librarySync = synchronization.enabled && container.syncStore.active
-    val showDownloadBadge = !librarySync && downloads[track.id]?.done == true
+    val showDownloadBadge = !librarySync && track.id in LocalAvailableTracks.current
     val available = !LocalOfflineLibrary.current || track.id in LocalAvailableTracks.current
     val current = playback.current?.id == track.id
     val playing = current && playback.playing

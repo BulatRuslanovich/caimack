@@ -2,11 +2,14 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import type { Route } from "next";
+import { isDesktop } from "@/desktop/api";
 import {
   Grid2X2Icon,
   ListIcon,
   PlusIcon,
   HeartIcon,
+  DownloadIcon,
   FolderIcon,
   ChevronRightIcon,
   SearchIcon,
@@ -28,7 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { queries } from "@/lib/queries";
-import type { LibraryKind } from "@/lib/types";
+import type { LibraryItem, LibraryKind } from "@/lib/types";
 import { useT } from "@/contexts/I18nContext";
 import { useInvalidate } from "@/lib/useInvalidate";
 import { Query } from "@/components/Query";
@@ -40,12 +43,15 @@ import { ToggleGroup, ToggleGroupButton } from "@/components/ui/toggle-group";
 import { EmptyState } from "@/components/EmptyState";
 import { PlaylistDialog } from "@/components/PlaylistDialog";
 import { Button } from "@/components/ui/button";
-import { LibraryNavigation } from "@/components/LibraryNavigation";
-import { PrefetchLink } from "@/components/PrefetchLink";
+import { LibraryAudiobookCard } from "@/components/audiobooks/AudiobookViews";
+import { useAudiobooks } from "@/contexts/AudiobookContext";
+import { filterAudiobooks } from "@/lib/audiobooks";
 
 export default function LibraryPage() {
   const t = useT();
   const invalidate = useInvalidate();
+  const { enabled: audiobooksEnabled, books, result: bookResult } = useAudiobooks();
+  const savedBooks = books.filter((book) => book.saved);
   const result = useQuery({ ...queries.savedLibrary(), refetchInterval: 30_000 });
   const favoriteResult = useQuery(queries.favorites({ page: 1, pageSize: 1 }));
   const folderResult = useQuery({ ...queries.libraryFolders(), refetchInterval: 30_000 });
@@ -64,7 +70,8 @@ export default function LibraryPage() {
     );
     document.getElementById("content")?.scrollTo({ top: 0 });
   };
-  const [filter, setFilter] = useState<LibraryKind | "all">("all");
+  const [selectedFilter, setFilter] = useState<LibraryKind | "all" | "audiobook">("all");
+  const filter = !audiobooksEnabled && selectedFilter === "audiobook" ? "all" : selectedFilter;
   const [search, setSearch] = useState("");
   const [searchExpanded, setSearchExpanded] = useState(false);
   const searchInput = useRef<HTMLInputElement>(null);
@@ -81,6 +88,7 @@ export default function LibraryPage() {
   const [creating, setCreating] = useState(false);
   const filters = [
     ["all", t("collection.all")],
+    ["audiobook", t("nav.audiobooks")],
     ["playlist", t("nav.playlists")],
     ["album", t("nav.albums")],
     ["artist", t("nav.artists")],
@@ -90,6 +98,228 @@ export default function LibraryPage() {
     folderId === null &&
     (filter === "all" || filter === "playlist") &&
     t("nav.favorites").toLocaleLowerCase().includes(q);
+  const shownBooks =
+    (filter === "all" || filter === "audiobook") && (q || folderId === null)
+      ? filterAudiobooks(savedBooks, q)
+      : [];
+  const renderCollection = (items: LibraryItem[]) => {
+    const shown = [
+      ...items
+        .filter(
+          (item) =>
+            (q ? true : (item.folderId ?? null) === folderId) &&
+            (filter === "all" || item.kind === filter) &&
+            `${item.title} ${item.subtitle}`.toLocaleLowerCase().includes(q),
+        )
+        .map((item) => ({
+          key: `${item.kind}:${item.id}`,
+          id: item.id,
+          kind: item.kind,
+          title: item.title,
+          savedAtMs: Date.parse(item.savedAt),
+          node: <SavedLibraryCard item={item} layout={grid ? "grid" : "list"} />,
+        })),
+      ...shownBooks.map((book) => ({
+        key: `audiobook:${book.id}`,
+        id: book.id,
+        kind: "audiobook",
+        title: book.title,
+        savedAtMs: book.savedAtMs ?? 0,
+        node: <LibraryAudiobookCard book={book} grid={grid} />,
+      })),
+    ].sort((a, b) =>
+      sort === "name" ? a.title.localeCompare(b.title) : b.savedAtMs - a.savedAtMs,
+    );
+    const shownFolders = folders
+      .filter(
+        (folder) =>
+          filter !== "audiobook" &&
+          (q ? folder.name.toLocaleLowerCase().includes(q) : folder.parentId === folderId),
+      )
+      .sort((a, b) =>
+        sort === "name"
+          ? a.name.localeCompare(b.name)
+          : Date.parse(b.createdAt) - Date.parse(a.createdAt),
+      );
+    const allKeys = [
+      ...(folderId === null ? ["favorites"] : []),
+      ...folders
+        .filter((f) => f.parentId === folderId)
+        .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+        .map((f) => `folder:${f.id}`),
+      ...[
+        ...items
+          .filter((item) => (item.folderId ?? null) === folderId)
+          .map((item) => ({ key: `${item.kind}:${item.id}`, savedAtMs: Date.parse(item.savedAt) })),
+        ...(folderId === null
+          ? savedBooks.map((book) => ({
+              key: `audiobook:${book.id}`,
+              savedAtMs: book.savedAtMs ?? 0,
+            }))
+          : []),
+      ]
+        .sort((a, b) => b.savedAtMs - a.savedAtMs)
+        .map(({ key }) => key),
+      ...(folderId === null ? ["downloads"] : []),
+    ];
+    const savedOrder = orderedKeys(allKeys, orderResult.data?.[folderId ?? "root"]);
+    const showDownloads =
+      isDesktop &&
+      folderId === null &&
+      filter !== "audiobook" &&
+      t("nav.downloads").toLocaleLowerCase().includes(q);
+    const entries: LibraryDragEntry[] = [
+      ...(favorites
+        ? [
+            {
+              key: "favorites",
+              id: "favorites",
+              kind: "favorites",
+              node: (
+                <Card
+                  layout={grid ? "grid" : "list"}
+                  href="/favorites"
+                  title={t("nav.favorites")}
+                  subtitle={t("playlists.kind")}
+                  details={
+                    favoriteResult.data
+                      ? t("count.tracks", { count: favoriteResult.data.total })
+                      : undefined
+                  }
+                  cover={
+                    <div className="grid size-full place-items-center bg-primary-soft text-primary">
+                      <HeartIcon size={32} />
+                    </div>
+                  }
+                />
+              ),
+            },
+          ]
+        : []),
+      ...(showDownloads
+        ? [
+            {
+              key: "downloads",
+              id: "downloads",
+              kind: "downloads",
+              node: (
+                <Card
+                  layout={grid ? "grid" : "list"}
+                  href={"/downloads" as Route}
+                  title={t("nav.downloads")}
+                  subtitle=""
+                  cover={
+                    <div className="grid size-full place-items-center bg-primary-soft text-primary">
+                      <DownloadIcon size={32} />
+                    </div>
+                  }
+                />
+              ),
+            },
+          ]
+        : []),
+      ...shownFolders.map((folder) => ({
+        key: `folder:${folder.id}`,
+        id: folder.id,
+        kind: "folder",
+        node: (
+          <Card
+            layout={grid ? "grid" : "list"}
+            onClick={() => openFolder(folder.id)}
+            title={folder.name}
+            subtitle={t("folders.items", {
+              count:
+                items.filter((item) => item.folderId === folder.id).length +
+                folders.filter((child) => child.parentId === folder.id).length,
+            })}
+            cover={
+              <div className="grid size-full place-items-center bg-raised text-primary">
+                <FolderIcon size={32} />
+              </div>
+            }
+            menu={<LibraryFolderMenu folder={folder} />}
+          />
+        ),
+      })),
+      ...shown,
+    ];
+    if (sort === "manual" && !q) {
+      const ranks = new Map(savedOrder.map((key, index) => [key, index]));
+      entries.sort((a, b) => (ranks.get(a.key) ?? Infinity) - (ranks.get(b.key) ?? Infinity));
+    }
+    return (
+      <>
+        <div className={grid ? undefined : "max-w-3xl"}>
+          <LibraryDragList
+            key={folderId ?? "root"}
+            entries={entries}
+            folders={folders}
+            grid={grid}
+            parent={currentFolder ? currentFolder.parentId : undefined}
+            disabled={
+              organize.isPending || !orderResult.data || !result.data || !folderResult.data || !!q
+            }
+            onOrder={async (keys) => {
+              const full =
+                sort === "manual"
+                  ? savedOrder
+                  : orderedKeys(
+                      allKeys,
+                      entries.map((e) => e.key),
+                    );
+              setSort("manual");
+              await organize.mutateAsync({
+                operation: "reorder",
+                folderId,
+                order: mergeVisibleOrder(full, keys),
+              });
+            }}
+            onMove={async (entry, destination) => {
+              if (entry.kind === "folder")
+                await organize.mutateAsync({
+                  operation: "moveFolder",
+                  id: entry.id,
+                  folderId: destination,
+                });
+              else if (entry.kind !== "audiobook")
+                await organize.mutateAsync({
+                  operation: "moveItem",
+                  id: entry.id,
+                  kind: entry.kind as LibraryKind,
+                  folderId: destination,
+                });
+            }}
+          />
+        </div>
+        {organize.isError && (
+          <p role="alert" className="text-destructive">
+            {t("folders.failed")}
+          </p>
+        )}
+        {q && <p className="text-sm text-muted-foreground">{t("collection.dragSearch")}</p>}
+        {shown.length === 0 && shownFolders.length === 0 && !favorites && !showDownloads && (
+          <EmptyState
+            title={t(
+              q
+                ? "collection.noResults"
+                : currentFolder
+                  ? "collection.empty"
+                  : filter === "audiobook"
+                    ? "audiobooks.emptySaved"
+                    : filter === "album"
+                      ? "collection.emptyAlbums"
+                      : filter === "artist"
+                        ? "collection.emptyArtists"
+                        : filter === "playlist"
+                          ? "collection.emptyPlaylists"
+                          : "collection.empty",
+            )}
+            description={t(currentFolder ? "folders.emptyHint" : "collection.hint")}
+          />
+        )}
+      </>
+    );
+  };
   return (
     <section className="space-y-5">
       <div>
@@ -143,9 +373,6 @@ export default function LibraryPage() {
             </div>
           }
         />
-        <div className="mt-5">
-          <LibraryNavigation saved />
-        </div>
         <div
           id="library-search"
           className="library-search-panel"
@@ -194,15 +421,17 @@ export default function LibraryPage() {
             aria-label={t("nav.mediaLibrary")}
             className="min-w-0 shadow-none max-sm:w-full"
           >
-            {filters.map(([value, label]) => (
-              <ToggleGroupButton
-                key={value}
-                active={filter === value}
-                onClick={() => setFilter(value)}
-              >
-                {label}
-              </ToggleGroupButton>
-            ))}
+            {filters
+              .filter(([value]) => audiobooksEnabled || value !== "audiobook")
+              .map(([value, label]) => (
+                <ToggleGroupButton
+                  key={value}
+                  active={filter === value}
+                  onClick={() => setFilter(value)}
+                >
+                  {label}
+                </ToggleGroupButton>
+              ))}
           </ToggleGroup>
           <div className="library-toolbar ml-auto flex shrink-0 items-center gap-2.5 max-sm:order-first">
             <SortSelect
@@ -225,190 +454,15 @@ export default function LibraryPage() {
             </Button>
           </div>
         </div>
-        <Query result={folderResult}>
-          {() => (
-            <Query result={result}>
-              {(items) => {
-                const shown = items
-                  .filter(
-                    (item) =>
-                      (q ? true : (item.folderId ?? null) === folderId) &&
-                      (filter === "all" || item.kind === filter) &&
-                      `${item.title} ${item.subtitle}`.toLocaleLowerCase().includes(q),
-                  )
-                  .sort((a, b) =>
-                    sort === "name"
-                      ? a.title.localeCompare(b.title)
-                      : Date.parse(b.savedAt) - Date.parse(a.savedAt),
-                  );
-                const shownFolders = folders
-                  .filter((folder) =>
-                    q ? folder.name.toLocaleLowerCase().includes(q) : folder.parentId === folderId,
-                  )
-                  .sort((a, b) =>
-                    sort === "name"
-                      ? a.name.localeCompare(b.name)
-                      : Date.parse(b.createdAt) - Date.parse(a.createdAt),
-                  );
-                const allKeys = [
-                  ...(folderId === null ? ["favorites"] : []),
-                  ...folders
-                    .filter((f) => f.parentId === folderId)
-                    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
-                    .map((f) => `folder:${f.id}`),
-                  ...items
-                    .filter((i) => (i.folderId ?? null) === folderId)
-                    .sort((a, b) => Date.parse(b.savedAt) - Date.parse(a.savedAt))
-                    .map((i) => `${i.kind}:${i.id}`),
-                  ...(folderId === null ? ["downloads"] : []),
-                ];
-                const savedOrder = orderedKeys(allKeys, orderResult.data?.[folderId ?? "root"]);
-                const entries: LibraryDragEntry[] = [
-                  ...(favorites
-                    ? [
-                        {
-                          key: "favorites",
-                          id: "favorites",
-                          kind: "favorites",
-                          node: (
-                            <Card
-                              layout={grid ? "grid" : "list"}
-                              href="/favorites"
-                              title={t("nav.favorites")}
-                              subtitle={t("playlists.kind")}
-                              details={
-                                favoriteResult.data
-                                  ? t("count.tracks", { count: favoriteResult.data.total })
-                                  : undefined
-                              }
-                              cover={
-                                <div className="grid size-full place-items-center bg-primary-soft text-primary">
-                                  <HeartIcon size={32} />
-                                </div>
-                              }
-                            />
-                          ),
-                        },
-                      ]
-                    : []),
-                  ...shownFolders.map((folder) => ({
-                    key: `folder:${folder.id}`,
-                    id: folder.id,
-                    kind: "folder",
-                    node: (
-                      <Card
-                        layout={grid ? "grid" : "list"}
-                        onClick={() => openFolder(folder.id)}
-                        title={folder.name}
-                        subtitle={t("folders.items", {
-                          count:
-                            items.filter((item) => item.folderId === folder.id).length +
-                            folders.filter((child) => child.parentId === folder.id).length,
-                        })}
-                        cover={
-                          <div className="grid size-full place-items-center bg-raised text-primary">
-                            <FolderIcon size={32} />
-                          </div>
-                        }
-                        menu={<LibraryFolderMenu folder={folder} />}
-                      />
-                    ),
-                  })),
-                  ...shown.map((item) => ({
-                    key: `${item.kind}:${item.id}`,
-                    id: item.id,
-                    kind: item.kind,
-                    node: <SavedLibraryCard item={item} layout={grid ? "grid" : "list"} />,
-                  })),
-                ];
-                if (sort === "manual" && !q) {
-                  const ranks = new Map(savedOrder.map((key, index) => [key, index]));
-                  entries.sort(
-                    (a, b) => (ranks.get(a.key) ?? Infinity) - (ranks.get(b.key) ?? Infinity),
-                  );
-                }
-                return (
-                  <>
-                    <div className="w-full">
-                      <LibraryDragList
-                        key={folderId ?? "root"}
-                        entries={entries}
-                        folders={folders}
-                        grid={grid}
-                        parent={currentFolder ? currentFolder.parentId : undefined}
-                        disabled={organize.isPending || !orderResult.data || !!q}
-                        onOrder={async (keys) => {
-                          const full =
-                            sort === "manual"
-                              ? savedOrder
-                              : orderedKeys(
-                                  allKeys,
-                                  entries.map((e) => e.key),
-                                );
-                          setSort("manual");
-                          await organize.mutateAsync({
-                            operation: "reorder",
-                            folderId,
-                            order: mergeVisibleOrder(full, keys),
-                          });
-                        }}
-                        onMove={async (entry, destination) => {
-                          if (entry.kind === "folder")
-                            await organize.mutateAsync({
-                              operation: "moveFolder",
-                              id: entry.id,
-                              folderId: destination,
-                            });
-                          else
-                            await organize.mutateAsync({
-                              operation: "moveItem",
-                              id: entry.id,
-                              kind: entry.kind as LibraryKind,
-                              folderId: destination,
-                            });
-                        }}
-                      />
-                    </div>
-                    {organize.isError && (
-                      <p role="alert" className="text-destructive">
-                        {t("folders.failed")}
-                      </p>
-                    )}
-                    {q && (
-                      <p className="text-sm text-muted-foreground">{t("collection.dragSearch")}</p>
-                    )}
-                    {shown.length === 0 && shownFolders.length === 0 && !favorites && (
-                      <EmptyState
-                        title={t(
-                          q
-                            ? "collection.noResults"
-                            : currentFolder
-                              ? "collection.empty"
-                              : filter === "album"
-                                ? "collection.emptyAlbums"
-                                : filter === "artist"
-                                  ? "collection.emptyArtists"
-                                  : filter === "playlist"
-                                    ? "collection.emptyPlaylists"
-                                    : "collection.empty",
-                        )}
-                        description={t(currentFolder ? "folders.emptyHint" : "collection.hint")}
-                        action={
-                          !currentFolder &&
-                          !q && (
-                            <Button asChild>
-                              <PrefetchLink href="/tracks">{t("collection.catalog")}</PrefetchLink>
-                            </Button>
-                          )
-                        }
-                      />
-                    )}
-                  </>
-                );
-              }}
-            </Query>
-          )}
-        </Query>
+        {filter === "audiobook" && bookResult.isPending && !shownBooks.length ? (
+          <Query result={bookResult}>{() => renderCollection(result.data ?? [])}</Query>
+        ) : shownBooks.length > 0 || filter === "audiobook" ? (
+          renderCollection(result.data ?? [])
+        ) : (
+          <Query result={folderResult}>
+            {() => <Query result={result}>{renderCollection}</Query>}
+          </Query>
+        )}
       </div>
       {creating && (
         <PlaylistDialog

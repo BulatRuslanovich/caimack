@@ -41,6 +41,7 @@ pub(super) async fn rescan_library(
     RequestLang(lang): RequestLang,
 ) -> impl IntoResponse {
     state.library.request();
+    state.audiobooks.request_scan();
     (StatusCode::ACCEPTED, Json(state.library.status(lang)))
 }
 

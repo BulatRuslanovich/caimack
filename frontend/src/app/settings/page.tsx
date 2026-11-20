@@ -4,6 +4,8 @@
 
 import { useRecommendations } from "@/lib/useRecommendations";
 import Link from "next/link";
+import type { Route } from "next";
+import { isDesktop } from "@/desktop/api";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import {
@@ -34,6 +36,11 @@ export default function SettingsPage() {
       <Suspense fallback={null}>
         <SettingsSections />
       </Suspense>
+      {isDesktop && (
+        <Link href={"/downloads" as Route} className="text-sm text-primary">
+          {t("nav.downloads")}
+        </Link>
+      )}
     </>
   );
 }

@@ -31,6 +31,10 @@ const optionalNumber = z
   .refine((value) => value === null || Number.isFinite(value), { message: "—" });
 
 export const yearRange = { min: 1500, max: 2999 } as const;
+const optionalYear = optionalNumber.refine(
+  (value) => value === null || (value >= yearRange.min && value <= yearRange.max),
+  { message: "—" },
+);
 
 export const playlistSchema = z.object({
   name: required(limits.playlistName),
@@ -61,10 +65,14 @@ export const artistSchema = z.object({
 export const albumSchema = z.object({
   title: required(limits.albumTitle),
   artist: required(limits.artistName),
-  year: optionalNumber.refine(
-    (value) => value === null || (value >= yearRange.min && value <= yearRange.max),
-    { message: "—" },
-  ),
+  year: optionalYear,
+});
+
+export const audiobookSchema = z.object({
+  title: required(limits.albumTitle),
+  author: trimmed(limits.artistName),
+  narrator: trimmed(limits.artistName),
+  year: optionalYear,
 });
 
 export const newUserSchema = z.object({
@@ -127,6 +135,8 @@ export type TrackValues = z.output<typeof trackSchema>;
 export type ArtistValues = z.infer<typeof artistSchema>;
 export type AlbumInput = z.input<typeof albumSchema>;
 export type AlbumValues = z.output<typeof albumSchema>;
+export type AudiobookInput = z.input<typeof audiobookSchema>;
+export type AudiobookValues = z.output<typeof audiobookSchema>;
 export type NewUserValues = z.infer<typeof newUserSchema>;
 export type SignInValues = z.infer<typeof signInSchema>;
 export type PasswordChangeValues = z.infer<typeof passwordChangeSchema>;

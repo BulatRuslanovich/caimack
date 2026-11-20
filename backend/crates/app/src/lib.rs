@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 pub mod analysis;
+pub mod audiobooks;
 pub mod auth;
 pub mod background;
 pub mod catalog;

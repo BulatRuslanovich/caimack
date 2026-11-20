@@ -41,7 +41,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.NavController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.rememberScrollState
@@ -49,12 +48,12 @@ import androidx.compose.foundation.verticalScroll
 import app.caimack.R
 import app.caimack.api.Genre
 import app.caimack.api.Paged
+import app.caimack.api.Playlist
 import app.caimack.api.Track
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
 
 const val TRACK_PAGE_SIZE = 50
 const val CARD_PAGE_SIZE = 60
@@ -208,18 +207,14 @@ internal fun TrackPage(
 }
 
 @Composable
-fun TracksScreen(play: (List<Track>, Int) -> Unit) {
+fun TracksScreen(query: String, play: (List<Track>, Int) -> Unit) {
     val api = catalogApi()
-    var input by rememberSaveable { mutableStateOf("") }
-    var query by rememberSaveable { mutableStateOf("") }
     var sort by rememberSaveable { mutableStateOf("Title") }
-    LaunchedEffect(input) { delay(300); query = input.trim() }
     // Keep controls mounted while the paged result reloads.
     TrackPage("tracks:$query:$sort", stringResource(R.string.nav_tracks),
         stringResource(if (query.isBlank()) R.string.tracks_empty else R.string.tracks_no_match), null, play,
         toolbar = {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                SearchInput(input, { input = it }, stringResource(R.string.tracks_search))
                 OptionSelector(stringResource(R.string.tracks_sort), sort, listOf(
                     "Title" to stringResource(R.string.sort_title), "Artist" to stringResource(R.string.sort_artist),
                     "Album" to stringResource(R.string.sort_album), "Recent" to stringResource(R.string.sort_recent),
@@ -254,10 +249,10 @@ fun RecentScreen(play: (List<Track>, Int) -> Unit) {
 }
 
 @Composable
-fun AlbumsScreen(nav: NavController) {
+fun AlbumsScreen(query: String, open: (Any) -> Unit) {
     val container = LocalContainer.current
     val api = catalogApi()
-    val pager = rememberPager("albums") { api.albums(it, CARD_PAGE_SIZE) }
+    val pager = rememberPager("albums:$query") { api.albums(it, CARD_PAGE_SIZE, query.takeIf(String::isNotEmpty)) }
     val total = pager.total
 
     val header: @Composable () -> Unit = {
@@ -266,36 +261,35 @@ fun AlbumsScreen(nav: NavController) {
         }
     }
 
-    PagedGrid(pager, stringResource(R.string.albums_empty), header = {
+    PagedGrid(pager, stringResource(if (query.isEmpty()) R.string.albums_empty else R.string.search_nothing_found), header = {
         item(span = { GridItemSpan(maxLineSpan) }) { header() }
     }) { album ->
         val cover = container.media.albumCover(album, small = true)
-        Card(album.title, listOfNotNull(album.artistName, album.year?.toString()).joinToString(", "), { nav.navigate(AlbumRoute(album.id)) }, toneUrl = cover) {
+        Card(album.title, listOfNotNull(album.artistName, album.year?.toString()).joinToString(", "), { open(AlbumRoute(album.id)) }, toneUrl = cover) {
             Cover(cover, album.title, it)
         }
     }
 }
 
 @Composable
-fun ArtistsScreen(nav: NavController) {
+fun ArtistsScreen(query: String, open: (Any) -> Unit) {
     val container = LocalContainer.current
     val api = catalogApi()
     val artworkRevision = if (LocalOfflineLibrary.current) LocalArtworkRevision.current else 0L
-    val pager = rememberPager("artists:$artworkRevision") { api.artists(it, CARD_PAGE_SIZE) }
+    val pager = rememberPager("artists:$artworkRevision:$query") { api.artists(it, CARD_PAGE_SIZE, query.takeIf(String::isNotEmpty)) }
     val total = pager.total
-    PagedGrid(pager, stringResource(R.string.artists_empty), header = {
+    PagedGrid(pager, stringResource(if (query.isEmpty()) R.string.artists_empty else R.string.search_nothing_found), header = {
         item(span = { GridItemSpan(maxLineSpan) }) { PageTitle(stringResource(R.string.nav_artists), total?.let { pluralStringResource(R.plurals.count_artists, it, it) }, inset = false) }
     }) { artist ->
         val image = container.media.artistImage(artist.id, artist.hasImage, small = true)
-        Card(artist.name, pluralStringResource(R.plurals.count_tracks, artist.trackCount, artist.trackCount), { nav.navigate(ArtistRoute(artist.id)) }, round = true, toneUrl = image) {
+        Card(artist.name, pluralStringResource(R.plurals.count_tracks, artist.trackCount, artist.trackCount), { open(ArtistRoute(artist.id)) }, round = true, toneUrl = image) {
             Cover(image, artist.name, it, round = true)
         }
     }
 }
 
 @Composable
-fun GenresScreen(nav: NavController) {
-    val container = LocalContainer.current
+fun GenresScreen(query: String, open: (Any) -> Unit) {
     val api = catalogApi()
     Load(
         "genres",
@@ -303,9 +297,13 @@ fun GenresScreen(nav: NavController) {
         isEmpty = { it.isEmpty() },
         empty = { Column { PageTitle(stringResource(R.string.nav_genres)); Empty(stringResource(R.string.genres_empty)) } },
     ) { genres ->
+        val matching = if (query.isEmpty()) genres else genres.filter { genre ->
+            genre.name.contains(query, ignoreCase = true) || genreTitle(genre.name).contains(query, ignoreCase = true)
+        }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding()) {
-            item { PageTitle(stringResource(R.string.nav_genres), pluralStringResource(R.plurals.count_genres, genres.size, genres.size)) }
-            itemsIndexed(genres) { _, genre -> GenreRow(genre) { nav.navigate(GenreRoute(genre.id, genre.name)) } }
+            item { PageTitle(stringResource(R.string.nav_genres), pluralStringResource(R.plurals.count_genres, matching.size, matching.size)) }
+            if (matching.isEmpty()) item { Empty(stringResource(R.string.search_nothing_found)) }
+            itemsIndexed(matching, key = { _, genre -> genre.id }) { _, genre -> GenreRow(genre) { open(GenreRoute(genre.id, genre.name)) } }
         }
     }
 }
@@ -334,19 +332,20 @@ fun GenreRow(genre: Genre, onClick: () -> Unit) {
 }
 
 @Composable
-fun PlaylistsScreen(nav: NavController) {
+fun PlaylistsScreen(query: String, open: (Any) -> Unit) {
     val palette = LocalPalette.current
     val container = LocalContainer.current
     val api = catalogApi()
     var publicTab by rememberSaveable { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
+    val matches: (Playlist) -> Boolean = { it.name.contains(query, ignoreCase = true) }
 
     if (creating) {
         PlaylistDialog(stringResource(R.string.playlist_new), onDismiss = { creating = false }) { changes ->
             val created = api.createPlaylist(changes)
             withContext(Dispatchers.Main) {
                 creating = false
-                nav.navigate(PlaylistRoute(created.id))
+                open(PlaylistRoute(created.id))
             }
         }
     }
@@ -368,9 +367,10 @@ fun PlaylistsScreen(nav: NavController) {
         Load(
             if (publicTab) "playlists:public" else "playlists:mine",
             { if (publicTab) api.publicPlaylists() else api.playlists() },
-            isEmpty = { it.isEmpty() },
+            isEmpty = { playlists -> playlists.none(matches) },
             empty = {
-                if (publicTab) Empty(stringResource(R.string.playlists_public_empty_title))
+                if (query.isNotEmpty()) Empty(stringResource(R.string.search_nothing_found))
+                else if (publicTab) Empty(stringResource(R.string.playlists_public_empty_title))
                 else Column {
                     Empty(stringResource(R.string.playlists_empty_title), stringResource(R.string.playlists_empty_hint))
                     if (!LocalOfflineLibrary.current) androidx.compose.material3.TextButton(onClick = { creating = true }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
@@ -385,11 +385,11 @@ fun PlaylistsScreen(nav: NavController) {
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
-                itemsIndexed(playlists) { _, playlist ->
+                itemsIndexed(playlists.filter(matches), key = { _, playlist -> playlist.id }) { _, playlist ->
                     val subtitle = pluralStringResource(R.plurals.count_tracks, playlist.trackCount, playlist.trackCount) +
                         if (publicTab) ", ${playlist.ownerName}" else ""
                     val cover = container.media.playlistCover(playlist.id, playlist.hasCover, playlist.coverTrackId, small = true)
-                    Card(playlist.name, subtitle, { nav.navigate(PlaylistRoute(playlist.id)) }, toneUrl = cover) {
+                    Card(playlist.name, subtitle, { open(PlaylistRoute(playlist.id)) }, toneUrl = cover) {
                         Cover(cover, playlist.name, it)
                     }
                 }

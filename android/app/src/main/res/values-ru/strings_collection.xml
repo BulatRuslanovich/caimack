@@ -6,7 +6,6 @@
     <string name="collection_grid">Сетка</string>
     <string name="collection_list">Список</string>
     <string name="collection_empty">Здесь пока ничего не сохранено</string>
-    <string name="collection_saved">Сохранённое</string>
     <string name="search_all_genres">Все жанры</string>
     <string name="error_refresh">Не удалось обновить. Показаны последние загруженные данные.</string>
     <string name="search_browse_empty">В каталоге пока нет жанров</string>
@@ -15,7 +14,6 @@
     <string name="collection_empty_artists">Нет сохранённых исполнителей</string>
     <string name="collection_empty_playlists">Нет сохранённых плейлистов</string>
     <string name="collection_hint">Сохраняйте альбомы, исполнителей и плейлисты кнопкой +.</string>
-    <string name="collection_catalog">Весь каталог</string>
     <string name="collection_failed">Не удалось изменить медиатеку. Попробуйте ещё раз.</string>
     <string name="collection_clear_filter">Сбросить фильтр</string>
     <string name="folders_new">Новая папка</string>

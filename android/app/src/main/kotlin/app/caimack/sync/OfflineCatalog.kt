@@ -22,14 +22,15 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
     val interceptor = Interceptor { chain ->
         val request = chain.request()
         val bound = store.boundAddress
+        val path = request.url.encodedPath.substringAfter("/api/", "")
         if (
             !store.active ||
                 bound == null ||
                 !request.url.toString().startsWith(bound) ||
-                request.header("X-Caimack-Sync") != null
+                request.header("X-Caimack-Sync") != null ||
+                path == "audiobooks" || path.startsWith("audiobooks/")
         )
             return@Interceptor chain.proceed(request)
-        val path = request.url.encodedPath.substringAfter("/api/", "")
         val body =
             request.body
                 ?.let { Buffer().also(it::writeTo).readUtf8() }
@@ -56,15 +57,6 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
         }
     }
 
-    private fun response(request: Request, result: Result): Response =
-        Response.Builder()
-            .request(request)
-            .protocol(Protocol.HTTP_1_1)
-            .code(result.code)
-            .message("Offline library")
-            .body(result.value.toString().toResponseBody("application/json".toMediaType()))
-            .build()
-
     data class Result(val value: JsonElement = JsonNull, val code: Int = 200)
 
     private fun mutation(
@@ -77,19 +69,13 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
         val parts = path.split('/')
         fun action(kind: String, id: String? = null, payload: JsonObject = body) =
             SyncAction(kind = kind, entityId = id, payload = payload)
+        preference(method, path) { body }?.let { return it }
         if (path == "me/library/organize" && method == "POST") {
             val mutation = action("libraryOrganize")
             try { organizeLibrary(view(snapshot, store.edits()), body, mutation.occurredAt) }
             catch (error: IllegalArgumentException) { throw IOException(error.message, error) }
             return mutation
         }
-        if (
-            parts.size == 3 &&
-                parts[0] == "tracks" &&
-                parts[2] == "favorite" &&
-                method in listOf("POST", "DELETE")
-        )
-            return action("favorite", parts[1], buildJsonObject { put("value", method == "POST") })
         if (parts.size == 4 && parts.take(2) == listOf("me", "library") && method in listOf("PUT", "DELETE")) {
             if (parts[2] !in listOf("album", "artist", "playlist")) throw IOException("Unknown library item")
             val data = view(snapshot, store.edits())
@@ -97,8 +83,6 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
                 throw IOException("Library item is unavailable offline")
             return action("library", parts[3], buildJsonObject { put("kind", parts[2]); put("value", method == "PUT") })
         }
-        if (path == "history" && method == "POST") return action("history")
-        if (path == "recommendations/rules" && method == "POST") return action("tasteRule")
         if (parts.first() != "playlists") return null
         if (parts.size == 1 && method == "POST")
             return action("playlistCreate", UUID.randomUUID().toString())
@@ -140,18 +124,33 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
             "playlistCreate",
             "playlistUpdate" ->
                 Result(data.objects("playlists").first { it.string("id") == action.entityId })
-            "tasteRule" ->
-                Result(
-                    buildJsonObject {
-                        put("id", action.id)
-                        put("action", action.payload.string("action"))
-                        put("name", "")
-                    }
-                )
-            else -> Result(code = 204)
+            else -> preferenceResult(action)
         }
 
     companion object {
+        internal fun response(request: Request, result: Result): Response =
+            Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
+                .code(result.code).message("Offline library")
+                .body(result.value.toString().toResponseBody("application/json".toMediaType())).build()
+
+        internal fun preference(method: String, path: String, body: () -> JsonObject): SyncAction? {
+            if (method == "POST") {
+                if (path == "history") return SyncAction(kind = "history", payload = body())
+                if (path == "recommendations/rules") return SyncAction(kind = "tasteRule", payload = body())
+            }
+            if (method != "POST" && method != "DELETE") return null
+            val parts = path.split('/')
+            if (parts.size != 3 || parts.first() != "tracks" || parts.last() != "favorite") return null
+            return SyncAction(kind = "favorite", entityId = parts[1], payload = buildJsonObject { put("value", method == "POST") })
+        }
+
+        internal fun preferenceResult(action: SyncAction): Result =
+            if (action.kind == "tasteRule") Result(buildJsonObject {
+                put("id", action.id)
+                put("action", action.payload.string("action"))
+                put("name", "")
+            }) else Result(code = 204)
+
         fun view(snapshot: JsonObject, actions: List<SyncAction>): JsonObject {
             var tracks = snapshot.objects("tracks")
             var playlists = snapshot.objects("playlists")

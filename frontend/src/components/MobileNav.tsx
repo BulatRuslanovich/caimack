@@ -3,17 +3,12 @@
 "use client";
 
 import { useRecommendations } from "@/lib/useRecommendations";
+import { useAudiobooks } from "@/contexts/AudiobookContext";
 import { PrefetchLink as Link } from "@/components/PrefetchLink";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
-import {
-  isActivePath,
-  isLibraryBrowsePath,
-  libraryTabs,
-  mobileNav,
-  serviceNav,
-} from "@/lib/navigation";
+import { isActivePath, libraryTabs, primaryNav, serviceNav } from "@/lib/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUpload } from "@/contexts/UploadContext";
 import { useT } from "@/contexts/I18nContext";
@@ -109,12 +104,7 @@ export function LibraryChips() {
     strip.current.scrollLeft += offset - (strip.current.clientWidth - active.offsetWidth) / 2;
   }, [pathname]);
 
-  if (
-    isLibraryBrowsePath(pathname) ||
-    /^\/(albums|artists|playlists)\//.test(pathname) ||
-    !inLibrary(pathname)
-  )
-    return null;
+  if (pathname === "/library" || !inLibrary(pathname)) return null;
 
   return (
     <nav
@@ -145,6 +135,7 @@ export function LibraryChips() {
 export function MobileNav() {
   const t = useT();
   const pathname = usePathname();
+  const { enabled: audiobooks } = useAudiobooks();
 
   return (
     <nav
@@ -155,7 +146,7 @@ export function MobileNav() {
         paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
-      {mobileNav.map(({ href, labelKey, icon: Icon }) => {
+      {primaryNav(audiobooks).map(({ href, labelKey, icon: Icon }) => {
         const active = href === "/library" ? inLibrary(pathname) : isActivePath(pathname, href);
 
         return (

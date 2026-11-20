@@ -304,6 +304,9 @@ data class TrackLookup(val ids: List<String>)
 @kotlinx.serialization.Serializable
 data class ServerCapabilities(val recommendationsEnabled: Boolean = false)
 
+@kotlinx.serialization.Serializable
+data class AudiobookExperiment(val enabled: Boolean = false)
+
 @Serializable
 data class LibraryItem(
     val kind: String, val id: String, val title: String, val subtitle: String = "",

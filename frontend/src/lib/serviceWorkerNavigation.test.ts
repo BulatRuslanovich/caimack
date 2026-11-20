@@ -36,9 +36,35 @@ it("never serves saved playback and background job statuses", () => {
     "/api/playback/now",
     "/api/library/scan",
     "/api/integrations/yandex-music/imports",
+    "/api/audiobooks",
+    "/api/audiobooks/book/chapters/chapter/stream",
   ]) {
     expect(intercepts(new Request(`https://music.test${path}`))).toBe(false);
   }
+});
+
+it("serves byte ranges from explicitly downloaded audiobook chapters", async () => {
+  const downloadedChapter = runInNewContext(`${source}\ndownloadedChapter`, {
+    self: { location: { origin: "https://music.test", search: "" }, addEventListener: vi.fn() },
+    caches: {
+      open: async () => ({
+        match: async () =>
+          new Response("0123456789", { headers: { "Content-Type": "audio/mpeg" } }),
+      }),
+    },
+    Response,
+  }) as (request: Request) => Promise<Response>;
+  const url = "https://music.test/__caimack/audiobooks/account/book/audio/chapter";
+  const request = new Request(url, { headers: { Range: "bytes=3-5" } });
+  expect(intercepts(request)).toBe(true);
+  const response = await downloadedChapter(request);
+  expect(response.status).toBe(206);
+  expect(response.headers.get("Content-Range")).toBe("bytes 3-5/10");
+  expect(response.headers.get("Content-Type")).toBe("audio/mpeg");
+  expect(await response.text()).toBe("345");
+
+  const invalid = await downloadedChapter(new Request(url, { headers: { Range: "bytes=10-" } }));
+  expect(invalid.status).toBe(416);
 });
 
 it("leaves Next.js chunks to the network under next dev", () => {
