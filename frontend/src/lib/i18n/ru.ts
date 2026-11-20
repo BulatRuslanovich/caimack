@@ -499,7 +499,8 @@ export const ru: Dictionary = {
   "queue.saveAsPlaylist": "Сохранить очередь как плейлист",
   "queue.savedAsPlaylist": "Очередь сохранена как плейлист.",
 
-  "search.placeholder": "Музыка, исполнители, альбомы, жанры…",
+  "search.placeholder": "Музыка, исполнители, аудиокниги…",
+  "search.audiobookPlaceholder": "Название, автор, чтец…",
   "search.browseGenres": "Жанры в фонотеке",
   "search.mostPlayedTracks": "Самые прослушиваемые треки",
   "search.mostPlayedAlbums": "Самые прослушиваемые альбомы",

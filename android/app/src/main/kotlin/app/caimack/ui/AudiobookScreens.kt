@@ -64,12 +64,12 @@ private const val DURATION = "duration"
 private const val DOWNLOADED = "downloaded"
 
 @Composable
-fun AudiobookBrowse(savedOnly: Boolean = false) {
+fun AudiobookBrowse() {
     val container = LocalContainer.current
     val catalog by container.audiobookStore.state.collectAsStateWithLifecycle()
     var filter by rememberSaveable { mutableStateOf(RECENT) }
     val saved = catalog.books.filter { it.saved }
-    val books = if (savedOnly) saved else catalog.books
+    val books = catalog.books
     val sorted = when (filter) {
         DURATION -> books.sortedBy { it.durationMs }
         DOWNLOADED -> books.filter { it.id in catalog.downloaded }
@@ -81,7 +81,7 @@ fun AudiobookBrowse(savedOnly: Boolean = false) {
         contentPadding = playerContentPadding(top = 12.dp, bottom = 20.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        if (!savedOnly && filter == RECENT) inProgress.firstOrNull()?.let { book ->
+        if (filter == RECENT) inProgress.firstOrNull()?.let { book ->
             item("continue") {
                 BookHeader(R.string.audiobook_continue)
                 BookHero(book, catalog)
@@ -96,14 +96,13 @@ fun AudiobookBrowse(savedOnly: Boolean = false) {
         }
         if (!catalog.ready && books.isEmpty()) item("loading") { BookLoading() }
         if (catalog.ready && books.isEmpty() && !catalog.online) item("error") { Failure(container.audiobookStore::requestRefresh) }
-        if (!savedOnly && filter == RECENT) {
+        if (filter == RECENT) {
             bookSection("progress", R.string.audiobook_in_progress, inProgress, catalog)
             bookSection("saved", R.string.audiobook_saved_section, saved, catalog)
         }
         if (sorted.isNotEmpty()) {
             val heading = when {
                 filter == DOWNLOADED -> R.string.collection_downloaded
-                savedOnly -> R.string.audiobook_saved_section
                 else -> R.string.audiobook_all
             }
             bookSection("catalog", heading, sorted, catalog)
@@ -214,13 +213,13 @@ private fun BookHero(book: Audiobook, catalog: AudiobookCatalog) {
 }
 
 @Composable
-private fun BookRow(book: Audiobook, catalog: AudiobookCatalog) {
+internal fun BookRow(book: Audiobook, catalog: AudiobookCatalog, open: (() -> Unit)? = null) {
     val container = LocalContainer.current
     val palette = LocalPalette.current
     val navigate = LocalNavigate.current
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(Radius.row)
-            .clickable { navigate(AudiobookRoute(book.id)) }.padding(vertical = 5.dp),
+            .clickable { if (open != null) open() else navigate(AudiobookRoute(book.id)) }.padding(vertical = 5.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -289,7 +288,7 @@ private fun BookPlay(book: Audiobook, catalog: AudiobookCatalog, prominent: Bool
 }
 
 @Composable
-private fun BookMenu(book: Audiobook, catalog: AudiobookCatalog) {
+internal fun BookMenu(book: Audiobook, catalog: AudiobookCatalog) {
     val store = LocalContainer.current.audiobookStore
     var open by remember { mutableStateOf(false) }
     Box {

@@ -18,6 +18,7 @@ import {
 import { useEffect, useState, type CSSProperties } from "react";
 import { DetailHeader } from "@/components/DetailHeader";
 import { EmptyState } from "@/components/EmptyState";
+import { Card } from "@/components/MediaCard";
 import { PageHeader, Section } from "@/components/PageHeader";
 import { PlayerProgressMeter } from "@/components/PlayerProgress";
 import { PrefetchLink } from "@/components/PrefetchLink";
@@ -221,7 +222,7 @@ function BookActions({ book }: { book: Audiobook }) {
   );
 }
 
-function BookRow({ book }: { book: Audiobook }) {
+export function AudiobookRow({ book }: { book: Audiobook }) {
   const t = useT();
   const { downloaded, transfer } = useAudiobooks();
   const artwork = useAudiobookArtwork(book);
@@ -294,7 +295,7 @@ function BookSection({
       </div>
       <ul className="divide-y divide-border">
         {books.map((book) => (
-          <BookRow key={book.id} book={book} />
+          <AudiobookRow key={book.id} book={book} />
         ))}
       </ul>
     </section>
@@ -358,11 +359,29 @@ export function AudiobookHome() {
   );
 }
 
-export function AudiobookLibrary() {
+export function LibraryAudiobookCard({ book, grid }: { book: Audiobook; grid: boolean }) {
   const t = useT();
-  const { books } = useAudiobooks();
-  const saved = books.filter((book) => book.saved).slice(0, 5);
-  return <BookSection title={t("nav.audiobooks")} books={saved} viewAll />;
+  const { totalDuration } = useFormat();
+  const artwork = useAudiobookArtwork(book);
+  const subtitle = [
+    t("audiobooks.kind"),
+    book.author,
+    book.narrator && t("audiobooks.narrator", { name: book.narrator }),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <Card
+      layout={grid ? "grid" : "list"}
+      href={audiobookHref(book.id)}
+      title={book.title}
+      subtitle={subtitle}
+      details={totalDuration(book.durationMs / 1000)}
+      toneSrc={artwork}
+      cover={<AudiobookCover book={book} artwork={artwork} className="size-full" />}
+      menu={<BookActions book={book} />}
+    />
+  );
 }
 
 export function AudiobooksPage() {

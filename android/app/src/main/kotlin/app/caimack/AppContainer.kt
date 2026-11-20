@@ -275,7 +275,7 @@ class AppContainer(context: Context) {
             scope, ::audiobookAccount, audiobookAccounts)
     }
     internal val audiobookPlayback by lazy {
-        AudiobookPlayback(context.applicationContext, scope, audiobookStore, ::audiobookAccount, player::pauseLocal)
+        AudiobookPlayback(context.applicationContext, scope, audiobookStore, ::audiobookAccount, connect::pauseForAudiobook)
     }
 
     private val artworkRefresh = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)

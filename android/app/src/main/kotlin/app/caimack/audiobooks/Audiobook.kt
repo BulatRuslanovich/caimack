@@ -22,6 +22,7 @@ data class Audiobook(
     val durationMs: Long,
     val chapters: List<AudiobookChapter>,
     val saved: Boolean = false,
+    val savedAtMs: Long? = null,
     val progress: AudiobookProgress? = null,
 ) {
     fun elapsedMs(progress: AudiobookProgress): Long {

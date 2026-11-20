@@ -474,7 +474,8 @@ export const en = {
   "queue.saveAsPlaylist": "Save the queue as a playlist",
   "queue.savedAsPlaylist": "The queue was saved as a playlist.",
 
-  "search.placeholder": "Music, artists, albums, genres…",
+  "search.placeholder": "Music, artists, audiobooks…",
+  "search.audiobookPlaceholder": "Title, author, narrator…",
   "search.browseGenres": "Browse by genre",
   "search.mostPlayedTracks": "Most played tracks",
   "search.mostPlayedAlbums": "Most played albums",

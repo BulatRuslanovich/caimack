@@ -741,7 +741,7 @@ function PlayerSessionProvider({
                     <AudiobookProvider
                       userId={userId}
                       musicPlaying={displayedPlaying}
-                      pauseMusic={connected.actions.pause}
+                      pauseMusic={connected.pauseForAudiobook}
                       onActiveChange={setAudiobookActive}
                       volume={volume}
                       muted={muted}

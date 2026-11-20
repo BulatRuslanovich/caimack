@@ -285,13 +285,14 @@ export function useAudiobookCatalog(scope: string | null, online: boolean) {
   const savedChange = async (book: Audiobook) => {
     const saved = !book.saved;
     await audiobookApi.save(book.id, saved);
-    updateBook(book.id, (current) => ({ ...current, saved }));
+    const savedAtMs = saved ? Date.now() : null;
+    updateBook(book.id, (current) => ({ ...current, saved, savedAtMs }));
     if (scope) {
       const catalog = await readAudiobookCatalog(scope).catch(() => undefined);
       if (catalog) {
         await storeAudiobookCatalog(
           scope,
-          catalog.map((item) => (item.id === book.id ? { ...item, saved } : item)),
+          catalog.map((item) => (item.id === book.id ? { ...item, saved, savedAtMs } : item)),
         ).catch(() => {});
       }
     }

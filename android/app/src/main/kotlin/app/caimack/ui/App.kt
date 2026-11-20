@@ -319,7 +319,7 @@ private fun AppContent(
             composable<HomeRoute> { HomeScreen(nav) }
             composable<SearchRoute> { SearchScreen(nav, play, it.toRoute<SearchRoute>().initialCategory()) }
             composable<LibraryRoute> { LibraryScreen(nav) }
-            composable<SavedAudiobooksRoute> { AudiobookBrowse(savedOnly = true) }
+            composable<SavedAudiobooksRoute> { LibraryScreen(nav, initialFilter = "audiobook") }
             composable<AudiobookRoute> { AudiobookDetail(it.toRoute<AudiobookRoute>().id) }
             composable<FavoritesRoute> { FavoritesScreen(play) }
             composable<RecentRoute> { RecentScreen(play) }

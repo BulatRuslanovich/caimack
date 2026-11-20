@@ -13,6 +13,7 @@ import { rememberSearch } from "@/lib/recentSearches";
 import { isCatalogTab, type CatalogTab } from "@/lib/searchNavigation";
 import { AlbumCard, ArtistCard } from "@/components/MediaCard";
 import { PageHeader, Section } from "@/components/PageHeader";
+import { AudiobookRow } from "@/components/audiobooks/AudiobookViews";
 import { SearchField } from "@/components/SearchField";
 import { Query } from "@/components/Query";
 import { TrackList } from "@/components/TrackList";
@@ -23,6 +24,8 @@ import { ToggleGroup, ToggleGroupButton } from "@/components/ui/toggle-group";
 import { useT } from "@/contexts/I18nContext";
 import { useYandexMusicSettings } from "@/lib/useYandexMusic";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAudiobooks } from "@/contexts/AudiobookContext";
+import { filterAudiobooks, type Audiobook } from "@/lib/audiobooks";
 import { YandexSearchWorkspace } from "@/components/yandex/YandexSearchWorkspace";
 import { YandexActivityButton } from "@/components/yandex/YandexImports";
 import { TracksPage } from "@/app/tracks/TracksPage";
@@ -65,6 +68,7 @@ function SearchView() {
   const client = useQueryClient();
 
   const { isAdmin } = useAuth();
+  const { books, result: audiobookCatalog } = useAudiobooks();
   const yandexSettings = useYandexMusicSettings();
   const yandex = isAdmin && yandexSettings.enabled;
 
@@ -73,7 +77,7 @@ function SearchView() {
   const yandexTab = yandex && tabParam === YANDEX_TAB;
   const tab = isCatalogTab(tabParam) ? tabParam : null;
   const [visited, setVisited] = useState<CatalogTab[]>([]);
-  if (tab && !visited.includes(tab)) setVisited([...visited, tab]);
+  if (tab && tab !== "audiobooks" && !visited.includes(tab)) setVisited([...visited, tab]);
 
   const navigate = (next: string, nextTab: Tab | null, push = false, genreId?: string | null) => {
     const search = new URLSearchParams();
@@ -92,6 +96,12 @@ function SearchView() {
   });
 
   const previewTracks = useMemo(() => results.data?.tracks.slice(0, PREVIEW) ?? [], [results.data]);
+  const bookMatches = useMemo(() => filterAudiobooks(books, query), [books, query]);
+  const searchPlaceholder = yandexTab
+    ? "yandex.searchPlaceholder"
+    : tab === "audiobooks"
+      ? "search.audiobookPlaceholder"
+      : "search.placeholder";
 
   return (
     <div className="search-page flex min-w-0 flex-col gap-3">
@@ -118,7 +128,7 @@ function SearchView() {
         <SearchField
           value={query}
           onChange={(next) => navigate(next, yandexTab ? YANDEX_TAB : tab)}
-          placeholder={t(yandexTab ? "yandex.searchPlaceholder" : "search.placeholder")}
+          placeholder={t(searchPlaceholder)}
           autoFocus
         />
       </div>
@@ -150,6 +160,8 @@ function SearchView() {
             <Query
               result={results}
               isEmpty={(data) =>
+                bookMatches.length === 0 &&
+                !audiobookCatalog.isPending &&
                 data.artists.length === 0 &&
                 data.albums.length === 0 &&
                 data.tracks.length === 0 &&
@@ -217,6 +229,33 @@ function SearchView() {
               )}
             </Query>
           ))}
+        {!yandexTab &&
+          tab === null &&
+          query.length >= SEARCH_MIN_LENGTH &&
+          bookMatches.length > 0 && (
+            <Section
+              title={t("nav.audiobooks")}
+              href={seeAll(query, "audiobooks", bookMatches.length)}
+            >
+              <AudiobookMatches books={bookMatches.slice(0, PREVIEW)} />
+            </Section>
+          )}
+        {!yandexTab &&
+          tab === "audiobooks" &&
+          (bookMatches.length > 0 ? (
+            <AudiobookMatches books={bookMatches} />
+          ) : (
+            <Query
+              result={audiobookCatalog}
+              isEmpty={() => true}
+              empty={{
+                icon: <SearchIcon size={24} />,
+                title: t(query ? "search.nothingFound" : "audiobooks.empty"),
+              }}
+            >
+              {() => null}
+            </Query>
+          ))}
         {visited.map((category) => (
           <Activity key={category} mode={tab === category && !yandexTab ? "visible" : "hidden"}>
             {category === "tracks" && <TracksPage query={query} />}
@@ -234,6 +273,16 @@ function SearchView() {
         ))}
       </div>
     </div>
+  );
+}
+
+function AudiobookMatches({ books }: { books: Audiobook[] }) {
+  return (
+    <ul className="min-w-0 divide-y divide-border">
+      {books.map((book) => (
+        <AudiobookRow key={book.id} book={book} />
+      ))}
+    </ul>
   );
 }
 

@@ -64,6 +64,7 @@ private data class AudiobookStatus(
     val saved: Set<String>,
     val pendingProgress: Map<String, AudiobookProgress>,
     val pendingSaves: Map<String, Boolean>,
+    val savedAtMs: Map<String, Long> = emptyMap(),
 )
 
 internal class AudiobookStore(
@@ -174,7 +175,9 @@ internal class AudiobookStore(
                 lock.withLock {
                     if (currentAccount() != account) return@withLock
                     load(account)
-                    persist(account, cache.copy(pendingSaves = cache.pendingSaves + (id to saved)))
+                    val savedAt = if (saved) System.currentTimeMillis() else null
+                    val books = cache.books.map { if (it.id == id) it.copy(savedAtMs = savedAt) else it }
+                    persist(account, cache.copy(books = books, pendingSaves = cache.pendingSaves + (id to saved)))
                     requests.trySend(Unit)
                 }
             } catch (error: IOException) {
@@ -321,7 +324,9 @@ internal class AudiobookStore(
         status = account?.let { read<AudiobookStatus>(statusFile(it)) }
         cache = status?.let { saved ->
             metadata.copy(
-                books = metadata.books.map { it.copy(progress = saved.progress[it.id], saved = it.id in saved.saved) },
+                books = metadata.books.map {
+                    it.copy(progress = saved.progress[it.id], saved = it.id in saved.saved, savedAtMs = saved.savedAtMs[it.id])
+                },
                 pendingProgress = saved.pendingProgress, pendingSaves = saved.pendingSaves,
             )
         } ?: metadata
@@ -331,12 +336,13 @@ internal class AudiobookStore(
 
     private fun persist(account: AudiobookAccount, updated: AudiobookCache) {
         if (updated == cache) return
-        val nextMetadata = AudiobookCache(updated.books.map { it.copy(progress = null, saved = false) }, updated.downloads)
+        val nextMetadata = AudiobookCache(updated.books.map { it.copy(progress = null, saved = false, savedAtMs = null) }, updated.downloads)
         val nextStatus = AudiobookStatus(
             updated.books.mapNotNull { book -> book.progress?.let { book.id to it } }.toMap(),
             updated.books.filter { it.saved }.mapTo(hashSetOf()) { it.id },
             updated.pendingProgress,
             updated.pendingSaves,
+            updated.books.mapNotNull { book -> book.savedAtMs?.let { book.id to it } }.toMap(),
         )
         if (nextStatus != status) {
             statusFile(account).writeText(json.encodeToString(nextStatus))

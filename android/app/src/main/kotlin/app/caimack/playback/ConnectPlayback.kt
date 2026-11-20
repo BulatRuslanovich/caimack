@@ -64,7 +64,13 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
     private var remoteTracks = emptyList<Track>()
     private val sending = Mutex()
     private val reports = Mutex()
-    private data class Outbound(val target: String, val selection: Long, val command: ConnectCommand, val revision: Long?)
+    private data class Outbound(
+        val target: String,
+        val selection: Long,
+        val command: ConnectCommand,
+        val revision: Long?,
+        val musicHandoff: (() -> Unit)?,
+    )
     private val outbound = Channel<Outbound>(32)
     private val executed = LinkedHashSet<String>()
     private var renderer: (suspend (ConnectCommand) -> Unit)? = null
@@ -74,7 +80,7 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
         container.scope.launch(Dispatchers.Main) {
             for (item in outbound) {
                 if (item.selection != selection || item.target != current.value.selectedId) continue
-                try { send(item.target, item.command, item.revision) }
+                try { send(item.target, item.command, item.revision, item.musicHandoff) }
                 catch (error: Exception) {
                     if (error is CancellationException && error !is TimeoutCancellationException) throw error
                     if (item.selection == selection && current.value.available) {
@@ -323,16 +329,48 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
             is ConnectCommand.Remove, is ConnectCommand.Move, is ConnectCommand.Jump -> current.value.playback?.queueRevision
             else -> null
         }
-        if (!current.value.available || outbound.trySend(Outbound(target, selection, command, revision)).isFailure) failure()
+        if (!current.value.available ||
+            outbound.trySend(Outbound(target, selection, command, revision, command.musicHandoff())).isFailure) failure()
         return true
     }
 
     suspend fun command(command: ConnectCommand, revision: Long? = null) {
         val target = current.value.selectedId ?: error("No playback device selected")
-        send(target, command, revision)
+        send(target, command, revision, command.musicHandoff())
     }
 
-    private suspend fun send(target: String, command: ConnectCommand, revision: Long? = null, expectedSelection: Long = selection) = sending.withLock {
+    internal suspend fun pauseForAudiobook() {
+        val device = current.value
+        val target = device.selectedId
+        if (target == null) {
+            container.player.pauseLocal()
+        } else if (device.available) {
+            // Let the remote music session settle before the book takes audio focus.
+            withTimeoutOrNull(2_000) {
+                try { send(target, ConnectCommand.SetPlaying(false)) }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { /* Local playback can still start. */ }
+            }
+        }
+    }
+
+    private fun ConnectCommand.musicHandoff(): (() -> Unit)? {
+        val startsMusic = when (this) {
+            is ConnectCommand.Play -> playing
+            is ConnectCommand.SetPlaying -> playing
+            is ConnectCommand.StartRadio -> true
+            else -> false
+        }
+        return if (startsMusic) container.audiobookPlayback.prepareMusicHandoff() else null
+    }
+
+    private suspend fun send(
+        target: String,
+        command: ConnectCommand,
+        revision: Long? = null,
+        musicHandoff: (() -> Unit)? = null,
+        expectedSelection: Long = selection,
+    ) = sending.withLock {
         val connection = connectionId
         check(expectedSelection == selection && current.value.selectedId == target && current.value.available && connection != null) {
             "Playback device is offline"
@@ -340,7 +378,10 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
         current.value = current.value.copy(pending = true)
         try {
             val next = withTimeout(12_000) { container.api.connectCommand(ConnectRequest(UUID.randomUUID().toString(), target, command, revision)) }
-            if (expectedSelection == selection && connection == connectionId) accept(next)
+            if (expectedSelection == selection && connection == connectionId) {
+                if (next.playback?.let { it.deviceId == target && (it.isPlaying || it.buffering) } == true) musicHandoff?.invoke()
+                accept(next)
+            }
         } finally {
             if (expectedSelection == selection && connection == connectionId) current.value = current.value.copy(pending = false)
         }

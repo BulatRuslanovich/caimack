@@ -32,6 +32,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
@@ -46,9 +47,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.caimack.R
 import app.caimack.api.SearchResults
 import app.caimack.api.Track
+import app.caimack.audiobooks.Audiobook
+import app.caimack.audiobooks.AudiobookCatalog
+import java.text.Normalizer
 import kotlinx.coroutines.delay
 
 private const val MIN_LENGTH = 3
@@ -57,6 +62,7 @@ private const val PREVIEW = 5
 
 enum class SearchCategory(val label: Int) {
     Tracks(R.string.nav_tracks),
+    Audiobooks(R.string.nav_audiobooks),
     Albums(R.string.nav_albums),
     Artists(R.string.nav_artists),
     Playlists(R.string.nav_playlists),
@@ -81,6 +87,9 @@ fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit, initialCa
     var query by rememberSaveable { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf(initialCategory) }
     val categoryState = rememberSaveableStateHolder()
+    val catalog by container.audiobookStore.state.collectAsStateWithLifecycle()
+    val books = catalog.books
+    val bookMatches = remember(books, query) { books.matchingAudiobooks(query) }
 
     LaunchedEffect(input) {
         delay(300)
@@ -102,7 +111,9 @@ fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit, initialCa
         SearchInput(
             value = input,
             onValueChange = { input = it; if (it.isEmpty()) query = "" },
-            label = stringResource(R.string.search_placeholder),
+            label = stringResource(
+                if (category == SearchCategory.Audiobooks) R.string.search_audiobook_placeholder else R.string.search_placeholder,
+            ),
             modifier = Modifier.padding(horizontal = 16.dp),
             onSearch = {
                 query = input.trim()
@@ -117,6 +128,7 @@ fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit, initialCa
             categoryState.SaveableStateProvider(selected.name) {
                 when (selected) {
                     SearchCategory.Tracks -> TracksScreen(query, playFound)
+                    SearchCategory.Audiobooks -> AudiobookSearchResults(bookMatches, catalog, query, open)
                     SearchCategory.Albums -> AlbumsScreen(query, open)
                     SearchCategory.Artists -> ArtistsScreen(query, open)
                     SearchCategory.Playlists -> PlaylistsScreen(query, open)
@@ -138,8 +150,22 @@ fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit, initialCa
             return@Column
         }
 
-        Load("search:$query", { container.api.search(query, LIMIT) }, isEmpty = { it.isEmpty() }, empty = { Empty(stringResource(R.string.search_nothing_found)) }) { results ->
-            AllResults(results, open, playFound)
+        val previewBooks = bookMatches.take(PREVIEW)
+        Load(
+            "search:$query",
+            { container.api.search(query, LIMIT) },
+            isEmpty = { it.isEmpty() && previewBooks.isEmpty() },
+            empty = { Empty(stringResource(R.string.search_nothing_found)) },
+            loading = {
+                if (previewBooks.isEmpty()) SearchLoading()
+                else AllResults(SearchResults(), previewBooks, catalog, open, playFound)
+            },
+            error = { retry ->
+                if (previewBooks.isEmpty()) Failure(retry)
+                else AllResults(SearchResults(), previewBooks, catalog, open, playFound)
+            },
+        ) { results ->
+            AllResults(results, previewBooks, catalog, open, playFound)
         }
     }
 }
@@ -147,7 +173,13 @@ fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit, initialCa
 private fun SearchResults.isEmpty() = tracks.isEmpty() && albums.isEmpty() && artists.isEmpty() && genres.isEmpty()
 
 @Composable
-private fun AllResults(results: SearchResults, open: (Any) -> Unit, play: (List<Track>, Int) -> Unit) {
+private fun AllResults(
+    results: SearchResults,
+    books: List<Audiobook>,
+    catalog: AudiobookCatalog,
+    open: (Any) -> Unit,
+    play: (List<Track>, Int) -> Unit,
+) {
     val palette = LocalPalette.current
     val media = LocalContainer.current.media
 
@@ -178,6 +210,12 @@ private fun AllResults(results: SearchResults, open: (Any) -> Unit, play: (List<
         if (results.tracks.isNotEmpty()) {
             item { SectionHeader(stringResource(R.string.nav_tracks)) }
             itemsIndexed(results.tracks.take(PREVIEW)) { index, track -> TrackRow(track, { play(results.tracks, index) }) }
+        }
+        if (books.isNotEmpty()) {
+            item { SectionHeader(stringResource(R.string.nav_audiobooks)) }
+            items(books, key = { "book-${it.id}" }) { book ->
+                BookRow(book, catalog) { open(AudiobookRoute(book.id)) }
+            }
         }
         if (results.albums.isNotEmpty()) {
             item {
@@ -210,6 +248,45 @@ private fun AllResults(results: SearchResults, open: (Any) -> Unit, play: (List<
             item { SectionHeader(stringResource(R.string.nav_genres)) }
             items(results.genres, key = { it.id }) { genre -> GenreRow(genre) { open(GenreRoute(genre.id, genre.name)) } }
         }
+    }
+}
+
+@Composable
+private fun AudiobookSearchResults(
+    books: List<Audiobook>,
+    catalog: AudiobookCatalog,
+    query: String,
+    open: (Any) -> Unit,
+) {
+    if (books.isEmpty()) {
+        if (!catalog.ready) SearchLoading()
+        else Empty(stringResource(if (query.isBlank()) R.string.audiobook_empty else R.string.search_nothing_found))
+        return
+    }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(top = 12.dp, bottom = 24.dp)) {
+        items(books, key = { it.id }) { book ->
+            BookRow(book, catalog) { open(AudiobookRoute(book.id)) }
+        }
+    }
+}
+
+@Composable
+private fun SearchLoading() {
+    Box(Modifier.fillMaxWidth().padding(vertical = 64.dp), contentAlignment = Alignment.Center) { RecordLoading(44.dp) }
+}
+
+private val SEARCH_WORD = Regex("[\\p{L}\\p{N}]+")
+
+private fun searchWords(value: String) =
+    SEARCH_WORD.findAll(Normalizer.normalize(value, Normalizer.Form.NFC).lowercase().replace('ё', 'е')).map { it.value }
+
+internal fun List<Audiobook>.matchingAudiobooks(query: String): List<Audiobook> {
+    if (query.isBlank()) return this
+    val words = searchWords(query).toList()
+    if (words.isEmpty()) return emptyList()
+    return filter { book ->
+        val fields = searchWords(listOfNotNull(book.title, book.author, book.narrator).joinToString(" ")).joinToString(" ")
+        words.all(fields::contains)
     }
 }
 

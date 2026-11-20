@@ -40,7 +40,7 @@ internal class AudiobookPlayback(
     private val scope: CoroutineScope,
     private val store: AudiobookStore,
     private val account: () -> AudiobookAccount?,
-    private val stopMusic: () -> Unit,
+    private val stopMusic: suspend () -> Unit,
 ) {
     private var connection: ListenableFuture<MediaController>? = null
     private var start: Job? = null
@@ -79,6 +79,7 @@ internal class AudiobookPlayback(
                 }
                 val items = selected.chapters.map { chapter -> mediaItem(owner, selected, chapter, extras) }
                 stopMusic()
+                if (account() != owner) return@launch
                 player.setMediaItems(items, index, position)
                 player.prepare()
                 player.play()
@@ -107,6 +108,11 @@ internal class AudiobookPlayback(
     fun skipChapter(next: Boolean) {
         val player = controller() ?: return
         if (next) player.seekToNextMediaItem() else player.seekToPreviousMediaItem()
+    }
+
+    fun prepareMusicHandoff(): () -> Unit {
+        val audiobookRequest = start
+        return { if (audiobookRequest === start) pauseForMusic() }
     }
 
     fun pauseForMusic() {

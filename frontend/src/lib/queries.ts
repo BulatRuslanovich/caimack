@@ -61,6 +61,7 @@ export const queries = {
     queryOptions({
       queryKey: ["settings"],
       queryFn: () => api.settings(),
+      meta: { hasOfflineFallback: true },
     }),
 
   sessions: () => queryOptions({ queryKey: ["sessions"], queryFn: () => api.sessions() }),
@@ -285,6 +286,9 @@ export const queries = {
 
 export function prefetchSearchCategory(client: QueryClient, tab: CatalogTab, q?: string) {
   switch (tab) {
+    // The audiobook provider already loads the catalog and its local copy.
+    case "audiobooks":
+      return Promise.resolve();
     case "tracks":
       return client.prefetchQuery(
         queries.tracks({ page: 1, pageSize: TRACK_PAGE_SIZE, sort: "Title", q }),

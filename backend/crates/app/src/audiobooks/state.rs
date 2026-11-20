@@ -12,6 +12,7 @@ use super::Progress;
 pub(super) struct BookState {
     book_id: Uuid,
     pub saved: bool,
+    pub saved_at_ms: Option<i64>,
     chapter_id: Option<Uuid>,
     position_ms: Option<i64>,
     updated_at_ms: Option<i64>,
@@ -31,7 +32,7 @@ impl BookState {
 
 pub(super) async fn get(db: &PgPool, user_id: Uuid, book_id: Uuid) -> sqlx::Result<Option<BookState>> {
     sqlx::query_as(
-        "SELECT book_id, saved, chapter_id, position_ms, updated_at_ms, completed
+        "SELECT book_id, saved, saved_at_ms, chapter_id, position_ms, updated_at_ms, completed
          FROM audiobook_state WHERE user_id = $1 AND book_id = $2",
     )
     .bind(user_id)
@@ -42,7 +43,7 @@ pub(super) async fn get(db: &PgPool, user_id: Uuid, book_id: Uuid) -> sqlx::Resu
 
 pub(super) async fn list(db: &PgPool, user_id: Uuid) -> sqlx::Result<HashMap<Uuid, BookState>> {
     let rows: Vec<BookState> = sqlx::query_as(
-        "SELECT book_id, saved, chapter_id, position_ms, updated_at_ms, completed
+        "SELECT book_id, saved, saved_at_ms, chapter_id, position_ms, updated_at_ms, completed
          FROM audiobook_state WHERE user_id = $1",
     )
     .bind(user_id)
@@ -53,12 +54,15 @@ pub(super) async fn list(db: &PgPool, user_id: Uuid) -> sqlx::Result<HashMap<Uui
 
 pub(super) async fn set_saved(db: &PgPool, user_id: Uuid, book_id: Uuid, saved: bool) -> sqlx::Result<()> {
     sqlx::query(
-        "INSERT INTO audiobook_state (user_id, book_id, saved) VALUES ($1, $2, $3)
-         ON CONFLICT (user_id, book_id) DO UPDATE SET saved = $3",
+        "INSERT INTO audiobook_state (user_id, book_id, saved, saved_at_ms) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (user_id, book_id) DO UPDATE SET saved = EXCLUDED.saved,
+            saved_at_ms = CASE WHEN audiobook_state.saved AND EXCLUDED.saved
+                               THEN audiobook_state.saved_at_ms ELSE EXCLUDED.saved_at_ms END",
     )
     .bind(user_id)
     .bind(book_id)
     .bind(saved)
+    .bind(saved.then(|| chrono::Utc::now().timestamp_millis()))
     .execute(db)
     .await?;
     Ok(())

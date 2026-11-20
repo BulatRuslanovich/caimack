@@ -8,9 +8,29 @@ import type { Album, Artist, Track } from "@/lib/types";
 import SearchPage from "./page";
 
 const route = vi.hoisted(() => ({ search: "" }));
+const books = vi.hoisted(() => [
+  {
+    id: "quantum",
+    title: "Квантовый кот вселенной",
+    author: "Эрвин Шрёдингер",
+    narrator: "Егор Бедуля",
+  },
+  {
+    id: "chance",
+    title: "(Не)совершенная случайность",
+    author: "Леонард Млодинов",
+    narrator: "Михаил Росляков",
+  },
+]);
 vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(route.search) }));
 vi.mock("@/contexts/I18nContext", () => ({ useT: () => (key: string) => key }));
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ isAdmin: false }) }));
+vi.mock("@/contexts/AudiobookContext", () => ({
+  useAudiobooks: () => ({ books, result: { data: books, isPending: false } }),
+}));
+vi.mock("@/components/audiobooks/AudiobookViews", () => ({
+  AudiobookRow: ({ book }: { book: (typeof books)[number] }) => <li>{book.title}</li>,
+}));
 vi.mock("@/lib/useYandexMusic", () => ({ useYandexMusicSettings: () => ({ enabled: false }) }));
 vi.mock("./RecentSearches", () => ({ RecentSearches: () => <p>recent searches</p> }));
 vi.mock("@/components/collection/RankedList", () => ({
@@ -88,7 +108,7 @@ function render(search: string) {
 
 it("shows all catalog tabs on the search start screen", () => {
   const markup = render("");
-  for (const tab of ["tracks", "albums", "artists", "playlists", "genres"]) {
+  for (const tab of ["tracks", "audiobooks", "albums", "artists", "playlists", "genres"]) {
     expect(markup).toContain(`>nav.${tab}</button>`);
   }
   expect(markup).toContain("recent searches");
@@ -114,4 +134,14 @@ it("opens the selected catalog category with or without a query", () => {
   expect(render("tab=playlists")).toContain('data-playlists-query=""');
   expect(render("tab=playlists&q=road%20trip")).toContain('data-playlists-query="road trip"');
   expect(render("tab=genres&id=rock")).toContain('data-selected-genre="rock"');
+});
+
+it("finds audiobooks by title, author and narrator from the filter and All", () => {
+  expect(render("tab=audiobooks")).toContain("Квантовый кот вселенной");
+  const query = encodeURIComponent("квант ШРЕДИНГЕР бедуля");
+  const filtered = render(`tab=audiobooks&q=${query}`);
+  expect(filtered).toContain("Квантовый кот вселенной");
+  expect(filtered).not.toContain("(Не)совершенная случайность");
+  expect(render(`q=${query}`)).toContain("Квантовый кот вселенной");
+  expect(render("tab=audiobooks&q=nonexistent")).toContain("search.nothingFound");
 });

@@ -81,7 +81,7 @@ export function LibraryDragList({
     if (target?.kind === "folder" && target.key !== source?.key && event.over) {
       if (position) nextEdge = { key: target.key, after: position === "after" };
     }
-    if (source && !["favorites", "downloads"].includes(source.kind)) {
+    if (source && !["favorites", "downloads", "audiobook"].includes(source.kind)) {
       if (event.over?.id === "up") folder = "up";
       else if (
         target?.kind === "folder" &&

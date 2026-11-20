@@ -12,6 +12,7 @@
     <string name="audiobook_saved_section">Saved audiobooks</string>
     <string name="audiobook_browse_all">View all</string>
     <string name="audiobook_empty">No audiobooks here</string>
+    <string name="audiobook_empty_saved">No saved audiobooks here</string>
     <string name="audiobook_narrator">Read by %1$s</string>
     <string name="audiobook_completed">Finished</string>
     <string name="audiobook_remaining">%1$s remaining</string>

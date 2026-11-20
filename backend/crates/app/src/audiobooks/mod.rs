@@ -71,6 +71,7 @@ pub struct Audiobook {
     pub duration_ms: i64,
     pub chapters: Vec<Chapter>,
     pub saved: bool,
+    pub saved_at_ms: Option<i64>,
     pub progress: Option<Progress>,
 }
 
@@ -251,6 +252,7 @@ impl Book {
                 })
                 .collect(),
             saved: state.saved,
+            saved_at_ms: state.saved_at_ms,
             progress,
         }
     }

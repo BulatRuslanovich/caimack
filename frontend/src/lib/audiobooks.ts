@@ -26,10 +26,32 @@ export interface Audiobook {
   durationMs: number;
   chapters: AudiobookChapter[];
   saved: boolean;
+  savedAtMs?: number | null;
   progress: AudiobookProgress | null;
 }
 
 export const audiobookHref = (id: string) => `/audiobooks/${encodeURIComponent(id)}` as const;
+
+function searchWords(value: string): string[] {
+  return (
+    value
+      .normalize()
+      .toLowerCase()
+      .replaceAll("ё", "е")
+      .match(/[\p{L}\p{N}]+/gu) ?? []
+  );
+}
+
+export function filterAudiobooks(books: Audiobook[], query: string): Audiobook[] {
+  if (!query.trim()) return books;
+  const words = searchWords(query);
+  if (!words.length) return [];
+
+  return books.filter(({ title, author, narrator }) => {
+    const fields = searchWords([title, author, narrator].join(" ")).join(" ");
+    return words.every((word) => fields.includes(word));
+  });
+}
 
 export const audiobookApi = {
   catalog: (signal?: AbortSignal, onResponse?: (headers: Headers) => void) =>

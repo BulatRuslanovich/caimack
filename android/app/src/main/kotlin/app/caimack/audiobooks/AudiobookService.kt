@@ -22,6 +22,8 @@ import androidx.media3.session.CacheBitmapLoader
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionError
+import androidx.media3.session.SessionResult
 import app.caimack.CaimackApp
 import app.caimack.MainActivity
 import app.caimack.R
@@ -139,6 +141,21 @@ class AudiobookService : MediaSessionService() {
         }
 
         val callback = object : MediaSession.Callback {
+            @Suppress("OVERRIDE_DEPRECATION")
+            override fun onPlayerCommandRequest(
+                session: MediaSession,
+                controller: MediaSession.ControllerInfo,
+                playerCommand: Int,
+            ): Int {
+                // System UI can send STOP when replacing the remote music card with the local book.
+                // Pause and dismissal of a paused book remain available from the notification.
+                if (playerCommand == Player.COMMAND_STOP && player.playWhenReady && container.connect.isRemote &&
+                    (controller.packageName == "com.android.systemui" || session.isMediaNotificationController(controller))) {
+                    return SessionError.ERROR_INVALID_STATE
+                }
+                return SessionResult.RESULT_SUCCESS
+            }
+
             override fun onAddMediaItems(
                 mediaSession: MediaSession,
                 controller: MediaSession.ControllerInfo,

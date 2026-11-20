@@ -7,6 +7,7 @@ import { useEffect, useRef } from "react";
 
 const labels = {
   tracks: "nav.tracks",
+  audiobooks: "nav.audiobooks",
   albums: "nav.albums",
   artists: "nav.artists",
   playlists: "nav.playlists",

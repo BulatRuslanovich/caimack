@@ -7,6 +7,7 @@ import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@ta
 import { useEffect, useState, type ReactNode } from "react";
 import { isDesktop } from "@/desktop/api";
 import { useT } from "@/contexts/I18nContext";
+import { ApiError, GATEWAY_STATUSES } from "@/lib/http";
 import { useToast } from "@/lib/useToast";
 
 const STALE_MS = 5 * 60 * 1000;
@@ -22,7 +23,14 @@ export function QueryProvider({ children }: { children: ReactNode }) {
       new QueryClient({
         queryCache: new QueryCache({
           onError: (error, query) => {
-            if (!query.meta?.handlesError) notifyError(error, t("error.load"));
+            if (query.meta?.handlesError) return;
+            if (
+              query.meta?.hasOfflineFallback &&
+              (error instanceof TypeError ||
+                (error instanceof ApiError && GATEWAY_STATUSES.has(error.status)))
+            )
+              return;
+            notifyError(error, t("error.load"));
           },
         }),
         mutationCache: new MutationCache({
