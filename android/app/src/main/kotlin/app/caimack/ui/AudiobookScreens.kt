@@ -479,7 +479,7 @@ private fun chapterTime(position: Long, duration: Long): String =
 
 @Composable
 private fun bookSummary(book: Audiobook, elapsed: Long, complete: Boolean): String =
-    if (complete) stringResource(R.string.audiobook_book_finished)
+    if (complete) stringResource(R.string.audiobook_completed)
     else stringResource(R.string.audiobook_book_summary, (elapsed.fractionOf(book.durationMs) * 100).roundToInt().coerceAtMost(99),
         bookTime(book.durationMs - elapsed))
 
