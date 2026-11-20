@@ -13,6 +13,7 @@ use sha2::{Digest, Sha256};
 use tokio_util::sync::CancellationToken;
 use uuid::{Builder, Uuid};
 
+use super::names::{self, BookName};
 use super::{Artwork, Book, Chapter, ChapterFile, Snapshot};
 
 const COVER_NAMES: &[&str] = &["cover", "folder", "front", "albumart", "albumartsmall"];
@@ -122,12 +123,9 @@ fn read_book(
         .iter()
         .filter(|file| standalone || cover_rank(&file.path).is_some())
         .find_map(|file| read_artwork(root, file));
-    let label = if standalone { name.file_stem()? } else { name.as_os_str() }.to_string_lossy();
-    let label = label.replace('_', " ");
-    let (named_author, named_title, named_narrator) = split_name(&label);
-    let mut title = named_author.map(|_| named_title.to_owned());
-    let mut author = named_author.map(str::to_owned);
-    let mut narrator = named_narrator.map(str::to_owned);
+    let label = if standalone { name.file_stem()? } else { name.as_os_str() };
+    let BookName { title: named_title, mut author, mut narrator, release } = names::book(&label.to_string_lossy());
+    let mut title = author.as_ref().filter(|_| !release).map(|_| named_title.clone());
     let mut duration_ms: i64 = 0;
     let mut chapters = Vec::new();
     for file in audio {
@@ -142,7 +140,10 @@ fn read_book(
             art = metadata.cover.and_then(artwork);
         }
         if title.is_none() {
-            title = metadata.album.or_else(|| if standalone { metadata.title.clone() } else { None });
+            title = metadata
+                .album
+                .or_else(|| if standalone { metadata.title.clone() } else { None })
+                .map(|tag| names::display_label(&tag));
         }
         if author.is_none() {
             author = metadata.author;
@@ -152,12 +153,16 @@ fn read_book(
         }
         duration_ms = duration_ms.saturating_add(metadata.duration_ms);
         let chapter_id = path_id("audiobook-chapter", &file.path);
+        let stem = file.path.file_stem().unwrap_or_default();
+        let chapter_title = match metadata.title.as_deref() {
+            Some(tag) if stem != label || tag != stem => names::chapter(tag),
+            _ if stem == label => named_title.clone(),
+            _ => names::chapter(&stem.to_string_lossy()),
+        };
         chapters.push(ChapterFile {
             data: Chapter {
                 id: chapter_id,
-                title: metadata
-                    .title
-                    .unwrap_or_else(|| file.path.file_stem().unwrap_or_default().to_string_lossy().into_owned()),
+                title: chapter_title,
                 duration_ms: metadata.duration_ms,
                 size_bytes: file.size_bytes,
                 stream_url: format!("/api/audiobooks/{id}/chapters/{chapter_id}/stream"),
@@ -176,7 +181,7 @@ fn read_book(
 
     (!chapters.is_empty()).then(|| Book {
         id,
-        title: title.unwrap_or_else(|| named_title.to_owned()),
+        title: title.unwrap_or(named_title),
         author,
         narrator,
         duration_ms,
@@ -222,24 +227,6 @@ fn artwork(bytes: Vec<u8>) -> Option<Artwork> {
     let webp = images::square_webp_set(&bytes, &[images::FULL_EDGE]).ok()?.pop()?.webp;
     let etag = format!("\"{}\"", crate::text::hex_lower(&Sha256::digest(&webp)));
     Some(Artwork { etag, webp: webp.into() })
-}
-
-fn split_name(label: &str) -> (Option<&str>, &str, Option<&str>) {
-    let label = label.trim();
-    // Consecutive bracket groups are common in release names and don't identify a reader.
-    if label.ends_with(']') && label.contains("][") {
-        return (None, label, None);
-    }
-    let author_title = [" - ", " – ", " — "].into_iter().find_map(|separator| {
-        label.split_once(separator).filter(|(author, title)| !author.trim().is_empty() && !title.trim().is_empty())
-    });
-    let (author, title) = author_title.map_or((None, label), |(author, title)| (Some(author.trim()), title.trim()));
-    let narrator = title
-        .strip_suffix(']')
-        .and_then(|title| title.rsplit_once(" ["))
-        .or_else(|| author.and_then(|_| title.strip_suffix(')')?.rsplit_once(" (")))
-        .filter(|(title, narrator)| !title.trim().is_empty() && !narrator.trim().is_empty());
-    narrator.map_or((author, title, None), |(title, narrator)| (author, title.trim(), Some(narrator.trim())))
 }
 
 fn path_id(kind: &str, path: &Path) -> Uuid {
@@ -299,17 +286,6 @@ fn significant_digits(digits: &[u8]) -> &[u8] {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn names_keep_title_punctuation_and_separate_narrator() {
-        assert_eq!(
-            split_name("Млодинов Леонард – (Не)совершенная случайность [Росляков Михаил]"),
-            (Some("Млодинов Леонард"), "(Не)совершенная случайность", Some("Росляков Михаил"))
-        );
-        assert_eq!(split_name("Some book"), (None, "Some book", None));
-        let release_name = "Some book - Author [release][edition]";
-        assert_eq!(split_name(release_name), (None, release_name, None));
-    }
 
     #[test]
     fn numeric_chapters_and_disc_directories_are_ordered() {

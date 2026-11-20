@@ -5,6 +5,7 @@ package app.caimack.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.progressSemantics
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +32,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -54,6 +57,7 @@ import app.caimack.R
 import app.caimack.audiobooks.Audiobook
 import app.caimack.audiobooks.AudiobookCatalog
 import app.caimack.audiobooks.AudiobookPlaybackState
+import kotlin.math.roundToInt
 
 private const val RECENT = "recent"
 private const val DURATION = "duration"
@@ -149,28 +153,63 @@ private fun BookLoading() {
 @Composable
 private fun BookHero(book: Audiobook, catalog: AudiobookCatalog) {
     val palette = LocalPalette.current
+    val hero = if (palette.dark) palette else paletteOf(LocalColorway.current, dark = true)
     val navigate = LocalNavigate.current
     val container = LocalContainer.current
     val cover = container.audiobookStore.cover(book)
+    val progress = book.progress ?: return
+    val chapterIndex = book.chapters.indexOfFirst { it.id == progress.chapterId }
+    val chapter = book.chapters.getOrNull(chapterIndex)
+    val elapsed = book.elapsedMs(progress).coerceIn(0, book.durationMs)
+    val fraction = elapsed.fractionOf(book.durationMs)
+    val wholeBookProgress = stringResource(R.string.audiobook_book_position)
+    val secondary = hero.foreground.copy(alpha = .84f)
     Box(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(Radius.panel).background(palette.raised)
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(Radius.hero).background(hero.raised)
             .clickable { navigate(AudiobookRoute(book.id)) },
     ) {
         if (cover != null) {
-            Cover(cover, book.title, Modifier.matchParentSize())
-            Box(Modifier.matchParentSize().background(Brush.horizontalGradient(listOf(palette.background.copy(alpha = .35f), palette.background.copy(alpha = .95f)))))
+            Cover(cover, book.title, Modifier.matchParentSize().blur(14.dp))
+            Box(
+                Modifier.matchParentSize()
+                    .background(Brush.horizontalGradient(
+                        0f to hero.background.copy(alpha = .62f),
+                        .34f to hero.background.copy(alpha = .84f),
+                        1f to hero.background.copy(alpha = .97f),
+                    ))
+                    .background(Brush.verticalGradient(
+                        .35f to hero.background.copy(alpha = 0f),
+                        1f to hero.background.copy(alpha = .82f),
+                    )),
+            )
         }
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Cover(cover, book.title, Modifier.size(76.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(book.title, style = Type.section, color = palette.foreground, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                BookByline(book)
-                book.progress?.let { progress -> book.chapters.firstOrNull { it.id == progress.chapterId }?.let {
-                    Text(it.title, color = palette.muted, style = Type.tiny, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                } }
-                BookProgress(book)
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Cover(cover, book.title, Modifier.size(72.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(book.title, style = Type.section, color = hero.foreground, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    book.author?.let { Text(it, style = Type.small, color = secondary) }
+                    book.narrator?.let { Text(stringResource(R.string.audiobook_narrator, it), style = Type.small, color = secondary) }
+                }
+                CompositionLocalProvider(LocalPalette provides hero) { BookPlay(book, catalog, prominent = true) }
             }
-            BookPlay(book, catalog)
+            if (chapter != null) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(stringResource(R.string.audiobook_numbered_chapter, chapterIndex + 1, chapter.title),
+                        style = Type.small, color = hero.foreground)
+                    if (chapter.durationMs > 0) {
+                        Text(chapterTime(progress.positionMs.coerceIn(0, chapter.durationMs), chapter.durationMs),
+                            style = Type.tiny, color = secondary)
+                    }
+                }
+            }
+            if (book.durationMs > 0) {
+                PlayerProgressTrack(fraction, hero.primary, hero.borderStrong,
+                    Modifier.progressSemantics(fraction).semantics {
+                        contentDescription = wholeBookProgress
+                    })
+                Text(bookSummary(book, elapsed, progress.completed), style = Type.tiny, color = secondary)
+            }
         }
     }
 }
@@ -230,17 +269,22 @@ private fun BookProgress(book: Audiobook) {
 }
 
 @Composable
-private fun BookPlay(book: Audiobook, catalog: AudiobookCatalog) {
+private fun BookPlay(book: Audiobook, catalog: AudiobookCatalog, prominent: Boolean = false) {
     val playback = LocalContainer.current.audiobookPlayback
     val state by playback.state.collectAsStateWithLifecycle()
     val playing = state?.let { it.bookId == book.id && (it.playing || it.buffering) } == true
+    val enabled = playing || catalog.canPlay(book)
     val palette = LocalPalette.current
-    IconButton(onClick = { playback.toggle(book) }, enabled = playing || catalog.canPlay(book)) {
+    if (prominent && enabled) {
+        CollectionTransportButton(playing, enabled, size = 48.dp, iconSize = 20.dp) { playback.toggle(book) }
+        return
+    }
+    IconButton(onClick = { playback.toggle(book) }, enabled = enabled) {
         Icon(
             if (playing) Lucide.Pause else Lucide.Play,
             stringResource(if (playing) R.string.action_pause else R.string.action_play),
             Modifier.size(20.dp),
-            tint = if (playing || catalog.canPlay(book)) palette.primary else palette.faint,
+            tint = if (enabled) palette.primary else palette.faint,
         )
     }
 }
@@ -397,27 +441,53 @@ private fun BookDetailActions(book: Audiobook, active: AudiobookPlaybackState?, 
 private fun BookListeningPosition(book: Audiobook, active: AudiobookPlaybackState?) {
     val player = LocalContainer.current.audiobookPlayback
     val palette = LocalPalette.current
-    val chapter = book.chapters.firstOrNull { it.id == (active?.chapterId ?: book.progress?.chapterId) }
-    val position = active?.positionMs ?: book.progress?.positionMs ?: 0
+    val saved = book.progress
+    val chapterIndex = book.chapters.indexOfFirst { it.id == (active?.chapterId ?: saved?.chapterId) }
+    val chapter = book.chapters.getOrNull(chapterIndex)
     val duration = active?.durationMs?.takeIf { it > 0 } ?: chapter?.durationMs ?: 0
+    val position = (active?.positionMs ?: saved?.positionMs ?: 0).coerceIn(0, duration)
+    val elapsed = when {
+        saved?.completed == true && (active == null || active.chapterId == saved.chapterId && active.positionMs >= saved.positionMs) -> book.durationMs
+        active != null && chapterIndex >= 0 -> book.chapters.take(chapterIndex).sumOf { it.durationMs } + position
+        else -> saved?.let(book::elapsedMs) ?: 0
+    }.coerceIn(0, book.durationMs)
+    val chapterProgressLabel = stringResource(R.string.audiobook_chapter_position)
     var preview by remember(active?.chapterId) { mutableStateOf<Long?>(null) }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         chapter?.let {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(it.title, Modifier.weight(1f), style = Type.small, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("${bookTime(preview ?: position)} / ${bookTime(duration)}", style = Type.tiny, color = palette.muted)
+            Text(stringResource(R.string.audiobook_numbered_chapter, chapterIndex + 1, it.title), style = Type.small)
+        }
+        if (chapter != null && duration > 0) {
+            Text(chapterTime(preview ?: position, duration), style = Type.tiny, color = palette.muted)
+            if (active != null && !active.failed) {
+                key(active.chapterId) {
+                    Seekbar(position, duration, peaks = null, onScrub = { preview = it }, onSeek = player::seek)
+                }
+            } else {
+                val fraction = position.fractionOf(duration)
+                PlayerProgressTrack(fraction, palette.foreground, palette.borderStrong,
+                    Modifier.progressSemantics(fraction).semantics { contentDescription = chapterProgressLabel })
             }
         }
-        if (duration > 0 && active != null && !active.failed) {
-            key(active.chapterId) {
-                Seekbar(position, duration, peaks = null, onScrub = { preview = it }, onSeek = player::seek)
-            }
-        } else {
-            BookProgress(book)
+        if (book.durationMs > 0 || saved?.completed == true) {
+            Text(bookSummary(book, elapsed, saved?.completed == true && elapsed == book.durationMs),
+                Modifier.padding(top = 4.dp), style = Type.tiny, color = palette.muted)
         }
         if (active?.failed == true) Text(stringResource(R.string.audiobook_playback_error), style = Type.small, color = palette.muted)
     }
 }
+
+@Composable
+private fun chapterTime(position: Long, duration: Long): String =
+    stringResource(R.string.audiobook_position_of, bookTime(position), bookTime(duration))
+
+@Composable
+private fun bookSummary(book: Audiobook, elapsed: Long, complete: Boolean): String =
+    if (complete) stringResource(R.string.audiobook_book_finished)
+    else stringResource(R.string.audiobook_book_summary, (elapsed.fractionOf(book.durationMs) * 100).roundToInt().coerceAtMost(99),
+        bookTime(book.durationMs - elapsed))
+
+private fun Long.fractionOf(duration: Long): Float = if (duration > 0) (toDouble() / duration).coerceIn(0.0, 1.0).toFloat() else 0f
 
 private fun AudiobookCatalog.canPlay(book: Audiobook): Boolean =
     book.chapters.isNotEmpty() && (online || book.id in downloaded)

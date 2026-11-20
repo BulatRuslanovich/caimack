@@ -517,9 +517,7 @@ internal fun Seekbar(
                 }
             }
         } else {
-            Box(Modifier.fillMaxWidth().height(5.dp).clip(CircleShape).background(palette.borderStrong)) {
-                Box(Modifier.fillMaxWidth(progress).height(5.dp).background(fill))
-            }
+            PlayerProgressTrack(progress, fill, palette.borderStrong)
         }
         if (dragging != null) {
             val width = with(LocalDensity.current) { maxWidth.toPx() }
@@ -528,6 +526,14 @@ internal fun Seekbar(
         }
     }
 }
+
+@Composable
+internal fun PlayerProgressTrack(progress: Float, fill: Color, rail: Color, modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxWidth().height(5.dp).clip(CircleShape).background(rail)) {
+        Box(Modifier.fillMaxWidth(progress).fillMaxHeight().background(fill))
+    }
+}
+
 @Composable
 fun Record(
     track: Track,

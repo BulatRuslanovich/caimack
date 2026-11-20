@@ -15,6 +15,12 @@
     <string name="audiobook_narrator">Read by %1$s</string>
     <string name="audiobook_completed">Finished</string>
     <string name="audiobook_remaining">%1$s remaining</string>
+    <string name="audiobook_chapter_position">Chapter position</string>
+    <string name="audiobook_book_position">Audiobook progress</string>
+    <string name="audiobook_numbered_chapter">Chapter %1$d · %2$s</string>
+    <string name="audiobook_position_of">%1$s / %2$s</string>
+    <string name="audiobook_book_summary">Whole book · %1$d%% listened · %2$s remaining</string>
+    <string name="audiobook_book_finished">Whole book · Finished</string>
     <string name="audiobook_actions">Audiobook actions</string>
     <string name="audiobook_save">Save to library</string>
     <string name="audiobook_unsave">Remove from library</string>

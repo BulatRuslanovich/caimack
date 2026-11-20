@@ -280,13 +280,13 @@ function BookSection({
   const t = useT();
   if (!books.length) return null;
   return (
-    <section id={id} className="flex flex-col gap-3.5">
+    <section id={id} className="flex min-w-0 flex-col gap-3.5">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-heading font-semibold">{title}</h2>
+        <h2 className="min-w-0 text-heading font-semibold wrap-anywhere">{title}</h2>
         {viewAll && (
           <PrefetchLink
             href="/audiobooks"
-            className="inline-flex shrink-0 items-center gap-1 text-sm text-primary"
+            className="inline-flex shrink-0 items-center gap-1 text-sm whitespace-nowrap text-primary"
           >
             {t("action.seeAll")} <ChevronRightIcon size={16} />
           </PrefetchLink>
@@ -307,7 +307,7 @@ function ContinueBook({ book }: { book: Audiobook }) {
   const chapter = book.chapters.find((item) => item.id === book.progress?.chapterId);
 
   return (
-    <section className="space-y-3.5">
+    <section className="min-w-0 space-y-3.5">
       <h2 className="text-heading font-semibold">{t("audiobooks.continue")}</h2>
       <div className="relative isolate flex items-center gap-5 overflow-hidden rounded-2xl border border-border bg-card p-4 max-sm:gap-3 max-sm:p-3">
         {artwork && (
@@ -319,7 +319,7 @@ function ContinueBook({ book }: { book: Audiobook }) {
         )}
         <AudiobookCover book={book} artwork={artwork} className="w-32 max-sm:w-19" />
         <div className="min-w-0 flex-1 space-y-1.5">
-          <h3 className="line-clamp-2 text-xl font-semibold max-sm:text-base">
+          <h3 className="line-clamp-2 text-xl font-semibold wrap-anywhere max-sm:text-base">
             <PrefetchLink href={audiobookHref(book.id)}>{book.title}</PrefetchLink>
           </h3>
           <Credits book={book} />
@@ -346,11 +346,11 @@ export function AudiobookHome() {
   if (!listening.length && !unplayed.length) return null;
 
   return (
-    <section className="flex flex-col gap-5" aria-labelledby="home-audiobooks">
+    <section className="flex min-w-0 flex-col gap-5" aria-labelledby="home-audiobooks">
       <h2 id="home-audiobooks" className="font-display text-heading">
         {t("nav.audiobooks")}
       </h2>
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <BookSection title={t("audiobooks.listening")} books={listening} viewAll />
         <BookSection title={t("audiobooks.unplayed")} books={unplayed} viewAll />
       </div>
@@ -383,7 +383,7 @@ export function AudiobooksPage() {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-225 flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-225 min-w-0 flex-col gap-6">
       <PageHeader title={t("nav.audiobooks")} />
       {filter === "all" && hero && <ContinueBook book={hero} />}
       <div role="group" aria-label={t("nav.audiobooks")} className="flex flex-wrap gap-2">
@@ -558,7 +558,9 @@ function BookDetail({ book }: { book: Audiobook }) {
                       />
                     )}
                   </span>
-                  <span className="line-clamp-2 text-sm font-semibold">{chapter.title}</span>
+                  <span className="line-clamp-2 text-sm font-semibold wrap-anywhere">
+                    {chapter.title}
+                  </span>
                   <span className="text-xs text-faint">
                     {chapter.durationMs > 0 && totalDuration(chapter.durationMs / 1000)}
                   </span>
