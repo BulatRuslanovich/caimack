@@ -113,8 +113,9 @@ export function TracksPage() {
   }, [selecting, stopSelecting]);
 
   return (
-    <div className="flex min-w-0 flex-col gap-6 max-md:gap-5">
+    <div className="flex min-w-0 flex-col gap-6 max-md:gap-3">
       <PageHeader
+        className="tracks-page-heading"
         title={t("nav.tracks")}
         subtitle={
           tracks.data && (
@@ -134,15 +135,20 @@ export function TracksPage() {
         actions={
           items.length > 0 && (
             <>
-              <PlayAllButton tracks={items} />
-              <ShuffleButton tracks={items} />
+              <PlayAllButton tracks={items} compact />
+              <ShuffleButton tracks={items} compact />
             </>
           )
         }
       />
 
       <LibraryNavigation />
-      <PageToolbar search={search} onSearch={setSearch} placeholder={t("filter.tracks")}>
+      <PageToolbar
+        search={search}
+        onSearch={setSearch}
+        placeholder={t("filter.tracks")}
+        mobileFilters={{ active: sort !== "Title" || tempo !== ANY || key !== ANY || selecting }}
+      >
         <SortSelect value={sort} onChange={setSort} options={sortKeys} />
         <Select value={tempo} onValueChange={setTempo}>
           <SelectTrigger aria-label={t("sort.bpm")}>

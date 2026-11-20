@@ -151,7 +151,7 @@ describe("catalog tab navigation", () => {
     }
   });
 
-  it("keeps the sidebar library active in every catalog category and uses the same transition", async () => {
+  it("keeps the sidebar library active in catalog categories and details", async () => {
     const pushState = stubHistory();
     const client = createClient();
     const entry = primaryNav.find(({ href }) => href === "/library")!;
@@ -171,16 +171,22 @@ describe("catalog tab navigation", () => {
       for (const pathname of [
         "/tracks",
         "/albums",
+        "/albums/album-id",
         "/artists",
+        "/artists/artist-id",
         "/playlists",
+        "/playlists/playlist-id",
         "/genres",
-        "/search",
       ]) {
         navigation.pathname = pathname;
         renderNavigation(client, <NavLink entry={entry} />);
-        expect(navigation.links.get("/library")!["aria-current"]).toBe(
-          pathname === "/search" ? undefined : "page",
-        );
+        expect(navigation.links.get("/library")!["aria-current"]).toBe("page");
+      }
+
+      for (const pathname of ["/search", "/favorites", "/albums-archive"]) {
+        navigation.pathname = pathname;
+        renderNavigation(client, <NavLink entry={entry} />);
+        expect(navigation.links.get("/library")!["aria-current"]).toBeUndefined();
       }
     } finally {
       client.clear();

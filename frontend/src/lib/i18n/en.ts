@@ -100,6 +100,7 @@ export const en = {
   "error.pageDescription": "This page hit a wrong note. Try again, or head back to your library.",
 
   "filter.tracks": "Filter tracks…",
+  "filter.options": "Filters",
   "filter.artists": "Filter artists…",
   "filter.albums": "Filter albums…",
   "filter.nothingMatched": "Nothing matched that filter.",

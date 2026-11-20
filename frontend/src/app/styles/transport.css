@@ -32,6 +32,143 @@
   box-shadow: inset 0 0 0 2px currentColor;
 }
 
+.fullscreen-player-art {
+  --player-art-size: min(100%, 48vh);
+}
+
+@media (width < 64rem) {
+  .fullscreen-player-art {
+    --player-art-size: min(76vw, 22rem);
+    padding-top: calc(var(--player-art-size) * 0.22 + 1rem);
+  }
+}
+
+@media (width < 64rem) and (pointer: coarse) {
+  .fullscreen-player-tools {
+    display: none;
+  }
+}
+
+@media ((width < 64rem) and (height < 48rem)) or ((orientation: landscape) and (height < 36rem)) {
+  .fullscreen-player-stage[data-panel="art"] {
+    gap: 0.875rem;
+  }
+
+  .fullscreen-player-art {
+    --player-art-size: min(76vw, 22rem, clamp(4rem, calc(80dvh - 20rem), 22rem));
+    flex: none;
+    padding-top: calc(var(--player-art-size) * 0.22 + 0.25rem);
+  }
+
+  .fullscreen-player-stage[data-panel="art"] .fullscreen-player-details {
+    gap: 0.75rem;
+  }
+
+  .fullscreen-player-stage[data-panel="art"] .fullscreen-player-caption {
+    gap: 0.25rem;
+    font-size: 0.875rem;
+  }
+
+  .fullscreen-player-stage[data-panel="art"] .fullscreen-player-caption h2 {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: clamp(1.25rem, 1rem + 1.5vw, 1.625rem);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .fullscreen-player-stage[data-panel="art"] .fullscreen-player-byline {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .fullscreen-player-stage[data-panel="art"] .fullscreen-player-divider {
+    display: none;
+  }
+
+  .fullscreen-player-stage[data-panel="art"]
+    :is(.fullscreen-player-artist, .fullscreen-player-album) {
+    overflow: hidden;
+    max-width: 100%;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .fullscreen-player-stage[data-panel="art"] .fullscreen-player-progress .wave-seek {
+    height: 2rem;
+  }
+
+  .fullscreen-player-up-next {
+    margin-top: 0;
+  }
+}
+
+@media (orientation: landscape) and (height < 36rem) and (width >= 34rem) {
+  .fullscreen-player-stage[data-panel="art"] {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    align-items: safe center;
+    overflow-y: auto;
+  }
+
+  .fullscreen-player-art {
+    --player-art-size: min(22vw, 54dvh, 18rem);
+    justify-content: center;
+    padding-top: 0;
+    padding-inline-end: calc(var(--player-art-size) * 0.44);
+  }
+
+  .fullscreen-player-stage[data-panel="art"] .fullscreen-player-controls {
+    min-width: 0;
+    padding-bottom: 0;
+  }
+
+  .fullscreen-player-stage[data-panel="art"] .fullscreen-player-byline {
+    flex-direction: row;
+    gap: 0.25rem;
+  }
+
+  .fullscreen-player-stage[data-panel="art"]
+    .fullscreen-player-artist:has(~ .fullscreen-player-album) {
+    flex-shrink: 0;
+    max-width: 55%;
+  }
+
+  .fullscreen-player-stage[data-panel="art"] .fullscreen-player-divider {
+    display: inline;
+    margin-inline-start: -0.25rem;
+  }
+
+  .fullscreen-player-stage[data-panel="art"] .fullscreen-player-album {
+    min-width: 0;
+  }
+
+  .fullscreen-player-stage[data-panel="art"] .player-transport {
+    gap: clamp(0.25rem, 1vw, 1rem);
+  }
+
+  .fullscreen-player-stage[data-panel="art"] .transport-main {
+    width: 3.25rem;
+    height: 3.25rem;
+  }
+}
+
+@media (orientation: landscape) and (height < 22rem) and (width >= 34rem) {
+  [data-player-fullscreen] {
+    padding-block-start: max(0.5rem, env(safe-area-inset-top));
+    padding-block-end: max(0.5rem, env(safe-area-inset-bottom));
+  }
+
+  .fullscreen-player-stage[data-panel="art"] .fullscreen-player-details {
+    gap: 0.5rem;
+  }
+
+  .fullscreen-player-up-next {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .player-transport .player-mode:active:not(:disabled) {
     transform: none;

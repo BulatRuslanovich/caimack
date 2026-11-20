@@ -12,7 +12,7 @@ export function LibraryNavigation({ saved = false }: { saved?: boolean }) {
   const t = useT();
   const pathname = usePathname();
   return (
-    <div className="flex min-w-0 flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-4 max-md:gap-2">
       <nav
         aria-label={t("collection.scope")}
         className="flex w-fit max-w-full flex-wrap gap-1 rounded-2xl bg-card p-1"
@@ -28,7 +28,7 @@ export function LibraryNavigation({ saved = false }: { saved?: boolean }) {
             href={href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "rounded-xl px-4 py-2.5 text-sm font-medium hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+              "rounded-xl px-4 py-2.5 text-sm font-medium hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:px-3 max-md:py-2",
               active ? "bg-raised text-foreground" : "text-muted-foreground hover:text-foreground",
             )}
           >
@@ -39,7 +39,7 @@ export function LibraryNavigation({ saved = false }: { saved?: boolean }) {
       {!saved && (
         <nav
           aria-label={t("collection.types")}
-          className="flex flex-wrap gap-x-6 gap-y-1 border-b border-border"
+          className="library-catalog-tabs flex flex-wrap gap-x-6 gap-y-1 border-b border-border max-md:justify-between max-md:gap-x-2 max-md:gap-y-0"
         >
           {catalogNav.map(({ href, labelKey }) => (
             <Link
@@ -47,7 +47,7 @@ export function LibraryNavigation({ saved = false }: { saved?: boolean }) {
               href={href}
               aria-current={pathname === href ? "page" : undefined}
               className={cn(
-                "border-b-2 py-2.5 text-sm font-medium hover:no-underline focus-visible:outline-2 focus-visible:outline-ring",
+                "border-b-2 py-2.5 text-sm font-medium hover:no-underline focus-visible:outline-2 focus-visible:outline-ring max-md:py-2 max-md:text-[0.8125rem]",
                 pathname === href
                   ? "border-primary text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground",

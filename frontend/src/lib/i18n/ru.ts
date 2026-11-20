@@ -102,6 +102,7 @@ export const ru: Dictionary = {
     "Страница сбилась с ритма. Попробуйте ещё раз или вернитесь в библиотеку.",
 
   "filter.tracks": "Поиск по трекам…",
+  "filter.options": "Фильтры",
   "filter.artists": "Поиск по исполнителям…",
   "filter.albums": "Поиск по альбомам…",
   "filter.nothingMatched": "Ничего не найдено.",

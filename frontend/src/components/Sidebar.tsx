@@ -9,8 +9,8 @@ import { PrefetchLink as Link } from "@/components/PrefetchLink";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 import {
+  catalogNav,
   isActivePath,
-  isLibraryBrowsePath,
   libraryNav,
   primaryNav,
   serviceNav,
@@ -36,7 +36,7 @@ export function NavLink({
   const pathname = usePathname();
   const active =
     isActivePath(pathname, entry.href) ||
-    (entry.href === "/library" && isLibraryBrowsePath(pathname));
+    (entry.href === "/library" && catalogNav.some(({ href }) => isActivePath(pathname, href)));
   const Icon = entry.icon;
 
   return (
