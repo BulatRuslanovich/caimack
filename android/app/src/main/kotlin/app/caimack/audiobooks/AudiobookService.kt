@@ -5,6 +5,7 @@ package app.caimack.audiobooks
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.os.SystemClock
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -27,7 +28,6 @@ import app.caimack.R
 import app.caimack.playback.PlaybackNotificationProvider
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
-import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -41,8 +41,14 @@ class AudiobookService : MediaSessionService() {
     private val container get() = (application as CaimackApp).container
     private var owner: AudiobookAccount? = null
     private var accounts: Job? = null
+    private var syncing: Job? = null
     private var ticking: Job? = null
     private var last: AudiobookPlaybackState? = null
+    private var selection: Long? = null
+    private var version = 0L
+    private var activated = false
+    private var recorded: AudiobookProgress? = null
+    private var applying: AudiobookProgress? = null
     private var lastCheckpointTime = 0L
 
     override fun onCreate() {
@@ -61,26 +67,43 @@ class AudiobookService : MediaSessionService() {
             override fun onPositionDiscontinuity(oldPosition: PositionInfo, newPosition: PositionInfo, reason: Int) {
                 val previous = last?.takeIf { oldPosition.mediaItem?.mediaId == it.chapterId } ?: return
                 val next = newPosition.mediaItem
-                val nextBook = next?.mediaMetadata?.extras?.getString(AudiobookPlayback.BOOK_ID)
-                if (previous.bookId != nextBook && previous.playing) {
-                    checkpoint(false, previous.copy(positionMs = oldPosition.positionMs))
-                } else if (next != null && previous.bookId == nextBook && reason == Player.DISCONTINUITY_REASON_SEEK) {
-                    checkpoint(false, previous.copy(chapterId = next.mediaId, positionMs = newPosition.positionMs))
+                val nextSelection = next?.mediaMetadata?.extras?.getLong(AudiobookPlayback.SELECTION)
+                if (next == null || nextSelection != selection) {
+                    if (previous.playing) checkpoint(previous.copy(positionMs = oldPosition.positionMs))
+                    return
                 }
+                val remoteSeek = applying
+                applying = null
+                val operation = reason == Player.DISCONTINUITY_REASON_SEEK
+                if (remoteSeek?.chapterId == next.mediaId && operation) return
+                if (!operation && reason != Player.DISCONTINUITY_REASON_AUTO_TRANSITION) return
+                checkpoint(previous.copy(chapterId = next.mediaId, positionMs = newPosition.positionMs), explicitSeek = operation)
             }
 
             override fun onEvents(player: Player, events: Player.Events) {
-                val previous = last
                 publish()
                 val current = last
-                if (current == null) return
-                val ended = player.playbackState == Player.STATE_ENDED
-                val seek = events.contains(Player.EVENT_POSITION_DISCONTINUITY)
-                if (ended || current.playing && previous?.playing != true ||
-                    previous?.playing == true && !current.playing ||
-                    seek && (player.playbackState == Player.STATE_READY || previous?.bookId == current.bookId && previous.playing)) {
-                    checkpoint(ended)
+                val extras = player.currentMediaItem?.mediaMetadata?.extras
+                val incoming = extras?.getLong(AudiobookPlayback.SELECTION)
+                if (incoming != selection) {
+                    selection = incoming
+                    version = extras?.getLong(AudiobookPlayback.RESUME_VERSION) ?: 0
+                    activated = false
+                    recorded = null
+                    applying = null
                 }
+                if (current == null) return
+                when {
+                    current.playing && !activated -> {
+                        activated = true
+                        checkpoint(current)
+                    }
+                    activated && events.contains(Player.EVENT_PLAYBACK_STATE_CHANGED) && player.playbackState == Player.STATE_ENDED ->
+                        checkpoint(current, completed = true)
+                    activated && events.contains(Player.EVENT_PLAY_WHEN_READY_CHANGED) && !player.playWhenReady ->
+                        checkpoint(current)
+                }
+                alignPausedPosition()
             }
 
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
@@ -95,12 +118,23 @@ class AudiobookService : MediaSessionService() {
                 owner = account
             }
         }
+        syncing = container.scope.launch(Dispatchers.Main) {
+            container.audiobookStore.state.collect { alignPausedPosition() }
+        }
         ticking = container.scope.launch(Dispatchers.Main) {
+            var lastPausedRefresh = 0L
             while (true) {
                 delay(1_000)
-                if (!player.isPlaying) continue
-                publish()
-                if (android.os.SystemClock.elapsedRealtime() - lastCheckpointTime >= 8_000) checkpoint(false)
+                val now = SystemClock.elapsedRealtime()
+                if (player.isPlaying) {
+                    publish()
+                    if (now - lastCheckpointTime >= 8_000) last?.let { checkpoint(it) }
+                } else if (!player.playWhenReady && now - lastPausedRefresh >= pausedRefreshInterval()) {
+                    val account = owner ?: continue
+                    val paused = last ?: continue
+                    lastPausedRefresh = now
+                    container.audiobookStore.refreshForPlayback(account, paused.bookId)
+                }
             }
         }
 
@@ -114,10 +148,11 @@ class AudiobookService : MediaSessionService() {
                     ?: return Futures.immediateFuture(mutableListOf())
                 val catalog = container.audiobookStore.state.value.books
                 return Futures.immediateFuture(mediaItems.mapNotNull { item ->
-                    val id = item.mediaMetadata.extras?.getString(AudiobookPlayback.BOOK_ID) ?: return@mapNotNull null
+                    val extras = item.mediaMetadata.extras ?: return@mapNotNull null
+                    val id = extras.getString(AudiobookPlayback.BOOK_ID) ?: return@mapNotNull null
                     val book = catalog.firstOrNull { it.id == id } ?: return@mapNotNull null
                     val chapter = book.chapters.firstOrNull { it.id == item.mediaId } ?: return@mapNotNull null
-                    container.audiobookPlayback.mediaItem(account, book, chapter)
+                    container.audiobookPlayback.mediaItem(account, book, chapter, extras)
                 }.toMutableList())
             }
         }
@@ -148,23 +183,42 @@ class AudiobookService : MediaSessionService() {
         container.audiobookPlayback.publish(last)
     }
 
-    private fun checkpoint(completed: Boolean, playback: AudiobookPlaybackState? = last) {
+    private fun alignPausedPosition() {
+        if (!activated || player.playWhenReady || owner != container.audiobookAccount()) return
+        val active = last ?: return
+        val latest = progressOf(active.bookId)?.takeIf { it.updatedAtMs > version } ?: return
+        val index = (0 until player.mediaItemCount).firstOrNull { player.getMediaItemAt(it).mediaId == latest.chapterId } ?: return
+        version = latest.updatedAtMs
+        recorded = latest
+        if (player.currentMediaItemIndex == index && player.currentPosition == latest.positionMs) return
+        applying = latest
+        player.seekTo(index, latest.positionMs)
+    }
+
+    private fun progressOf(bookId: String) = container.audiobookStore.state.value.books.firstOrNull { it.id == bookId }?.progress
+
+    private fun pausedRefreshInterval(): Long = if (container.audiobookStore.state.value.online) 8_000 else 30_000
+
+    private fun checkpoint(state: AudiobookPlaybackState, completed: Boolean = false, explicitSeek: Boolean = false) {
         val account = owner ?: return
-        val state = playback ?: return
-        val progress = AudiobookProgress(state.chapterId, state.positionMs, System.currentTimeMillis(), completed)
-        lastCheckpointTime = android.os.SystemClock.elapsedRealtime()
-        container.scope.launch {
-            try { container.audiobookStore.checkpoint(account, state.bookId, progress) }
-            catch (error: IOException) { android.util.Log.w("Caimack", "Could not save audiobook progress", error) }
-        }
+        lastCheckpointTime = SystemClock.elapsedRealtime()
+        if (recorded?.let { it.chapterId == state.chapterId && it.positionMs == state.positionMs && it.completed == completed } == true) return
+        val known = progressOf(state.bookId)?.updatedAtMs ?: 0
+        val basedOn = if (explicitSeek) maxOf(version, known) else version
+        if (known > basedOn) return
+        val progress = AudiobookProgress(state.chapterId, state.positionMs, container.audiobookStore.checkpointTime(account, basedOn), completed)
+        version = progress.updatedAtMs
+        recorded = progress
+        container.audiobookPlayback.recordProgress(account, state.bookId, progress, basedOn)
     }
 
     override fun onDestroy() {
         if (player.isPlaying) {
             publish()
-            checkpoint(false)
+            last?.let { checkpoint(it) }
         }
         accounts?.cancel()
+        syncing?.cancel()
         ticking?.cancel()
         session?.release()
         player.release()

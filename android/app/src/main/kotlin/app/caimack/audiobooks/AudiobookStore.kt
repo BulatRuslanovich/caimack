@@ -4,6 +4,7 @@
 package app.caimack.audiobooks
 
 import android.net.Uri
+import android.os.SystemClock
 import android.util.AtomicFile
 import android.util.Log
 import androidx.core.net.toUri
@@ -17,7 +18,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,6 +34,7 @@ import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import retrofit2.HttpException
+import retrofit2.Response
 
 internal data class AudiobookAccount(val server: HttpUrl, val user: String) {
     fun endpoint(vararg segments: String): HttpUrl = server.newBuilder()
@@ -85,6 +86,7 @@ internal class AudiobookStore(
     private var cache = AudiobookCache()
     private var metadata = AudiobookCache()
     private var status: AudiobookStatus? = null
+    @Volatile private var serverClock: Pair<AudiobookAccount, Long>? = null
     private val downloadJobs = mutableSetOf<Pair<AudiobookAccount, String>>()
 
     init {
@@ -116,8 +118,28 @@ internal class AudiobookStore(
     }
 
     suspend fun refreshForPlayback(account: AudiobookAccount, id: String) {
-        withTimeoutOrNull(1800) { refresh(account, false, id) }
+        withTimeoutOrNull(1800) {
+            try {
+                val book = absentIfGone { timed(account) { api.book(account.endpoint(id)) } } ?: return@withTimeoutOrNull
+                lock.withLock {
+                    if (currentAccount() != account) return@withLock
+                    load(account)
+                    val known = cache.books.firstOrNull { it.id == id }
+                    val merged = book.withLatestProgress(known?.progress)
+                    val books = if (known == null) cache.books + merged else cache.books.map { if (it.id == id) merged else it }
+                    persist(account, cache.copy(books = books))
+                    current.update { it.copy(ready = true, online = true) }
+                }
+            } catch (error: IOException) {
+                // The cached chapter and pending local progress remain available.
+            } catch (_: HttpException) {
+            }
+        }
     }
+
+    fun checkpointTime(account: AudiobookAccount, after: Long = 0): Long =
+        (System.currentTimeMillis() + (serverClock?.takeIf { it.first == account }?.second ?: 0))
+            .coerceAtLeast(after + 1)
 
     fun remote(account: AudiobookAccount, path: String): HttpUrl =
         account.server.newBuilder().addEncodedPathSegments(path.trimStart('/')).build()
@@ -134,15 +156,12 @@ internal class AudiobookStore(
         else remote(account, chapter.streamUrl).toString().toUri()
     }
 
-    suspend fun checkpoint(account: AudiobookAccount, id: String, progress: AudiobookProgress) = withContext(Dispatchers.IO) {
+    suspend fun checkpoint(account: AudiobookAccount, id: String, progress: AudiobookProgress, basedOn: Long) = withContext(Dispatchers.IO) {
         lock.withLock {
             if (currentAccount() != account) return@withLock
             load(account)
             val known = state.value.books.firstOrNull { it.id == id }?.progress
-            if (known != null && (known.updatedAtMs >= progress.updatedAtMs ||
-                known.chapterId == progress.chapterId && known.positionMs == progress.positionMs && known.completed == progress.completed)) {
-                return@withLock
-            }
+            if (known != null && known.updatedAtMs > basedOn) return@withLock
             persist(account, cache.copy(pendingProgress = cache.pendingProgress + (id to progress)))
             requests.trySend(Unit)
         }
@@ -237,16 +256,17 @@ internal class AudiobookStore(
         }
     }
 
-    private suspend fun refresh(account: AudiobookAccount, full: Boolean, bookId: String? = null) = refreshLock.withLock refresh@ {
+    private suspend fun refresh(account: AudiobookAccount, full: Boolean) = refreshLock.withLock refresh@ {
         if (currentAccount() != account) return@refresh
         val pending = lock.withLock { load(account); cache }
         try {
             for ((id, progress) in pending.pendingProgress) {
-                val winning = absentIfGone { api.progress(account.endpoint(id, "progress"), progress) } ?: continue
+                val winning = absentIfGone { timed(account) { api.progress(account.endpoint(id, "progress"), progress) } } ?: continue
                 lock.withLock {
-                    if (currentAccount() == account && cache.pendingProgress[id] == progress) {
-                        persist(account, cache.copy(pendingProgress = cache.pendingProgress - id,
-                            books = cache.books.map { if (it.id == id) it.copy(progress = winning) else it }))
+                    if (currentAccount() == account) {
+                        val remaining = if (cache.pendingProgress[id] == progress) cache.pendingProgress - id else cache.pendingProgress
+                        persist(account, cache.copy(pendingProgress = remaining,
+                            books = cache.books.map { if (it.id == id) it.withLatestProgress(winning) else it }))
                     }
                 }
             }
@@ -261,23 +281,14 @@ internal class AudiobookStore(
                     }
                 }
             }
-            if (!full) {
-                if (bookId != null) {
-                    val book = absentIfGone { api.book(account.endpoint(bookId)) }
-                    lock.withLock {
-                        if (book != null && currentAccount() == account) {
-                            persist(account, cache.copy(books = cache.books.map { if (it.id == bookId) book else it }))
-                        }
-                    }
-                }
-                return@refresh
-            }
-            val books = api.catalog(account.endpoint())
+            if (!full) return@refresh
+            val books = timed(account) { api.catalog(account.endpoint()) }
             lock.withLock {
                 if (currentAccount() != account) return@withLock
                 val freshIds = books.mapTo(hashSetOf()) { it.id }
+                val known = cache.books.associateBy { it.id }
                 val retained = cache.books.filter { it.id !in freshIds && it.id in cache.downloads }
-                persist(account, cache.copy(books = books + retained))
+                persist(account, cache.copy(books = books.map { it.withLatestProgress(known[it.id]?.progress) } + retained))
                 current.update { it.copy(ready = true, online = true) }
             }
         } catch (error: Exception) {
@@ -288,6 +299,19 @@ internal class AudiobookStore(
 
     private suspend fun <T> absentIfGone(request: suspend () -> T): T? {
         return try { request() } catch (error: HttpException) { if (error.code() == 404) null else throw error }
+    }
+
+    private suspend fun <T : Any> timed(account: AudiobookAccount, request: suspend () -> Response<T>): T {
+        val start = SystemClock.elapsedRealtime()
+        val response = request()
+        if (!response.isSuccessful) throw HttpException(response)
+        val roundTripMs = SystemClock.elapsedRealtime() - start
+        val serverTime = response.headers()["X-Caimack-Server-Time-Ms"]?.toLongOrNull()
+        if (serverTime != null && roundTripMs < 2_000 && currentAccount() == account) {
+            val midpoint = System.currentTimeMillis() - roundTripMs / 2
+            serverClock = account to (serverTime - midpoint)
+        }
+        return response.body() ?: throw IOException("Empty audiobook response")
     }
 
     private fun load(account: AudiobookAccount?) {
@@ -328,9 +352,7 @@ internal class AudiobookStore(
 
     private fun publish() {
         val books = cache.books.map { book ->
-            val pending = cache.pendingProgress[book.id]
-            book.copy(
-                progress = pending?.takeIf { it.updatedAtMs >= (book.progress?.updatedAtMs ?: 0) } ?: book.progress,
+            book.withLatestProgress(cache.pendingProgress[book.id]).copy(
                 saved = cache.pendingSaves[book.id] ?: book.saved,
             )
         }
@@ -371,3 +393,8 @@ internal class AudiobookStore(
         const val CATALOG_INTERVAL_MS = 30_000L
     }
 }
+
+internal fun Audiobook.withLatestProgress(candidate: AudiobookProgress?): Audiobook =
+    if (candidate != null && candidate.updatedAtMs > (progress?.updatedAtMs ?: 0) && chapters.any { it.id == candidate.chapterId }) {
+        copy(progress = candidate)
+    } else this

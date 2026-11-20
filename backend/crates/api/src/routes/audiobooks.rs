@@ -8,6 +8,7 @@ use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, put};
+use serde::Serialize;
 use uuid::Uuid;
 
 use crate::auth::CurrentUser;
@@ -16,8 +17,8 @@ use crate::files::{self, FileReply};
 use crate::problem::ApiResult;
 use crate::state::AppState;
 
-const NO_CACHE: [(header::HeaderName, &str); 1] = [(header::CACHE_CONTROL, "private, no-store")];
 const MEDIA_CACHE: &str = "private, max-age=300";
+const SERVER_TIME: header::HeaderName = header::HeaderName::from_static("x-caimack-server-time-ms");
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()
@@ -29,18 +30,23 @@ pub(super) fn router() -> Router<AppState> {
         .route("/api/audiobooks/{id}/chapters/{chapter_id}/stream", get(stream))
 }
 
-async fn list(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> ApiResult<impl IntoResponse> {
+fn timed_json(body: impl Serialize) -> Response {
+    let now = chrono::Utc::now().timestamp_millis().to_string();
+    ([(header::CACHE_CONTROL, "private, no-store"), (SERVER_TIME, now.as_str())], Json(body)).into_response()
+}
+
+async fn list(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> ApiResult<Response> {
     let catalog = state.audiobooks.list(&state.db, user.user_id).await?;
-    Ok((NO_CACHE, Json(catalog)))
+    Ok(timed_json(catalog))
 }
 
 async fn get_book(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     RoutePath(id): RoutePath<Uuid>,
-) -> ApiResult<impl IntoResponse> {
+) -> ApiResult<Response> {
     let book = state.audiobooks.get(&state.db, user.user_id, id).await?;
-    Ok((NO_CACHE, Json(book)))
+    Ok(timed_json(book))
 }
 
 async fn save(
@@ -66,9 +72,9 @@ async fn set_progress(
     CurrentUser(user): CurrentUser,
     RoutePath(id): RoutePath<Uuid>,
     Json(progress): Json<Progress>,
-) -> ApiResult<impl IntoResponse> {
+) -> ApiResult<Response> {
     let progress = state.audiobooks.set_progress(&state.db, user.user_id, id, progress).await?;
-    Ok((NO_CACHE, Json(progress)))
+    Ok(timed_json(progress))
 }
 
 async fn cover(

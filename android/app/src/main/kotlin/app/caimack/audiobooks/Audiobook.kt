@@ -5,6 +5,7 @@ package app.caimack.audiobooks
 
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -38,9 +39,9 @@ data class AudiobookChapter(val id: String, val title: String, val durationMs: L
 data class AudiobookProgress(val chapterId: String, val positionMs: Long, val updatedAtMs: Long, val completed: Boolean = false)
 
 interface AudiobookApi {
-    @GET suspend fun catalog(@Url url: HttpUrl): List<Audiobook>
-    @GET suspend fun book(@Url url: HttpUrl): Audiobook
-    @PUT suspend fun progress(@Url url: HttpUrl, @Body progress: AudiobookProgress): AudiobookProgress
+    @GET suspend fun catalog(@Url url: HttpUrl): Response<List<Audiobook>>
+    @GET suspend fun book(@Url url: HttpUrl): Response<Audiobook>
+    @PUT suspend fun progress(@Url url: HttpUrl, @Body progress: AudiobookProgress): Response<AudiobookProgress>
     @PUT suspend fun save(@Url url: HttpUrl)
     @DELETE suspend fun unsave(@Url url: HttpUrl)
 }

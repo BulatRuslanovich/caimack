@@ -526,7 +526,6 @@ function BookDetail({ book }: { book: Audiobook }) {
           {book.chapters.map((chapter, index) => {
             const active =
               player.active?.book.id === book.id && player.active.chapterIndex === index;
-            const resume = !book.progress?.completed && book.progress?.chapterId === chapter.id;
             const playing = active && player.playing;
             return (
               <li key={chapter.id}>
@@ -541,7 +540,7 @@ function BookDetail({ book }: { book: Audiobook }) {
                     "group grid min-h-13 w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 py-2 text-left hover:bg-raised max-sm:gap-2 disabled:opacity-50",
                     active && "bg-card text-primary",
                   )}
-                  onClick={() => player.play(book, active || resume ? undefined : index)}
+                  onClick={() => player.play(book, chapter.id)}
                 >
                   <span className="grid place-items-center text-xs text-faint tabular-nums">
                     <span className="group-hover:hidden group-focus-visible:hidden">

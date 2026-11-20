@@ -162,13 +162,13 @@ impl Audiobooks {
     ) -> AppResult<Progress> {
         let snapshot = self.snapshot();
         let book = snapshot.book(id)?;
-        let chapter = book.chapter(progress.chapter_id)?;
         if progress.updated_at_ms <= 0 || progress.position_ms < 0 {
             return Err(AppError::validation("Invalid audiobook progress."));
         }
-        progress.position_ms = progress.position_ms.min(chapter.data.duration_ms);
+        progress = book.normalize_progress(progress)?;
         progress.updated_at_ms = progress.updated_at_ms.min(chrono::Utc::now().timestamp_millis());
-        Ok(state::set_progress(db, user_id, id, progress).await?)
+        let winning = state::set_progress(db, user_id, id, progress).await?;
+        Ok(book.normalize_progress(winning).unwrap_or(winning))
     }
 
     pub fn cover(&self, id: Uuid) -> AppResult<Artwork> {
@@ -213,12 +213,18 @@ impl Book {
             .ok_or_else(|| AppError::not_found("Audiobook chapter not found."))
     }
 
+    fn normalize_progress(&self, mut progress: Progress) -> AppResult<Progress> {
+        let chapter = self.chapter(progress.chapter_id)?;
+        let duration = chapter.data.duration_ms;
+        progress.completed &= self.chapters.last().is_some_and(|last| last.data.id == progress.chapter_id);
+        // The decoder's end position can differ from the catalog duration. Persist a single
+        // terminal position so different clients render completed books consistently.
+        progress.position_ms = if progress.completed { duration } else { progress.position_ms.min(duration) };
+        Ok(progress)
+    }
+
     fn dto(&self, state: state::BookState) -> Audiobook {
-        let progress = state.progress().and_then(|mut progress| {
-            let chapter = self.chapter(progress.chapter_id).ok()?;
-            progress.position_ms = progress.position_ms.min(chapter.data.duration_ms);
-            Some(progress)
-        });
+        let progress = state.progress().and_then(|progress| self.normalize_progress(progress).ok());
         Audiobook {
             id: self.id,
             title: self.title.clone(),
@@ -230,5 +236,40 @@ impl Book {
             saved: state.saved,
             progress,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_the_final_chapter_can_complete_a_book() -> AppResult<()> {
+        let chapter = || ChapterFile {
+            data: Chapter {
+                id: Uuid::new_v4(),
+                title: String::new(),
+                duration_ms: 60_000,
+                size_bytes: 500,
+                stream_url: String::new(),
+            },
+            path: PathBuf::new(),
+        };
+        let book = Book {
+            id: Uuid::new_v4(),
+            title: "Book".into(),
+            author: None,
+            narrator: None,
+            duration_ms: 120_000,
+            chapters: vec![chapter(), chapter()],
+            cover: None,
+            fingerprint: Vec::new(),
+        };
+        let early =
+            Progress { chapter_id: book.chapters[0].data.id, position_ms: 55_000, updated_at_ms: 100, completed: true };
+        assert_eq!(book.normalize_progress(early)?, Progress { completed: false, ..early });
+        let final_chapter = Progress { chapter_id: book.chapters[1].data.id, position_ms: 59_980, ..early };
+        assert_eq!(book.normalize_progress(final_chapter)?, Progress { position_ms: 60_000, ..final_chapter });
+        Ok(())
     }
 }

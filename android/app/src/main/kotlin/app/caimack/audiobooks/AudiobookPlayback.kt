@@ -13,6 +13,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
+import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +44,8 @@ internal class AudiobookPlayback(
 ) {
     private var connection: ListenableFuture<MediaController>? = null
     private var start: Job? = null
+    private var checkpointWrite: Job? = null
+    private var selection = 0L
     private val current = MutableStateFlow<AudiobookPlaybackState?>(null)
     val state = current.asStateFlow()
     val openFromNotification = MutableStateFlow(false)
@@ -55,20 +58,26 @@ internal class AudiobookPlayback(
 
     fun play(book: Audiobook, chapterId: String? = null) {
         val owner = account() ?: return
-        val active = state.value
         start?.cancel()
         start = scope.launch(Dispatchers.Main) {
             try {
                 val player = connect()
-                if (active != null && active.bookId != book.id) player.pause()
-                if (chapterId == null && store.state.value.online) store.refreshForPlayback(owner, book.id)
+                if (player.playWhenReady) player.pause()
+                checkpointWrite?.join()
+                if (chapterId == null) store.refreshForPlayback(owner, book.id)
+                checkpointWrite?.join()
                 if (account() != owner) return@launch
                 val selected = store.state.value.books.firstOrNull { it.id == book.id } ?: book
                 val saved = selected.progress?.takeUnless { it.completed || chapterId != null }
                 val index = selected.chapters.indexOfFirst { it.id == (chapterId ?: saved?.chapterId) }.coerceAtLeast(0)
                 if (selected.chapters.isEmpty()) return@launch
                 val position = saved?.takeIf { it.chapterId == selected.chapters[index].id }?.positionMs ?: 0L
-                val items = selected.chapters.map { chapter -> mediaItem(owner, selected, chapter) }
+                val extras = Bundle().apply {
+                    putString(BOOK_ID, book.id)
+                    putLong(SELECTION, ++selection)
+                    putLong(RESUME_VERSION, selected.progress?.updatedAtMs ?: 0)
+                }
+                val items = selected.chapters.map { chapter -> mediaItem(owner, selected, chapter, extras) }
                 stopMusic()
                 player.setMediaItems(items, index, position)
                 player.prepare()
@@ -77,6 +86,15 @@ internal class AudiobookPlayback(
                 if (error is CancellationException) throw error
                 android.util.Log.w("Caimack", "Could not start audiobook playback", error)
             }
+        }
+    }
+
+    fun recordProgress(owner: AudiobookAccount, bookId: String, value: AudiobookProgress, basedOn: Long) {
+        val before = checkpointWrite
+        checkpointWrite = scope.launch {
+            before?.join()
+            try { store.checkpoint(owner, bookId, value, basedOn) }
+            catch (error: IOException) { android.util.Log.w("Caimack", "Could not save audiobook progress", error) }
         }
     }
 
@@ -102,12 +120,12 @@ internal class AudiobookPlayback(
 
     fun publish(playback: AudiobookPlaybackState?) { current.value = playback }
 
-    fun mediaItem(account: AudiobookAccount, book: Audiobook, chapter: AudiobookChapter): MediaItem =
+    fun mediaItem(account: AudiobookAccount, book: Audiobook, chapter: AudiobookChapter, extras: Bundle): MediaItem =
         MediaItem.Builder().setMediaId(chapter.id).setUri(store.audio(account, book, chapter))
             .setMediaMetadata(MediaMetadata.Builder().setTitle(chapter.title).setAlbumTitle(book.title)
                 .setArtist(book.author).setArtworkUri(store.cover(book)?.toUri())
                 .setMediaType(MediaMetadata.MEDIA_TYPE_AUDIO_BOOK_CHAPTER)
-                .setExtras(Bundle().apply { putString(BOOK_ID, book.id) }).build())
+                .setExtras(extras).build())
             .build()
 
     private fun controller(): MediaController? =
@@ -130,6 +148,8 @@ internal class AudiobookPlayback(
 
     companion object {
         const val BOOK_ID = "app.caimack.audiobook.id"
+        const val SELECTION = "app.caimack.audiobook.selection"
+        const val RESUME_VERSION = "app.caimack.audiobook.resumeVersion"
         const val OPEN = "app.caimack.audiobook.open"
     }
 }

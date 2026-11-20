@@ -4,12 +4,17 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   audiobookApi,
-  journalKey,
-  persistProgressJournal,
+  audiobookClockOffset,
+  isJournalKey,
+  mergeJournalEntry,
+  persistProgressEntry,
   readProgressJournal,
+  sameAudiobookProgress,
+  settleProgress,
   withLatestProgress,
   type Audiobook,
   type AudiobookProgress,
+  type ProgressEntry,
   type ProgressJournal,
 } from "./audiobooks";
 import {
@@ -18,27 +23,60 @@ import {
   storeAudiobookCatalog,
 } from "./audiobookDownloads";
 import { ApiError } from "./http";
+import { readStored, writeStored } from "./storage";
 
 export function useAudiobookCatalog(scope: string | null, online: boolean) {
   const client = useQueryClient();
   const key = useMemo(() => ["audiobooks", scope], [scope]);
   const downloadKey = useMemo(() => ["audiobook-downloads", scope], [scope]);
   const journal = useRef<ProgressJournal>({});
+  const confirmed = useRef(new Map<string, AudiobookProgress>());
   const inFlight = useRef(new Set<string>());
+  const scopeRequest = useRef<AbortController | null>(null);
+  const clockKey = `caimack-audiobook-clock:${scope}`;
+  const clockOffset = useRef<number | null>(null);
+
+  const observeServerTime = useCallback(
+    (sentAt: number) => (headers: Headers) => {
+      const offset = audiobookClockOffset(headers, sentAt, Date.now());
+      if (offset === null || offset === clockOffset.current) return;
+      clockOffset.current = offset;
+      writeStored(clockKey, String(offset));
+    },
+    [clockKey],
+  );
 
   const readJournal = useCallback(() => {
     if (scope) {
-      for (const [id, progress] of Object.entries(readProgressJournal(scope))) {
-        if (
-          !journal.current[id] ||
-          progress.progress.updatedAtMs >= journal.current[id].progress.updatedAtMs
-        ) {
-          journal.current[id] = progress;
-        }
+      for (const [id, stored] of Object.entries(readProgressJournal(scope))) {
+        const entry = mergeJournalEntry(journal.current[id], stored);
+        journal.current[id] = entry;
       }
     }
     return journal.current;
   }, [scope]);
+
+  const remember = useCallback((id: string, progress: AudiobookProgress) => {
+    const known = confirmed.current.get(id);
+    if (known && known.updatedAtMs > progress.updatedAtMs) return known;
+    confirmed.current.set(id, progress);
+    return progress;
+  }, []);
+
+  const applyProgress = (book: Audiobook, journal: ProgressJournal, fromServer: boolean) => {
+    if (fromServer && book.progress) remember(book.id, book.progress);
+    const authoritative = withLatestProgress(book, confirmed.current.get(book.id));
+    const local = journal[book.id];
+    if (
+      local?.settled &&
+      authoritative.progress &&
+      sameAudiobookProgress(authoritative.progress, local.settled) &&
+      authoritative.chapters.some(({ id }) => id === local.progress.chapterId)
+    ) {
+      return { ...book, progress: local.progress };
+    }
+    return withLatestProgress(authoritative, local?.progress);
+  };
 
   const result = useQuery({
     queryKey: key,
@@ -53,10 +91,11 @@ export function useAudiobookCatalog(scope: string | null, online: boolean) {
       if (!scope) return [];
 
       let books: Audiobook[] | undefined;
+      let fromServer = false;
       if (online) {
         try {
-          books = await audiobookApi.catalog(signal);
-          void storeAudiobookCatalog(scope, books).catch(() => {});
+          books = await audiobookApi.catalog(signal, observeServerTime(Date.now()));
+          fromServer = true;
         } catch (error) {
           if (signal.aborted || (error instanceof ApiError && error.status < 500)) throw error;
           books = await readAudiobookCatalog(scope).catch(() => undefined);
@@ -70,7 +109,9 @@ export function useAudiobookCatalog(scope: string | null, online: boolean) {
       }
 
       const saved = readJournal();
-      return (books ?? []).map((book) => withLatestProgress(book, saved[book.id]?.progress));
+      const reconciled = (books ?? []).map((book) => applyProgress(book, saved, fromServer));
+      if (fromServer) void storeAudiobookCatalog(scope, reconciled).catch(() => {});
+      return reconciled;
     },
   });
 
@@ -84,7 +125,7 @@ export function useAudiobookCatalog(scope: string | null, online: boolean) {
       if (!scope) return [];
       const books = await readDownloadedAudiobooks(scope);
       const saved = readJournal();
-      return books.map((book) => withLatestProgress(book, saved[book.id]?.progress));
+      return books.map((book) => applyProgress(book, saved, false));
     },
   });
 
@@ -104,48 +145,72 @@ export function useAudiobookCatalog(scope: string | null, online: boolean) {
     [client, key, downloadKey],
   );
 
+  const saveEntry = useCallback(
+    (bookId: string, entry: ProgressEntry) => {
+      if (!scope) return;
+      journal.current[bookId] = entry;
+      persistProgressEntry(scope, bookId, entry);
+    },
+    [scope],
+  );
+
   const flush = useCallback(async () => {
-    if (!scope || !online || !navigator.onLine) return;
+    const signal = scopeRequest.current?.signal;
+    if (!scope || !online || !navigator.onLine || !signal || signal.aborted) return;
     const entries = Object.entries(readJournal());
     await Promise.all(
-      entries.map(async ([id, value]) => {
-        if (!value.pending || inFlight.current.has(id)) return;
+      entries.map(async ([id, initial]) => {
+        if (!initial.pending || inFlight.current.has(id)) return;
 
         inFlight.current.add(id);
         try {
-          const progress = await audiobookApi.writeProgress(id, value.progress);
-          const latest = readJournal();
-          if (latest[id]?.progress.updatedAtMs !== value.progress.updatedAtMs) return;
-
-          latest[id] = { progress, pending: false };
-          persistProgressJournal(scope, latest);
-          updateBook(id, (book) => ({ ...book, progress }));
-        } catch (error) {
-          if (error instanceof ApiError && [400, 404, 410, 422].includes(error.status)) {
-            const latest = readJournal();
-            if (latest[id]?.progress.updatedAtMs !== value.progress.updatedAtMs) return;
-            latest[id] = { ...value, pending: false };
-            persistProgressJournal(scope, latest);
+          let value = initial;
+          while (value.pending && navigator.onLine && !signal.aborted) {
+            let winner: AudiobookProgress;
+            try {
+              winner = await audiobookApi.writeProgress(
+                id,
+                value.progress,
+                signal,
+                observeServerTime(Date.now()),
+              );
+            } catch (error) {
+              if (error instanceof ApiError && [400, 404, 410, 422].includes(error.status)) {
+                const latest = readJournal()[id];
+                if (latest && sameAudiobookProgress(latest.progress, value.progress)) {
+                  saveEntry(id, { ...value, pending: false });
+                }
+              }
+              break;
+            }
+            const latest = readJournal()[id];
+            const next = settleProgress(latest, value.progress, remember(id, winner));
+            if (next !== latest) saveEntry(id, next);
+            updateBook(id, (book) => ({ ...book, progress: next.progress }));
+            value = next;
           }
         } finally {
           inFlight.current.delete(id);
         }
       }),
     );
-  }, [scope, online, readJournal, updateBook]);
+  }, [scope, online, readJournal, updateBook, remember, saveEntry, observeServerTime]);
 
   const checkpoint = useCallback(
     (
       bookId: string,
       position: Omit<AudiobookProgress, "updatedAtMs">,
       lastKnown: AudiobookProgress | null,
+      activation = false,
     ) => {
       if (!scope) return;
       const latest = readJournal();
       const saved = latest[bookId]?.progress;
-      const previous =
-        (saved?.updatedAtMs ?? 0) > (lastKnown?.updatedAtMs ?? 0) ? saved : lastKnown;
+      let previous = (saved?.updatedAtMs ?? 0) > (lastKnown?.updatedAtMs ?? 0) ? saved : lastKnown;
+      const server = confirmed.current.get(bookId);
+      if (server && server.updatedAtMs >= (previous?.updatedAtMs ?? 0)) previous = server;
       if (
+        !activation &&
         previous?.chapterId === position.chapterId &&
         previous.positionMs === position.positionMs &&
         previous.completed === position.completed
@@ -154,29 +219,52 @@ export function useAudiobookCatalog(scope: string | null, online: boolean) {
         return previous;
       }
 
+      const offset = clockOffset.current ?? (Number(readStored(clockKey)) || 0);
+      let accountFloor = 0;
+      if (activation) {
+        for (const { progress } of Object.values(latest)) {
+          accountFloor = Math.max(accountFloor, progress.updatedAtMs);
+        }
+        for (const progress of confirmed.current.values()) {
+          accountFloor = Math.max(accountFloor, progress.updatedAtMs);
+        }
+      }
       const progress = {
         ...position,
-        updatedAtMs: Math.max(Date.now(), (previous?.updatedAtMs ?? 0) + 1),
+        updatedAtMs: Math.max(
+          Date.now() + offset,
+          (previous?.updatedAtMs ?? 0) + 1,
+          accountFloor + 1,
+        ),
       };
-      latest[bookId] = { progress, pending: true };
-      persistProgressJournal(scope, latest);
+      saveEntry(bookId, { progress, pending: true });
       updateBook(bookId, (book) => ({ ...book, progress }));
       void flush();
       return progress;
     },
-    [scope, readJournal, updateBook, flush],
+    [scope, readJournal, updateBook, flush, saveEntry, clockKey],
   );
 
   const { refetch } = result;
+  useEffect(() => {
+    const controller = new AbortController();
+    scopeRequest.current = controller;
+    return () => controller.abort();
+  }, [scope]);
+
   useEffect(() => {
     if (!scope) return;
     const onlineAgain = () => {
       void flush().finally(() => void refetch());
     };
     const onStorage = (event: StorageEvent) => {
-      if (event.key !== journalKey(scope)) return;
-      for (const [id, { progress }] of Object.entries(readJournal())) {
-        updateBook(id, (book) => withLatestProgress(book, progress));
+      if (!isJournalKey(scope, event.key)) return;
+      for (const [id, { progress, settled }] of Object.entries(readJournal())) {
+        updateBook(id, (book) =>
+          settled && book.progress && sameAudiobookProgress(book.progress, settled)
+            ? { ...book, progress }
+            : withLatestProgress(book, progress),
+        );
       }
     };
 
@@ -211,12 +299,17 @@ export function useAudiobookCatalog(scope: string | null, online: boolean) {
 
   const latestForPlayback = async (book: Audiobook) => {
     const known = books.find((item) => item.id === book.id) ?? book;
-    const latest = (item: Audiobook) => withLatestProgress(item, readJournal()[item.id]?.progress);
+    const latest = (item: Audiobook, fromServer = false) =>
+      applyProgress(item, readJournal(), fromServer);
     if (!online) return latest(known);
 
     try {
-      const remote = await audiobookApi.detail(book.id, AbortSignal.timeout(1_200));
-      const current = latest(remote);
+      const remote = await audiobookApi.detail(
+        book.id,
+        AbortSignal.timeout(1_200),
+        observeServerTime(Date.now()),
+      );
+      const current = latest(remote, true);
       updateBook(book.id, () => current);
       return current;
     } catch {

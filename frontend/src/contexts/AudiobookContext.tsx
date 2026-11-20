@@ -12,9 +12,11 @@ import {
 } from "@/lib/audiobookDownloads";
 import {
   audiobookHref,
+  audiobookTarget,
+  pausedAudiobookTarget,
+  sameAudiobookProgress,
   type Audiobook,
   type AudiobookProgress,
-  withLatestProgress,
 } from "@/lib/audiobooks";
 import { cacheAudiobookShell } from "@/lib/serviceWorker";
 import { useAudiobookCatalog } from "@/lib/useAudiobookCatalog";
@@ -24,6 +26,7 @@ import {
   createContext,
   useCallback,
   useEffect,
+  useEffectEvent,
   useRef,
   useState,
   useSyncExternalStore,
@@ -34,6 +37,7 @@ interface PlayingBook {
   book: Audiobook;
   chapterIndex: number;
   progress: AudiobookProgress | null;
+  publishStart: boolean;
 }
 
 interface AudiobookPlayer {
@@ -41,7 +45,7 @@ interface AudiobookPlayer {
   playing: boolean;
   pending: boolean;
   speed: number;
-  play: (book: Audiobook, chapterIndex?: number) => void;
+  play: (book: Audiobook, chapterId?: string) => void;
   toggle: () => void;
   seek: (ms: number) => void;
   skip: (ms: number) => void;
@@ -166,6 +170,7 @@ function AudiobookSession({
   const objectUrl = useRef<string | null>(null);
   const loadId = useRef(0);
   const selectionId = useRef(0);
+  const selecting = useRef(false);
   const waitingForGesture = useRef(false);
   const controller = useRef<AbortController | null>(null);
   const storeProgress = useRef(catalog.checkpoint);
@@ -175,19 +180,30 @@ function AudiobookSession({
     storeProgress.current = catalog.checkpoint;
   }, [catalog.checkpoint]);
 
-  const checkpoint = useCallback(() => {
+  const checkpoint = useCallback((activation = false, positionMs?: number) => {
     const session = current.current;
     const audio = audioRef.current;
     const chapter = session?.book.chapters[session.chapterIndex];
-    if (!session || !audio || !chapter || !audio.readyState || audio.ended) return;
-    const ms = Math.round(audio.currentTime * 1000);
-    if (ms === 0 && !session.progress) return;
-    if (session.progress?.chapterId === chapter.id && session.progress.positionMs === ms) return;
+    if (!session || !audio || !chapter) return;
+    if (positionMs === undefined && (!audio.readyState || audio.ended)) return;
+
+    const position = positionMs ?? Math.round(audio.currentTime * 1000);
+    if (
+      !activation &&
+      session.progress?.chapterId === chapter.id &&
+      session.progress.positionMs === position &&
+      !session.progress.completed
+    ) {
+      return;
+    }
+    if (!activation && positionMs === undefined && position === 0 && !session.progress) return;
+
     session.progress =
       storeProgress.current(
         session.book.id,
-        { chapterId: chapter.id, positionMs: ms, completed: false },
+        { chapterId: chapter.id, positionMs: position, completed: false },
         session.progress,
+        activation,
       ) ?? session.progress;
   }, []);
 
@@ -204,8 +220,9 @@ function AudiobookSession({
   }, []);
 
   const close = useCallback(() => {
-    checkpoint();
+    if (!audioRef.current?.paused) checkpoint();
     selectionId.current++;
+    selecting.current = false;
     loadId.current++;
     current.current = null;
     unload();
@@ -217,22 +234,24 @@ function AudiobookSession({
 
   useEffect(() => {
     if (!musicPlaying) return;
-    if (current.current) close();
-    else selectionId.current++;
+    if (current.current || selecting.current) close();
   }, [musicPlaying, close]);
 
   useEffect(() => {
     const recordOnBackground = () => {
-      if (document.visibilityState === "hidden") checkpoint();
+      if (document.visibilityState === "hidden" && !audioRef.current?.paused) checkpoint();
     };
     const timer = window.setInterval(() => {
       if (!audioRef.current?.paused) checkpoint();
     }, 4_000);
-    window.addEventListener("pagehide", checkpoint);
+    const recordOnExit = () => {
+      if (!audioRef.current?.paused) checkpoint();
+    };
+    window.addEventListener("pagehide", recordOnExit);
     document.addEventListener("visibilitychange", recordOnBackground);
     return () => {
       window.clearInterval(timer);
-      window.removeEventListener("pagehide", checkpoint);
+      window.removeEventListener("pagehide", recordOnExit);
       document.removeEventListener("visibilitychange", recordOnBackground);
     };
   }, [checkpoint]);
@@ -254,59 +273,70 @@ function AudiobookSession({
     audioRef.current.muted = muted;
   }, [volume, muted]);
 
-  const start = async (book: Audiobook, chapterIndex?: number) => {
+  const reportPlayError = (error: unknown) => {
+    if (error instanceof DOMException) {
+      if (error.name === "AbortError") return;
+      if (error.name === "NotAllowedError") {
+        waitingForGesture.current = true;
+        notify(t("audiobooks.playBlocked"), "info");
+        return;
+      }
+    }
+    notify(t("audiobooks.playFailed"), "error");
+  };
+
+  const start = async (book: Audiobook, chapterId?: string, restartChapter = false) => {
     const audio = audioRef.current;
-    if (!audio || !scope) return;
+    if (!audio || !scope) {
+      setPending(false);
+      return;
+    }
     if (!online && !downloaded.has(book.id)) {
+      setPending(false);
       notify(t("audiobooks.offlineUnavailable"), "info");
       return;
     }
 
-    const activeBook = current.current;
-    if (activeBook?.book.id === book.id && chapterIndex === undefined) {
-      if (!audio.paused) {
-        audio.pause();
-        return;
-      }
-      book = withLatestProgress(book, activeBook.progress ?? undefined);
-      if (
-        !book.progress?.completed &&
-        (book.progress?.updatedAtMs ?? 0) <= (activeBook.progress?.updatedAtMs ?? 0) &&
-        audio.src &&
-        !audio.error
-      ) {
-        pauseMusic();
-        await audio.play().catch(reportPlayError);
-        return;
-      }
+    const session = current.current;
+    const target = audiobookTarget(book, chapterId);
+    if (!target) {
+      setPending(false);
+      return;
     }
 
-    checkpoint();
-    if (activeBook?.book.id === book.id) {
-      book = withLatestProgress(book, activeBook.progress ?? undefined);
+    const { chapter, index } = target;
+    const position = restartChapter ? 0 : target.positionMs;
+    if (
+      session?.book.id === book.id &&
+      session.book.chapters[session.chapterIndex]?.id === chapter.id &&
+      Math.abs(Math.round(audio.currentTime * 1000) - position) <= 100 &&
+      audio.src &&
+      !audio.error &&
+      !audio.ended
+    ) {
+      session.progress = book.progress;
+      session.publishStart = true;
+      pauseMusic();
+      try {
+        await audio.play();
+      } catch (error) {
+        reportPlayError(error);
+      } finally {
+        if (current.current === session) setPending(false);
+      }
+      return;
     }
-
-    const previous = chapterIndex === undefined && !book.progress?.completed ? book.progress : null;
-    const index =
-      chapterIndex ??
-      Math.max(
-        0,
-        book.chapters.findIndex((item) => item.id === previous?.chapterId),
-      );
-    const chapter = book.chapters[index];
-    if (!chapter) return;
 
     const request = ++loadId.current;
     current.current = null;
     unload();
     pauseMusic();
-    const next = { book, chapterIndex: index, progress: book.progress };
+    const next = { book, chapterIndex: index, progress: book.progress, publishStart: true };
     current.current = next;
     setActive(next);
     onActiveChange(true);
     setPlaying(false);
     setPending(true);
-    const position = previous?.chapterId === chapter.id ? previous.positionMs : 0;
     clock.update({ positionMs: position, durationMs: chapter.durationMs });
 
     try {
@@ -333,31 +363,90 @@ function AudiobookSession({
     }
   };
 
-  const reportPlayError = (error: unknown) => {
-    if (error instanceof DOMException) {
-      if (error.name === "AbortError") return;
-      if (error.name === "NotAllowedError") {
-        waitingForGesture.current = true;
-        notify(t("audiobooks.playBlocked"), "info");
+  const alignPaused = useCallback(
+    (book: Audiobook) => {
+      const audio = audioRef.current;
+      const session = current.current;
+      const progress = book.progress;
+      if (
+        !audio?.paused ||
+        selecting.current ||
+        waitingForGesture.current ||
+        session?.book.id !== book.id ||
+        !progress ||
+        (session.progress && sameAudiobookProgress(session.progress, progress))
+      ) {
         return;
       }
-    }
-    notify(t("audiobooks.playFailed"), "error");
-  };
+
+      const target = pausedAudiobookTarget(book);
+      if (!target) return;
+      const previousChapter = session.book.chapters[session.chapterIndex];
+      const position = clock.getSnapshot().positionMs;
+      if (
+        previousChapter?.id !== target.chapter.id ||
+        position !== target.positionMs ||
+        progress.completed
+      ) {
+        loadId.current++;
+        unload();
+      }
+
+      const next = { book, progress, chapterIndex: target.index, publishStart: false };
+      current.current = next;
+      setActive(next);
+      clock.update({ positionMs: target.positionMs, durationMs: target.chapter.durationMs });
+    },
+    [clock, unload],
+  );
+
+  useEffect(() => {
+    if (!active || playing || pending) return;
+    const fresh = catalog.books.find(({ id }) => id === active.book.id);
+    if (!fresh) return;
+    let currentSnapshot = true;
+    queueMicrotask(() => {
+      if (currentSnapshot) alignPaused(fresh);
+    });
+    return () => {
+      currentSnapshot = false;
+    };
+  }, [active, alignPaused, catalog.books, pending, playing]);
+
+  const refreshPaused = useEffectEvent(() => {
+    const session = current.current;
+    if (!session || selecting.current || !audioRef.current?.paused) return;
+    if (document.visibilityState === "visible") void catalog.latestForPlayback(session.book);
+  });
+  const activeBookId = active?.book.id;
+  useEffect(() => {
+    if (!activeBookId || playing || pending || !online) return;
+    const timer = window.setInterval(() => refreshPaused(), 8_000);
+    const onVisibility = () => refreshPaused();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [activeBookId, online, pending, playing]);
 
   const seek = (ms: number) => {
     const audio = audioRef.current;
-    if (!audio || !audio.readyState || !Number.isFinite(audio.duration)) return;
-    audio.currentTime = Math.max(0, Math.min(audio.duration, ms / 1000));
-    clock.update({ positionMs: Math.round(audio.currentTime * 1000) });
-    checkpoint();
+    const session = current.current;
+    const durationMs = clock.getSnapshot().durationMs;
+    if (!audio || !session || !durationMs || selecting.current) return;
+
+    const positionMs = Math.round(Math.max(0, Math.min(durationMs, ms)));
+    if (audio.readyState && Number.isFinite(audio.duration)) audio.currentTime = positionMs / 1000;
+    clock.update({ positionMs });
+    checkpoint(false, positionMs);
   };
 
-  const skip = (ms: number) => seek((audioRef.current?.currentTime ?? 0) * 1000 + ms);
+  const skip = (ms: number) => seek(clock.getSnapshot().positionMs + ms);
 
   const onEnded = () => {
     const session = current.current;
-    if (!session) return;
+    if (!session || !audioRef.current?.ended) return;
 
     const next = session.chapterIndex + 1;
     const completed = next >= session.book.chapters.length;
@@ -369,25 +458,45 @@ function AudiobookSession({
         session.progress,
       ) ?? session.progress;
     setPlaying(false);
-    if (!completed) void start(session.book, next);
+    if (!completed && !selecting.current) void start(session.book, chapter.id, true);
   };
 
-  const play = (book: Audiobook, chapterIndex?: number) => {
-    const selection = ++selectionId.current;
+  const play = (book: Audiobook, chapterId?: string) => {
     const audio = audioRef.current;
-    const sameBook = current.current?.book.id === book.id;
-    if (chapterIndex === undefined && sameBook && audio?.src && waitingForGesture.current) {
+    const session = current.current;
+    const localChapter = session?.book.chapters[session.chapterIndex];
+    const sameSelection =
+      session?.book.id === book.id && (chapterId === undefined || chapterId === localChapter?.id);
+    const selection = ++selectionId.current;
+
+    if (sameSelection && audio && !audio.paused) {
+      selecting.current = false;
+      checkpoint();
+      audio.pause();
+      setPlaying(false);
+      setPending(false);
+      return;
+    }
+    if (sameSelection && audio?.src && waitingForGesture.current) {
       waitingForGesture.current = false;
       pauseMusic();
       void audio.play().catch(reportPlayError);
       return;
     }
-    if (chapterIndex !== undefined || (sameBook && audio?.paused === false)) {
-      void start(book, chapterIndex);
-      return;
+
+    // Finish the outgoing chapter before asking the server for the new position.
+    if (audio && !audio.paused) {
+      checkpoint();
+      audio.pause();
+      setPlaying(false);
     }
+    loadId.current++;
+    selecting.current = true;
+    setPending(true);
     void catalog.latestForPlayback(book).then((latest) => {
-      if (selection === selectionId.current) void start(latest);
+      if (selection !== selectionId.current) return;
+      selecting.current = false;
+      void start(latest, chapterId);
     });
   };
 
@@ -399,8 +508,12 @@ function AudiobookSession({
   const changeChapter = (delta: number) => {
     const session = current.current;
     if (!session) return;
-    const index = session.chapterIndex + delta;
-    if (session.book.chapters[index]) play(session.book, index);
+    const chapter = session.book.chapters[session.chapterIndex + delta];
+    if (!chapter) return;
+    selectionId.current++;
+    selecting.current = false;
+    if (!audioRef.current?.paused) checkpoint();
+    void start(session.book, chapter.id, true);
   };
 
   const setSpeed = (next: number) => {
@@ -495,16 +608,25 @@ function AudiobookSession({
           const duration = event.currentTarget.duration;
           if (Number.isFinite(duration)) clock.update({ durationMs: Math.round(duration * 1000) });
         }}
-        onTimeUpdate={(event) =>
-          clock.update({ positionMs: Math.round(event.currentTarget.currentTime * 1000) })
-        }
-        onPlaying={() => {
+        onTimeUpdate={(event) => {
+          if (event.currentTarget.readyState) {
+            clock.update({ positionMs: Math.round(event.currentTarget.currentTime * 1000) });
+          }
+        }}
+        onPlaying={(event) => {
+          const session = current.current;
+          if (!session || event.currentTarget.paused || selecting.current) return;
           setPlaying(true);
           setPending(false);
+          if (session.publishStart) {
+            session.publishStart = false;
+            checkpoint(true);
+          }
         }}
-        onPause={() => {
+        onPause={(event) => {
+          if (!event.currentTarget.paused) return;
           setPlaying(false);
-          checkpoint();
+          if (!current.current?.publishStart) checkpoint();
         }}
         onEnded={onEnded}
       />

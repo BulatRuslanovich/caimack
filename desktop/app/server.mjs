@@ -107,6 +107,7 @@ export async function network(
           "etag",
           "last-modified",
           "retry-after",
+          "x-caimack-server-time-ms",
         ]) {
           for (const value of raw[name] ?? []) outgoing.append(name, value);
         }

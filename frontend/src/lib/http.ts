@@ -85,6 +85,7 @@ interface RequestOptions {
   body?: unknown;
   signal?: AbortSignal;
   keepalive?: boolean;
+  onResponse?: (headers: Headers) => void;
   isRetry?: boolean;
   allowUnauthenticated?: boolean;
   sessionless?: boolean;
@@ -212,6 +213,7 @@ async function send(path: string, options: RequestOptions = {}): Promise<Respons
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const response = await send(path, options);
+  options.onResponse?.(response.headers);
 
   if (response.status === 204) {
     return undefined as T;

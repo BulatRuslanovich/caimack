@@ -32,13 +32,22 @@ export interface Audiobook {
 export const audiobookHref = (id: string) => `/audiobooks/${encodeURIComponent(id)}` as const;
 
 export const audiobookApi = {
-  catalog: (signal?: AbortSignal) => request<Audiobook[]>("/audiobooks", { signal }),
-  detail: (id: string, signal: AbortSignal) => request<Audiobook>(audiobookHref(id), { signal }),
-  writeProgress: (id: string, body: AudiobookProgress) =>
+  catalog: (signal?: AbortSignal, onResponse?: (headers: Headers) => void) =>
+    request<Audiobook[]>("/audiobooks", { signal, onResponse }),
+  detail: (id: string, signal: AbortSignal, onResponse?: (headers: Headers) => void) =>
+    request<Audiobook>(audiobookHref(id), { signal, onResponse }),
+  writeProgress: (
+    id: string,
+    body: AudiobookProgress,
+    signal: AbortSignal,
+    onResponse?: (headers: Headers) => void,
+  ) =>
     request<AudiobookProgress>(`${audiobookHref(id)}/progress`, {
       method: "PUT",
       body,
       keepalive: true,
+      signal,
+      onResponse,
     }),
   save: (id: string, saved: boolean) =>
     request<void>(`${audiobookHref(id)}/saved`, { method: saved ? "PUT" : "DELETE" }),
@@ -55,6 +64,37 @@ export function withLatestProgress(book: Audiobook, progress?: AudiobookProgress
   return book;
 }
 
+export function audiobookTarget(book: Audiobook, chapterId?: string) {
+  const progress = book.progress?.completed ? null : book.progress;
+  const requested = chapterId ?? progress?.chapterId;
+  const requestedIndex = book.chapters.findIndex((chapter) => chapter.id === requested);
+  if (chapterId !== undefined && requestedIndex === -1) return null;
+
+  const index = Math.max(0, requestedIndex);
+  const chapter = book.chapters[index];
+  if (!chapter) return null;
+  const positionMs = progress && progress.chapterId === chapter.id ? progress.positionMs : 0;
+  return { chapter, index, positionMs };
+}
+
+export function pausedAudiobookTarget(book: Audiobook) {
+  const progress = book.progress;
+  if (progress?.completed) {
+    const target = audiobookTarget(book, progress.chapterId);
+    if (target) return { ...target, positionMs: target.chapter.durationMs };
+  }
+  return audiobookTarget(book);
+}
+
+export function sameAudiobookProgress(a: AudiobookProgress, b: AudiobookProgress) {
+  return (
+    a.updatedAtMs === b.updatedAtMs &&
+    a.chapterId === b.chapterId &&
+    a.positionMs === b.positionMs &&
+    a.completed === b.completed
+  );
+}
+
 export function elapsedBookMs(book: Audiobook): number {
   if (book.progress?.completed) return book.durationMs;
 
@@ -68,24 +108,77 @@ export function elapsedBookMs(book: Audiobook): number {
   return 0;
 }
 
-export type ProgressJournal = Record<string, { progress: AudiobookProgress; pending: boolean }>;
+export interface ProgressEntry {
+  progress: AudiobookProgress;
+  pending: boolean;
+  settled?: AudiobookProgress;
+}
+
+export type ProgressJournal = Record<string, ProgressEntry>;
 
 export function journalKey(userId: string) {
   return `caimack-audiobook-progress:${userId}`;
 }
 
+function entryKey(userId: string, bookId: string) {
+  return `${journalKey(userId)}:${bookId}`;
+}
+
+export function isJournalKey(userId: string, key: string | null) {
+  return key === journalKey(userId) || Boolean(key?.startsWith(`${journalKey(userId)}:`));
+}
+
 export function readProgressJournal(userId: string): ProgressJournal {
   try {
-    return JSON.parse(localStorage.getItem(journalKey(userId)) ?? "{}") as ProgressJournal;
+    const prefix = `${journalKey(userId)}:`;
+    const legacy = JSON.parse(localStorage.getItem(journalKey(userId)) ?? "{}") as ProgressJournal;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith(prefix)) continue;
+      const current = localStorage.getItem(key);
+      if (current) legacy[key.slice(prefix.length)] = JSON.parse(current) as ProgressEntry;
+    }
+    return legacy;
   } catch {
     return {};
   }
 }
 
-export function persistProgressJournal(userId: string, journal: ProgressJournal) {
+export function persistProgressEntry(userId: string, bookId: string, entry: ProgressEntry) {
   try {
-    localStorage.setItem(journalKey(userId), JSON.stringify(journal));
+    localStorage.setItem(entryKey(userId, bookId), JSON.stringify(entry));
   } catch {
     // A browser can disable storage. The active tab can still sync its progress.
   }
+}
+
+export function mergeJournalEntry(memory: ProgressEntry | undefined, stored: ProgressEntry) {
+  if (!memory) return stored;
+  if (stored.settled && sameAudiobookProgress(memory.progress, stored.settled)) return stored;
+  if (memory.settled && sameAudiobookProgress(stored.progress, memory.settled)) return memory;
+  if (memory.progress.updatedAtMs !== stored.progress.updatedAtMs) {
+    return memory.progress.updatedAtMs > stored.progress.updatedAtMs ? memory : stored;
+  }
+  return !memory.pending && stored.pending ? memory : stored;
+}
+
+export function settleProgress(
+  current: ProgressEntry | undefined,
+  submitted: AudiobookProgress,
+  confirmed: AudiobookProgress,
+): ProgressEntry {
+  if (!current || sameAudiobookProgress(current.progress, submitted)) {
+    return { progress: confirmed, pending: false, settled: submitted };
+  }
+  if (confirmed.updatedAtMs >= current.progress.updatedAtMs) {
+    return { progress: confirmed, pending: false, settled: current.progress };
+  }
+  return current;
+}
+
+export function audiobookClockOffset(headers: Headers, sentAt: number, receivedAt: number) {
+  const server = Number(headers.get("X-Caimack-Server-Time-Ms"));
+  const latency = receivedAt - sentAt;
+  if (!Number.isSafeInteger(server) || server <= 0 || latency < 0 || latency > 2_000) return null;
+  return Math.round(server - (sentAt + receivedAt) / 2);
 }
