@@ -63,7 +63,7 @@ export function LibrarySaveButton({ kind, id }: { kind: LibraryKind; id: string 
   );
 }
 
-function LibrarySaveIcon({ saved }: { saved: boolean }) {
+export function LibrarySaveIcon({ saved }: { saved: boolean }) {
   const icon = useRef<SVGSVGElement>(null);
   const previous = useRef(saved);
   useEffect(() => {

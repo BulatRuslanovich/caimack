@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
 
 /** Keep one mark on screen while its strokes become a check, rather than swapping icons. */
 @Composable
-internal fun LibrarySaveIcon(saved: Boolean, label: String) {
+internal fun LibrarySaveIcon(saved: Boolean, label: String?) {
     val palette = LocalPalette.current
     val motion = systemMotionEnabled()
     val progress by animateFloatAsState(if (saved) 1f else 0f, tween(320), label = "library check")
@@ -49,7 +49,7 @@ internal fun LibrarySaveIcon(saved: Boolean, label: String) {
             ripple.snapTo(1f)
         }
     }
-    Canvas(Modifier.size(24.dp).semantics { contentDescription = label }) {
+    Canvas(Modifier.size(24.dp).semantics { if (label != null) contentDescription = label }) {
         val unit = size.minDimension / 24f
         val color = lerp(palette.muted, palette.primary, progress)
         if (saved && ripple.value < 1f) {

@@ -5,7 +5,8 @@
 import {
   ArrowDownToLineIcon,
   BookHeadphonesIcon,
-  BookmarkIcon,
+  CirclePlusIcon,
+  CircleCheckIcon,
   CheckIcon,
   Clock3Icon,
   EllipsisIcon,
@@ -203,8 +204,8 @@ function BookActions({ book }: { book: Audiobook }) {
             void save(book).finally(() => setSaving(false));
           }}
         >
-          <BookmarkIcon size={16} className={book.saved ? "fill-current" : undefined} />
-          {t(book.saved ? "audiobooks.unsave" : "audiobooks.save")}
+          {book.saved ? <CircleCheckIcon size={16} /> : <CirclePlusIcon size={16} />}
+          {t(book.saved ? "collection.remove" : "collection.add")}
         </DropdownMenuItem>
         {isDesktop &&
           (working ? (
@@ -415,7 +416,7 @@ export function AudiobooksPage() {
                   aria-pressed={filter === option}
                   onClick={() => setFilter(option)}
                 >
-                  {option === "saved" && <BookmarkIcon size={16} />}
+                  {option === "saved" && <CircleCheckIcon size={16} />}
                   {option === "duration" && <Clock3Icon size={16} />}
                   {option === "downloaded" && <ArrowDownToLineIcon size={16} />}
                   {t(option === "all" ? "audiobooks.recent" : `audiobooks.${option}`)}

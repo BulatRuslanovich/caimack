@@ -6,8 +6,9 @@ import { useAudiobookClock, useAudiobooks } from "@/contexts/AudiobookContext";
 import { useT } from "@/contexts/I18nContext";
 import type { Audiobook } from "@/lib/audiobooks";
 import { cn } from "@/lib/cn";
-import { BookmarkIcon, RotateCcwIcon, RotateCwIcon } from "lucide-react";
+import { RotateCcwIcon, RotateCwIcon } from "lucide-react";
 import { useState } from "react";
+import { LibrarySaveIcon } from "../LibrarySaveButton";
 import { PlayerProgress, PlayerProgressLine } from "../PlayerProgress";
 import { TransportButtons } from "../PlayerTransport";
 import { Button } from "../ui/button";
@@ -135,7 +136,7 @@ export function AudiobookSaveButton({
   const { save, online, books } = useAudiobooks();
   const [saving, setSaving] = useState(false);
   const current = books.find(({ id }) => id === book.id) ?? book;
-  const label = t(current.saved ? "audiobooks.unsave" : "audiobooks.save");
+  const label = t(current.saved ? "collection.remove" : "collection.add");
   return (
     <Button
       variant="ghost"
@@ -143,6 +144,7 @@ export function AudiobookSaveButton({
       className={cn(current.saved && "text-primary hover:text-primary", className)}
       aria-label={label}
       aria-pressed={current.saved}
+      aria-busy={saving}
       title={label}
       disabled={!online || saving}
       onClick={() => {
@@ -150,7 +152,7 @@ export function AudiobookSaveButton({
         void save(current).finally(() => setSaving(false));
       }}
     >
-      <BookmarkIcon size={20} className={current.saved ? "fill-current" : undefined} />
+      <LibrarySaveIcon key={current.id} saved={current.saved} />
     </Button>
   );
 }

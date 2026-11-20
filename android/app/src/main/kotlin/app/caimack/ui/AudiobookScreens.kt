@@ -291,8 +291,8 @@ internal fun BookMenu(book: Audiobook, catalog: AudiobookCatalog) {
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             DropdownMenuItem(
-                text = { Text(stringResource(if (book.saved) R.string.audiobook_unsave else R.string.audiobook_save)) },
-                leadingIcon = { Icon(if (book.saved) Lucide.Check else Lucide.LibraryBig, null) },
+                text = { Text(stringResource(if (book.saved) R.string.collection_remove else R.string.collection_add)) },
+                leadingIcon = { LibrarySaveIcon(book.saved, null) },
                 onClick = { open = false; store.setSaved(book.id, !book.saved) },
             )
             val downloaded = book.id in catalog.downloaded
@@ -404,7 +404,7 @@ private fun BookDetailActions(book: Audiobook, active: AudiobookPlaybackState?, 
         }
         Spacer(Modifier.weight(1f))
         IconButton(onClick = { container.audiobookStore.setSaved(book.id, !book.saved) }) {
-            LibrarySaveIcon(book.saved, stringResource(if (book.saved) R.string.audiobook_unsave else R.string.audiobook_save))
+            LibrarySaveIcon(book.saved, stringResource(if (book.saved) R.string.collection_remove else R.string.collection_add))
         }
         if (download != null) {
             val label = stringResource(R.string.audiobook_download_progress, (download * 100).toInt())

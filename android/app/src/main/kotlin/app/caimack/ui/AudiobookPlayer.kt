@@ -64,7 +64,7 @@ internal fun AudiobookMiniPlayer(
         playing = playback.playing || playback.buffering,
         buffering = playback.buffering,
         saved = book.saved,
-        saveLabel = stringResource(if (book.saved) R.string.audiobook_unsave else R.string.audiobook_save),
+        saveLabel = stringResource(if (book.saved) R.string.collection_remove else R.string.collection_add),
         onOpen = onOpen,
         toggle = { container.audiobookPlayback.toggle(book) },
         save = { container.audiobookStore.setSaved(book.id, !book.saved) },
@@ -147,7 +147,7 @@ private fun BookPlayerContent(
                         haptic(PlayerHaptic.Favorite)
                         container.audiobookStore.setSaved(book.id, !book.saved)
                     }, contentAlignment = Alignment.Center) {
-                        LibrarySaveIcon(book.saved, stringResource(if (book.saved) R.string.audiobook_unsave else R.string.audiobook_save))
+                        LibrarySaveIcon(book.saved, stringResource(if (book.saved) R.string.collection_remove else R.string.collection_add))
                     }
                 }
                 if (!chapters && duration > 0) {
