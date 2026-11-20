@@ -20,7 +20,7 @@ import { Shelf } from "@/components/Shelf";
 import { Button } from "@/components/ui/button";
 import { blockHref, blockNote, blockSubjectHref, blockTitle } from "./blockMeta";
 import { DailyMix, HERO_PREVIEW_SIZE } from "./DailyMix";
-import { capFiveOnMobile, deferredSection, listPanel } from "./layout";
+import { capFiveOnMobile, deferredSection, dropOrphanRow, listPanel } from "./layout";
 import { MixCover } from "./MixCover";
 import { RecapBanner } from "./RecapBanner";
 import { QuickTiles } from "./QuickTiles";
@@ -153,7 +153,7 @@ function BlockBody({ block, shown }: { block: HomeBlock; shown: Set<string> }) {
             ranked={false}
             density="compact"
             tracks={fresh.length >= MIN_DISTINCT ? fresh : onePerAlbum(tracks)}
-            className={capFiveOnMobile}
+            className={cn(capFiveOnMobile, dropOrphanRow)}
           />
         </Section>
       );

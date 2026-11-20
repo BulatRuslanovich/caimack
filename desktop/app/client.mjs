@@ -524,6 +524,7 @@ export class Client {
     if (
       journaling &&
       path !== "/api/config" &&
+      path !== "/api/search/popular" &&
       (browse.test(path) ||
         ["/api/tracks/shuffle", "/api/tracks/lookup"].includes(path))
     ) {

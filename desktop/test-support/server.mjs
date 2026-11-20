@@ -238,6 +238,14 @@ export async function fixture({ trackCount = 1, isAdmin = false } = {}) {
         totalPages: Math.ceil(items.length / pageSize),
       });
     }
+    if (path === "/api/search/popular")
+      return json({
+        tracks: state.present
+          ? [currentTrack(), ...otherTracks].slice(0, 10)
+          : [],
+        albums: albums.slice(0, 5),
+        artists: artists.slice(0, 5),
+      });
     if (path === "/api/search") {
       const first = currentTrack();
       return json({

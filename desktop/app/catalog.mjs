@@ -4,7 +4,7 @@ import { digest, uuid } from "./storage.mjs";
 import { isTrack } from "./downloads.mjs";
 
 const browse =
-  /^\/api\/(config|me\/(?:library(?:\/folders|\/order)?|settings)|home\/(?:feed|mixes\/(?:daily|new|top))|library\/overview|tracks(?:\/[0-9a-f-]+\/(?:lyrics|waveform))?|artists(?:\/[0-9a-f-]+(?:\/top-tracks)?)?|albums(?:\/[0-9a-f-]+)?|genres(?:\/[0-9a-f-]+\/tracks)?|playlists(?:\/(?:public|[0-9a-f-]+))?|favorites|search(?:\/(?:tracks|albums|artists|genres))?|history(?:\/recent)?|recommendations\/rules)$/i;
+  /^\/api\/(config|me\/(?:library(?:\/folders|\/order)?|settings)|home\/(?:feed|mixes\/(?:daily|new|top))|library\/overview|tracks(?:\/[0-9a-f-]+\/(?:lyrics|waveform))?|artists(?:\/[0-9a-f-]+(?:\/top-tracks)?)?|albums(?:\/[0-9a-f-]+)?|genres(?:\/[0-9a-f-]+\/tracks)?|playlists(?:\/(?:public|[0-9a-f-]+))?|favorites|search(?:\/(?:popular|tracks|albums|artists|genres))?|history(?:\/recent)?|recommendations\/rules)$/i;
 const entities = { album: "albums", artist: "artists", playlist: "playlists" };
 const empty = () => new Response(null, { status: 204 });
 const own = (object, key) =>
@@ -26,6 +26,36 @@ const byTrackNumber = (a, b) =>
   (a.discNumber ?? 0) - (b.discNumber ?? 0) ||
   (a.trackNumber ?? Infinity) - (b.trackNumber ?? Infinity) ||
   byName("title")(a, b);
+
+function popularSearch(view) {
+  const trackPlays = new Map();
+  const albumPlays = new Map();
+  const artistPlays = new Map();
+  const count = (plays, id) => plays.set(id, (plays.get(id) ?? 0) + 1);
+  for (const entry of view.history) {
+    const track = view.tracks.get(entry.track.id);
+    if (!track) continue;
+    count(trackPlays, track.id);
+    if (track.albumId) count(albumPlays, track.albumId);
+    const credits = track.artists?.length
+      ? track.artists.map(({ id }) => id)
+      : [track.artistId];
+    for (const id of credits) count(artistPlays, id);
+  }
+  const top = (items, plays, field, limit) =>
+    [...items.values()]
+      .sort(
+        (a, b) =>
+          (plays.get(b.id) ?? 0) - (plays.get(a.id) ?? 0) ||
+          byName(field)(a, b),
+      )
+      .slice(0, limit);
+  return {
+    tracks: top(view.tracks, trackPlays, "title", 10),
+    albums: top(view.albums, albumPlays, "title", 5),
+    artists: top(view.artists, artistPlays, "name", 5),
+  };
+}
 
 function page(items, params) {
   const page = Math.max(1, Math.floor(Number(params.get("page")) || 1));
@@ -671,6 +701,7 @@ export class Catalog {
       );
     if (path === "/api/history/recent") return page(recent, params);
     if (path === "/api/history") return page(view.history, params);
+    if (path === "/api/search/popular") return exact ?? popularSearch(view);
     if (path === "/api/recommendations/rules") return view.rules;
     if (path === "/api/tracks")
       return page(

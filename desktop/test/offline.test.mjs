@@ -142,6 +142,17 @@ test("individual download resumes by range and plays after a restart without the
   assert.equal(client().status().downloads.length, 0);
 });
 
+test("popular search serves the last library ranking when the server is offline", async (t) => {
+  const { state, request, client, restart } = await context(t);
+  const path = "/api/search/popular";
+  const popular = await (await request(path)).json();
+  assert.equal(popular.tracks[0].id, track.id);
+  await waitFor(() => client().account.catalog.cached(path));
+  state.online = false;
+  await restart();
+  assert.deepEqual(await (await request(path)).json(), popular);
+});
+
 test("individual downloads preserve a selected HLS rendition", async (t) => {
   const { state, request, client } = await context(t);
   state.quality = "Normal";

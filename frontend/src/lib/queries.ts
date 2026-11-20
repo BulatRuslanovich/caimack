@@ -28,6 +28,7 @@ function keepPreviousOf<TData>(id: string | null): PlaceholderDataFunction<TData
 }
 
 export const SEARCH_MIN_LENGTH = 3;
+const popularSearchKey = ["search", "popular", "start"] as const;
 
 export const queries = {
   listeningStats: () =>
@@ -191,6 +192,12 @@ export const queries = {
       queryFn: ({ signal }) => api.search(q, 25, signal),
       enabled: q.length >= SEARCH_MIN_LENGTH,
       placeholderData: keepPreviousData,
+    }),
+
+  searchPopular: () =>
+    queryOptions({
+      queryKey: popularSearchKey,
+      queryFn: ({ signal }) => api.searchPopular(signal),
     }),
 
   searchTab: <T extends SearchTab>(tab: T, q: string, params: PageParams) =>
@@ -365,6 +372,6 @@ export const invalidates = {
     ["homeMix"],
     ["libraryOverview"],
   ],
-  history: [["history"], ["homeFeed"], ["homeMix"]],
+  history: [["history"], ["homeFeed"], ["homeMix"], popularSearchKey],
   recommendations: [["tasteRules"], ["homeFeed"], ["homeMix"]],
 } as const;

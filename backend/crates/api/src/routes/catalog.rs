@@ -34,6 +34,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/genres", get(list_genres))
         .route("/api/genres/{id}/tracks", get(genre_tracks))
         .route("/api/search", get(search_all))
+        .route("/api/search/popular", get(search_popular))
         .route("/api/search/tracks", get(search_tracks))
         .route("/api/search/albums", get(search_albums))
         .route("/api/search/artists", get(search_artists))
@@ -325,6 +326,10 @@ async fn search_all(
     Query(query): Query<SearchQuery>,
 ) -> ApiResult<impl IntoResponse> {
     Ok(Json(search::search(&state.db, user.user_id, query.q.as_deref(), query.limit.unwrap_or(20)).await?))
+}
+
+async fn search_popular(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> ApiResult<impl IntoResponse> {
+    Ok(Json(search::popular(&state.db, user.user_id).await?))
 }
 
 async fn search_tracks(

@@ -56,13 +56,7 @@ const TEMPOS: Record<string, { phrase: TranslationKey; filter: TrackFilter }> = 
   veryFast: { phrase: "filter.tempo.veryFast", filter: { bpmMin: 150 } },
 };
 
-export function TracksPage({
-  query,
-  scrollOnPageChange,
-}: {
-  query: string;
-  scrollOnPageChange?: () => void;
-}) {
+export function TracksPage({ query }: { query: string }) {
   const t = useT();
   const display = useTrackDisplay();
   const format = useFormat();
@@ -200,7 +194,7 @@ export function TracksPage({
               }
             />
 
-            <Pagination result={data} onChange={setPage} scrollOnChange={scrollOnPageChange} />
+            <Pagination result={data} onChange={setPage} />
           </Section>
         )}
       </Query>

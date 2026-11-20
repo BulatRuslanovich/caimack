@@ -38,6 +38,7 @@ import type {
   RadioBatch,
   RecommendationStats,
   Recap,
+  SearchPopular,
   SearchResults,
   Track,
   AccountSession,
@@ -191,6 +192,7 @@ export const api = {
     request<Paged<Track>>(`/genres/${id}/tracks${qs(params)}`, { signal }),
   search: (q: string, limit: number, signal?: AbortSignal) =>
     request<SearchResults>(`/search${qs({ q, limit })}`, { signal }),
+  searchPopular: (signal?: AbortSignal) => request<SearchPopular>("/search/popular", { signal }),
   searchTab: <T extends SearchTab>(tab: T, q: string, params: PageParams, signal?: AbortSignal) =>
     request<SearchTabResult[T]>(`/search/${tab}${qs({ q, ...params })}`, { signal }),
   waveform: (trackId: string) =>

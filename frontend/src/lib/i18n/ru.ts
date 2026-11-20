@@ -455,7 +455,9 @@ export const ru: Dictionary = {
 
   "search.placeholder": "Музыка, исполнители, альбомы, жанры…",
   "search.browseGenres": "Жанры в фонотеке",
-  "search.allTracks": "Все треки",
+  "search.mostPlayedTracks": "Самые прослушиваемые треки",
+  "search.mostPlayedAlbums": "Самые прослушиваемые альбомы",
+  "search.mostPlayedArtists": "Самые прослушиваемые исполнители",
   "search.browseEmpty": "В каталоге пока нет жанров",
   "search.browseEmptyHint": "Найдите трек, альбом или исполнителя через поиск выше.",
   "search.recent": "Недавние запросы",

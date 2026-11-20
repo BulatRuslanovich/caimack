@@ -233,6 +233,44 @@ try {
     await evaluate(`${categoryButtons}.map(button => button.textContent)`),
     ["All", "Tracks", "Albums", "Artists", "Playlists", "Genres"],
   );
+  const popularSection = `[...document.querySelectorAll("#content h2")]
+    .find(heading => heading.textContent === "Most played tracks")?.closest("section")`;
+  const popularList = `${popularSection}?.querySelector("ol")`;
+  await until(
+    () => evaluate(`${popularList}?.children.length === 10`),
+    "popular search tracks",
+  );
+  assert.deepEqual(
+    await evaluate(
+      `[...document.querySelectorAll("#content h2")].map(heading => heading.textContent)`,
+    ),
+    [
+      "Browse by genre",
+      "Most played tracks",
+      "Most played albums",
+      "Most played artists",
+    ],
+  );
+  for (const width of [1440, 390]) {
+    await command("Emulation.setDeviceMetricsOverride", {
+      ...desktopViewport,
+      width,
+    });
+    assert.equal(
+      await evaluate(`getComputedStyle(${popularSection}).backgroundColor`),
+      "rgba(0, 0, 0, 0)",
+    );
+    assert.equal(
+      await evaluate(
+        `[...${popularList}.children].filter(row => row.getClientRects().length).length`,
+      ),
+      10,
+    );
+  }
+  await command("Emulation.setDeviceMetricsOverride", desktopViewport);
+  await evaluate(
+    `${categoryButtons}.find(button => button.textContent === "Tracks").click()`,
+  );
   const pagination = '[aria-label="Pagination"]';
   const pageNumber = `document.querySelector(${JSON.stringify(pagination + " span")})?.textContent`;
   const measureTrackToolbar = `(() => {
@@ -275,7 +313,7 @@ try {
   }
   await until(
     () => evaluate(`${pageNumber} === "Page 1 of 2"`),
-    "pagination below all tracks",
+    "pagination in the Tracks tab",
   );
   await assertTrackToolbar(true);
   await command("Emulation.setDeviceMetricsOverride", {
@@ -284,12 +322,6 @@ try {
   });
   await assertTrackToolbar(false);
   await command("Emulation.setDeviceMetricsOverride", desktopViewport);
-  assert.deepEqual(
-    await evaluate(
-      `[...document.querySelectorAll("#content h2")].map(heading => heading.textContent)`,
-    ),
-    ["Browse by genre", "All tracks"],
-  );
   await evaluate(
     `document.querySelector(${JSON.stringify(pagination + " button:last-child")}).click()`,
   );
@@ -300,20 +332,6 @@ try {
       ),
     "second page of all tracks",
   );
-  await evaluate(
-    `${categoryButtons}.find(button => button.textContent === "Tracks").click()`,
-  );
-  await until(
-    () => evaluate(`!!document.querySelector('#content [role="table"]')`),
-    "track sorting in Search",
-  );
-  await assertTrackToolbar(true);
-  await command("Emulation.setDeviceMetricsOverride", {
-    ...desktopViewport,
-    width: 390,
-  });
-  await assertTrackToolbar(false);
-  await command("Emulation.setDeviceMetricsOverride", desktopViewport);
   async function checkCatalogTab(name, content, width) {
     await evaluate(
       `${categoryButtons}.find(button => button.textContent === ${JSON.stringify(name)}).click()`,

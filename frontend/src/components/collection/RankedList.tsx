@@ -33,7 +33,7 @@ export function RankedList({
     <ol
       className={cn(
         "grid grid-cols-2 gap-x-8 gap-y-0.5 max-md:grid-cols-1",
-        compact && ["gap-x-6 xl:grid-cols-3", dropOrphanRow],
+        compact && "gap-x-6 xl:grid-cols-3",
         className,
       )}
     >
@@ -107,8 +107,3 @@ export function RankedList({
     </ol>
   );
 }
-
-const dropOrphanRow = [
-  "xl:[&>li:nth-child(3n+1):not(:first-child):nth-last-child(-n+2)]:hidden",
-  "xl:[&>li:nth-child(3n+1):not(:first-child):nth-last-child(-n+2)~li]:hidden",
-];

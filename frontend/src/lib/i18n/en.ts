@@ -431,7 +431,9 @@ export const en = {
 
   "search.placeholder": "Music, artists, albums, genres…",
   "search.browseGenres": "Browse by genre",
-  "search.allTracks": "All tracks",
+  "search.mostPlayedTracks": "Most played tracks",
+  "search.mostPlayedAlbums": "Most played albums",
+  "search.mostPlayedArtists": "Most played artists",
   "search.browseEmpty": "No genres in this catalog yet",
   "search.browseEmptyHint": "Search for a track, album or artist above.",
   "search.recent": "Recent searches",

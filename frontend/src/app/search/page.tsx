@@ -7,7 +7,7 @@ import { cn } from "@/lib/cn";
 import type { Route } from "next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
-import { Activity, Suspense, useMemo, useRef, useState } from "react";
+import { Activity, Suspense, useMemo, useState } from "react";
 import { prefetchSearchCategory, queries, SEARCH_MIN_LENGTH } from "@/lib/queries";
 import { rememberSearch } from "@/lib/recentSearches";
 import { isCatalogTab, type CatalogTab } from "@/lib/searchNavigation";
@@ -17,7 +17,8 @@ import { SearchField } from "@/components/SearchField";
 import { Query } from "@/components/Query";
 import { TrackList } from "@/components/TrackList";
 import { SearchIcon } from "lucide-react";
-import { hiddenScrollbar } from "@/components/Shelf";
+import { hiddenScrollbar, Shelf } from "@/components/Shelf";
+import { RankedList } from "@/components/collection/RankedList";
 import { ToggleGroup, ToggleGroupButton } from "@/components/ui/toggle-group";
 import { useT } from "@/contexts/I18nContext";
 import { useYandexMusicSettings } from "@/lib/useYandexMusic";
@@ -144,7 +145,7 @@ function SearchView() {
         {!yandexTab &&
           tab === null &&
           (query.length < SEARCH_MIN_LENGTH ? (
-            <SearchStart showTracks={query === ""} />
+            <SearchStart showPopular={query === ""} />
           ) : (
             <Query
               result={results}
@@ -240,11 +241,9 @@ function seeAll(query: string, tab: CatalogTab, shown: number): Route | undefine
   return shown > PREVIEW ? `/search?q=${encodeURIComponent(query)}&tab=${tab}` : undefined;
 }
 
-function SearchStart({ showTracks }: { showTracks: boolean }) {
+function SearchStart({ showPopular }: { showPopular: boolean }) {
   const t = useT();
   const genres = useQuery(queries.genres());
-  const tracksRef = useRef<HTMLElement>(null);
-
   const top = useMemo(
     () =>
       [...(genres.data ?? [])].sort((a, b) => b.trackCount - a.trackCount).slice(0, START_GENRES),
@@ -266,14 +265,40 @@ function SearchStart({ showTracks }: { showTracks: boolean }) {
         )}
       </Query>
 
-      {showTracks && (
-        <Section title={t("search.allTracks")} ref={tracksRef} className="gap-2.5">
-          <TracksPage
-            query=""
-            scrollOnPageChange={() => tracksRef.current?.scrollIntoView({ block: "start" })}
-          />
-        </Section>
-      )}
+      {showPopular && <PopularSearch />}
     </>
+  );
+}
+
+function PopularSearch() {
+  const t = useT();
+  const result = useQuery(queries.searchPopular());
+
+  return (
+    <Query result={result}>
+      {({ tracks, albums, artists }) => (
+        <>
+          {tracks.length > 0 && (
+            <Section title={t("search.mostPlayedTracks")}>
+              <RankedList tracks={tracks} ranked={false} density="compact" />
+            </Section>
+          )}
+          {albums.length > 0 && (
+            <Shelf title={t("search.mostPlayedAlbums")} className="gap-2.5">
+              {albums.map((album) => (
+                <AlbumCard key={album.id} album={album} />
+              ))}
+            </Shelf>
+          )}
+          {artists.length > 0 && (
+            <Shelf title={t("search.mostPlayedArtists")} className="gap-2.5">
+              {artists.map((artist) => (
+                <ArtistCard key={artist.id} artist={artist} bare />
+              ))}
+            </Shelf>
+          )}
+        </>
+      )}
+    </Query>
   );
 }
