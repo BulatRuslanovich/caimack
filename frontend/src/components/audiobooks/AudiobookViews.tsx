@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState, type CSSProperties } from "react";
 import styles from "./AudiobookCatalog.module.css";
+import { isDesktop } from "@/desktop/runtime";
 import { DetailHeader } from "@/components/DetailHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { Card } from "@/components/MediaCard";
@@ -205,22 +206,26 @@ function BookActions({ book }: { book: Audiobook }) {
           <BookmarkIcon size={16} className={book.saved ? "fill-current" : undefined} />
           {t(book.saved ? "audiobooks.unsave" : "audiobooks.save")}
         </DropdownMenuItem>
-        {working ? (
-          <DropdownMenuItem onSelect={cancelDownload}>
-            <XIcon size={16} />
-            {t("audiobooks.cancelDownload")}
-          </DropdownMenuItem>
-        ) : local ? (
-          <DropdownMenuItem onSelect={() => removeDownload(book)}>
-            <Trash2Icon size={16} />
-            {t("audiobooks.removeDownload")}
-          </DropdownMenuItem>
-        ) : (
-          <DropdownMenuItem disabled={!online || Boolean(transfer)} onSelect={() => download(book)}>
-            <ArrowDownToLineIcon size={16} />
-            {t("audiobooks.download")}
-          </DropdownMenuItem>
-        )}
+        {isDesktop &&
+          (working ? (
+            <DropdownMenuItem onSelect={cancelDownload}>
+              <XIcon size={16} />
+              {t("audiobooks.cancelDownload")}
+            </DropdownMenuItem>
+          ) : local ? (
+            <DropdownMenuItem onSelect={() => removeDownload(book)}>
+              <Trash2Icon size={16} />
+              {t("audiobooks.removeDownload")}
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem
+              disabled={!online || Boolean(transfer)}
+              onSelect={() => download(book)}
+            >
+              <ArrowDownToLineIcon size={16} />
+              {t("audiobooks.download")}
+            </DropdownMenuItem>
+          ))}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -244,7 +249,7 @@ export function AudiobookRow({ book }: { book: Audiobook }) {
           artwork={artwork}
           className="size-[4.5rem] max-sm:size-[3.6rem]"
         />
-        {downloaded.has(book.id) && (
+        {isDesktop && downloaded.has(book.id) && (
           <span
             role="img"
             aria-label={t("audiobooks.downloadedLabel")}
@@ -260,7 +265,7 @@ export function AudiobookRow({ book }: { book: Audiobook }) {
           <PrefetchLink href={audiobookHref(book.id)}>{book.title}</PrefetchLink>
         </h3>
         <Credits book={book} />
-        {working ? (
+        {isDesktop && working ? (
           <p className="text-xs text-primary" role="status">
             {t("audiobooks.downloading", { percent: transfer.percent })}
           </p>
@@ -389,7 +394,7 @@ export function AudiobooksPage() {
   const empty = t(
     filter === "saved"
       ? "audiobooks.emptySaved"
-      : filter === "downloaded" || !online
+      : filter === "downloaded" || (isDesktop && !online)
         ? "audiobooks.emptyDownloaded"
         : "audiobooks.empty",
   );
@@ -400,20 +405,22 @@ export function AudiobooksPage() {
         title={t("nav.audiobooks")}
         actions={
           <div role="group" aria-label={t("nav.audiobooks")} className="flex flex-wrap gap-2">
-            {(["all", "duration", "downloaded", "saved"] as const).map((option) => (
-              <Button
-                key={option}
-                size="sm"
-                variant={filter === option ? "primary" : "outline"}
-                aria-pressed={filter === option}
-                onClick={() => setFilter(option)}
-              >
-                {option === "saved" && <BookmarkIcon size={16} />}
-                {option === "duration" && <Clock3Icon size={16} />}
-                {option === "downloaded" && <ArrowDownToLineIcon size={16} />}
-                {t(option === "all" ? "audiobooks.recent" : `audiobooks.${option}`)}
-              </Button>
-            ))}
+            {(["all", "duration", "downloaded", "saved"] as const)
+              .filter((option) => option !== "downloaded" || isDesktop)
+              .map((option) => (
+                <Button
+                  key={option}
+                  size="sm"
+                  variant={filter === option ? "primary" : "outline"}
+                  aria-pressed={filter === option}
+                  onClick={() => setFilter(option)}
+                >
+                  {option === "saved" && <BookmarkIcon size={16} />}
+                  {option === "duration" && <Clock3Icon size={16} />}
+                  {option === "downloaded" && <ArrowDownToLineIcon size={16} />}
+                  {t(option === "all" ? "audiobooks.recent" : `audiobooks.${option}`)}
+                </Button>
+              ))}
           </div>
         }
       />
@@ -525,34 +532,36 @@ function BookDetail({ book }: { book: Audiobook }) {
         trailingActions={
           <>
             <AudiobookSaveButton book={book} />
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={downloadLabel}
-              title={downloadLabel}
-              disabled={!availableOffline && !working && (!online || Boolean(transfer))}
-              onClick={() =>
-                working
-                  ? cancelDownload()
-                  : availableOffline
-                    ? removeDownload(book)
-                    : download(book)
-              }
-            >
-              {working ? (
-                <XIcon size={20} />
-              ) : availableOffline ? (
-                <CheckIcon size={20} className="text-primary" />
-              ) : (
-                <ArrowDownToLineIcon size={20} />
-              )}
-            </Button>
-            {working && (
+            {isDesktop && (
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={downloadLabel}
+                title={downloadLabel}
+                disabled={!availableOffline && !working && (!online || Boolean(transfer))}
+                onClick={() =>
+                  working
+                    ? cancelDownload()
+                    : availableOffline
+                      ? removeDownload(book)
+                      : download(book)
+                }
+              >
+                {working ? (
+                  <XIcon size={20} />
+                ) : availableOffline ? (
+                  <CheckIcon size={20} className="text-primary" />
+                ) : (
+                  <ArrowDownToLineIcon size={20} />
+                )}
+              </Button>
+            )}
+            {isDesktop && working && (
               <span role="status" className="text-sm text-primary">
                 {t("audiobooks.downloading", { percent: transfer.percent })}
               </span>
             )}
-            {availableOffline && !working && (
+            {isDesktop && availableOffline && !working && (
               <span className="text-sm text-muted-foreground">
                 {t("audiobooks.downloadedLabel")}
               </span>
