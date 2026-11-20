@@ -2,10 +2,11 @@
 // Copyright (c) 2026 Bulat Ruslanovich
 
 use app::AppError;
-use app::audiobooks::{Audiobooks, Progress};
+use app::audiobooks::{Audiobooks, BookEdit, Progress};
+use app::covers::MAX_IMAGE_BYTES;
 use axum::Router;
 use axum::body::Bytes;
-use axum::extract::{Request, State};
+use axum::extract::{DefaultBodyLimit, Multipart, Request, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::middleware::{Next, from_fn_with_state};
 use axum::response::{IntoResponse, Response};
@@ -13,6 +14,7 @@ use axum::routing::{get, put};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::media::read_image_field;
 use crate::auth::{Admin, CurrentUser};
 use crate::extract::{Json, RequestLang, RoutePath};
 use crate::files::{self, FileReply};
@@ -25,7 +27,10 @@ const SERVER_TIME: header::HeaderName = header::HeaderName::from_static("x-caima
 pub(super) fn router(state: AppState) -> Router<AppState> {
     Router::new()
         .route("/api/audiobooks", get(list))
-        .route("/api/audiobooks/{id}", get(get_book))
+        .route(
+            "/api/audiobooks/{id}",
+            get(get_book).put(edit_book).layer(DefaultBodyLimit::max(MAX_IMAGE_BYTES as usize + 16 * 1024)),
+        )
         .route("/api/audiobooks/{id}/saved", put(save).delete(remove))
         .route("/api/audiobooks/{id}/progress", put(set_progress))
         .route("/api/audiobooks/{id}/cover", get(cover))
@@ -84,6 +89,29 @@ async fn get_book(
     Ok(timed_json(book))
 }
 
+async fn edit_book(
+    State(state): State<AppState>,
+    Admin(_): Admin,
+    RoutePath(id): RoutePath<Uuid>,
+    mut form: Multipart,
+) -> ApiResult<StatusCode> {
+    let invalid = || AppError::validation("Invalid audiobook details.");
+    let mut edit = None;
+    let mut image = None;
+    while let Some(field) = form.next_field().await.map_err(|_| invalid())? {
+        match field.name() {
+            Some("details") if edit.is_none() => {
+                let details = field.text().await.map_err(|_| invalid())?;
+                edit = Some(serde_json::from_str::<BookEdit>(&details).map_err(|_| invalid())?);
+            }
+            Some("file") if image.is_none() => image = Some(read_image_field(field).await?),
+            _ => return Err(invalid().into()),
+        }
+    }
+    state.audiobooks.edit(&state.db, id, edit.ok_or_else(invalid)?, image).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn save(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
@@ -117,7 +145,7 @@ async fn cover(
     RoutePath(id): RoutePath<Uuid>,
     headers: HeaderMap,
 ) -> ApiResult<Response> {
-    let artwork = state.audiobooks.cover(id)?;
+    let artwork = state.audiobooks.cover(&state.db, id).await?;
     let not_modified = files::etag_matches(&headers, &artwork.etag);
     let response_headers = [(header::CACHE_CONTROL, MEDIA_CACHE), (header::ETAG, artwork.etag.as_str())];
     if not_modified {

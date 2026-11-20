@@ -232,8 +232,7 @@ fn artwork(bytes: Vec<u8>) -> Option<Artwork> {
         return None;
     }
     let webp = images::square_webp_set(&bytes, &[images::FULL_EDGE]).ok()?.pop()?.webp;
-    let etag = format!("\"{}\"", crate::text::hex_lower(&Sha256::digest(&webp)));
-    Some(Artwork { etag, webp: webp.into() })
+    Some(Artwork::from_webp(webp))
 }
 
 fn path_id(kind: &str, path: &Path) -> Uuid {

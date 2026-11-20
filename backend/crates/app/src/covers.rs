@@ -24,6 +24,10 @@ pub struct UploadedImage {
 }
 
 pub async fn accept(image: UploadedImage) -> AppResult<Vec<Rendition>> {
+    accept_for_edges(image, &images::EDGES).await
+}
+
+pub(crate) async fn accept_for_edges(image: UploadedImage, edges: &'static [u32]) -> AppResult<Vec<Rendition>> {
     if image.bytes.is_empty() {
         return Err(AppError::validation("No image was provided."));
     }
@@ -44,11 +48,15 @@ pub async fn accept(image: UploadedImage) -> AppResult<Vec<Rendition>> {
         return Err(AppError::validation("Only .jpg, .png and .webp files are accepted."));
     }
 
-    renditions(image.bytes).await
+    renditions_for_edges(image.bytes, edges).await
 }
 
 pub async fn renditions(bytes: Vec<u8>) -> AppResult<Vec<Rendition>> {
-    let set = tokio::task::spawn_blocking(move || images::square_webp_set(&bytes, &images::EDGES))
+    renditions_for_edges(bytes, &images::EDGES).await
+}
+
+async fn renditions_for_edges(bytes: Vec<u8>, edges: &'static [u32]) -> AppResult<Vec<Rendition>> {
+    let set = tokio::task::spawn_blocking(move || images::square_webp_set(&bytes, edges))
         .await
         .map_err(AppError::internal)?;
     set.map_err(|error| match error {

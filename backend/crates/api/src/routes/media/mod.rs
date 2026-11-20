@@ -9,6 +9,7 @@ use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum::routing::{get, post};
 
+pub(super) use self::images::read_image_field;
 use self::images::{
     album_cover, artist_image, playlist_cover, remove_album_cover, remove_artist_image, remove_playlist_cover,
     set_album_cover, set_artist_image, set_playlist_cover, track_cover,

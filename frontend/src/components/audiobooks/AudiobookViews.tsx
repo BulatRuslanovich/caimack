@@ -12,11 +12,13 @@ import {
   EllipsisIcon,
   ListMusicIcon,
   PauseIcon,
+  PencilIcon,
   PlayIcon,
   Trash2Icon,
   XIcon,
 } from "lucide-react";
 import { useEffect, useState, type CSSProperties } from "react";
+import dynamic from "next/dynamic";
 import styles from "./AudiobookCatalog.module.css";
 import { isDesktop } from "@/desktop/runtime";
 import { DetailHeader } from "@/components/DetailHeader";
@@ -34,6 +36,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAudiobooks } from "@/contexts/AudiobookContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useT } from "@/contexts/I18nContext";
 import { downloadedArtwork } from "@/lib/audiobookDownloads";
 import { audiobookHref, elapsedBookMs, type Audiobook } from "@/lib/audiobooks";
@@ -42,15 +45,19 @@ import { useParams } from "next/navigation";
 import { useFormat } from "@/lib/useFormat";
 import { AudiobookSaveButton } from "./AudiobookControls";
 
+const EditAudiobookDialog = dynamic(() =>
+  import("./EditAudiobookDialog").then((module) => module.EditAudiobookDialog),
+);
+
 export function useAudiobookArtwork(book: Audiobook | null) {
-  const { scope, downloaded } = useAudiobooks();
+  const { scope, downloaded, online } = useAudiobooks();
   const id = book?.id;
   const cover = book?.coverUrl ?? null;
   const local = id !== undefined && downloaded.has(id);
-  const [art, setArt] = useState<{ bookId: string; url: string } | null>(null);
+  const [art, setArt] = useState<{ bookId: string; cover: string; url: string } | null>(null);
 
   useEffect(() => {
-    if (!local || !scope || !id || !cover) return;
+    if (!local || online || !scope || !id || !cover) return;
 
     let disposed = false;
     let url: string | undefined;
@@ -58,7 +65,7 @@ export function useAudiobookArtwork(book: Audiobook | null) {
       .then((blob) => {
         if (disposed || !blob) return;
         url = URL.createObjectURL(blob);
-        setArt({ bookId: id, url });
+        setArt({ bookId: id, cover, url });
       })
       .catch(() => {});
 
@@ -66,9 +73,9 @@ export function useAudiobookArtwork(book: Audiobook | null) {
       disposed = true;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [scope, local, id, cover]);
+  }, [scope, local, online, id, cover]);
 
-  return local && art && art.bookId === id ? art.url : cover;
+  return local && !online && art?.bookId === id && art.cover === cover ? art.url : cover;
 }
 
 export function AudiobookCover({
@@ -502,8 +509,10 @@ function AudiobooksDisabled() {
 
 function BookDetail({ book }: { book: Audiobook }) {
   const t = useT();
+  const { isAdmin } = useAuth();
+  const [editing, setEditing] = useState(false);
   const { totalDuration } = useFormat();
-  const { online, downloaded, transfer, download, removeDownload, cancelDownload, player } =
+  const { online, downloaded, transfer, download, removeDownload, cancelDownload, player, result } =
     useAudiobooks();
   const artwork = useAudiobookArtwork(book);
   const availableOffline = downloaded.has(book.id);
@@ -526,6 +535,7 @@ function BookDetail({ book }: { book: Audiobook }) {
         facts={[
           book.author,
           book.narrator ? t("audiobooks.narrator", { name: book.narrator }) : null,
+          book.year,
           t("count.chapters", { count: book.chapters.length }),
           book.durationMs > 0 && totalDuration(book.durationMs / 1000),
         ]}
@@ -566,6 +576,18 @@ function BookDetail({ book }: { book: Audiobook }) {
               <span className="text-sm text-muted-foreground">
                 {t("audiobooks.downloadedLabel")}
               </span>
+            )}
+            {isAdmin && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setEditing(true)}
+                aria-label={t("action.edit")}
+                title={t("action.edit")}
+                disabled={!online}
+              >
+                <PencilIcon size={18} />
+              </Button>
             )}
           </>
         }
@@ -620,6 +642,14 @@ function BookDetail({ book }: { book: Audiobook }) {
           })}
         </ol>
       </Section>
+      {isAdmin && editing && (
+        <EditAudiobookDialog
+          key={book.id}
+          book={book}
+          onClose={() => setEditing(false)}
+          onSaved={() => void result.refetch()}
+        />
+      )}
     </>
   );
 }

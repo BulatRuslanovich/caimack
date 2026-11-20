@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Bulat Ruslanovich
 
+mod edits;
 mod names;
 mod scan;
 mod state;
@@ -11,6 +12,7 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use tokio::sync::Notify;
 use tokio::task::JoinHandle;
@@ -19,6 +21,8 @@ use uuid::Uuid;
 
 use crate::i18n::{self, Lang};
 use crate::{AppError, AppResult};
+
+pub use edits::BookEdit;
 
 #[derive(Clone, Default)]
 pub struct Audiobooks {
@@ -54,6 +58,13 @@ pub struct Artwork {
     pub etag: String,
 }
 
+impl Artwork {
+    fn from_webp(webp: Vec<u8>) -> Self {
+        let etag = format!("\"{}\"", crate::text::hex_lower(&Sha256::digest(&webp)));
+        Self { webp: webp.into(), etag }
+    }
+}
+
 pub struct AudioFile {
     pub path: PathBuf,
     pub content_type: &'static str,
@@ -67,6 +78,7 @@ pub struct Audiobook {
     pub title: String,
     pub author: Option<String>,
     pub narrator: Option<String>,
+    pub year: Option<i32>,
     pub cover_url: Option<String>,
     pub duration_ms: i64,
     pub chapters: Vec<Chapter>,
@@ -169,12 +181,13 @@ impl Audiobooks {
     }
 
     pub async fn list(&self, db: &PgPool, user_id: Uuid, lang: Lang) -> AppResult<Vec<Audiobook>> {
-        let mut state = state::list(db, user_id).await?;
+        let (mut state, edits) = tokio::try_join!(state::list(db, user_id), edits::list(db))?;
+        let mut edits: HashMap<_, _> = edits.into_iter().map(|edit| (edit.book_id, edit)).collect();
         let mut books: Vec<_> = self
             .snapshot()
             .books
             .values()
-            .map(|book| book.dto(state.remove(&book.id).unwrap_or_default(), lang))
+            .map(|book| book.dto(state.remove(&book.id).unwrap_or_default(), edits.remove(&book.id), lang))
             .collect();
         books.sort_by_cached_key(|book| (book.title.to_lowercase(), book.id));
         Ok(books)
@@ -183,8 +196,19 @@ impl Audiobooks {
     pub async fn get(&self, db: &PgPool, user_id: Uuid, id: Uuid, lang: Lang) -> AppResult<Audiobook> {
         let snapshot = self.snapshot();
         let book = snapshot.book(id)?;
-        let state = state::get(db, user_id, id).await?.unwrap_or_default();
-        Ok(book.dto(state, lang))
+        let (state, edit) = tokio::try_join!(state::get(db, user_id, id), edits::get(db, id))?;
+        Ok(book.dto(state.unwrap_or_default(), edit, lang))
+    }
+
+    pub async fn edit(
+        &self,
+        db: &PgPool,
+        id: Uuid,
+        edit: BookEdit,
+        image: Option<crate::covers::UploadedImage>,
+    ) -> AppResult<()> {
+        self.snapshot().book(id)?;
+        edits::save(db, id, edit, image).await
     }
 
     pub async fn set_saved(&self, db: &PgPool, user_id: Uuid, id: Uuid, saved: bool) -> AppResult<()> {
@@ -211,8 +235,11 @@ impl Audiobooks {
         Ok(book.normalize_progress(winning).unwrap_or(winning))
     }
 
-    pub fn cover(&self, id: Uuid) -> AppResult<Artwork> {
-        self.snapshot().book(id)?.cover.clone().ok_or_else(|| AppError::not_found("Audiobook cover not found."))
+    pub async fn cover(&self, db: &PgPool, id: Uuid) -> AppResult<Artwork> {
+        let snapshot = self.snapshot();
+        edits::cover(db, id, &snapshot.book(id)?.cover)
+            .await?
+            .ok_or_else(|| AppError::not_found("Audiobook cover not found."))
     }
 
     pub async fn audio(&self, id: Uuid, chapter_id: Uuid) -> AppResult<AudioFile> {
@@ -263,14 +290,26 @@ impl Book {
         Ok(progress)
     }
 
-    fn dto(&self, state: state::BookState, lang: Lang) -> Audiobook {
+    fn dto(&self, state: state::BookState, edit: Option<edits::Metadata>, lang: Lang) -> Audiobook {
         let progress = state.progress().and_then(|progress| self.normalize_progress(progress).ok());
+        let scanned_etag = self.cover.as_ref().map(|cover| cover.etag.as_str());
+        let cover_etag = match &edit {
+            Some(edit) if edit.cover_edited => edit.cover_etag.as_deref(),
+            _ => scanned_etag,
+        };
+        let cover_url =
+            cover_etag.map(|etag| format!("/api/audiobooks/{}/cover?v={}", self.id, etag.trim_matches('"')));
+        let (title, author, narrator, year) = match edit {
+            Some(edit) => (edit.title, edit.author, edit.narrator, edit.year),
+            None => (self.title.clone(), self.author.clone(), self.narrator.clone(), None),
+        };
         Audiobook {
             id: self.id,
-            title: self.title.clone(),
-            author: self.author.clone(),
-            narrator: self.narrator.clone(),
-            cover_url: self.cover.as_ref().map(|_| format!("/api/audiobooks/{}/cover", self.id)),
+            title,
+            author,
+            narrator,
+            year,
+            cover_url,
             duration_ms: self.duration_ms,
             chapters: self
                 .chapters

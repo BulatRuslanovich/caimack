@@ -870,13 +870,28 @@ function AudiobookSession({
       );
     else seek(ms);
   };
+  const activeBookDetails = active && catalog.books.find((book) => book.id === active.book.id);
+  const localView =
+    active && activeBookDetails
+      ? {
+          ...active,
+          book: {
+            ...active.book,
+            title: activeBookDetails.title,
+            author: activeBookDetails.author,
+            narrator: activeBookDetails.narrator,
+            coverUrl: activeBookDetails.coverUrl,
+          },
+        }
+      : active;
+
   return (
     <AudiobookContext.Provider
       value={{
         enabled,
         experimentReady,
         player: {
-          active: enabled ? (active ?? mirrored) : null,
+          active: enabled ? (localView ?? mirrored) : null,
           playing: enabled && (mirrored ? remotePlaying : playing),
           pending: enabled && pending,
           speed,

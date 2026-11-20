@@ -26,7 +26,8 @@ export const en = {
   "collection.noResults": "No matches in your library",
   "collection.failed": "Could not update your library. Try again.",
   "connect.title": "Playback devices",
-  "connect.audiobookDescription": "Continue this chapter on another device from your current position.",
+  "connect.audiobookDescription":
+    "Continue this chapter on another device from your current position.",
   "connect.description": "Choose where the music plays. Use this player to control it.",
   "connect.thisDevice": "This device",
   "connect.playingOn": "Playing on {device}",
@@ -235,6 +236,8 @@ export const en = {
   "field.created": "Created",
   "field.name": "Name",
   "field.title": "Title",
+  "field.author": "Author",
+  "field.narrator": "Narrator",
   "field.artist": "Artist",
   "field.album": "Album",
   "field.genre": "Genre",
@@ -685,6 +688,9 @@ export const en = {
   "dialog.editAlbum.title": "Edit album",
   "dialog.editAlbum.saved": "Album updated.",
   "dialog.editAlbum.failed": "Could not save the album.",
+  "dialog.editAudiobook.title": "Edit audiobook",
+  "dialog.editAudiobook.saved": "Audiobook updated.",
+  "dialog.editAudiobook.failed": "Could not save the audiobook.",
 
   "dialog.editPlaylist.title": "Edit playlist",
   "dialog.editPlaylist.saved": "Playlist updated.",

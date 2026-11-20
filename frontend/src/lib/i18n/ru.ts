@@ -254,6 +254,8 @@ export const ru: Dictionary = {
   "field.created": "Создан",
   "field.name": "Имя",
   "field.title": "Название",
+  "field.author": "Автор",
+  "field.narrator": "Чтец",
   "field.artist": "Исполнитель",
   "field.album": "Альбом",
   "field.genre": "Жанр",
@@ -722,6 +724,9 @@ export const ru: Dictionary = {
   "dialog.editAlbum.title": "Редактирование альбома",
   "dialog.editAlbum.saved": "Альбом обновлён.",
   "dialog.editAlbum.failed": "Не удалось сохранить альбом.",
+  "dialog.editAudiobook.title": "Редактирование аудиокниги",
+  "dialog.editAudiobook.saved": "Аудиокнига обновлена.",
+  "dialog.editAudiobook.failed": "Не удалось сохранить аудиокнигу.",
 
   "dialog.editPlaylist.title": "Редактирование плейлиста",
   "dialog.editPlaylist.saved": "Плейлист обновлён.",
@@ -857,7 +862,8 @@ export const ru: Dictionary = {
   "settings.account": "Учётная запись",
   "settings.recommendations": "Рекомендации",
   "settings.experimental": "Эксперименты",
-  "settings.audiobooksHint": "Включить аудиокниги на всех устройствах, подключённых к этому серверу.",
+  "settings.audiobooksHint":
+    "Включить аудиокниги на всех устройствах, подключённых к этому серверу.",
   "settings.tatarMafia": "Режим татарской мафии",
   "settings.tatarMafiaHint":
     "Крути пластинку в полноэкранном плеере вперёд-назад — будут скретчи и искажения. Воспроизведение должно идти на этом устройстве. Кто поймёт, тот поймёт.",

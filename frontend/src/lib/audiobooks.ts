@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { request } from "./http";
+import type { AudiobookValues } from "./schemas";
 
 export interface AudiobookChapter {
   id: string;
@@ -22,6 +23,7 @@ export interface Audiobook {
   title: string;
   author: string | null;
   narrator: string | null;
+  year?: number | null;
   coverUrl: string | null;
   durationMs: number;
   chapters: AudiobookChapter[];
@@ -58,6 +60,12 @@ export const audiobookApi = {
     request<Audiobook[]>("/audiobooks", { signal, onResponse }),
   detail: (id: string, signal: AbortSignal, onResponse?: (headers: Headers) => void) =>
     request<Audiobook>(audiobookHref(id), { signal, onResponse }),
+  edit: (id: string, values: AudiobookValues, cover: File | null, removeCover: boolean) => {
+    const body = new FormData();
+    body.set("details", JSON.stringify({ ...values, removeCover }));
+    if (cover) body.set("file", cover);
+    return request<void>(audiobookHref(id), { method: "PUT", body });
+  },
   writeProgress: (
     id: string,
     body: AudiobookProgress,
