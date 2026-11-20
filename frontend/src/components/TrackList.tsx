@@ -26,7 +26,16 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { ArtistLinks } from "./ArtistLinks";
 import { TrackCover } from "./Cover";
 import { EmptyState } from "./EmptyState";
-import { NowPlayingBars } from "./PlaybackIndicators";
+import {
+  PlaybackRowNumber,
+  playbackDurationClass,
+  playbackGridClass,
+  playbackHeaderClass,
+  playbackListClass,
+  playbackNumberClass,
+  playbackRowClass,
+  playbackTitleClass,
+} from "./PlaybackListRows";
 import { TrackMenu } from "./TrackMenu";
 import { DragHandle, VerticalSortable } from "./VerticalSortable";
 import { VirtualList, type VirtualListHandle } from "./VirtualList";
@@ -57,30 +66,34 @@ interface TrackListProps {
 }
 
 const ROW_COLUMNS = {
-  "album+date": "grid-cols-[2rem_minmax(0,1.65fr)_minmax(0,1fr)_7rem_var(--track-first)_3.5rem]",
-  album: "grid-cols-[2rem_minmax(0,1.65fr)_minmax(0,1fr)_var(--track-first)_3.5rem]",
-  date: "grid-cols-[2rem_minmax(0,1fr)_7rem_var(--track-first)_3.5rem]",
-  plain: "grid-cols-[2rem_minmax(0,1fr)_var(--track-first)_3.5rem]",
+  "album+date":
+    "grid-cols-[2rem_minmax(0,1.65fr)_minmax(0,1fr)_7rem_var(--track-duration)_var(--track-actions)]",
+  album:
+    "grid-cols-[2rem_minmax(0,1.65fr)_minmax(0,1fr)_var(--track-duration)_var(--track-actions)]",
+  date: "grid-cols-[2rem_minmax(0,1fr)_7rem_var(--track-duration)_var(--track-actions)]",
+  plain: "grid-cols-[2rem_minmax(0,1fr)_var(--track-duration)_var(--track-actions)]",
   "album+date+tempo":
-    "grid-cols-[2rem_minmax(0,1.65fr)_minmax(0,1fr)_7rem_6rem_var(--track-first)_3.5rem]",
-  "album+tempo": "grid-cols-[2rem_minmax(0,1.65fr)_minmax(0,1fr)_6rem_var(--track-first)_3.5rem]",
-  "date+tempo": "grid-cols-[2rem_minmax(0,1fr)_7rem_6rem_var(--track-first)_3.5rem]",
-  tempo: "grid-cols-[2rem_minmax(0,1fr)_6rem_var(--track-first)_3.5rem]",
+    "grid-cols-[2rem_minmax(0,1.65fr)_minmax(0,1fr)_7rem_6rem_var(--track-duration)_var(--track-actions)]",
+  "album+tempo":
+    "grid-cols-[2rem_minmax(0,1.65fr)_minmax(0,1fr)_6rem_var(--track-duration)_var(--track-actions)]",
+  "date+tempo":
+    "grid-cols-[2rem_minmax(0,1fr)_7rem_6rem_var(--track-duration)_var(--track-actions)]",
+  tempo: "grid-cols-[2rem_minmax(0,1fr)_6rem_var(--track-duration)_var(--track-actions)]",
 } as const;
 
 const revealOnRow =
   "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 data-[state=open]:opacity-100 max-md:opacity-100 [@media(hover:none)]:opacity-100";
 
-const rowBase =
-  "grid items-center gap-3 rounded-md px-2.5 py-2 max-md:grid-cols-[2.125rem_minmax(0,1fr)_auto_auto] max-md:gap-2 max-md:px-1 max-[380px]:grid-cols-[2.125rem_minmax(0,1fr)_auto]";
-
 function rowGridFor(showAlbum: boolean, showDate: boolean, showTempoKey: boolean): string {
   const parts = [showAlbum && "album", showDate && "date", showTempoKey && "tempo"].filter(Boolean);
   const key = (parts.join("+") || "plain") as keyof typeof ROW_COLUMNS;
   return cn(
-    rowBase,
+    playbackGridClass,
+    "max-md:grid-cols-[2.125rem_minmax(0,1fr)_auto_var(--track-actions)] max-[380px]:grid-cols-[2.125rem_minmax(0,1fr)_var(--track-actions)]",
     ROW_COLUMNS[key],
-    isDesktop ? "[--track-first:5.5rem]" : "[--track-first:4.5rem]",
+    isDesktop
+      ? "[--track-duration:5.5rem] [--track-actions:3.5rem] pointer-coarse:[--track-actions:3.75rem]"
+      : "[--track-duration:3.5rem] [--track-actions:4.625rem] pointer-coarse:[--track-actions:5.625rem] max-md:[--track-actions:2.5rem] max-md:pointer-coarse:[--track-actions:2.75rem]",
   );
 }
 
@@ -295,13 +308,13 @@ export function TrackList({
   const body = (
     <div
       ref={bodyRef}
-      className="library-track-list flex flex-col"
+      className={playbackListClass}
       role="table"
       aria-rowcount={tracks.length + 1}
       aria-label={t("tracks.tableLabel")}
       onKeyDown={onRowsKeyDown}
     >
-      <div className={cn(grid, "rounded-none border-b border-border pb-2")} role="row">
+      <div className={cn(grid, playbackHeaderClass)} role="row">
         {selection ? (
           <span role="columnheader" className="flex items-center">
             <Checkbox
@@ -339,11 +352,10 @@ export function TrackList({
             {t("column.tempoKey")}
           </Caption>
         )}
-        {!isDesktop && <span role="columnheader" aria-label={t("column.actions")} />}
         <Caption role="columnheader" className="text-right max-[380px]:hidden">
           {t("column.duration")}
         </Caption>
-        {isDesktop && <span role="columnheader" aria-label={t("column.actions")} />}
+        <span role="columnheader" aria-label={t("column.actions")} />
       </div>
 
       {rows.length > 100 ? (
@@ -486,17 +498,6 @@ const TrackRowContent = memo(function TrackRowContent({
       <HeartIcon size={16} className={isFavorite ? "fill-current" : undefined} />
     </Button>
   );
-  const duration = (
-    <span
-      className="flex items-center justify-end gap-1 text-right text-sm text-muted-foreground tabular-nums max-[380px]:hidden"
-      role="cell"
-      data-track-duration
-    >
-      {isDesktop && favorite}
-      {formatDuration(track.durationSeconds)}
-    </span>
-  );
-
   return (
     <div
       ref={drag?.setNodeRef}
@@ -524,14 +525,12 @@ const TrackRowContent = memo(function TrackRowContent({
       }
       className={cn(
         grid,
-        "library-track-row group relative transition-colors outline-none",
-        "hover:bg-card focus-within:bg-card focus-visible:bg-card focus-visible:inset-ring focus-visible:inset-ring-ring",
-        isCurrent && "track-row-current bg-card",
+        playbackRowClass(isCurrent),
         unavailable && "opacity-55",
         drag?.isDragging && "z-10 opacity-90 shadow-pop",
       )}
     >
-      <span className="flex items-center gap-1 text-sm text-faint tabular-nums" role="cell">
+      <span className={playbackNumberClass} role="cell">
         {selectable ? (
           <Checkbox
             checked={isSelected}
@@ -551,18 +550,11 @@ const TrackRowContent = memo(function TrackRowContent({
               />
             )}
 
-            {isPlaying ? (
-              <NowPlayingBars className="text-primary group-hover:hidden [@media(hover:none)]:hidden" />
-            ) : (
-              <span
-                className={cn(
-                  "group-hover:hidden [@media(hover:none)]:hidden",
-                  isCurrent && "text-primary",
-                )}
-              >
-                {useTrackNumbers ? (track.trackNumber ?? index + 1) : index + 1}
-              </span>
-            )}
+            <PlaybackRowNumber
+              number={useTrackNumbers ? (track.trackNumber ?? index + 1) : index + 1}
+              current={isCurrent}
+              playing={isPlaying}
+            />
 
             <Button
               variant="ghost"
@@ -585,9 +577,7 @@ const TrackRowContent = memo(function TrackRowContent({
       <span className="flex min-w-0 items-center gap-3" role="cell">
         {showCover && <TrackCover track={track} size={40} className="library-track-cover" />}
         <span className="flex min-w-0 flex-col">
-          <span className={cn("truncate text-body font-semibold", isCurrent && "text-primary")}>
-            {track.title}
-          </span>
+          <span className={cn(playbackTitleClass, isCurrent && "text-primary")}>{track.title}</span>
           {(showArtist || showSpec) && (
             <span className="flex min-w-0 items-center gap-2">
               {showArtist && (
@@ -624,7 +614,17 @@ const TrackRowContent = memo(function TrackRowContent({
 
       {showTempoKey && <TempoKeyCell track={track} />}
 
-      {isDesktop && duration}
+      <span
+        className={cn(
+          playbackDurationClass,
+          "flex items-center justify-end gap-1 max-[380px]:hidden",
+        )}
+        role="cell"
+        data-track-duration
+      >
+        {isDesktop && favorite}
+        {formatDuration(track.durationSeconds)}
+      </span>
       <span role="cell" className="flex items-center justify-end gap-0.5">
         {isDesktop ? <DownloadBadge id={track.id} /> : favorite}
 
@@ -649,8 +649,6 @@ const TrackRowContent = memo(function TrackRowContent({
           }
         />
       </span>
-
-      {!isDesktop && duration}
     </div>
   );
 });

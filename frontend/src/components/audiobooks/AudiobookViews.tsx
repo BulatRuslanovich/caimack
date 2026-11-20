@@ -43,6 +43,7 @@ import { audiobookHref, elapsedBookMs, type Audiobook } from "@/lib/audiobooks";
 import { cn } from "@/lib/cn";
 import { useParams } from "next/navigation";
 import { useFormat } from "@/lib/useFormat";
+import { AudiobookChapterList } from "./AudiobookChapterList";
 import { AudiobookSaveButton } from "./AudiobookControls";
 
 const EditAudiobookDialog = dynamic(() =>
@@ -512,7 +513,7 @@ function BookDetail({ book }: { book: Audiobook }) {
   const { isAdmin } = useAuth();
   const [editing, setEditing] = useState(false);
   const { totalDuration } = useFormat();
-  const { online, downloaded, transfer, download, removeDownload, cancelDownload, player, result } =
+  const { online, downloaded, transfer, download, removeDownload, cancelDownload, result } =
     useAudiobooks();
   const artwork = useAudiobookArtwork(book);
   const availableOffline = downloaded.has(book.id);
@@ -594,53 +595,7 @@ function BookDetail({ book }: { book: Audiobook }) {
       />
       <Section title={t("audiobooks.chapters")}>
         {book.progress && <BookProgress book={book} />}
-        <ol className="divide-y divide-border border-y border-border">
-          {book.chapters.map((chapter, index) => {
-            const active =
-              player.active?.book.id === book.id && player.active.chapterIndex === index;
-            const playing = active && player.playing;
-            return (
-              <li key={chapter.id}>
-                <button
-                  type="button"
-                  disabled={!online && !availableOffline}
-                  aria-current={active ? "true" : undefined}
-                  aria-label={t(playing ? "audiobooks.pauseNamed" : "action.playNamed", {
-                    name: chapter.title,
-                  })}
-                  className={cn(
-                    "group grid min-h-13 w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 py-2 text-left hover:bg-raised max-sm:gap-2 disabled:opacity-50",
-                    active && "bg-card text-primary",
-                  )}
-                  onClick={() => player.play(book, chapter.id)}
-                >
-                  <span className="grid place-items-center text-xs text-faint tabular-nums">
-                    <span className="group-hover:hidden group-focus-visible:hidden">
-                      {index + 1}
-                    </span>
-                    {playing ? (
-                      <PauseIcon
-                        size={16}
-                        className="hidden group-hover:block group-focus-visible:block"
-                      />
-                    ) : (
-                      <PlayIcon
-                        size={16}
-                        className="hidden group-hover:block group-focus-visible:block"
-                      />
-                    )}
-                  </span>
-                  <span className="line-clamp-2 text-sm font-semibold wrap-anywhere">
-                    {chapter.title}
-                  </span>
-                  <span className="text-xs text-faint">
-                    {chapter.durationMs > 0 && totalDuration(chapter.durationMs / 1000)}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ol>
+        <AudiobookChapterList book={book} />
       </Section>
       {isAdmin && editing && (
         <EditAudiobookDialog

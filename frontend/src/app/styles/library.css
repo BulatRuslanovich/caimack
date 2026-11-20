@@ -73,7 +73,7 @@
   padding: 0.25rem 0;
 }
 
-.library-track-list > [role="row"]:first-child {
+.library-track-list > .library-track-list-header {
   margin-bottom: 0.5rem;
   padding-block: 0.75rem;
   border-color: var(--library-edge);
@@ -130,7 +130,7 @@
   padding-block: 0;
 }
 
-.search-page .library-track-list > [role="row"]:first-child {
+.search-page .library-track-list > .library-track-list-header {
   margin-bottom: 0.25rem;
   padding-block: 0.5rem;
 }
