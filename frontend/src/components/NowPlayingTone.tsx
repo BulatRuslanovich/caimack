@@ -8,10 +8,18 @@ import { trackCoverUrl } from "@/lib/media";
 import { setCoverPaletteTone, useColorway } from "@/lib/theme";
 import { toneStyle, useCoverTone } from "@/lib/useCoverTone";
 import { usePlayerState } from "@/contexts/PlayerContext";
+import { useAudiobooks } from "@/contexts/AudiobookContext";
+import { useAudiobookArtwork } from "./audiobooks/AudiobookViews";
 
 export function NowPlayingTone() {
   const { currentTrack } = usePlayerState();
-  const cover = currentTrack ? trackCoverUrl(currentTrack, "thumb") : null;
+  const { player } = useAudiobooks();
+  const bookArt = useAudiobookArtwork(player.active?.book ?? null);
+  const cover = player.active
+    ? bookArt
+    : currentTrack
+      ? trackCoverUrl(currentTrack, "thumb")
+      : null;
   const tone = useCoverTone(cover);
   const adaptive = useColorway() === "cover";
   const paletteTone = useCoverTone(adaptive ? cover : null, "player");

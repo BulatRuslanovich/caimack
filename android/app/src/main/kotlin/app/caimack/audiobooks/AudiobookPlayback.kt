@@ -81,6 +81,11 @@ internal class AudiobookPlayback(
     }
 
     fun seek(positionMs: Long) { controller()?.seekTo(positionMs) }
+    fun skipTime(forward: Boolean) {
+        val player = controller() ?: return
+        if (forward) player.seekForward() else player.seekBack()
+    }
+
     fun skipChapter(next: Boolean) {
         val player = controller() ?: return
         if (next) player.seekToNextMediaItem() else player.seekToPreviousMediaItem()

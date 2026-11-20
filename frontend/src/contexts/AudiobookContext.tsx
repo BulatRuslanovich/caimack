@@ -45,7 +45,12 @@ interface AudiobookPlayer {
   toggle: () => void;
   seek: (ms: number) => void;
   skip: (ms: number) => void;
+  changeChapter: (delta: number) => void;
   setSpeed: (speed: number) => void;
+  volume: number;
+  muted: boolean;
+  setVolume: (volume: number) => void;
+  toggleMute: () => void;
   close: () => void;
 }
 
@@ -111,6 +116,8 @@ interface AudiobookProviderProps {
   onActiveChange: (active: boolean) => void;
   volume: number;
   muted: boolean;
+  setVolume: (volume: number) => void;
+  toggleMute: () => void;
   children: ReactNode;
 }
 
@@ -131,6 +138,8 @@ function AudiobookSession({
   onActiveChange,
   volume,
   muted,
+  setVolume,
+  toggleMute,
   children,
 }: AudiobookProviderProps & { scope: string | null; serverOnline: boolean }) {
   const networkOnline = useSyncExternalStore(
@@ -387,6 +396,13 @@ function AudiobookSession({
     play(current.current.book);
   };
 
+  const changeChapter = (delta: number) => {
+    const session = current.current;
+    if (!session) return;
+    const index = session.chapterIndex + delta;
+    if (session.book.chapters[index]) play(session.book, index);
+  };
+
   const setSpeed = (next: number) => {
     if (audioRef.current) audioRef.current.playbackRate = next;
     setPlaybackSpeed(next);
@@ -450,7 +466,12 @@ function AudiobookSession({
           toggle,
           seek,
           skip,
+          changeChapter,
           setSpeed,
+          volume,
+          muted,
+          setVolume,
+          toggleMute,
           close,
         },
         clock,

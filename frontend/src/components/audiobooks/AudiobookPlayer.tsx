@@ -2,27 +2,27 @@
 
 "use client";
 
-import {
-  AudioLinesIcon,
-  PauseIcon,
-  PlayIcon,
-  RotateCcwIcon,
-  RotateCwIcon,
-  XIcon,
-} from "lucide-react";
+import { SkipForwardIcon, XIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { DeferredAudiobookFullPlayer } from "@/components/FullPlayerLoader";
 import { Player } from "@/components/Player";
+import { PlayerBar } from "@/components/PlayerBar";
+import { PlayPauseButton } from "@/components/PlayPauseButton";
 import { PrefetchLink } from "@/components/PrefetchLink";
+import { VolumeControls } from "@/components/PlayerVolume";
 import { Button } from "@/components/ui/button";
 import { useAudiobookClock, useAudiobooks } from "@/contexts/AudiobookContext";
 import { useT } from "@/contexts/I18nContext";
-import { formatDuration } from "@/lib/format";
 import { isTypingTarget, resolveShortcut } from "@/lib/shortcuts";
 import { AudiobookCover, useAudiobookArtwork } from "./AudiobookViews";
 import { audiobookHref, type Audiobook } from "@/lib/audiobooks";
-
-const SKIP_MS = 15_000;
-const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+import {
+  AudiobookProgress,
+  AudiobookSaveButton,
+  AudiobookSpeed,
+  AudiobookTransport,
+  BOOK_SKIP_MS,
+} from "./AudiobookControls";
 
 export function PlaybackFooter() {
   const { player } = useAudiobooks();
@@ -33,8 +33,103 @@ function AudiobookPlayer({ book }: { book: Audiobook }) {
   const t = useT();
   const { player } = useAudiobooks();
   const artwork = useAudiobookArtwork(book);
+  const active = player.active;
+  if (!active) return null;
+  const currentChapter = book.chapters[active.chapterIndex];
+
+  return (
+    <>
+      <AudiobookPlatform book={book} chapter={currentChapter.title} artwork={artwork} />
+      <PlayerBar
+        label={t("audiobooks.player")}
+        artworkUrl={artwork}
+        artwork={(expanded) => (
+          <AudiobookCover
+            book={book}
+            artwork={artwork}
+            className="w-(--player-cover) rounded-xs"
+            style={{ viewTransitionName: expanded ? undefined : "player-artwork" }}
+          />
+        )}
+        metadata={
+          <>
+            <PrefetchLink
+              href={audiobookHref(book.id)}
+              className="truncate text-sm font-medium hover:underline"
+              title={book.title}
+            >
+              {book.title}
+            </PrefetchLink>
+            <span className="truncate text-sm text-muted-foreground">{currentChapter.title}</span>
+          </>
+        }
+        mobileControls={
+          <>
+            <AudiobookSaveButton book={book} className="relative shrink-0 md:hidden" />
+            <div className="relative flex items-center gap-0.5 md:hidden">
+              <PlayPauseButton
+                playing={player.playing}
+                buffering={player.pending}
+                onToggle={() => !player.pending && player.toggle()}
+                size="compact"
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={active.chapterIndex + 1 >= book.chapters.length}
+                onClick={() => player.changeChapter(1)}
+                aria-label={t("audiobooks.nextChapter")}
+              >
+                <SkipForwardIcon size={24} />
+              </Button>
+            </div>
+          </>
+        }
+        transport={<AudiobookTransport />}
+        progress={<AudiobookProgress />}
+        progressLine={<AudiobookProgress line />}
+        actions={
+          <div className="flex shrink-0 items-center gap-0.5">
+            <AudiobookSpeed />
+            <AudiobookSaveButton book={book} className="max-lg:hidden" />
+            <div className="flex items-center gap-1">
+              <VolumeControls
+                {...player}
+                seekbarClassName="w-20 max-w-20 max-lg:w-12 max-lg:max-w-12"
+              />
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={player.close}
+              aria-label={t("audiobooks.closePlayer")}
+              title={t("audiobooks.closePlayer")}
+            >
+              <XIcon size={18} />
+            </Button>
+          </div>
+        }
+        expandedPlayer={(onClose) => (
+          <DeferredAudiobookFullPlayer artwork={artwork} onClose={onClose} />
+        )}
+        next={() => player.changeChapter(1)}
+        previous={() => player.changeChapter(-1)}
+      />
+    </>
+  );
+}
+
+function AudiobookPlatform({
+  book,
+  chapter,
+  artwork,
+}: {
+  book: Audiobook;
+  chapter: string;
+  artwork: string | null;
+}) {
+  const { player } = useAudiobooks();
   const last = useRef(player);
-  const currentChapter = book.chapters[player.active?.chapterIndex ?? 0];
   const { playing, speed } = player;
   const { durationMs, positionMs } = useAudiobookClock();
 
@@ -46,7 +141,9 @@ function AudiobookPlayer({ book }: { book: Audiobook }) {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (isTypingTarget(target) || target?.closest("button, select, a, [role='menuitem']")) return;
-      if (document.querySelector("[data-state='open']:is([role='dialog'], [role='menu'])")) return;
+      if (document.querySelector("[data-state='open'][role='menu']")) return;
+      const dialog = document.querySelector("[data-state='open'][role='dialog']");
+      if (dialog && !dialog.matches("[data-player-fullscreen]")) return;
 
       const shortcut = resolveShortcut(event);
       if (shortcut?.action === "playPause" && !event.repeat) {
@@ -55,7 +152,11 @@ function AudiobookPlayer({ book }: { book: Audiobook }) {
       }
       if (shortcut?.action === "seekBy" && shortcut.value) {
         event.preventDefault();
-        last.current.skip(Math.sign(shortcut.value) * SKIP_MS);
+        last.current.skip(Math.sign(shortcut.value) * BOOK_SKIP_MS);
+      }
+      if ((shortcut?.action === "previous" || shortcut?.action === "next") && !event.repeat) {
+        event.preventDefault();
+        last.current.changeChapter(shortcut.action === "previous" ? -1 : 1);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -66,12 +167,12 @@ function AudiobookPlayer({ book }: { book: Audiobook }) {
     if (!("mediaSession" in navigator) || typeof MediaMetadata === "undefined") return;
 
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: currentChapter.title,
+      title: chapter,
       artist: book.author ?? "",
       album: book.title,
       artwork: artwork ? [{ src: artwork }] : [],
     });
-  }, [book.author, book.title, currentChapter.title, artwork]);
+  }, [book.author, book.title, chapter, artwork]);
 
   useEffect(() => {
     if (!("mediaSession" in navigator)) return;
@@ -85,6 +186,8 @@ function AudiobookPlayer({ book }: { book: Audiobook }) {
       ["play", () => !last.current.playing && last.current.toggle()],
       ["pause", () => last.current.playing && last.current.toggle()],
       ["stop", () => last.current.close()],
+      ["previoustrack", () => last.current.changeChapter(-1)],
+      ["nexttrack", () => last.current.changeChapter(1)],
       ["seekto", ({ seekTime }) => seekTime !== undefined && last.current.seek(seekTime * 1000)],
       ["seekbackward", ({ seekOffset = 15 }) => last.current.skip(-seekOffset * 1000)],
       ["seekforward", ({ seekOffset = 15 }) => last.current.skip(seekOffset * 1000)],
@@ -119,94 +222,5 @@ function AudiobookPlayer({ book }: { book: Audiobook }) {
     });
   }, [durationMs, positionMs, speed]);
 
-  return (
-    <footer
-      aria-label={t("audiobooks.player")}
-      className="grid grid-cols-[minmax(10rem,1fr)_auto_minmax(8rem,2fr)_auto] items-center gap-4 border-t border-border bg-card px-5 py-2.5 max-md:grid-cols-[minmax(0,1fr)_auto] max-md:gap-2 max-md:px-3"
-    >
-      <PrefetchLink
-        href={audiobookHref(book.id)}
-        aria-label={t("audiobooks.chapters")}
-        className="flex min-w-0 items-center gap-2.5 rounded-md text-left"
-      >
-        <AudiobookCover book={book} artwork={artwork} className="size-10 rounded-sm" />
-        <span className="min-w-0">
-          <span className="block truncate text-sm font-semibold">{book.title}</span>
-          <span className="block truncate text-xs text-muted-foreground">
-            {currentChapter.title}
-          </span>
-        </span>
-      </PrefetchLink>
-      <div className="flex items-center justify-center gap-0.5">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => player.skip(-SKIP_MS)}
-          aria-label={t("audiobooks.back15")}
-          title={t("audiobooks.back15")}
-        >
-          <RotateCcwIcon size={18} />
-        </Button>
-        <Button
-          variant="play"
-          size="icon"
-          onClick={player.toggle}
-          disabled={player.pending}
-          aria-label={t(playing ? "action.pause" : "action.play")}
-        >
-          {playing ? <PauseIcon size={19} /> : <PlayIcon size={19} />}
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => player.skip(SKIP_MS)}
-          aria-label={t("audiobooks.forward15")}
-          title={t("audiobooks.forward15")}
-        >
-          <RotateCwIcon size={18} />
-        </Button>
-      </div>
-      <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground tabular-nums">
-        <span>{formatDuration(positionMs / 1000)}</span>
-        <input
-          type="range"
-          min={0}
-          max={Number.isFinite(durationMs) && durationMs > 0 ? durationMs : 1}
-          step={100}
-          disabled={!durationMs}
-          value={positionMs}
-          aria-label={t("audiobooks.position")}
-          aria-valuetext={formatDuration(positionMs / 1000)}
-          onChange={(event) => player.seek(Number(event.target.value))}
-          className="min-w-0 flex-1 accent-primary"
-        />
-        <span>{formatDuration(durationMs / 1000)}</span>
-      </div>
-      <div className="flex items-center justify-end gap-1">
-        <label className="flex h-8 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-raised">
-          <AudioLinesIcon size={14} aria-hidden="true" className="max-md:hidden" />
-          <select
-            aria-label={t("audiobooks.speed")}
-            value={speed}
-            onChange={(event) => player.setSpeed(Number(event.target.value))}
-            className="bg-card text-foreground"
-          >
-            {SPEEDS.map((value) => (
-              <option key={value} value={value}>
-                {value}×
-              </option>
-            ))}
-          </select>
-        </label>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={player.close}
-          aria-label={t("audiobooks.closePlayer")}
-        >
-          <XIcon size={16} />
-        </Button>
-      </div>
-    </footer>
-  );
+  return null;
 }

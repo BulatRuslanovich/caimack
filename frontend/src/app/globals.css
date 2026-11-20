@@ -78,26 +78,6 @@
   }
 }
 
-.audiobook-progress {
-  appearance: none;
-  background: var(--raised);
-  color: var(--primary);
-}
-
-.audiobook-progress::-webkit-progress-bar {
-  background: var(--raised);
-}
-
-.audiobook-progress::-webkit-progress-value {
-  border-radius: 999px;
-  background: var(--primary);
-}
-
-.audiobook-progress::-moz-progress-bar {
-  border-radius: 999px;
-  background: var(--primary);
-}
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

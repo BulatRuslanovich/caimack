@@ -94,6 +94,8 @@ export const ru: Dictionary = {
   "audiobooks.position": "Позиция в главе",
   "audiobooks.back15": "Назад на 15 секунд",
   "audiobooks.forward15": "Вперёд на 15 секунд",
+  "audiobooks.previousChapter": "Предыдущая глава",
+  "audiobooks.nextChapter": "Следующая глава",
   "audiobooks.speed": "Скорость воспроизведения",
   "audiobooks.closePlayer": "Закрыть плеер аудиокниг",
 

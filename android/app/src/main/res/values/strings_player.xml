@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="player_seek_position">Playback position</string>
     <string name="player_open_full">Open the full player</string>
     <string name="player_close_full">Close the full player</string>
     <string name="player_previous">Previous track</string>

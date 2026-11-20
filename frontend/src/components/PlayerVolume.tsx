@@ -20,11 +20,28 @@ export function PlayerVolume({
   seekbarClassName?: string;
 }) {
   const player = usePlayer();
+  return <VolumeControls {...player} size={size} seekbarClassName={seekbarClassName} />;
+}
+
+export function VolumeControls({
+  muted,
+  volume,
+  setVolume,
+  toggleMute,
+  size = "icon",
+  seekbarClassName,
+}: {
+  muted: boolean;
+  volume: number;
+  setVolume: (value: number) => void;
+  toggleMute: () => void;
+  size?: "icon" | "icon-lg";
+  seekbarClassName?: string;
+}) {
   const t = useT();
 
-  const silent = player.muted || player.volume === 0;
+  const silent = muted || volume === 0;
   const wheelRef = useRef<HTMLSpanElement>(null);
-  const { muted, volume, setVolume } = player;
 
   useEffect(() => {
     const element = wheelRef.current;
@@ -44,17 +61,17 @@ export function PlayerVolume({
       <Button
         variant="ghost"
         size={size}
-        onClick={player.toggleMute}
-        aria-label={player.muted ? t("player.unmute") : t("player.mute")}
+        onClick={toggleMute}
+        aria-label={muted ? t("player.unmute") : t("player.mute")}
       >
         {silent ? <VolumeXIcon size={20} /> : <Volume2Icon size={20} />}
       </Button>
 
       <Seekbar
-        value={player.muted ? 0 : player.volume}
+        value={muted ? 0 : volume}
         max={1}
         step={0.01}
-        onSeek={player.setVolume}
+        onSeek={setVolume}
         ariaLabel={t("player.volume")}
         valueText={(value) => `${Math.round(value * 100)}%`}
         keyStep={SHORTCUT_VOLUME_STEP}

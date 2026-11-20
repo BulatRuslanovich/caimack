@@ -46,6 +46,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -79,6 +80,7 @@ import androidx.navigation.toRoute
 import app.caimack.R
 import app.caimack.api.Track
 import app.caimack.api.User
+import app.caimack.audiobooks.Audiobook
 import app.caimack.playback.PlayerState
 import kotlin.reflect.KClass
 import kotlinx.coroutines.launch
@@ -145,6 +147,17 @@ internal fun NavController.openSection(route: Any) {
 fun App(user: User, dark: Boolean, colorway: Colorway) {
     val container = LocalContainer.current
     val playback by container.player.state.collectAsStateWithLifecycle()
+    val audiobookPlayback by container.audiobookPlayback.state.collectAsStateWithLifecycle()
+    val audiobookCatalog by container.audiobookStore.state.collectAsStateWithLifecycle()
+    val activeAudiobook by remember(container) {
+        derivedStateOf { audiobookCatalog.books.firstOrNull { it.id == audiobookPlayback?.bookId } }
+    }
+    val activeBookDownloaded by remember(container) {
+        derivedStateOf { activeAudiobook?.id in audiobookCatalog.downloaded }
+    }
+    val bookCover = remember(activeAudiobook?.id, activeAudiobook?.coverUrl, activeBookDownloaded) {
+        activeAudiobook?.let(container.audiobookStore::cover)
+    }
     val toneEnabled by container.appearance.coverTone.collectAsStateWithLifecycle()
     val artworkRevision by container.downloadedCatalog.revision.collectAsStateWithLifecycle()
     val syncArtworkRevision by container.syncStore.artworkRevision.collectAsStateWithLifecycle()
@@ -154,7 +167,9 @@ fun App(user: User, dark: Boolean, colorway: Colorway) {
         LocalArtworkResolver provides resolveArtwork,
     ) {
         val adaptive = colorway == Colorway.Cover
-        val cover = playback.current?.takeIf { toneEnabled || adaptive }?.let { trackCover(it) }
+        val cover = if (toneEnabled || adaptive) {
+            if (activeAudiobook != null) bookCover else playback.current?.let { trackCover(it) }
+        } else null
         val loadedTone = rememberLoadedPlayerTone(cover)
         val palette = if (adaptive) {
             rememberCoverPalette(dark, cover, loadedTone)
@@ -163,7 +178,7 @@ fun App(user: User, dark: Boolean, colorway: Colorway) {
         }
         CaimackTheme(dark = dark, colorway = colorway, palette = palette) {
             Surface(Modifier.fillMaxSize()) {
-                AppContent(user, playback, toneEnabled, loadedTone.takeIf { toneEnabled })
+                AppContent(user, playback, activeAudiobook, bookCover, toneEnabled, loadedTone.takeIf { toneEnabled })
             }
         }
     }
@@ -174,6 +189,8 @@ fun App(user: User, dark: Boolean, colorway: Colorway) {
 private fun AppContent(
     user: User,
     playback: PlayerState,
+    activeAudiobook: Audiobook?,
+    bookCover: String?,
     toneEnabled: Boolean,
     loadedTone: LoadedPlayerTone?,
 ) {
@@ -187,9 +204,8 @@ private fun AppContent(
     var expanded by rememberSaveable { mutableStateOf(false) }
     val offlineLibrary by container.libraryCache.offline.collectAsStateWithLifecycle()
     val audiobookPlayback by container.audiobookPlayback.state.collectAsStateWithLifecycle()
-    val audiobookCatalog by container.audiobookStore.state.collectAsStateWithLifecycle()
     val openAudiobook by container.audiobookPlayback.openFromNotification.collectAsStateWithLifecycle()
-    val activeAudiobook = audiobookCatalog.books.firstOrNull { it.id == audiobookPlayback?.bookId }
+    val bookPlayback = audiobookPlayback?.takeIf { it.bookId == activeAudiobook?.id }
     val catalog by container.localLibrary.collectAsStateWithLifecycle()
     val localLibrary = catalog.takeIf { it.account == container.accountKey } ?: app.caimack.playback.LocalLibrary()
     val availableTracks = localLibrary.trackIds
@@ -203,7 +219,8 @@ private fun AppContent(
         }
     }
 
-    val full = expanded && playback.current != null
+    val hasPlayback = bookPlayback != null || playback.current != null
+    val full = expanded && hasPlayback
     val libraryDensity by container.appearance.libraryDensity.collectAsStateWithLifecycle()
 
     val colorway = LocalColorway.current
@@ -214,8 +231,8 @@ private fun AppContent(
 
     LaunchedEffect(Unit) { container.player.connect() }
 
-    LaunchedEffect(playback.current == null) {
-        if (playback.current == null) expanded = false
+    LaunchedEffect(hasPlayback) {
+        if (!hasPlayback) expanded = false
     }
 
     LaunchedEffect(user.id) {
@@ -232,7 +249,9 @@ private fun AppContent(
     LaunchedEffect(openAudiobook, activeAudiobook?.id) {
         if (openAudiobook && activeAudiobook != null) {
             container.audiobookPlayback.openFromNotification.value = false
-            navigate(AudiobookRoute(activeAudiobook.id))
+            focus.clearFocus()
+            account = false
+            expanded = true
         }
     }
 
@@ -286,11 +305,9 @@ private fun AppContent(
         },
         bottomBar = { BottomBar(nav) },
         miniPlayer = {
-            if (activeAudiobook != null && !playback.playing) {
-                val entry by nav.currentBackStackEntryAsState()
-                if (entry?.destination?.hasRoute(AudiobookRoute::class) != true) {
-                    AudiobookMiniPlayer(activeAudiobook, audiobookCatalog) { navigate(AudiobookRoute(activeAudiobook.id)) }
-                }
+            if (activeAudiobook != null && bookPlayback != null) {
+                AudiobookMiniPlayer(activeAudiobook, bookPlayback, bookCover,
+                    onOpen = { expanded = true }, onBook = { navigate(AudiobookRoute(activeAudiobook.id)) })
             } else MiniPlayer(playback) { expanded = true }
         },
     ) { padding ->
@@ -326,7 +343,10 @@ private fun AppContent(
         exit = slideOutVertically(tween(if (motion) NOW_PLAYING_TRANSITION_MS else 0, easing = FastOutSlowInEasing)) { it },
     ) {
         CompositionLocalProvider(LocalFullPlayerVisibility provides this) {
-            FullPlayer(playback) { expanded = false }
+            if (activeAudiobook != null && bookPlayback != null) {
+                AudiobookFullPlayer(activeAudiobook, bookPlayback, bookCover,
+                    onOpenBook = { navigate(AudiobookRoute(activeAudiobook.id)) }, onClose = { expanded = false })
+            } else FullPlayer(playback) { expanded = false }
         }
     }
     }

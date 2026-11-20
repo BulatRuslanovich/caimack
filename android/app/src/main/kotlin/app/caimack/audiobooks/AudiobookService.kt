@@ -59,9 +59,14 @@ class AudiobookService : MediaSessionService() {
             .build()
         player.addListener(object : Player.Listener {
             override fun onPositionDiscontinuity(oldPosition: PositionInfo, newPosition: PositionInfo, reason: Int) {
-                val previous = last?.takeIf { it.playing && oldPosition.mediaItem?.mediaId == it.chapterId } ?: return
-                val nextBook = newPosition.mediaItem?.mediaMetadata?.extras?.getString(AudiobookPlayback.BOOK_ID)
-                if (previous.bookId != nextBook) checkpoint(false, previous.copy(positionMs = oldPosition.positionMs))
+                val previous = last?.takeIf { oldPosition.mediaItem?.mediaId == it.chapterId } ?: return
+                val next = newPosition.mediaItem
+                val nextBook = next?.mediaMetadata?.extras?.getString(AudiobookPlayback.BOOK_ID)
+                if (previous.bookId != nextBook && previous.playing) {
+                    checkpoint(false, previous.copy(positionMs = oldPosition.positionMs))
+                } else if (next != null && previous.bookId == nextBook && reason == Player.DISCONTINUITY_REASON_SEEK) {
+                    checkpoint(false, previous.copy(chapterId = next.mediaId, positionMs = newPosition.positionMs))
+                }
             }
 
             override fun onEvents(player: Player, events: Player.Events) {

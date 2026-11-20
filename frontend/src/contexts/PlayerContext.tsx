@@ -745,6 +745,8 @@ function PlayerSessionProvider({
                       onActiveChange={setAudiobookActive}
                       volume={volume}
                       muted={muted}
+                      setVolume={setVolume}
+                      toggleMute={toggleMute}
                     >
                       {children}
                     </AudiobookProvider>

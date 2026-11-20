@@ -12,6 +12,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.progressSemantics
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -62,6 +63,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -86,6 +88,8 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -164,7 +168,194 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
     val position = scrub ?: live
     val duration = state.durationMs.takeIf { it > 0 } ?: (track.durationSeconds * 1000L)
 
-    BackHandler { if (panel != Panel.None) panel = Panel.None else onClose() }
+    val stage: @Composable (Modifier) -> Unit = { modifier ->
+        Box(modifier) {
+            when (panel) {
+                Panel.None -> PlayerArtwork(scene, { scrub = it }, Modifier.fillMaxSize())
+                Panel.Lyrics -> LyricsPanel(track, position, state.playing)
+                Panel.Queue -> QueuePanel(state, undoable)
+            }
+        }
+    }
+
+    val controls: @Composable (Modifier) -> Unit = { modifier ->
+        Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.Bottom)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (panel == Panel.None) {
+                        Text(track.title, style = displayStyle(track.title))
+                    } else {
+                        Text(track.title, style = Type.body, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                    Text(artistsOf(track), style = Type.body, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (panel == Panel.None) note?.let { RadioNoteLine(it) }
+                    val delivery by container.playbackDelivery.collectAsStateWithLifecycle()
+                    delivery?.takeIf { it.trackId == track.id && panel == Panel.None }?.let { stream ->
+                        val label = when {
+                            !stream.adaptive -> stringResource(R.string.player_delivery_original)
+                            stream.bitrateKbps != null -> stringResource(R.string.player_delivery_aac, stream.bitrateKbps)
+                            else -> stringResource(R.string.player_delivery_adaptive)
+                        }
+                        Text(label, style = Type.tiny, color = palette.muted)
+                        val explanation = when (stream.reason) {
+                            "waiting" -> R.string.player_delivery_waiting
+                            "download" -> R.string.player_delivery_download
+                            "network" -> R.string.player_delivery_network
+                            else -> null
+                        }
+                        explanation?.let { Text(stringResource(it), style = Type.tiny, color = palette.muted) }
+                    }
+                }
+                IconAction(
+                    if (liked) Lucide.HeartFilled else Lucide.Heart,
+                    stringResource(if (liked) R.string.menu_unlike else R.string.menu_like),
+                    tint = if (liked) palette.primary else palette.muted,
+                ) { haptic(PlayerHaptic.Favorite); container.favorites.toggle(track) }
+            }
+            if (panel != Panel.Queue) {
+                Seekbar(position, duration, peaks) { player.seekTo(it) }
+                Row {
+                    Text(clock(position), style = Type.tiny, color = palette.muted)
+                    Spacer(Modifier.weight(1f))
+                    Text(clock(duration), style = Type.tiny, color = palette.muted)
+                }
+            }
+            PlayerTransport(
+                playing = state.playing,
+                buffering = state.buffering,
+                toggle = player::toggle,
+                leading = {
+                    PlayerModeButton(Lucide.Shuffle, stringResource(R.string.player_shuffle), state.shuffle,
+                        stringResource(if (state.shuffle) R.string.player_shuffle_on else R.string.player_shuffle_off)) {
+                        haptic(PlayerHaptic.Button)
+                        player.toggleShuffle()
+                    }
+                },
+                previous = {
+                    IconAction(Lucide.SkipBack, stringResource(R.string.player_previous), size = 26) {
+                        haptic(PlayerHaptic.Skip)
+                        player.previous()
+                    }
+                },
+                next = {
+                    IconAction(Lucide.SkipForward, stringResource(R.string.player_next), size = 26) {
+                        haptic(PlayerHaptic.Skip)
+                        player.next()
+                    }
+                },
+                trailing = {
+                    PlayerModeButton(
+                        if (state.repeat == Player.REPEAT_MODE_ONE) Lucide.Repeat1 else Lucide.Repeat,
+                        stringResource(R.string.player_repeat),
+                        active = state.repeat != Player.REPEAT_MODE_OFF,
+                        mode = stringResource(when (state.repeat) {
+                            Player.REPEAT_MODE_ONE -> R.string.player_repeat_one
+                            Player.REPEAT_MODE_ALL -> R.string.player_repeat_all
+                            else -> R.string.player_repeat_off
+                        }),
+                    ) {
+                        haptic(PlayerHaptic.Button)
+                        player.cycleRepeat()
+                    }
+                },
+            )
+            Row(Modifier.fillMaxWidth().testTag("full-player-footer"), verticalAlignment = Alignment.CenterVertically) {
+                PlaybackDevicesButton(Modifier.weight(1f))
+                Box(Modifier.semantics { selected = panel == Panel.Lyrics }) {
+                    IconAction(Lucide.MicVocal, stringResource(R.string.lyrics_title), tint = if (panel == Panel.Lyrics) palette.primary else palette.muted) { panel = if (panel == Panel.Lyrics) Panel.None else Panel.Lyrics }
+                }
+                Box(Modifier.semantics { selected = panel == Panel.Queue }) {
+                    IconAction(Lucide.ListVideo, stringResource(R.string.queue_title), tint = if (panel == Panel.Queue) palette.primary else palette.muted) { panel = if (panel == Panel.Queue) Panel.None else Panel.Queue }
+                }
+            }
+        }
+    }
+
+    FullPlayerLayout(
+        panelOpen = panel != Panel.None,
+        onBack = { if (panel != Panel.None) panel = Panel.None else onClose() },
+        header = {
+            PlayerHeader(stringResource(R.string.player_now_playing), onClose) {
+                Box {
+                    IconAction(Lucide.EllipsisVertical, stringResource(R.string.menu_more)) { options = true }
+                    DropdownMenu(options, onDismissRequest = { options = false }) {
+                        DropdownMenuItem(text = { Text(stringResource(R.string.menu_more)) }, onClick = { options = false; actions = true })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.sleep_title)) }, leadingIcon = { Icon(Lucide.Moon, null, tint = if (sleepTimer != null) palette.primary else palette.muted) }, onClick = { options = false; sleeping = true })
+                    }
+                }
+            }
+        },
+        artwork = { modifier, inset -> PlayerArtwork(scene, { scrub = it }, modifier, inset) },
+        background = { PlayerSceneBackground(scene, it) },
+        stage = stage,
+        controls = controls,
+        overlay = { modifier ->
+            SnackbarHost(snackbar, modifier) { data ->
+                Snackbar(data, containerColor = palette.popover, contentColor = palette.foreground, actionColor = palette.primary)
+            }
+        },
+    )
+}
+
+@Composable
+internal fun PlayerHeader(title: String, onClose: () -> Unit, options: @Composable () -> Unit) {
+    val palette = LocalPalette.current
+    Row(Modifier.fillMaxWidth().testTag("full-player-header"), verticalAlignment = Alignment.CenterVertically) {
+        IconAction(Lucide.ChevronDown, stringResource(R.string.player_close_full), onClick = onClose)
+        Text(title, style = Type.small, color = palette.muted, modifier = Modifier.weight(1f).testTag("full-player-context"),
+            textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        options()
+    }
+}
+
+@Composable
+internal fun PlayerTransport(
+    playing: Boolean,
+    buffering: Boolean,
+    toggle: () -> Unit,
+    leading: @Composable () -> Unit,
+    previous: @Composable () -> Unit,
+    next: @Composable () -> Unit,
+    trailing: @Composable () -> Unit,
+) {
+    val palette = LocalPalette.current
+    val haptic = rememberPlayerHaptics()
+    Row(Modifier.fillMaxWidth().testTag("full-player-transport"), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        leading()
+        previous()
+        Box(contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.size(68.dp).clip(CircleShape).background(palette.action).clickable { haptic(PlayerHaptic.Button); toggle() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    if (playing) Lucide.Pause else Lucide.Play,
+                    stringResource(if (playing) R.string.action_pause else R.string.action_play),
+                    tint = palette.onAction,
+                    modifier = Modifier.size(28.dp),
+                )
+            }
+            // A visual overlay must not enlarge the 68 dp button's layout slot.
+            BufferingRing(buffering, Modifier.matchParentSize().requiredSize(78.dp).testTag("full-player-buffering"))
+        }
+        next()
+        trailing()
+    }
+}
+
+@Composable
+internal fun FullPlayerLayout(
+    panelOpen: Boolean,
+    onBack: () -> Unit,
+    header: @Composable () -> Unit,
+    artwork: @Composable (Modifier, Dp) -> Unit,
+    background: @Composable (Modifier) -> Unit,
+    stage: @Composable (Modifier) -> Unit,
+    controls: @Composable (Modifier) -> Unit,
+    overlay: @Composable (Modifier) -> Unit = {},
+) {
+    val palette = LocalPalette.current
+    BackHandler { onBack() }
 
     val view = LocalView.current
     DisposableEffect(view) {
@@ -174,175 +365,60 @@ private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
 
     Surface(Modifier.fillMaxSize(), color = palette.background, contentColor = palette.foreground) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
-        val viewportHeight = maxHeight
-        val portrait = maxWidth <= maxHeight
-        val safeInsets = WindowInsets.safeDrawing.asPaddingValues()
-        val safeTop = safeInsets.calculateTopPadding() + 12.dp
-        val artworkTop = safeTop + 48.dp
-        // Use the seekbar's bottom-anchored block and two-line metadata as a
-        // stable reference, so a longer title never shifts the artwork.
-        val baselineTextHeight = with(LocalDensity.current) {
-            Type.display.lineHeight.toDp() * 2 + Type.body.lineHeight.toDp() + Type.tiny.lineHeight.toDp() * 2
-        }
-        val baselineControlsHeight = baselineTextHeight + 48.dp + 68.dp + 48.dp + 24.dp
-        val artworkBottom = (viewportHeight - safeInsets.calculateBottomPadding() - 12.dp - baselineControlsHeight).coerceAtLeast(artworkTop + 24.dp)
-        PlayerSceneBackground(scene, Modifier.matchParentSize())
-        if (portrait && panel == Panel.None) {
-            PlayerArtwork(
-                scene,
-                { scrub = it },
-                Modifier.fillMaxWidth().height((artworkBottom - artworkTop).coerceAtLeast(1.dp)).offset(y = artworkTop),
-                horizontalInset = 20.dp,
-            )
-        }
-        BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 20.dp, vertical = 12.dp)) {
-            val wide = !portrait
-            // Centre the artwork in the space above the metadata, keeping the
-            // lower block anchored to the seekbar as titles grow or scroll.
-            val controlsTop = artworkBottom - safeTop
-            val controlsHeight = (maxHeight - controlsTop).coerceAtLeast(96.dp)
-
-            val header = @Composable {
-                Row(Modifier.fillMaxWidth().testTag("full-player-header"), verticalAlignment = Alignment.CenterVertically) {
-                    IconAction(Lucide.ChevronDown, stringResource(R.string.player_close_full), onClick = onClose)
-                    Text(stringResource(R.string.player_now_playing), style = Type.small, color = palette.muted, modifier = Modifier.weight(1f).testTag("full-player-context"), textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Box {
-                        IconAction(Lucide.EllipsisVertical, stringResource(R.string.menu_more)) { options = true }
-                        DropdownMenu(options, onDismissRequest = { options = false }) {
-                            DropdownMenuItem(text = { Text(stringResource(R.string.menu_more)) }, onClick = { options = false; actions = true })
-                            DropdownMenuItem(text = { Text(stringResource(R.string.sleep_title)) }, leadingIcon = { Icon(Lucide.Moon, null, tint = if (sleepTimer != null) palette.primary else palette.muted) }, onClick = { options = false; sleeping = true })
-                        }
-                    }
-                }
+            val viewportHeight = maxHeight
+            val portrait = maxWidth <= maxHeight
+            val safeInsets = WindowInsets.safeDrawing.asPaddingValues()
+            val safeTop = safeInsets.calculateTopPadding() + 12.dp
+            val artworkTop = safeTop + 48.dp
+            // Use the seekbar's bottom-anchored block and two-line metadata as a
+            // stable reference, so a longer title never shifts the artwork.
+            val baselineTextHeight = with(LocalDensity.current) {
+                Type.display.lineHeight.toDp() * 2 + Type.body.lineHeight.toDp() + Type.tiny.lineHeight.toDp() * 2
             }
-
-            val stage: @Composable (Modifier) -> Unit = { modifier ->
-                Box(modifier) {
-                    when (panel) {
-                        Panel.None -> PlayerArtwork(scene, { scrub = it }, Modifier.fillMaxSize())
-                        Panel.Lyrics -> LyricsPanel(track, position, state.playing)
-                        Panel.Queue -> QueuePanel(state, undoable)
-                    }
-                }
+            val baselineControlsHeight = baselineTextHeight + 48.dp + 68.dp + 48.dp + 24.dp
+            val artworkBottom = (viewportHeight - safeInsets.calculateBottomPadding() - 12.dp - baselineControlsHeight).coerceAtLeast(artworkTop + 24.dp)
+            background(Modifier.matchParentSize())
+            if (portrait && !panelOpen) {
+                artwork(
+                    Modifier.fillMaxWidth().height((artworkBottom - artworkTop).coerceAtLeast(1.dp)).offset(y = artworkTop),
+                    20.dp,
+                )
             }
+            BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 20.dp, vertical = 12.dp)) {
+                val wide = !portrait
+                // Centre the artwork in the space above the metadata, keeping the
+                // lower block anchored to the seekbar as titles grow or scroll.
+                val controlsTop = artworkBottom - safeTop
+                val controlsHeight = (maxHeight - controlsTop).coerceAtLeast(96.dp)
 
-            val controls: @Composable (Modifier) -> Unit = { modifier ->
-                Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.Bottom)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            if (panel == Panel.None) {
-                                Text(track.title, style = displayStyle(track.title))
-                            } else {
-                                Text(track.title, style = Type.body, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            }
-                            Text(artistsOf(track), style = Type.body, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            if (panel == Panel.None) note?.let { RadioNoteLine(it) }
-                            val delivery by container.playbackDelivery.collectAsStateWithLifecycle()
-                            delivery?.takeIf { it.trackId == track.id && panel == Panel.None }?.let { stream ->
-                                val label = when {
-                                    !stream.adaptive -> stringResource(R.string.player_delivery_original)
-                                    stream.bitrateKbps != null -> stringResource(R.string.player_delivery_aac, stream.bitrateKbps)
-                                    else -> stringResource(R.string.player_delivery_adaptive)
-                                }
-                                Text(label, style = Type.tiny, color = palette.muted)
-                                val explanation = when (stream.reason) {
-                                    "waiting" -> R.string.player_delivery_waiting
-                                    "download" -> R.string.player_delivery_download
-                                    "network" -> R.string.player_delivery_network
-                                    else -> null
-                                }
-                                explanation?.let { Text(stringResource(it), style = Type.tiny, color = palette.muted) }
+                if (wide) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                        stage(Modifier.weight(1f).fillMaxHeight())
+                        Column(Modifier.weight(1f).fillMaxHeight()) {
+                            header()
+                            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                                Spacer(Modifier.height(16.dp))
+                                controls(Modifier)
                             }
                         }
-                        IconAction(
-                            if (liked) Lucide.HeartFilled else Lucide.Heart,
-                            stringResource(if (liked) R.string.menu_unlike else R.string.menu_like),
-                            tint = if (liked) palette.primary else palette.muted,
-                        ) { haptic(PlayerHaptic.Favorite); container.favorites.toggle(track) }
                     }
-                    if (panel != Panel.Queue) {
-                    Seekbar(position, duration, peaks) { player.seekTo(it) }
-                    Row {
-                        Text(clock(position), style = Type.tiny, color = palette.muted)
-                        Spacer(Modifier.weight(1f))
-                        Text(clock(duration), style = Type.tiny, color = palette.muted)
-                    }
-                    }
-                    Row(Modifier.fillMaxWidth().testTag("full-player-transport"), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        PlayerModeButton(Lucide.Shuffle, stringResource(R.string.player_shuffle), state.shuffle,
-                            stringResource(if (state.shuffle) R.string.player_shuffle_on else R.string.player_shuffle_off)) {
-                            haptic(PlayerHaptic.Button); player.toggleShuffle()
-                        }
-                        IconAction(Lucide.SkipBack, stringResource(R.string.player_previous), size = 26) { haptic(PlayerHaptic.Skip); player.previous() }
-                        Box(contentAlignment = Alignment.Center) {
-                            Box(
-                                Modifier.size(68.dp).clip(CircleShape).background(palette.action).clickable { haptic(PlayerHaptic.Button); player.toggle() },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    if (state.playing) Lucide.Pause else Lucide.Play,
-                                    stringResource(if (state.playing) R.string.action_pause else R.string.action_play),
-                                    tint = palette.onAction,
-                                    modifier = Modifier.size(28.dp),
-                                )
-                            }
-                            // A visual overlay must not enlarge the 68 dp button's layout slot.
-                            BufferingRing(state.buffering, Modifier.matchParentSize().requiredSize(78.dp).testTag("full-player-buffering"))
-                        }
-                        IconAction(Lucide.SkipForward, stringResource(R.string.player_next), size = 26) { haptic(PlayerHaptic.Skip); player.next() }
-                        PlayerModeButton(
-                            if (state.repeat == Player.REPEAT_MODE_ONE) Lucide.Repeat1 else Lucide.Repeat,
-                            stringResource(R.string.player_repeat),
-                            active = state.repeat != Player.REPEAT_MODE_OFF,
-                            mode = stringResource(when (state.repeat) {
-                                Player.REPEAT_MODE_ONE -> R.string.player_repeat_one
-                                Player.REPEAT_MODE_ALL -> R.string.player_repeat_all
-                                else -> R.string.player_repeat_off
-                            }),
-                        ) { haptic(PlayerHaptic.Button); player.cycleRepeat() }
-                    }
-                    Row(Modifier.fillMaxWidth().testTag("full-player-footer"), verticalAlignment = Alignment.CenterVertically) {
-                        PlaybackDevicesButton(Modifier.weight(1f))
-                        Box(Modifier.semantics { selected = panel == Panel.Lyrics }) {
-                            IconAction(Lucide.MicVocal, stringResource(R.string.lyrics_title), tint = if (panel == Panel.Lyrics) palette.primary else palette.muted) { panel = if (panel == Panel.Lyrics) Panel.None else Panel.Lyrics }
-                        }
-                        Box(Modifier.semantics { selected = panel == Panel.Queue }) {
-                            IconAction(Lucide.ListVideo, stringResource(R.string.queue_title), tint = if (panel == Panel.Queue) palette.primary else palette.muted) { panel = if (panel == Panel.Queue) Panel.None else Panel.Queue }
-                        }
-                    }
-                }
-            }
-
-            if (wide) {
-                Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                    stage(Modifier.weight(1f).fillMaxHeight())
-                    Column(Modifier.weight(1f).fillMaxHeight()) {
+                } else if (!panelOpen) {
+                    Column(Modifier.fillMaxSize()) {
                         header()
-                        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                            Spacer(Modifier.height(16.dp))
-                            controls(Modifier)
+                        Spacer(Modifier.weight(1f))
+                        Box(Modifier.fillMaxWidth().height(controlsHeight).testTag("full-player-controls-region").verticalScroll(rememberScrollState())) {
+                            controls(Modifier.fillMaxWidth().heightIn(min = controlsHeight))
                         }
                     }
-                }
-            } else if (panel == Panel.None) {
-                Column(Modifier.fillMaxSize()) {
-                    header()
-                    Spacer(Modifier.weight(1f))
-                    Box(Modifier.fillMaxWidth().height(controlsHeight).testTag("full-player-controls-region").verticalScroll(rememberScrollState())) {
-                        controls(Modifier.fillMaxWidth().heightIn(min = controlsHeight))
+                } else {
+                    Column {
+                        header()
+                        stage(Modifier.weight(1f).fillMaxWidth())
+                        controls(Modifier)
                     }
                 }
-            } else {
-                Column {
-                    header()
-                    stage(Modifier.weight(1f).fillMaxWidth())
-                    controls(Modifier)
-                }
             }
-        }
-        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(16.dp)) { data ->
-            Snackbar(data, containerColor = palette.popover, contentColor = palette.foreground, actionColor = palette.primary)
-        }
+            overlay(Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(16.dp))
         }
     }
 }
@@ -360,36 +436,68 @@ private fun PlayerArtwork(scene: PlayerScene, onScrub: (Long?) -> Unit, modifier
 }
 
 @Composable
-private fun Seekbar(positionMs: Long, durationMs: Long, peaks: List<Int>?, onSeek: (Long) -> Unit) {
+internal fun Seekbar(
+    positionMs: Long,
+    durationMs: Long,
+    peaks: List<Int>?,
+    onScrub: ((Long?) -> Unit)? = null,
+    onSeek: (Long) -> Unit,
+) {
     val haptic = rememberPlayerHaptics()
     val seekFeedback = remember(durationMs) { SeekHaptics(durationMs) }
     val palette = LocalPalette.current
+    val label = stringResource(R.string.player_seek_position)
+    val seek by rememberUpdatedState(onSeek)
+    val scrub by rememberUpdatedState(onScrub)
     var dragging by remember { mutableStateOf<Float?>(null) }
-    val progress = dragging ?: (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
+    val progress = dragging ?: if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
 
     BoxWithConstraints(
         Modifier
             .fillMaxWidth()
             .height(48.dp)
+            .progressSemantics(progress)
+            .semantics {
+                contentDescription = label
+                if (durationMs > 0) setProgress { value ->
+                    seek((value.coerceIn(0f, 1f) * durationMs).toLong())
+                    true
+                }
+            }
             .systemGestureExclusion()
             .pointerInput(durationMs) {
-                detectTapGestures { haptic(PlayerHaptic.Button); onSeek((it.x / size.width * durationMs).toLong()) }
+                if (durationMs <= 0) return@pointerInput
+                detectTapGestures {
+                    haptic(PlayerHaptic.Button)
+                    seek(((it.x / size.width).coerceIn(0f, 1f) * durationMs).toLong())
+                }
             }
             .pointerInput(durationMs) {
+                if (durationMs <= 0) return@pointerInput
                 detectHorizontalDragGestures(
                     onDragStart = {
-                        dragging = (it.x / size.width).coerceIn(0f, 1f)
-                        seekFeedback.start((dragging!! * durationMs).toLong())
+                        val fraction = (it.x / size.width).coerceIn(0f, 1f)
+                        dragging = fraction
+                        val time = (fraction * durationMs).toLong()
+                        scrub?.invoke(time)
+                        seekFeedback.start(time)
                     },
                     onDragEnd = {
-                        dragging?.let { onSeek((it * durationMs).toLong()) }
+                        dragging?.let { seek((it * durationMs).toLong()) }
                         haptic(PlayerHaptic.Confirm)
                         dragging = null
+                        scrub?.invoke(null)
                     },
-                    onDragCancel = { dragging = null },
+                    onDragCancel = {
+                        dragging = null
+                        scrub?.invoke(null)
+                    },
                 ) { change, _ ->
-                    dragging = (change.position.x / size.width).coerceIn(0f, 1f)
-                    seekFeedback.move((dragging!! * durationMs).toLong())?.let(haptic)
+                    val fraction = (change.position.x / size.width).coerceIn(0f, 1f)
+                    dragging = fraction
+                    val time = (fraction * durationMs).toLong()
+                    scrub?.invoke(time)
+                    seekFeedback.move(time)?.let(haptic)
                 }
             },
         contentAlignment = Alignment.CenterStart,
@@ -432,11 +540,28 @@ fun Record(
     jacket: Modifier = Modifier,
     aura: (@Composable (Modifier) -> Unit)? = null,
 ) {
+    val artwork = PlayerArtworkRef(track.id, trackCover(track), track.albumTitle ?: track.title)
+    RecordArtwork(artwork, spinning, modifier, out, twist, sleeve, vertical, jacket, aura, trackCover(track, small = false))
+}
+
+@Composable
+internal fun RecordArtwork(
+    artwork: PlayerArtworkRef,
+    spinning: Boolean,
+    modifier: Modifier = Modifier,
+    out: Boolean = spinning,
+    twist: Float = 0f,
+    sleeve: (@Composable (Modifier) -> Unit)? = null,
+    vertical: Boolean = false,
+    jacket: Modifier = Modifier,
+    aura: (@Composable (Modifier) -> Unit)? = null,
+    largeCover: String? = artwork.url,
+) {
     val motion = playerMotionEnabled()
     val slid by animateFloatAsState(if (out) RECORD_OUT else 0f, tween(if (motion) 650 else 0), label = "record-out")
-    val angle = remember(track.id) { Animatable(0f) }
+    val angle = remember(artwork.id) { Animatable(0f) }
 
-    LaunchedEffect(spinning, track.id, motion) {
+    LaunchedEffect(spinning, artwork.id, motion) {
         while (spinning && motion) {
             angle.animateTo(angle.value + 360f, tween(1800, easing = LinearEasing))
             angle.snapTo(angle.value % 360f)
@@ -460,7 +585,7 @@ fun Record(
                     }
                     drawCircle(Color(0xFF121010), radius * 0.66f * 0.5f, style = Stroke(width = radius * 0.015f))
                 }
-                Cover(trackCover(track), track.albumTitle ?: track.title, Modifier.align(Alignment.Center).fillMaxSize(0.32f), round = true, fadeIn = false)
+                Cover(artwork.url, artwork.title, Modifier.align(Alignment.Center).fillMaxSize(0.32f), round = true, fadeIn = false)
                 Box(Modifier.align(Alignment.Center).fillMaxSize(0.032f).clip(CircleShape).background(LocalPalette.current.background))
             }
             Canvas(Modifier.fillMaxSize()) {
@@ -483,7 +608,7 @@ fun Record(
         }
         val sleeveModifier = jacket.fillMaxSize().shadow(18.dp, Radius.cover)
         if (sleeve != null) sleeve(sleeveModifier.clip(Radius.cover))
-        else Cover(trackCover(track, small = false), track.albumTitle ?: track.title, sleeveModifier, fadeIn = false)
+        else Cover(largeCover, artwork.title, sleeveModifier, fadeIn = false)
     }
 }
 @Composable

@@ -4,6 +4,7 @@
 "use client";
 
 import { useAuth } from "@/contexts/AuthContext";
+import { useAudiobooks } from "@/contexts/AudiobookContext";
 import { useT } from "@/contexts/I18nContext";
 import { usePlayerUi } from "@/contexts/PlayerUiContext";
 import { useLibraryDensity } from "@/lib/libraryDensity";
@@ -31,6 +32,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { queueOpen, queueDocked, setQueueOpen } = usePlayerUi();
+  const { player: audiobook } = useAudiobooks();
 
   const isLoginPage = pathname === "/login";
   const isPublicPage = isLoginPage || pathname.startsWith("/invite/");
@@ -71,7 +73,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div
-      data-queue-docked={queueDocked}
+      data-queue-docked={!audiobook.active && queueDocked}
       className="app-shell grid h-dvh grid-cols-[var(--sidebar-width)_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] [grid-template-areas:'sidebar_content''player_player'] max-md:grid-cols-1 max-md:grid-rows-[auto_minmax(0,1fr)_auto_auto] max-md:[grid-template-areas:'mobile-header''content''player''nav']"
     >
       <a
@@ -98,7 +100,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </main>
 
-      {queueOpen && <QueuePanel docked={queueDocked} onClose={() => setQueueOpen(false)} />}
+      {!audiobook.active && queueOpen && (
+        <QueuePanel docked={queueDocked} onClose={() => setQueueOpen(false)} />
+      )}
 
       <div className="flex flex-col [grid-area:player]">
         <PlaybackFooter />
@@ -106,7 +110,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <MobileNav />
       <NowPlayingTone />
       <ShortcutsHelp />
-      <LeanBack />
+      {!audiobook.active && <LeanBack />}
       <SecretCat />
       <YandexImports />
     </div>

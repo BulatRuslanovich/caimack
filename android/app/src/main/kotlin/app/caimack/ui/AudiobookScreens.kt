@@ -28,13 +28,11 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -283,25 +281,6 @@ private fun BookMenu(book: Audiobook, catalog: AudiobookCatalog) {
 }
 
 @Composable
-internal fun AudiobookMiniPlayer(book: Audiobook, catalog: AudiobookCatalog, open: () -> Unit) {
-    val palette = LocalPalette.current
-    val cover = LocalContainer.current.audiobookStore.cover(book)
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp).clip(Radius.panel)
-            .background(palette.raised).clickable(onClick = open).padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Cover(cover, book.title, Modifier.size(42.dp))
-        Column(Modifier.weight(1f)) {
-            Text(book.title, style = Type.body, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            BookByline(book)
-        }
-        BookPlay(book, catalog)
-    }
-}
-
-@Composable
 fun AudiobookDetail(id: String) {
     val container = LocalContainer.current
     val catalog by container.audiobookStore.state.collectAsStateWithLifecycle()
@@ -421,27 +400,18 @@ private fun BookListeningPosition(book: Audiobook, active: AudiobookPlaybackStat
     val chapter = book.chapters.firstOrNull { it.id == (active?.chapterId ?: book.progress?.chapterId) }
     val position = active?.positionMs ?: book.progress?.positionMs ?: 0
     val duration = active?.durationMs?.takeIf { it > 0 } ?: chapter?.durationMs ?: 0
-    var dragging by remember(active?.chapterId) { mutableStateOf(false) }
-    var target by remember(active?.chapterId) { mutableFloatStateOf(0f) }
+    var preview by remember(active?.chapterId) { mutableStateOf<Long?>(null) }
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         chapter?.let {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(it.title, Modifier.weight(1f), style = Type.small, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("${bookTime(if (dragging) target.toLong() else position)} / ${bookTime(duration)}", style = Type.tiny, color = palette.muted)
+                Text("${bookTime(preview ?: position)} / ${bookTime(duration)}", style = Type.tiny, color = palette.muted)
             }
         }
         if (duration > 0 && active != null && !active.failed) {
-            Slider(
-                value = if (dragging) target else position.coerceIn(0, duration).toFloat(),
-                onValueChange = { dragging = true; target = it },
-                onValueChangeFinished = { player.seek(target.toLong()); dragging = false },
-                valueRange = 0f..duration.toFloat(),
-                colors = SliderDefaults.colors(
-                    thumbColor = palette.primary,
-                    activeTrackColor = palette.primary,
-                    inactiveTrackColor = palette.borderStrong,
-                ),
-            )
+            key(active.chapterId) {
+                Seekbar(position, duration, peaks = null, onScrub = { preview = it }, onSeek = player::seek)
+            }
         } else {
             BookProgress(book)
         }
@@ -452,7 +422,7 @@ private fun BookListeningPosition(book: Audiobook, active: AudiobookPlaybackStat
 private fun AudiobookCatalog.canPlay(book: Audiobook): Boolean =
     book.chapters.isNotEmpty() && (online || book.id in downloaded)
 
-private fun bookTime(ms: Long): String {
+internal fun bookTime(ms: Long): String {
     val seconds = ms.coerceAtLeast(0) / 1_000
     return if (seconds >= 3600) "%d:%02d:%02d".format(seconds / 3600, seconds / 60 % 60, seconds % 60)
     else "%d:%02d".format(seconds / 60, seconds % 60)

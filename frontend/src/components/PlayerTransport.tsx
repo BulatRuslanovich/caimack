@@ -10,6 +10,7 @@ import { useT } from "@/contexts/I18nContext";
 import { PlayPauseButton } from "./PlayPauseButton";
 import { Button } from "./ui/button";
 import { Repeat1Icon, RepeatIcon, ShuffleIcon, SkipBackIcon, SkipForwardIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 const REPEAT_MODES: Record<RepeatMode, TranslationKey> = {
   off: "player.repeatOff",
@@ -17,14 +18,32 @@ const REPEAT_MODES: Record<RepeatMode, TranslationKey> = {
   all: "player.repeatAll",
 };
 
-export function PlayerTransport({ size = "bar" }: { size?: "bar" | "full" }) {
-  const { isPlaying, buffering, shuffle, repeat } = usePlayerState();
-  const { toggle, next, previous, toggleShuffle, cycleRepeat } = usePlayerActions();
-  const t = useT();
+interface NavigationControl {
+  label: string;
+  run: () => void;
+  disabled?: boolean;
+}
 
+export function TransportButtons({
+  size,
+  playing,
+  buffering,
+  toggle,
+  previous,
+  next,
+  before,
+  after,
+}: {
+  size: "bar" | "full";
+  playing: boolean;
+  buffering: boolean;
+  toggle: () => void;
+  previous: NavigationControl;
+  next: NavigationControl;
+  before: ReactNode;
+  after: ReactNode;
+}) {
   const large = size === "full";
-  const repeatLabel = t("player.repeat", { mode: t(REPEAT_MODES[repeat]) });
-
   return (
     <div
       onKeyDown={(event) => {
@@ -35,57 +54,81 @@ export function PlayerTransport({ size = "bar" }: { size?: "bar" | "full" }) {
         large ? "justify-center gap-4 max-[420px]:gap-1.5" : "gap-1.5",
       )}
     >
-      <Button
-        variant="ghost"
-        size={large ? "icon-lg" : "icon"}
-        className="player-mode"
-        onClick={toggleShuffle}
-        aria-label={t("player.shuffle")}
-        aria-pressed={shuffle}
-        title={t("player.shuffle")}
-      >
-        <ShuffleIcon size={large ? 24 : 20} />
-      </Button>
-
+      {before}
       <Button
         variant="ghost"
         size={large ? "icon-lg" : "icon"}
         className={large ? undefined : "size-10"}
-        onClick={previous}
-        aria-label={t("player.previousTrack")}
-        title={t("player.previousTrack")}
+        onClick={previous.run}
+        disabled={previous.disabled}
+        aria-label={previous.label}
+        title={previous.label}
       >
         <SkipBackIcon size={large ? 34 : 28} />
       </Button>
-
-      <PlayPauseButton playing={isPlaying} buffering={buffering} onToggle={toggle} size={size} />
-
+      <PlayPauseButton playing={playing} buffering={buffering} onToggle={toggle} size={size} />
       <Button
         variant="ghost"
         size={large ? "icon-lg" : "icon"}
         className={large ? undefined : "size-10"}
-        onClick={next}
-        aria-label={t("player.nextTrack")}
-        title={t("player.nextTrack")}
+        onClick={next.run}
+        disabled={next.disabled}
+        aria-label={next.label}
+        title={next.label}
       >
         <SkipForwardIcon size={large ? 34 : 28} />
       </Button>
-
-      <Button
-        variant="ghost"
-        size={large ? "icon-lg" : "icon"}
-        className="player-mode"
-        onClick={cycleRepeat}
-        aria-label={repeatLabel}
-        aria-pressed={repeat !== "off"}
-        title={repeatLabel}
-      >
-        {repeat === "one" ? (
-          <Repeat1Icon size={large ? 24 : 20} />
-        ) : (
-          <RepeatIcon size={large ? 24 : 20} />
-        )}
-      </Button>
+      {after}
     </div>
+  );
+}
+
+export function PlayerTransport({ size = "bar" }: { size?: "bar" | "full" }) {
+  const { isPlaying, buffering, shuffle, repeat } = usePlayerState();
+  const { toggle, next, previous, toggleShuffle, cycleRepeat } = usePlayerActions();
+  const t = useT();
+
+  const large = size === "full";
+  const repeatLabel = t("player.repeat", { mode: t(REPEAT_MODES[repeat]) });
+
+  return (
+    <TransportButtons
+      size={size}
+      playing={isPlaying}
+      buffering={buffering}
+      toggle={toggle}
+      previous={{ label: t("player.previousTrack"), run: previous }}
+      next={{ label: t("player.nextTrack"), run: next }}
+      before={
+        <Button
+          variant="ghost"
+          size={large ? "icon-lg" : "icon"}
+          className="player-mode"
+          onClick={toggleShuffle}
+          aria-label={t("player.shuffle")}
+          aria-pressed={shuffle}
+          title={t("player.shuffle")}
+        >
+          <ShuffleIcon size={large ? 24 : 20} />
+        </Button>
+      }
+      after={
+        <Button
+          variant="ghost"
+          size={large ? "icon-lg" : "icon"}
+          className="player-mode"
+          onClick={cycleRepeat}
+          aria-label={repeatLabel}
+          aria-pressed={repeat !== "off"}
+          title={repeatLabel}
+        >
+          {repeat === "one" ? (
+            <Repeat1Icon size={large ? 24 : 20} />
+          ) : (
+            <RepeatIcon size={large ? 24 : 20} />
+          )}
+        </Button>
+      }
+    />
   );
 }

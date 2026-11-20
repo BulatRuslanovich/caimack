@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="player_seek_position">Позиция воспроизведения</string>
     <string name="player_open_full">Открыть плеер на весь экран</string>
     <string name="player_close_full">Закрыть полноэкранный плеер</string>
     <string name="player_previous">Предыдущий трек</string>

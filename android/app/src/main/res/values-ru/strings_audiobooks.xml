@@ -33,5 +33,8 @@
     </plurals>
     <string name="audiobook_previous_chapter">Предыдущая глава</string>
     <string name="audiobook_next_chapter">Следующая глава</string>
+    <string name="audiobook_open_book">Открыть аудиокнигу</string>
+    <string name="audiobook_back_time">Назад на 15 секунд</string>
+    <string name="audiobook_forward_time">Вперёд на 30 секунд</string>
     <string name="audiobook_playback_error">Не удалось воспроизвести главу. Нажмите кнопку воспроизведения, чтобы повторить.</string>
 </resources>

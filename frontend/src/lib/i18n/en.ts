@@ -94,6 +94,8 @@ export const en = {
   "audiobooks.position": "Chapter position",
   "audiobooks.back15": "Back 15 seconds",
   "audiobooks.forward15": "Forward 15 seconds",
+  "audiobooks.previousChapter": "Previous chapter",
+  "audiobooks.nextChapter": "Next chapter",
   "audiobooks.speed": "Playback speed",
   "audiobooks.closePlayer": "Close audiobook player",
 

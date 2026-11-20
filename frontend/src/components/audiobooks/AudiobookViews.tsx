@@ -15,10 +15,11 @@ import {
   Trash2Icon,
   XIcon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { DetailHeader } from "@/components/DetailHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader, Section } from "@/components/PageHeader";
+import { PlayerProgressMeter } from "@/components/PlayerProgress";
 import { PrefetchLink } from "@/components/PrefetchLink";
 import { LoadError, Query } from "@/components/Query";
 import { Button } from "@/components/ui/button";
@@ -35,22 +36,25 @@ import { audiobookHref, elapsedBookMs, type Audiobook } from "@/lib/audiobooks";
 import { cn } from "@/lib/cn";
 import { useParams } from "next/navigation";
 import { useFormat } from "@/lib/useFormat";
+import { AudiobookSaveButton } from "./AudiobookControls";
 
-export function useAudiobookArtwork(book: Audiobook) {
+export function useAudiobookArtwork(book: Audiobook | null) {
   const { scope, downloaded } = useAudiobooks();
-  const local = downloaded.has(book.id);
+  const id = book?.id;
+  const cover = book?.coverUrl ?? null;
+  const local = id !== undefined && downloaded.has(id);
   const [art, setArt] = useState<{ bookId: string; url: string } | null>(null);
 
   useEffect(() => {
-    if (!local || !scope || !book.coverUrl) return;
+    if (!local || !scope || !id || !cover) return;
 
     let disposed = false;
     let url: string | undefined;
-    void downloadedArtwork(scope, book.id)
+    void downloadedArtwork(scope, id)
       .then((blob) => {
         if (disposed || !blob) return;
         url = URL.createObjectURL(blob);
-        setArt({ bookId: book.id, url });
+        setArt({ bookId: id, url });
       })
       .catch(() => {});
 
@@ -58,23 +62,26 @@ export function useAudiobookArtwork(book: Audiobook) {
       disposed = true;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [scope, local, book.id, book.coverUrl]);
+  }, [scope, local, id, cover]);
 
-  return local && art?.bookId === book.id ? art.url : book.coverUrl;
+  return local && art && art.bookId === id ? art.url : cover;
 }
 
 export function AudiobookCover({
   book,
   className,
   artwork,
+  style,
 }: {
   book: Audiobook;
   className?: string;
   artwork: string | null;
+  style?: CSSProperties;
 }) {
   const [failed, setFailed] = useState<string | null>(null);
   return (
     <span
+      style={style}
       className={cn(
         "relative grid aspect-square shrink-0 place-items-center overflow-hidden rounded-lg bg-primary-soft text-primary",
         className,
@@ -121,11 +128,10 @@ function BookProgress({ book }: { book: Audiobook }) {
   const percent = Math.round(100 * Math.min(1, elapsed / book.durationMs));
   return (
     <div className="min-w-0">
-      <progress
-        value={percent}
-        max={100}
-        aria-label={t("audiobooks.progress")}
-        className="audiobook-progress block h-1.5 w-full max-w-90 overflow-hidden rounded-full"
+      <PlayerProgressMeter
+        percent={percent}
+        label={t("audiobooks.progress")}
+        className="max-w-90"
       />
       <span className="mt-1.5 block truncate text-xs text-faint">
         {book.progress.completed
@@ -449,13 +455,11 @@ export function AudiobookDetailPage() {
 function BookDetail({ book }: { book: Audiobook }) {
   const t = useT();
   const { totalDuration } = useFormat();
-  const { online, downloaded, transfer, download, removeDownload, cancelDownload, save, player } =
+  const { online, downloaded, transfer, download, removeDownload, cancelDownload, player } =
     useAudiobooks();
   const artwork = useAudiobookArtwork(book);
-  const [saving, setSaving] = useState(false);
   const availableOffline = downloaded.has(book.id);
   const working = transfer?.bookId === book.id;
-  const saveLabel = t(book.saved ? "audiobooks.unsave" : "audiobooks.save");
   const downloadLabel = t(
     working
       ? "audiobooks.cancelDownload"
@@ -480,23 +484,7 @@ function BookDetail({ book }: { book: Audiobook }) {
         actions={<PlayBookButton book={book} hero />}
         trailingActions={
           <>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={saveLabel}
-              aria-pressed={book.saved}
-              title={saveLabel}
-              disabled={saving || !online}
-              onClick={() => {
-                setSaving(true);
-                void save(book).finally(() => setSaving(false));
-              }}
-            >
-              <BookmarkIcon
-                size={20}
-                className={book.saved ? "fill-current text-primary" : undefined}
-              />
-            </Button>
+            <AudiobookSaveButton book={book} />
             <Button
               variant="ghost"
               size="icon"
