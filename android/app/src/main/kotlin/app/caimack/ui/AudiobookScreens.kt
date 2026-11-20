@@ -63,10 +63,11 @@ private const val DURATION = "duration"
 private const val DOWNLOADED = "downloaded"
 
 @Composable
-fun AudiobookBrowse(homeFilters: @Composable () -> Unit) {
+fun AudiobookBrowse(downloadedOnly: Boolean, homeFilters: @Composable () -> Unit) {
     val container = LocalContainer.current
     val catalog by container.audiobookStore.state.collectAsStateWithLifecycle()
-    var filter by rememberSaveable { mutableStateOf(RECENT) }
+    var sort by rememberSaveable { mutableStateOf(RECENT) }
+    val filter = if (downloadedOnly) DOWNLOADED else sort
     val saved = catalog.books.filter { it.saved }
     val books = catalog.books
     val sorted = when (filter) {
@@ -87,15 +88,14 @@ fun AudiobookBrowse(homeFilters: @Composable () -> Unit) {
                 BookHero(book, catalog)
             }
         }
-        item("filters") {
+        if (!downloadedOnly) item("filters") {
             CategoryFilterRow(filter, false, {}) {
-                item(RECENT) { CategoryFilter(R.string.audiobook_recent, filter == RECENT) { filter = RECENT } }
-                item(DURATION) { CategoryFilter(R.string.audiobook_by_duration, filter == DURATION) { filter = DURATION } }
-                item(DOWNLOADED) { CategoryFilter(R.string.collection_downloaded, filter == DOWNLOADED) { filter = DOWNLOADED } }
+                item(RECENT) { CategoryFilter(R.string.audiobook_recent, filter == RECENT) { sort = RECENT } }
+                item(DURATION) { CategoryFilter(R.string.audiobook_by_duration, filter == DURATION) { sort = DURATION } }
             }
         }
         if (!catalog.ready && books.isEmpty()) item("loading") { BookLoading() }
-        if (catalog.ready && books.isEmpty() && !catalog.online) item("error") { Failure(container.audiobookStore::requestRefresh) }
+        if (!downloadedOnly && catalog.ready && books.isEmpty() && !catalog.online) item("error") { Failure(container.audiobookStore::requestRefresh) }
         if (filter == RECENT) {
             bookSection("progress", R.string.audiobook_in_progress, inProgress, catalog)
             bookSection("saved", R.string.audiobook_saved_section, saved, catalog)
@@ -106,8 +106,8 @@ fun AudiobookBrowse(homeFilters: @Composable () -> Unit) {
                 else -> R.string.audiobook_all
             }
             bookSection("catalog", heading, sorted, catalog)
-        } else if (catalog.ready && (catalog.online || books.isNotEmpty()) && (filter != RECENT || inProgress.isEmpty())) {
-            item("empty") { Empty(stringResource(R.string.audiobook_empty)) }
+        } else if (catalog.ready && (downloadedOnly || catalog.online || books.isNotEmpty()) && (filter != RECENT || inProgress.isEmpty())) {
+            item("empty") { Empty(stringResource(if (downloadedOnly) R.string.downloads_empty_title else R.string.audiobook_empty)) }
         }
     }
 }

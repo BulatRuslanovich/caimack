@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Icon
@@ -68,20 +69,41 @@ fun HomeScreen(nav: NavController) {
     val container = LocalContainer.current
     val enabled by container.audiobooksEnabled.collectAsStateWithLifecycle()
     val catalog by container.audiobookStore.state.collectAsStateWithLifecycle()
-    val selected = if (enabled) mode else "all"
+    var downloads by rememberSaveable { mutableStateOf(false) }
+    val selected = if (mode == "audiobooks" && !enabled) "all" else mode
+    fun select(category: String) {
+        mode = if (category == selected) "all" else category
+        downloads = false
+    }
     val filters: @Composable () -> Unit = {
-        Box {
-            CategoryFilterRow(mode, false, {}) {
-                item("all") { CategoryFilter(R.string.home_filter_all, mode == "all") { mode = "all" } }
-                item("music") { CategoryFilter(R.string.home_filter_music, mode == "music") { mode = "music" } }
-                item("audiobooks") { CategoryFilter(R.string.nav_audiobooks, mode == "audiobooks") { mode = "audiobooks" } }
+        CategoryFilterRow(selected, false, {}, focusIndex = when (selected) { "music" -> 1; "audiobooks" -> 2; else -> 0 }) {
+            item("all") { CategoryFilter(R.string.home_filter_all, selected == "all") { select("all") } }
+            item("music") {
+                HomeCategory(R.string.home_filter_music, selected == "music", downloads, { select("music") }, { downloads = !downloads })
+            }
+            if (enabled) item("audiobooks") {
+                HomeCategory(R.string.nav_audiobooks, selected == "audiobooks", downloads, { select("audiobooks") }, { downloads = !downloads })
             }
         }
     }
-    if (selected == "audiobooks") {
-        AudiobookBrowse(filters)
-    } else {
-        MusicHome(nav, catalog.takeIf { enabled && selected == "all" }, filters.takeIf { enabled })
+    when {
+        selected == "audiobooks" -> AudiobookBrowse(downloads, filters)
+        selected == "music" && downloads -> DownloadedMusicHome(filters)
+        else -> MusicHome(nav, catalog.takeIf { enabled && selected == "all" }, filters)
+    }
+}
+
+@Composable
+private fun DownloadedMusicHome(filters: @Composable () -> Unit) {
+    val container = LocalContainer.current
+    val library by container.localLibrary.collectAsStateWithLifecycle()
+    val tracks = library.takeIf { it.account == container.accountKey }?.availableTracks.orEmpty()
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(top = 16.dp, bottom = 16.dp)) {
+        item("home-filters") { filters() }
+        if (tracks.isEmpty()) item { Empty(stringResource(R.string.downloads_empty_title)) }
+        itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
+            TrackRow(track, onClick = { container.player.play(tracks, index, "home:downloads") })
+        }
     }
 }
 

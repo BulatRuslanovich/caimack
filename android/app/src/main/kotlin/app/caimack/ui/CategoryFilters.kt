@@ -10,6 +10,9 @@ import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -29,10 +32,11 @@ internal fun CategoryFilterRow(
     selection: Any?,
     showClear: Boolean,
     onClear: () -> Unit,
+    focusIndex: Int = 0,
     content: LazyListScope.() -> Unit,
 ) {
     val scroll = rememberLazyListState()
-    LaunchedEffect(selection, showClear) { scroll.animateScrollToItem(0) }
+    LaunchedEffect(selection, showClear) { scroll.animateScrollToItem(focusIndex) }
     LazyRow(
         state = scroll,
         contentPadding = PaddingValues(horizontal = 16.dp),
@@ -53,6 +57,7 @@ internal fun LazyItemScope.CategoryFilter(
     label: Int,
     active: Boolean,
     modifier: Modifier = categoryAnimation(),
+    shape: Shape = CircleShape,
     onClick: () -> Unit,
 ) {
     val palette = LocalPalette.current
@@ -61,7 +66,7 @@ internal fun LazyItemScope.CategoryFilter(
         selected = active,
         onClick = onClick,
         label = { Text(stringResource(label)) },
-        shape = CircleShape,
+        shape = shape,
         border = null,
         colors = FilterChipDefaults.filterChipColors(
             containerColor = palette.raised, labelColor = palette.foreground,
@@ -75,3 +80,17 @@ private fun LazyItemScope.categoryAnimation() = Modifier.animateItem(
     placementSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
     fadeOutSpec = tween(140),
 )
+
+@Composable
+internal fun LazyItemScope.HomeCategory(
+    label: Int, selected: Boolean, downloaded: Boolean, select: () -> Unit, toggleDownloads: () -> Unit,
+) {
+    Row(modifier = categoryAnimation(), horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+        CategoryFilter(label, selected, Modifier,
+            shape = if (selected) RoundedCornerShape(topStartPercent = 50, bottomStartPercent = 50, topEndPercent = 0, bottomEndPercent = 0) else CircleShape,
+            onClick = select)
+        if (selected) CategoryFilter(R.string.collection_downloaded, downloaded, Modifier,
+            shape = RoundedCornerShape(topEndPercent = 50, bottomEndPercent = 50, topStartPercent = 0, bottomStartPercent = 0),
+            onClick = toggleDownloads)
+    }
+}
