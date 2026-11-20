@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 package app.caimack.ui
 
@@ -462,13 +461,16 @@ internal fun BottomBar(nav: NavController) {
 @Composable
 private fun androidx.compose.foundation.layout.RowScope.TabItem(label: String, icon: ImageVector, active: Boolean, onClick: () -> Unit) {
     val palette = LocalPalette.current
+    val feedback = remember { InsetRipple() }
     Column(
-        Modifier.weight(1f).fillMaxSize().selectable(selected = active, role = Role.Tab, onClick = onClick),
+        Modifier.weight(1f).fillMaxSize().then(feedback.targetModifier)
+            .selectable(selected = active, interactionSource = feedback.interactions, indication = null, role = Role.Tab, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
     ) {
         Box(
-            Modifier.clip(CircleShape).background(if (active) palette.primarySoft else Color.Transparent).padding(horizontal = 18.dp, vertical = 4.dp),
+            Modifier.clip(CircleShape).background(if (active) palette.primarySoft else Color.Transparent)
+                .then(feedback.indicationModifier).padding(horizontal = 18.dp, vertical = 4.dp),
             contentAlignment = Alignment.Center,
         ) {
             Icon(icon, null, tint = if (active) palette.primary else palette.muted)

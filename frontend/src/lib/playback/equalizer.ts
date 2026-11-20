@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 import { useSyncExternalStore } from "react";
 import { readStoredJson, writeStored } from "@/lib/storage";
@@ -97,7 +96,7 @@ function ensureGraph(): void {
   apply();
 }
 
-export function vinylScratchSupported(): boolean {
+function vinylScratchSupported(): boolean {
   return equalizerSupported() && typeof AudioWorkletNode !== "undefined" && window.isSecureContext;
 }
 
@@ -150,14 +149,13 @@ export function loadVinylScratchTrack(
   trackId: string,
   channels: Float32Array[],
   sampleRate: number,
-): boolean {
-  if (!scratch || !scratchEnabled) return false;
+): void {
+  if (!scratch || !scratchEnabled) return;
   scratch.port.postMessage(
     { type: "load", trackId, channels, sampleRate },
     channels.map((channel) => channel.buffer),
   );
   scratchTrackId = trackId;
-  return true;
 }
 
 export function unloadVinylScratchTrack(): void {
@@ -176,10 +174,6 @@ export function startVinylScratch(trackId: string, position: number): boolean {
 
 export function moveVinylScratch(position: number, seconds: number): void {
   scratch?.port.postMessage({ type: "move", position, seconds });
-}
-
-export function setVinylCrossfader(value: number): void {
-  scratch?.port.postMessage({ type: "fader", value });
 }
 
 export function endVinylScratch(): void {

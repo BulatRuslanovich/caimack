@@ -65,7 +65,7 @@ internal fun AudiobookMiniPlayer(
         onOpen = onOpen,
         toggle = { container.audiobookPlayback.toggle(book) },
         save = { container.audiobookStore.setSaved(book.id, !book.saved) },
-        leadingControl = { _, secondary -> PlaybackDevicesButton(compact = true, iconTint = secondary, audiobook = true) },
+        leadingControl = { _, secondary -> PlaybackDevicesButton(style = PlaybackDevicesStyle.Icon, iconTint = secondary, audiobook = true) },
     ) { modifier ->
         MiniPlayerText(book.title, chapter?.title ?: book.author.orEmpty(), null, modifier.testTag("mini-player-tracks"))
     }

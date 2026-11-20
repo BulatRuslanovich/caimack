@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 use std::collections::HashMap;
 
@@ -15,6 +14,7 @@ pub async fn migrate(db: &PgPool) -> anyhow::Result<()> {
     let mut conn = db.acquire().await?.detach();
     conn.lock().await?;
     reconcile_fork_versions(&mut conn).await?;
+    reconcile_library_map_version(&mut conn).await?;
     let mut migrator = Migrator::with_migrations(MIGRATOR.iter().cloned().collect());
     migrator.set_locking(false);
     migrator.run(&mut conn).await.context("Could not migrate the database")?;
@@ -52,6 +52,35 @@ async fn reconcile_fork_versions(conn: &mut PgConnection) -> anyhow::Result<()> 
     sqlx::query("UPDATE _sqlx_migrations SET version=9 WHERE version=8").execute(&mut *tx).await?;
     tx.commit().await?;
     tracing::info!("Aligned legacy fork collection migrations with upstream versions 9/10");
+    Ok(())
+}
+
+/// Upstream shipped the same library map SQL at version 13, already used by
+/// this fork's audiobooks. Move the recorded version only for that exact SQL.
+async fn reconcile_library_map_version(conn: &mut PgConnection) -> anyhow::Result<()> {
+    if !sqlx::query_scalar::<_, bool>("SELECT to_regclass('public._sqlx_migrations') IS NOT NULL")
+        .fetch_one(&mut *conn)
+        .await?
+    {
+        return Ok(());
+    }
+    let map = MIGRATOR.iter().find(|m| m.version == 17).context("Missing library map migration")?;
+    let applied = conn.list_applied_migrations(&MIGRATOR.table_name).await?;
+    if !applied.iter().any(|m| m.version == 13 && m.checksum == map.checksum) {
+        return Ok(());
+    }
+    if conn.dirty_version(&MIGRATOR.table_name).await?.is_some()
+        || applied.iter().any(|m| {
+            m.version > 13
+                || (m.version < 13
+                    && !MIGRATOR.iter().any(|known| known.version == m.version && known.checksum == m.checksum))
+        })
+        || MIGRATOR.iter().any(|known| known.version < 13 && !applied.iter().any(|m| m.version == known.version))
+    {
+        bail!("Unrecognized upstream library map migration history. No migration versions have been changed.");
+    }
+    sqlx::query("UPDATE _sqlx_migrations SET version=17 WHERE version=13").execute(&mut *conn).await?;
+    tracing::info!("Aligned upstream library map migration with fork version 17");
     Ok(())
 }
 

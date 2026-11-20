@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 pub const MODEL_ID: &str = "m-a-p/MERT-v1-330M";
 pub const REVISION: &str = "5240c2708a5acaee1007f43fb9735c7dcd0b78c9";

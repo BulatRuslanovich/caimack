@@ -18,7 +18,9 @@ class LibraryDownloadedFilterUiTest {
         var kind by mutableStateOf("all")
         var downloaded by mutableStateOf(false)
         compose.setContent {
-            CaimackTheme { LibraryFilters(kind, downloaded, { kind = it }, { downloaded = it }) }
+            CaimackTheme {
+                LibraryFilters(kind, downloaded, audiobooksEnabled = false, onFilter = { kind = it }, onDownloaded = { downloaded = it })
+            }
         }
         val label = context.getString(R.string.collection_downloaded)
         compose.onNodeWithText(label).performScrollTo().performClick().assertIsSelected()

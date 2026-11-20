@@ -108,11 +108,11 @@
     <string name="player_delivery_network">Качество снижено из-за медленного соединения</string>
     <string name="player_delivery_download">Играет скачанная версия AAC</string>
     <string name="player_delivery_waiting">Ждём соединение · продолжим автоматически</string>
-    <string name="widget_record_label">Caimack · Пластинка</string>
-    <string name="widget_record_description">Нажмите на пластинку для пуска или паузы; стрелки переключают треки</string>
     <string name="player_shuffle_on">Перемешивание включено</string>
     <string name="player_shuffle_off">Перемешивание выключено</string>
     <string name="player_repeat_off">Повтор выключен</string>
     <string name="player_repeat_all">Повтор очереди</string>
     <string name="player_repeat_one">Повтор одного трека</string>
+    <string name="widget_record_label">Caimack · Пластинка</string>
+    <string name="widget_record_description">Нажмите на пластинку для пуска или паузы; стрелки переключают треки</string>
 </resources>

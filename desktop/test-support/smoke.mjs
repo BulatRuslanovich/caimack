@@ -298,7 +298,7 @@ try {
       "Track toolbar should fit above the table",
     );
     assert.ok(roundPlay, "The playback button should be round");
-    assert.equal(controls.length, wide ? 7 : 6);
+    assert.equal(controls.length, wide ? 7 : 3);
     assert.ok(
       controls.every(
         (control) => Math.abs(control.height - controls[0].height) <= 1,
@@ -321,6 +321,14 @@ try {
     width: 390,
   });
   await assertTrackToolbar(false);
+  const filterButton = `document.querySelector('.track-catalog button[aria-controls]')`;
+  const sortButton = `document.querySelector('.track-catalog button[aria-label="Sort by"]')`;
+  await evaluate(`${filterButton}.click()`);
+  assert.equal(await evaluate(`${filterButton}.getAttribute('aria-expanded')`), "true");
+  assert.ok(await evaluate(`Boolean(${sortButton}?.getClientRects().length)`));
+  await evaluate(`${filterButton}.click()`);
+  assert.equal(await evaluate(`${filterButton}.getAttribute('aria-expanded')`), "false");
+  assert.equal(await evaluate(`${sortButton}?.getClientRects().length`), 0);
   await command("Emulation.setDeviceMetricsOverride", desktopViewport);
   await evaluate(
     `document.querySelector(${JSON.stringify(pagination + " button:last-child")}).click()`,

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_HINT_COOKIE } from "@/lib/earlyFetch";

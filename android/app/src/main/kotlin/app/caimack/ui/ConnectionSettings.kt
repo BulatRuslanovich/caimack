@@ -42,7 +42,7 @@ internal fun LocalHttpSetting() {
                 modifier = Modifier.weight(1f).padding(end = 12.dp),
                 style = Type.small,
             )
-            Toggle(enabled, change)
+            Toggle(enabled, onCheckedChange = change)
         }
         if (enabled && !granted) {
             TextButton(onClick = { request { granted = true; container.refreshLibraryConnection(); container.refreshDownloadMetadata() } }) {

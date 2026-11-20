@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 import { api, type SearchTab } from "@/lib/api";
 import { ApiError } from "@/lib/http";
@@ -226,7 +225,12 @@ export const queries = {
       queryKey: ["libraryMap"],
       queryFn: () => api.libraryMap(),
       staleTime: 300_000,
-      refetchInterval: (query) => (query.state.data?.points.length === 0 ? 15_000 : false),
+      refetchInterval: (query) => {
+        const data = query.state.data;
+        if (!data) return false;
+        if (data.updating || data.points.length === 0) return 15_000;
+        return data.points.length < data.totalTracks ? 60_000 : false;
+      },
     }),
 
   duplicates: () => queryOptions({ queryKey: ["duplicates"], queryFn: () => api.duplicates() }),

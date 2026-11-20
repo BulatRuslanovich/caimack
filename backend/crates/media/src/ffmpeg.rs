@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -25,7 +24,7 @@ pub async fn is_present() -> bool {
     match command().arg("-version").output().await {
         Ok(output) => output.status.success(),
         Err(error) => {
-            tracing::error!("{EXECUTABLE} could not be started: {error}");
+            tracing::error!(%error, executable = EXECUTABLE, "Cannot start ffmpeg; check that it is installed on PATH");
             false
         }
     }
@@ -40,7 +39,7 @@ impl Drop for PartialHls {
         if let Err(error) = std::fs::remove_dir_all(&self.0)
             && error.kind() != std::io::ErrorKind::NotFound
         {
-            tracing::warn!("Could not clean up partial HLS at {}: {error}", self.0.display());
+            tracing::warn!(directory = %self.0.display(), %error, "Cannot remove incomplete HLS files");
         }
     }
 }
@@ -79,7 +78,7 @@ pub async fn transcode_to_hls(
     if let Err(error) = tokio::fs::remove_dir_all(&partial.0).await
         && error.kind() != std::io::ErrorKind::NotFound
     {
-        tracing::warn!("Could not clean up the partial HLS rendition at {}: {error}", partial.0.display());
+        tracing::warn!(directory = %partial.0.display(), %error, "Cannot remove incomplete HLS rendition");
     }
     result
 }
@@ -128,10 +127,9 @@ async fn run_hls(
     let complete = status.success() && partial.join(HLS_INDEX).exists() && partial.join(HLS_MEDIA).exists();
     if !complete {
         tracing::warn!(
-            "ffmpeg exited with {} while preparing HLS for {}: {}",
-            status,
-            source.display(),
-            String::from_utf8_lossy(&stderr).trim()
+            file = %source.display(), exit_status = %status, bitrate_kbps,
+            stderr = String::from_utf8_lossy(&stderr).trim(),
+            "ffmpeg failed to prepare HLS rendition"
         );
         return Ok(false);
     }
@@ -158,10 +156,9 @@ pub async fn remux_flac(source: &Path, target: &Path) -> anyhow::Result<bool> {
         return Ok(true);
     }
     tracing::warn!(
-        "ffmpeg exited with {} while unpacking FLAC from {}: {}",
-        output.status,
-        source.display(),
-        String::from_utf8_lossy(&output.stderr).trim()
+        file = %source.display(), exit_status = %output.status,
+        stderr = String::from_utf8_lossy(&output.stderr).trim(),
+        "ffmpeg failed to unpack FLAC audio"
     );
     Ok(false)
 }

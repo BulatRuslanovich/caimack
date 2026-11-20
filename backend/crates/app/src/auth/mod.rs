@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 pub mod invitations;
 pub mod journal;
@@ -152,7 +151,7 @@ impl AuthService {
             failure,
         };
         if let Err(error) = self.throttle.check_login(&username, address) {
-            tracing::warn!("Sign-in for username {username} throttled after repeated failures");
+            tracing::warn!(username, address = ?address, "Sign-in throttled after repeated failures");
             journal::record(&self.db, attempt(None, Some("throttled")), client).await;
             return Err(error);
         }
@@ -168,7 +167,7 @@ impl AuthService {
         let password_ok = password::verify(password.to_owned(), hash).await;
 
         let Some(user) = user.filter(|_| password_ok) else {
-            tracing::warn!("Failed login attempt for username {username}");
+            tracing::warn!(username, address = ?address, "Sign-in rejected: invalid credentials");
             self.throttle.login_failed(&username, address);
             journal::record(&self.db, attempt(None, Some("wrong_password")), client).await;
             return Err(AppError::authentication("Invalid username or password."));
@@ -176,7 +175,7 @@ impl AuthService {
         self.throttle.login_succeeded(&username);
 
         if !user.is_active {
-            tracing::warn!("Deactivated user {} tried to sign in", user.username);
+            tracing::warn!(user_id = %user.id, "Sign-in rejected: account is deactivated");
             journal::record(&self.db, attempt(Some(user.id), Some("deactivated")), client).await;
             return Err(AppError::forbidden("This account has been deactivated."));
         }
@@ -194,7 +193,7 @@ impl AuthService {
         let user = UserDto { id: current.id, username: current.username, is_admin: current.is_admin };
         let result = self.issue(&mut tx, user, SessionStart::new(client)).await?;
         tx.commit().await?;
-        tracing::info!("User {} signed in", result.user.username);
+        tracing::info!(user_id = %result.user.id, username = result.user.username, "User signed in");
         journal::record(&self.db, attempt(Some(result.user.id), None), client).await;
         Ok(result)
     }
@@ -224,7 +223,7 @@ impl AuthService {
         .await?;
 
         let Some(stored) = stored else {
-            tracing::info!("Rejected an unknown refresh token");
+            tracing::debug!("Session refresh rejected: unknown token");
             return Err(AppError::authentication("Refresh token is invalid or expired."));
         };
 
@@ -242,11 +241,10 @@ impl AuthService {
             .await?;
 
             if !session_lives_on || now - revoked_at > REUSE_GRACE {
-                tracing::warn!("Refresh token reuse detected for user {}; all sessions revoked", stored.user_id);
-
                 sqlx::query!("DELETE FROM refresh_tokens WHERE user_id = $1", stored.user_id).execute(&mut *tx).await?;
                 tx.commit().await?;
                 self.sessions.forget_user(stored.user_id);
+                tracing::warn!(user_id = %stored.user_id, "Refresh token reuse detected; all sessions revoked");
 
                 return Err(AppError::authentication("Refresh token is invalid or expired."));
             }
@@ -258,7 +256,7 @@ impl AuthService {
         }
 
         if stored.expires_at <= now || !stored.is_active {
-            tracing::info!("Rejected an expired refresh token or a deactivated user");
+            tracing::debug!(user_id = %stored.user_id, "Session refresh rejected: token expired or account deactivated");
             return Err(AppError::authentication("Refresh token is invalid or expired."));
         }
 
@@ -373,7 +371,7 @@ impl AuthService {
         tx.commit().await?;
 
         self.sessions.forget_user(user);
-        tracing::info!("User {user} signed out");
+        tracing::info!(user_id = %user, "User signed out");
         Ok(())
     }
 
@@ -431,7 +429,7 @@ impl AuthService {
         tx.commit().await?;
 
         self.sessions.forget_user(user_id);
-        tracing::info!("User {user_id} changed their password");
+        tracing::info!(%user_id, "User changed password");
         Ok(result)
     }
 

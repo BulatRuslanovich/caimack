@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 "use client";
 
@@ -19,7 +18,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useT } from "@/contexts/I18nContext";
 import { useToast } from "@/lib/useToast";
 import { Section } from "@/components/PageHeader";
-import { Pagination, SortSelect } from "@/components/PageToolbar";
+import { Pagination, SortSelect, ToolbarFilters } from "@/components/PageToolbar";
 import {
   Select,
   SelectContent,
@@ -126,50 +125,55 @@ export function TracksPage({ query }: { query: string }) {
       )}
 
       <div className="library-toolbar flex flex-wrap items-center gap-2">
-        <SortSelect value={sort} onChange={setSort} options={sortKeys} />
-        <Select value={tempo} onValueChange={setTempo}>
-          <SelectTrigger aria-label={t("sort.bpm")}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ANY}>{t("filter.anyTempo")}</SelectItem>
-            {Object.entries(TEMPOS).map(([value, { phrase }]) => (
-              <SelectItem key={value} value={value}>
-                {t(phrase)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={key} onValueChange={setKey}>
-          <SelectTrigger aria-label={t("sort.key")}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ANY}>{t("filter.anyKey")}</SelectItem>
-            {CAMELOT_KEYS.map(({ camelot, name }) => (
-              <SelectItem key={camelot} value={camelot}>
-                {camelot} · {name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <TrackDisplayMenu />
-        {isAdmin && (
-          <BulkActions
-            selection={selection}
-            selecting={selecting}
-            onStart={() => setSelecting(true)}
-            onStop={stopSelecting}
-            confirm={confirm}
-          />
-        )}
+        <ToolbarFilters
+          compact
+          mobileFilters={{ active: sort !== "Title" || tempo !== ANY || key !== ANY || selecting }}
+        >
+          <SortSelect value={sort} onChange={setSort} options={sortKeys} />
+          <Select value={tempo} onValueChange={setTempo}>
+            <SelectTrigger aria-label={t("sort.bpm")}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ANY}>{t("filter.anyTempo")}</SelectItem>
+              {Object.entries(TEMPOS).map(([value, { phrase }]) => (
+                <SelectItem key={value} value={value}>
+                  {t(phrase)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={key} onValueChange={setKey}>
+            <SelectTrigger aria-label={t("sort.key")}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ANY}>{t("filter.anyKey")}</SelectItem>
+              {CAMELOT_KEYS.map(({ camelot, name }) => (
+                <SelectItem key={camelot} value={camelot}>
+                  {camelot} · {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <TrackDisplayMenu />
+          {isAdmin && (
+            <BulkActions
+              selection={selection}
+              selecting={selecting}
+              onStart={() => setSelecting(true)}
+              onStop={stopSelecting}
+              confirm={confirm}
+            />
+          )}
+        </ToolbarFilters>
         {items.length > 0 && (
-          <div className="ml-auto flex shrink-0 items-center gap-2 max-sm:ml-0">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             <PlayAllButton tracks={items} className="size-10 pointer-coarse:size-11" />
             <ShuffleButton
               tracks={items}
               compact
-              className="rounded-lg px-3 pointer-coarse:h-11 pointer-coarse:max-sm:w-11"
+              className="rounded-lg px-3 max-md:size-10 pointer-coarse:h-11 pointer-coarse:max-md:w-11"
             />
           </div>
         )}

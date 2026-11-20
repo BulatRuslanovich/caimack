@@ -146,8 +146,53 @@ it never starts the GPU worker or resets the idle timer. `error` also includes
 without starting a worker. Failed loads, crashes and inference timeouts stop the GPU
 worker and apply a retry delay of 30, 60, 120, 240, then at most 300 seconds.
 Recovery starts only when an embedding request arrives after the delay. A
-successful inference resets the backoff. Service logs record process startup,
-load and inference durations, failures and transitions to sleep.
+successful inference resets the backoff.
+
+### Logs
+
+MERT writes to stderr with UTC timestamps including milliseconds and an explicit
+`+00:00` offset. Backend timestamps may use a different offset; compare the full
+timestamps when matching events across services.
+
+At `INFO`, logs describe HTTP readiness, worker starts, model loading stages,
+loading progress every 30 seconds, GPU readiness, completed embeddings and idle
+shutdown. Stages distinguish Python imports, GPU initialization, configuration,
+architecture, checkpoint resolution from cache or download, checksum verification,
+weight loading and transfer to the GPU. Stage completion includes `elapsed_ms`;
+GPU initialization reports device, runtime, vector dimension and allocated/reserved
+GPU memory. Checkpoint resolution does not claim that cached weights were downloaded.
+
+Each worker lifecycle has a PID and generation number. Idle shutdown reports
+`completed`, `fragments`, idle duration and rejected requests. `completed=0` means
+the model loaded but no inference completed before it went to sleep; a warning
+explicitly calls out backend retry timing in that case. These counters reset on
+each worker start. The HTTP health check never resets the idle timer.
+
+Inference results include fragment count, vector dimension, duration and
+`request_id`. Responses return this server-generated ID in `X-Request-Id`; it is
+also passed to the GPU subprocess so worker errors can be correlated. The request
+that wakes a worker is identified on its loading events. Request bodies, PCM
+samples, vectors, headers and raw unknown URLs are not logged.
+
+Ordinary health checks and expected `503` deferrals while loading or busy are
+`DEBUG`. Their HTTP events include state, reason and `retry_after_secs`. Worker
+failures remain `ERROR`, with the failing phase/stage, exception, worker PID,
+retry delay and exit code when available. A failed worker's exception is also
+reported by the supervisor rather than replaced with a generic loading error.
+
+The specific Hugging Face `resume_download` deprecation is filtered; other
+warnings remain visible. The remote model's missing-`nnAudio` print is `DEBUG`
+only when CQT is disabled in the actual configuration. With CQT enabled it remains
+a warning. Unknown model prints are retained as warning events.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `MERT_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL`. Applied in both the HTTP process and GPU worker. |
+| `LOG_FORMAT` | `text` | `text` for the console or one JSON object per event with `json`. Compose passes this setting to MERT, backend and migration services. |
+
+Change these settings in the deployment `.env` and recreate the service with your
+usual Compose file list. Updated Python code requires rebuilding/pulling the MERT
+image before recreating it. Restarting an existing image alone does not update it.
 
 The CUDA and ROCm GPU images are published alongside the API and web images only on `v*` release
 tags. Default deployments do not pull or start those images. Model weights are

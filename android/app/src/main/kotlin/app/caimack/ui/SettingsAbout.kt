@@ -7,7 +7,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.caimack.BuildConfig
 import app.caimack.R
@@ -24,14 +23,12 @@ internal fun QuickSettingsTile(added: Boolean, onAdd: () -> Unit) {
 }
 
 @Composable
-internal fun SettingsAbout(onSource: () -> Unit) {
+internal fun SettingsAbout() {
     val palette = LocalPalette.current
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        HorizontalDivider(color = palette.border)
-        Spacer(Modifier.height(24.dp))
-        Text("Caimack", style = Type.body.copy(fontWeight = FontWeight.SemiBold), color = palette.foreground)
-        Text("v${BuildConfig.VERSION_NAME}", style = Type.small, color = palette.muted, modifier = Modifier.padding(top = 4.dp))
-        TextButton(onClick = onSource) { Text(stringResource(R.string.settings_source_code)); Icon(Lucide.ChevronRight, null, Modifier.padding(start = 4.dp).size(16.dp)) }
-        Text("AGPL-3.0", style = Type.tiny, color = palette.faint)
-    }
+    Text(
+        "v${BuildConfig.VERSION_NAME}",
+        style = Type.tiny.copy(fontFeatureSettings = "tnum"),
+        color = palette.faint,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
+    )
 }

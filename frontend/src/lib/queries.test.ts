@@ -1,13 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { InfiniteQueryObserver, QueryClient, type QueryKey } from "@tanstack/react-query";
+import {
+  InfiniteQueryObserver,
+  QueryClient,
+  QueryObserver,
+  type QueryKey,
+} from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { api } from "./api";
 import { ApiError } from "./http";
 import { WAVEFORM_VERSION } from "./waveform";
 import { invalidates, navigationPrefetch, prefetchRouteData, queries } from "./queries";
 import { CARD_PAGE_SIZE } from "./pageSizes";
-import type { Album, Paged } from "./types";
+import type { Album, LibraryMap, Paged } from "./types";
 
 describe("library navigation cache", () => {
   it("prefetches the filtered feed used by a Search category link", async () => {
@@ -103,6 +108,40 @@ describe("waveform analysis upgrades", () => {
         request.mockRestore();
         client.clear();
       }
+    },
+  );
+});
+
+describe("library map refresh", () => {
+  it.each([
+    { count: 0, total: 40, updating: false, interval: 15_000 },
+    { count: 36, total: 40, updating: true, interval: 15_000 },
+    { count: 36, total: 40, updating: false, interval: 60_000 },
+    { count: 40, total: 40, updating: false, interval: false },
+  ])(
+    "refreshes $count/$total tracks with updating=$updating",
+    ({ count, total, updating, interval }) => {
+      const client = new QueryClient();
+      const options = queries.libraryMap();
+      client.setQueryData(options.queryKey, {
+        points: Array.from({ length: count }, (_, i) => ({
+          id: String(i),
+          x: 0.5,
+          y: 0.5,
+          title: "Song",
+          artist: "Artist",
+          hasCover: false,
+          plays: 0,
+        })),
+        totalTracks: total,
+        updating,
+      } satisfies LibraryMap);
+      const query = new QueryObserver(client, options).getCurrentQuery();
+      expect(typeof options.refetchInterval).toBe("function");
+      if (typeof options.refetchInterval === "function") {
+        expect(options.refetchInterval(query)).toBe(interval);
+      }
+      client.clear();
     },
   );
 });

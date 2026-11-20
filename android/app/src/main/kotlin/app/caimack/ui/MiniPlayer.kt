@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 package app.caimack.ui
 
@@ -173,7 +172,7 @@ fun MiniPlayer(state: PlayerState, onOpen: () -> Unit) {
                 }
             },
         leadingControl = { foreground, secondary ->
-            PlaybackDevicesButton(Modifier.size(48.dp).testTag("mini-player-devices"), compact = true,
+            PlaybackDevicesButton(Modifier.size(48.dp).testTag("mini-player-devices"), style = PlaybackDevicesStyle.Icon,
                 iconTint = if (connect.selectedId != null) foreground else secondary)
         },
     ) { modifier ->

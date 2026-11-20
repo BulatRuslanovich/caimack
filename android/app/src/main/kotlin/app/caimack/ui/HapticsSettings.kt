@@ -2,7 +2,6 @@
 package app.caimack.ui
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
@@ -30,7 +29,7 @@ internal fun HapticsSettings(touch: Boolean, music: Boolean) {
                 SettingLabel(label,
                     stringResource(if (preferences.tactileAvailable) R.string.settings_touch_haptics_hint else R.string.settings_touch_haptics_unavailable),
                     modifier = Modifier.weight(1f).padding(end = 12.dp))
-                Switch(modifier = Modifier.semantics { contentDescription = label }, checked = touchEnabled && preferences.tactileAvailable, enabled = preferences.tactileAvailable,
+                Toggle(modifier = Modifier.semantics { contentDescription = label }, checked = touchEnabled && preferences.tactileAvailable, enabled = preferences.tactileAvailable,
                     onCheckedChange = preferences::setTouchEnabled)
             }
             if (preferences.tactileAvailable) TextButton(onClick = { feedback(PlayerHaptic.Confirm) }, enabled = touchEnabled) {
@@ -50,7 +49,7 @@ internal fun HapticsSettings(touch: Boolean, music: Boolean) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             SettingLabel(label, stringResource(hint),
                 modifier = Modifier.weight(1f).padding(end = 12.dp))
-            Switch(modifier = Modifier.semantics { contentDescription = label }, checked = musicEnabled, enabled = preferences.musicAvailable, onCheckedChange = preferences::setMusicEnabled)
+            Toggle(modifier = Modifier.semantics { contentDescription = label }, checked = musicEnabled, enabled = preferences.musicAvailable, onCheckedChange = preferences::setMusicEnabled)
         }
     }
 }

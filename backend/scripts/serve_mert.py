@@ -5,7 +5,11 @@
 """Internal, single-GPU MERT inference. Accepts PCM, never filesystem paths/URLs."""
 
 import argparse
+from contextlib import contextmanager, redirect_stdout
+from contextvars import ContextVar
+from datetime import datetime, timezone
 import hashlib
+import io
 import json
 import logging
 import math
@@ -15,6 +19,8 @@ import signal
 import struct
 import threading
 import time
+import uuid
+import warnings
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from benchmark_mert import MODELS, SAMPLE_RATE, load_weights, pool
@@ -27,6 +33,122 @@ CHECKPOINT_SHA256 = "0c03774d821a6ad972cb48220b128a10ebea2c790116bd0fd35e5a013f8
 MAX_WINDOWS = 8
 MAX_SAMPLES = SAMPLE_RATE * 5
 MAX_BODY = 4 + MAX_WINDOWS * (4 + MAX_SAMPLES * 4)
+LOGGER = logging.getLogger("mert")
+REQUEST_ID = ContextVar("mert_request_id", default=None)
+LOAD_STAGE = ContextVar("mert_load_stage", default="imports")
+
+
+def event(level, message, **fields):
+    if REQUEST_ID.get() is not None:
+        fields.setdefault("request_id", REQUEST_ID.get())
+    LOGGER.log(level, message, extra={"fields": fields})
+
+
+class LogFormatter(logging.Formatter):
+    def __init__(self, json_output=False):
+        super().__init__()
+        self.json_output = json_output
+
+    def format(self, record):
+        fields = {"message": record.getMessage(), **getattr(record, "fields", {})}
+        if record.exc_info:
+            fields["exception"] = self.formatException(record.exc_info)
+        timestamp = datetime.fromtimestamp(record.created, timezone.utc).isoformat(
+            timespec="milliseconds"
+        )
+        if self.json_output:
+            return json.dumps(
+                dict(
+                    timestamp=timestamp,
+                    level=record.levelname,
+                    target=record.name,
+                    pid=record.process,
+                    fields=fields,
+                ),
+                ensure_ascii=False,
+            )
+        message = fields.pop("message").replace("\n", r"\n").replace("\r", r"\r")
+        details = " ".join(
+            f"{key}={json.dumps(value, ensure_ascii=False)}"
+            for key, value in fields.items()
+        )
+        return (
+            f"{timestamp} {record.levelname:>5} {record.name}: {message} pid={record.process}"
+            + (f" {details}" if details else "")
+        )
+
+
+def configure_logging():
+    level = os.environ.get("MERT_LOG_LEVEL", "INFO").upper()
+    invalid_level = level not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+    output_format = os.environ.get("LOG_FORMAT", "text")
+    handler = logging.StreamHandler()
+    handler.setFormatter(LogFormatter(json_output=output_format == "json"))
+    logging.basicConfig(
+        level=logging.INFO if invalid_level else level, handlers=[handler], force=True
+    )
+    logging.captureWarnings(True)
+    # Transformers 4.38 passes this deprecated option internally. Other warnings
+    # (including other FutureWarnings) must remain visible.
+    warnings.filterwarnings(
+        "ignore",
+        category=FutureWarning,
+        message=r"`resume_download` is deprecated.*",
+        module=r"huggingface_hub\.file_download",
+    )
+    os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+    for name in ("huggingface_hub", "transformers", "urllib3", "httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+    if invalid_level:
+        event(logging.WARNING, "Invalid MERT_LOG_LEVEL; using INFO")
+    if output_format not in {"text", "json"}:
+        event(logging.WARNING, "Invalid LOG_FORMAT; expected text or json, using text")
+
+
+@contextmanager
+def load_stage(stage):
+    LOAD_STAGE.set(stage)
+    started = time.monotonic()
+    event(logging.INFO, "Model loading stage started", stage=stage)
+    yield
+    event(
+        logging.INFO,
+        "Model loading stage finished",
+        stage=stage,
+        elapsed_ms=round((time.monotonic() - started) * 1000),
+    )
+
+
+class ModelOutput(io.TextIOBase):
+    """Convert remote model prints to events without hiding unknown diagnostics."""
+
+    def __init__(self, cqt_enabled):
+        self.cqt_enabled = cqt_enabled
+        self.pending = ""
+
+    def write(self, text):
+        self.pending += text
+        while "\n" in self.pending:
+            line, self.pending = self.pending.split("\n", 1)
+            self._line(line)
+        return len(text)
+
+    def flush(self):
+        if self.pending:
+            self._line(self.pending)
+            self.pending = ""
+
+    def _line(self, line):
+        if (
+            line.strip()
+            == "WARNING: feature_extractor_cqt requires the libray 'nnAudio'"
+            and not self.cqt_enabled
+        ):
+            event(
+                logging.DEBUG, "Optional nnAudio is absent; this model has CQT disabled"
+            )
+        elif line.strip():
+            event(logging.WARNING, "Model emitted a diagnostic", output=line)
 
 
 def identity() -> dict:
@@ -62,38 +184,68 @@ class Mert:
     def __init__(self) -> None:
         from pathlib import Path
 
-        import torch
-        from huggingface_hub import hf_hub_download
-        from transformers import AutoConfig, AutoModel, Wav2Vec2FeatureExtractor
+        with load_stage("imports"):
+            import torch
+            from huggingface_hub import hf_hub_download
+            from transformers import AutoConfig, AutoModel, Wav2Vec2FeatureExtractor
 
-        if not torch.cuda.is_available():
-            raise RuntimeError("MERT requires a CUDA or ROCm GPU; check Docker GPU access")
-        torch.set_num_threads(int(os.environ.get("OMP_NUM_THREADS", "2")))
-        torch.cuda.set_device(0)
+        with load_stage("gpu_initialization"):
+            if not torch.cuda.is_available():
+                raise RuntimeError(
+                    "MERT requires a CUDA or ROCm GPU; check Docker GPU access"
+                )
+            torch.set_num_threads(int(os.environ.get("OMP_NUM_THREADS", "2")))
+            torch.cuda.set_device(0)
         options = dict(revision=REVISION)
-        self.processor = Wav2Vec2FeatureExtractor.from_pretrained(MODEL, **options)
-        config = AutoConfig.from_pretrained(MODEL, trust_remote_code=True, **options)
-        model = AutoModel.from_config(
-            config, trust_remote_code=True, code_revision=REVISION
-        )
-        # Native strict loading preserves legacy weight_norm g/v parameters.
-        checkpoint = Path(
-            hf_hub_download(MODEL, filename="pytorch_model.bin", **options)
-        )
-        with checkpoint.open("rb") as source:
-            digest = hashlib.file_digest(source, "sha256").hexdigest()
-        if digest != CHECKPOINT_SHA256:
-            raise RuntimeError(
-                "MERT checkpoint checksum mismatch; replace the cached file"
+        with load_stage("configuration"):
+            self.processor = Wav2Vec2FeatureExtractor.from_pretrained(MODEL, **options)
+            config = AutoConfig.from_pretrained(
+                MODEL, trust_remote_code=True, **options
             )
-        load_weights(model, checkpoint)
-        self.model = model.eval().to("cuda")
-        logging.info(
-            "MERT ready: %s, revision %s, GPU %s, backend %s",
-            MODEL,
-            REVISION,
-            torch.cuda.get_device_name(0),
-            "ROCm" if torch.version.hip else "CUDA",
+        with load_stage("architecture"):
+            output = ModelOutput(
+                cqt_enabled=getattr(config, "feature_extractor_cqt", False)
+            )
+            try:
+                with redirect_stdout(output):
+                    model = AutoModel.from_config(
+                        config, trust_remote_code=True, code_revision=REVISION
+                    )
+            finally:
+                output.flush()
+        # Native strict loading preserves legacy weight_norm g/v parameters.
+        with load_stage("checkpoint_cache_or_download"):
+            checkpoint = Path(
+                hf_hub_download(MODEL, filename="pytorch_model.bin", **options)
+            )
+            event(
+                logging.INFO,
+                "Model checkpoint available",
+                size_bytes=checkpoint.stat().st_size,
+            )
+        with load_stage("checksum_verification"):
+            with checkpoint.open("rb") as source:
+                digest = hashlib.file_digest(source, "sha256").hexdigest()
+            if digest != CHECKPOINT_SHA256:
+                raise RuntimeError(
+                    "MERT checkpoint checksum mismatch; replace the cached file"
+                )
+        with load_stage("checkpoint_loading"):
+            load_weights(model, checkpoint)
+        with load_stage("gpu_transfer"):
+            self.model = model.eval().to("cuda")
+            torch.cuda.synchronize()
+        LOAD_STAGE.set("ready")
+        event(
+            logging.INFO,
+            "Model initialized on GPU",
+            model=MODEL,
+            revision=REVISION,
+            dimension=DIMENSION,
+            device=torch.cuda.get_device_name(0),
+            backend="ROCm" if torch.version.hip else "CUDA",
+            allocated_mib=round(torch.cuda.memory_allocated() / 1024**2),
+            reserved_mib=round(torch.cuda.memory_reserved() / 1024**2),
         )
 
     def embed(self, windows: list[list[float]]) -> list[float]:
@@ -122,25 +274,36 @@ class Unavailable(Exception):
         self.retry_after = retry_after
 
 
-def model_worker(connection, model_factory):
+def model_worker(connection, model_factory, wake_request_id=None):
     # Only this spawned process imports torch and creates a GPU context. Killing
     # it releases the context too, which unloading tensors alone cannot do.
     signal.signal(signal.SIGINT, signal.SIG_IGN)
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
-    )
+    configure_logging()
+    REQUEST_ID.set(wake_request_id)
+    phase = "loading"
     try:
         model = model_factory()
         connection.send(("ready", None))
+        phase = "inference"
         while True:
-            windows = connection.recv()
+            request_id, windows = connection.recv()
+            REQUEST_ID.set(request_id)
             connection.send(("vector", model.embed(windows)))
     except EOFError:
         pass
-    except Exception:
-        logging.exception("MERT GPU worker failed")
+    except Exception as error:
+        LOGGER.exception(
+            "GPU worker failed",
+            extra={
+                "fields": dict(
+                    phase=phase,
+                    stage=LOAD_STAGE.get() if phase == "loading" else "inference",
+                    request_id=REQUEST_ID.get(),
+                )
+            },
+        )
         try:
-            connection.send(("error", None))
+            connection.send(("error", f"{type(error).__name__}: {error}"))
         except (OSError, EOFError):
             pass
     finally:
@@ -183,6 +346,12 @@ class ModelSupervisor:
         self._retry_at = 0
         self._backoff = 30
         self._closed = False
+        self._generation = 0
+        self._completed = 0
+        self._fragments = 0
+        self._rejected = {"loading": 0, "busy": 0, "error": 0}
+        self._ready_at = 0
+        self._last_load_report = 0
 
     def status(self):
         with self._lock:
@@ -200,6 +369,11 @@ class ModelSupervisor:
                 self._process.terminate()
             self._process.join(timeout=1)
             if self._process.is_alive():
+                event(
+                    logging.WARNING,
+                    "GPU worker did not terminate; forcing shutdown",
+                    worker_pid=self._process.pid,
+                )
                 self._process.kill()
                 self._process.join(timeout=1)
             if self._process.is_alive():
@@ -212,16 +386,29 @@ class ModelSupervisor:
             self._connection = None
 
     def _fail(self, reason):
+        previous_state = self._state
         self._state = "error"
         self._retry_at = self._clock() + self._backoff
-        logging.warning("MERT unavailable: %s; retry in %s s", reason, self._backoff)
+        event(
+            logging.ERROR,
+            "GPU worker unavailable; new requests deferred during recovery",
+            reason=reason,
+            previous_state=previous_state,
+            retry_after_secs=self._backoff,
+            worker_pid=self._process.pid if self._process else None,
+            exit_code=self._process.exitcode if self._process else None,
+            completed=self._completed,
+            worker_generation=self._generation,
+        )
         self._backoff = min(self._backoff * 2, 300)
         self._stop_worker()
 
     def _start_worker(self):
         parent, child = self._context.Pipe()
         process = self._context.Process(
-            target=model_worker, args=(child, self._factory), daemon=True
+            target=model_worker,
+            args=(child, self._factory, REQUEST_ID.get()),
+            daemon=True,
         )
         try:
             process.start()
@@ -232,8 +419,20 @@ class ModelSupervisor:
             child.close()
         self._process, self._connection = process, parent
         self._started_at = self._clock()
+        self._last_load_report = self._started_at
         self._state = "loading"
-        logging.info("MERT waking: worker PID %s", process.pid)
+        self._generation += 1
+        self._completed = self._fragments = 0
+        self._rejected = {"loading": 0, "busy": 0, "error": 0}
+        event(
+            logging.INFO,
+            "GPU worker starting on embedding request; model loading",
+            worker_pid=process.pid,
+            worker_generation=self._generation,
+            load_timeout_secs=self.load_timeout,
+            model=MODEL,
+            revision=REVISION,
+        )
 
     def maintain(self):
         # Called by the HTTP accept loop, never by a GPU request thread.
@@ -244,20 +443,40 @@ class ModelSupervisor:
                 if self._state == "error" and self._clock() >= self._retry_at:
                     self._stop_worker()
                     self._state = "sleeping"
+                    event(
+                        logging.INFO,
+                        "Recovery delay finished; waiting for the next embedding request",
+                    )
                 if self._state not in ("loading", "ready"):
                     return
                 if self._state == "loading":
                     if self._connection.poll():
-                        kind, _ = self._connection.recv()
+                        kind, detail = self._connection.recv()
                         if kind != "ready":
-                            raise RuntimeError("model loading failed")
+                            raise RuntimeError(detail or "model loading failed")
                         self._last_used = self._clock()
+                        self._ready_at = self._last_used
                         self._state = "ready"
-                        logging.info(
-                            "MERT loaded in %.1f s", self._clock() - self._started_at
+                        event(
+                            logging.INFO,
+                            "GPU worker ready; waiting for a retried embedding request",
+                            worker_pid=self._process.pid,
+                            worker_generation=self._generation,
+                            elapsed_ms=round((self._clock() - self._started_at) * 1000),
+                            idle_timeout_secs=self.idle_timeout,
+                            rejected_while_loading=self._rejected["loading"],
                         )
                     elif self._clock() - self._started_at >= self.load_timeout:
                         raise TimeoutError("model loading timed out")
+                    elif self._clock() - self._last_load_report >= 30:
+                        event(
+                            logging.INFO,
+                            "Model is still loading; embedding requests remain deferred",
+                            worker_pid=self._process.pid,
+                            elapsed_secs=round(self._clock() - self._started_at),
+                            load_timeout_secs=self.load_timeout,
+                        )
+                        self._last_load_report = self._clock()
                 if not self._process.is_alive():
                     raise RuntimeError("GPU worker exited")
                 if (
@@ -265,9 +484,28 @@ class ModelSupervisor:
                     and self.idle_timeout > 0
                     and self._clock() - self._last_used >= self.idle_timeout
                 ):
+                    worker_pid = self._process.pid
+                    idle_secs = round(self._clock() - self._last_used)
                     self._stop_worker()
                     self._state = "sleeping"
-                    logging.info("MERT sleeping: GPU worker stopped after idle timeout")
+                    event(
+                        logging.INFO,
+                        "GPU worker stopped after idle timeout; GPU context released",
+                        worker_pid=worker_pid,
+                        idle_secs=idle_secs,
+                        idle_timeout_secs=self.idle_timeout,
+                        ready_secs=round(self._clock() - self._ready_at),
+                        completed=self._completed,
+                        fragments=self._fragments,
+                        rejected_loading=self._rejected["loading"],
+                        rejected_busy=self._rejected["busy"],
+                    )
+                    if self._completed == 0:
+                        event(
+                            logging.WARNING,
+                            "Model went idle without completing any embeddings; check backend retry timing",
+                            worker_generation=self._generation,
+                        )
             except Exception as error:
                 self._fail(f"{type(error).__name__}: {error}")
 
@@ -277,6 +515,7 @@ class ModelSupervisor:
                 raise Unavailable("MERT is shutting down")
             if self._state == "error":
                 if self._clock() < self._retry_at:
+                    self._rejected["error"] += 1
                     raise Unavailable("MERT is recovering", self._retry_after())
                 try:
                     self._stop_worker()
@@ -294,22 +533,36 @@ class ModelSupervisor:
                         "MERT worker could not start", self._retry_after()
                     ) from error
             if self._state == "loading":
+                self._rejected["loading"] += 1
                 raise Unavailable("MERT is loading")
             if self._state == "busy":
                 # The durable queue lives in the backend database. Do not build
                 # an unbounded second queue of PCM bodies and HTTP threads here.
+                self._rejected["busy"] += 1
                 raise Unavailable("MERT is busy", 1)
             self._state = "busy"
             connection = self._connection
+            worker_pid = self._process.pid
 
         started = self._clock()
+        event(
+            logging.DEBUG,
+            "GPU inference started",
+            worker_pid=worker_pid,
+            fragments=len(windows),
+            audio_secs=round(sum(map(len, windows)) / SAMPLE_RATE, 3),
+        )
         try:
-            connection.send(windows)
+            connection.send((REQUEST_ID.get(), windows))
             if not connection.poll(self.inference_timeout):
                 raise TimeoutError("inference timed out")
             kind, vector = connection.recv()
-            if kind != "vector" or len(vector) != DIMENSION or not all(
-                math.isfinite(value) for value in vector
+            if kind == "error":
+                raise RuntimeError(vector or "GPU inference failed")
+            if (
+                kind != "vector"
+                or len(vector) != DIMENSION
+                or not all(math.isfinite(value) for value in vector)
             ):
                 raise ValueError("invalid model output or inference failure")
         except Exception as error:
@@ -325,17 +578,30 @@ class ModelSupervisor:
                 self._state = "ready"
                 self._last_used = self._clock()
                 self._backoff = 30
-        logging.info(
-            "MERT embedded %s fragments in %.2f s",
-            len(windows),
-            self._clock() - started,
+                self._completed += 1
+                self._fragments += len(windows)
+        event(
+            logging.INFO,
+            "Embedding completed",
+            worker_pid=worker_pid,
+            fragments=len(windows),
+            dimension=len(vector),
+            completed=self._completed,
+            elapsed_ms=round((self._clock() - started) * 1000),
         )
         return vector
 
     def close(self):
         with self._lock:
+            if self._closed:
+                return
             self._closed = True
             self._stop_worker()
+            event(
+                logging.INFO,
+                "MERT stopped; GPU worker released",
+                completed=self._completed,
+            )
 
 
 class MertServer(ThreadingHTTPServer):
@@ -349,6 +615,15 @@ class MertServer(ThreadingHTTPServer):
 
 def handler(model):
     class Handler(BaseHTTPRequestHandler):
+        def handle_one_request(self):
+            self.request_id = uuid.uuid4().hex
+            self.request_started = time.monotonic()
+            token = REQUEST_ID.set(self.request_id)
+            try:
+                super().handle_one_request()
+            finally:
+                REQUEST_ID.reset(token)
+
         def setup(self):
             super().setup()
             self.connection.settimeout(15)
@@ -359,13 +634,42 @@ def handler(model):
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Connection", "close")
+            self.send_header("X-Request-Id", self.request_id)
             if retry_after is not None:
                 self.send_header("Retry-After", str(retry_after))
             self.end_headers()
             try:
                 self.wfile.write(body)
             except (BrokenPipeError, ConnectionResetError):
-                pass
+                event(
+                    logging.DEBUG, "Client disconnected before receiving the response"
+                )
+            route = self.path if self.path in {"/health", "/embed"} else "<unmatched>"
+            state = model.status()["state"]
+            fields = dict(
+                method=self.command,
+                route=route,
+                status=status,
+                state=state,
+                elapsed_ms=round((time.monotonic() - self.request_started) * 1000),
+            )
+            if status >= 400:
+                fields["reason"] = payload.get("error", "")
+            if retry_after is not None:
+                fields["retry_after_secs"] = retry_after
+            if status == 503 and payload.get("error") in {
+                "MERT is loading",
+                "MERT is busy",
+            }:
+                event(
+                    logging.DEBUG,
+                    "Embedding request deferred; client must retry",
+                    **fields,
+                )
+            elif status >= 400 and status != 404:
+                event(logging.WARNING, "HTTP request rejected", **fields)
+            else:
+                event(logging.DEBUG, "HTTP response sent", **fields)
 
         def do_GET(self):
             (
@@ -397,11 +701,15 @@ def handler(model):
             except Unavailable as error:
                 self.reply(503, dict(error=str(error)), retry_after=error.retry_after)
             except Exception:
-                logging.exception("MERT inference failed")
+                LOGGER.exception(
+                    "Unhandled embedding request failure",
+                    extra={"fields": {"request_id": self.request_id}},
+                )
                 self.reply(503, dict(error="Inference unavailable; retry later"))
 
         def log_message(self, fmt, *args):
-            logging.debug(fmt, *args)
+            # reply() emits structured outcomes without raw URLs or header values.
+            pass
 
     return Handler
 
@@ -428,11 +736,15 @@ def main():
         default=os.environ.get("MERT_INFERENCE_TIMEOUT_SECONDS", "90"),
     )
     args = parser.parse_args()
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
-    )
+    configure_logging()
     if args.download_only:
+        event(
+            logging.INFO,
+            "Validating model download and GPU initialization",
+            **identity(),
+        )
         Mert()
+        event(logging.INFO, "Model download validation completed")
         return
     try:
         supervisor = ModelSupervisor(
@@ -444,13 +756,22 @@ def main():
         parser.error(str(error))
 
     def stop(signum, frame):
+        event(logging.INFO, "Shutdown requested", signal=signal.Signals(signum).name)
         raise KeyboardInterrupt
 
     signal.signal(signal.SIGTERM, stop)
     try:
         with MertServer((args.host, args.port), supervisor) as server:
-            logging.info(
-                "MERT HTTP ready; GPU sleeping until the first embedding request"
+            event(
+                logging.INFO,
+                "MERT HTTP ready; GPU starts on the first embedding request",
+                address=args.host,
+                port=server.server_port,
+                state="sleeping",
+                idle_timeout_secs=supervisor.idle_timeout,
+                load_timeout_secs=supervisor.load_timeout,
+                inference_timeout_secs=supervisor.inference_timeout,
+                **identity(),
             )
             server.serve_forever()
     except KeyboardInterrupt:
@@ -460,4 +781,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        LOGGER.exception("MERT service failed")
+        raise SystemExit(1)

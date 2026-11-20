@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 "use client";
 
@@ -8,7 +7,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { isDesktop } from "@/desktop/api";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef } from "react";
+import { Suspense } from "react";
 import {
   AudioLinesIcon,
   ChartLineIcon,
@@ -17,7 +16,7 @@ import {
   RadioIcon,
   UserRoundIcon,
 } from "lucide-react";
-import { Copyright } from "@/components/Copyright";
+import { AppVersion } from "@/components/AppVersion";
 import { PageHeader } from "@/components/PageHeader";
 import { useAuth } from "@/contexts/AuthContext";
 import { useT } from "@/contexts/I18nContext";
@@ -42,8 +41,6 @@ export default function SettingsPage() {
           {t("nav.downloads")}
         </Link>
       )}
-      <p className="text-2xs text-faint mt-auto">Caimack v{process.env.APP_VERSION}</p>
-      <Copyright />
     </>
   );
 }
@@ -83,53 +80,38 @@ function SettingsSections() {
 
   const raw = params.get("tab");
   const section = sections.find((key) => key === raw) ?? DEFAULT_SECTION;
-  const navigation = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    const nav = navigation.current;
-    if (!nav) return;
-    const revealCurrent = () => {
-      const current = nav.querySelector('[aria-current="page"]');
-      if (!current || nav.scrollWidth <= nav.clientWidth) return;
-      const outer = nav.getBoundingClientRect();
-      const inner = current.getBoundingClientRect();
-      if (inner.left < outer.left) nav.scrollLeft += inner.left - outer.left;
-      else if (inner.right > outer.right) nav.scrollLeft += inner.right - outer.right;
-    };
-    const observer = new ResizeObserver(revealCurrent);
-    observer.observe(nav);
-    revealCurrent();
-    return () => observer.disconnect();
-  }, [section]);
 
   return (
     <div className="settings-workspace">
-      <nav ref={navigation} aria-label={t("settings.title")} className="settings-navigation">
-        {sections.map((key) => {
-          const Icon = SECTION_ICONS[key];
-          return (
-            <Link
-              key={key}
-              href={key === DEFAULT_SECTION ? "/settings" : `/settings?tab=${key}`}
-              replace
-              scroll={false}
-              prefetch={false}
-              onNavigate={(event) => {
-                event.preventDefault();
-                window.history.replaceState(
-                  null,
-                  "",
-                  key === DEFAULT_SECTION ? "/settings" : `/settings?tab=${key}`,
-                );
-              }}
-              aria-current={section === key ? "page" : undefined}
-            >
-              <Icon size={18} aria-hidden="true" />
-              {t(`settings.${key}`)}
-            </Link>
-          );
-        })}
-      </nav>
+      <div className="settings-sidebar">
+        <nav aria-label={t("settings.title")} className="settings-navigation">
+          {sections.map((key) => {
+            const Icon = SECTION_ICONS[key];
+            return (
+              <Link
+                key={key}
+                href={key === DEFAULT_SECTION ? "/settings" : `/settings?tab=${key}`}
+                replace
+                scroll={false}
+                prefetch={false}
+                aria-current={section === key ? "page" : undefined}
+                onNavigate={(event) => {
+                  event.preventDefault();
+                  window.history.replaceState(
+                    null,
+                    "",
+                    key === DEFAULT_SECTION ? "/settings" : `/settings?tab=${key}`,
+                  );
+                }}
+              >
+                <Icon size={18} aria-hidden="true" />
+                {t(`settings.${key}`)}
+              </Link>
+            );
+          })}
+        </nav>
+        <AppVersion className="mt-4 px-3 text-left" />
+      </div>
 
       <div className="settings-content">
         {section === "playback" && <Playback />}

@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 "use client";
 
-import type { ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
+import { SlidersHorizontalIcon } from "lucide-react";
+import { cn } from "@/lib/cn";
 import { scrollContentToTop } from "@/lib/scroll";
 import type { Paged } from "@/lib/types";
 import type { TranslationKey } from "@/lib/i18n";
@@ -17,12 +18,14 @@ export function PageToolbar({
   onSearch,
   placeholder,
   autoFocus = false,
+  mobileFilters,
   children,
 }: {
   search: string;
   onSearch: (value: string) => void;
   placeholder: string;
   autoFocus?: boolean;
+  mobileFilters?: { active: boolean };
   children?: ReactNode;
 }) {
   return (
@@ -34,12 +37,52 @@ export function PageToolbar({
         autoFocus={autoFocus}
         className="min-w-0 flex-[1_1_16rem] max-md:flex-1 max-md:basis-0"
       />
-      {children && (
-        <div className="flex flex-wrap items-center gap-2.5 max-md:order-2 max-md:w-full max-md:gap-2">
-          {children}
-        </div>
-      )}
+      {children && <ToolbarFilters mobileFilters={mobileFilters}>{children}</ToolbarFilters>}
     </div>
+  );
+}
+
+export function ToolbarFilters({
+  mobileFilters,
+  children,
+  compact = false,
+}: {
+  mobileFilters?: { active: boolean };
+  children: ReactNode;
+  compact?: boolean;
+}) {
+  const t = useT();
+  const controlsId = useId();
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  return (
+    <>
+      {mobileFilters && (
+        <Button
+          size={compact ? "icon" : "icon-lg"}
+          className={cn(
+            "shrink-0 rounded-lg md:hidden min-[24rem]:w-auto min-[24rem]:px-3",
+            (filtersOpen || mobileFilters.active) && "border-primary bg-primary-soft text-primary",
+          )}
+          aria-expanded={filtersOpen}
+          aria-controls={controlsId}
+          title={t("filter.options")}
+          onClick={() => setFiltersOpen((open) => !open)}
+        >
+          <SlidersHorizontalIcon size={18} />
+          <span className="max-[24rem]:sr-only">{t("filter.options")}</span>
+        </Button>
+      )}
+      <div
+        id={mobileFilters ? controlsId : undefined}
+        className={cn(
+          "flex flex-wrap items-center gap-2.5 max-md:order-2 max-md:w-full max-md:gap-2",
+          mobileFilters && !filtersOpen && "max-md:hidden",
+        )}
+      >
+        {children}
+      </div>
+    </>
   );
 }
 

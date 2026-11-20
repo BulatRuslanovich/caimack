@@ -46,8 +46,8 @@ class SyncStoreProjectionTest {
             store.updateIndex { it.copy(files = mapOf(first.id to audio(first.id))) }
             val initial = store.tracks()
             assertEquals("Stored size includes audio payload and embedded metadata", 2_500_000_020L, store.audioBytes())
-            val restoredIndex = SyncStore(isolated, json, server).apply { session(user) }
-            assertEquals("Existing indexes expose their size without downloading again", 2_500_000_020L, restoredIndex.audioBytes())
+            val restoredSize = SyncStore(isolated, json, server).apply { session(user) }
+            assertEquals("Existing indexes expose their size without downloading again", 2_500_000_020L, restoredSize.audioBytes())
             assertEquals(listOf("one"), initial.map { it.id })
             store.status.value = store.status.value.copy(bytes = 100)
             assertSame(initial, store.tracks())

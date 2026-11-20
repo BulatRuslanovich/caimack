@@ -50,7 +50,7 @@ function start(node: Processor, position = 0.5, gain = 1) {
   send(node, "start", { trackId: "track", position, gain });
 }
 
-describe("DJ needle and crossfader", () => {
+describe("vinyl scratch audio", () => {
   it("passes stereo audio through unchanged when disabled", () => {
     const node = processor();
     const input = [new Float32Array([0.1, -0.2, 0.5]), new Float32Array([-0.3, 0.4, 0.2])];
@@ -188,18 +188,14 @@ describe("DJ needle and crossfader", () => {
     expect(node.position).toBe(23_999);
   });
 
-  it("cuts dry and scratched audio with the crossfader and recovers when disabled", () => {
+  it("restores dry audio when disabled during a scratch", () => {
     const node = processor();
     load(node);
     const input = new Float32Array(1024).fill(0.4);
-    send(node, "fader", { value: 0 });
-    expect(Math.abs(render(node, [input])[0][1023])).toBeLessThan(0.00001);
-    send(node, "fader", { value: 0.1 });
-    expect(render(node, [input])[0][1023]).toBeCloseTo(0.4, 5);
     start(node);
     send(node, "move", { position: 0.7, seconds: 0.05 });
-    send(node, "fader", { value: 0 });
-    expect(Math.abs(render(node, [], 1024)[0][1023])).toBeLessThan(0.00001);
+    const [wet] = render(node, [], 2400);
+    expect(Math.max(...wet.map(Math.abs))).toBeGreaterThan(0.1);
     send(node, "enabled", { enabled: false });
     expect(render(node, [input])[0][1023]).toBeCloseTo(0.4, 5);
   });

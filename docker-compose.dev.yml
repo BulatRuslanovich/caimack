@@ -1,0 +1,34 @@
+# MERT for a backend running directly on the host (make backend).
+# Requires Docker Desktop with NVIDIA GPU support.
+services:
+  mert:
+    image: music-streaming-mert:latest
+    build:
+      context: ./backend/scripts
+      dockerfile: Dockerfile.mert
+      target: runtime
+    container_name: caimack-rust-dev-mert
+    restart: unless-stopped
+    entrypoint: ["python", "serve_mert.py"]
+    gpus: all
+    ports:
+      - "127.0.0.1:8090:8090"
+    environment:
+      HF_HOME: /models
+      MERT_IDLE_TIMEOUT_SECONDS: "300"
+    volumes:
+      - ./storage/models/mert:/models
+      - ./backend/scripts/serve_mert.py:/app/serve_mert.py:ro
+      - ./backend/scripts/benchmark_mert.py:/app/benchmark_mert.py:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=4).read()",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

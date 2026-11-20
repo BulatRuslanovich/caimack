@@ -35,7 +35,7 @@
   animation-name: record-rise;
 }
 
-@media (width < 64rem) {
+@media (width < 64rem) and ((orientation: portrait) or (width < 34rem) or (height >= 36rem)) {
   .record[data-axis="responsive"] {
     --record-out: 22%;
   }
@@ -71,11 +71,6 @@
 
 .record[data-scratchable="true"] .record-disc:active {
   cursor: grabbing;
-}
-
-.record[data-dj-scratching="true"] .record-disc {
-  outline: 2px solid var(--primary);
-  outline-offset: 3px;
 }
 
 .record-label {

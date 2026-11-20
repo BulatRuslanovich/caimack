@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
@@ -70,7 +69,7 @@ impl Storage {
         let root = root.canonicalize().with_context(|| format!("Storage root {} is not usable", root.display()))?;
         media::ffmpeg::cleanup_partial_hls(&root.join(HLS_DIRECTORY))
             .context("Could not clean up interrupted HLS renditions")?;
-        tracing::info!("Music storage rooted at {}", root.display());
+        tracing::info!(folder = %root.display(), "Music storage ready");
         Ok(Self { root, ready_variants: Arc::default() })
     }
 

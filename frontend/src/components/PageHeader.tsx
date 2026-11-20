@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 "use client";
 
@@ -16,13 +15,17 @@ export function PageHeader({
   title,
   subtitle,
   actions,
+  className,
 }: {
   title?: string;
   subtitle?: ReactNode;
   actions?: ReactNode;
+  className?: string;
 }) {
   return (
-    <header className="flex flex-wrap items-end justify-between gap-5 max-md:items-start">
+    <header
+      className={cn("flex flex-wrap items-end justify-between gap-5 max-md:items-start", className)}
+    >
       <div className="min-w-0">
         {title && <h1 className="font-display text-title">{title}</h1>}
         {subtitle && (

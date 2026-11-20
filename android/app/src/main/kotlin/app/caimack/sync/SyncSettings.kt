@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 package app.caimack.sync
 
@@ -10,7 +9,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.caimack.R
 import app.caimack.session.SessionState
 import app.caimack.ui.LocalContainer
+import app.caimack.ui.Toggle
 import app.caimack.ui.Type
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -62,12 +61,12 @@ fun SyncSettings() {
     val label = stringResource(R.string.sync_enable)
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f).padding(end = 12.dp), style = Type.body.copy(fontWeight = FontWeight.SemiBold))
-        Switch(
+        Toggle(
             checked = active,
             enabled = user != null && !updating,
             modifier = Modifier.semantics { contentDescription = label },
             onCheckedChange = { value ->
-                val account = user ?: return@Switch
+                val account = user ?: return@Toggle
                 updating = true
                 scope.launch {
                     try {

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 "use client";
 
+import { cn } from "@/lib/cn";
 import type { Track } from "@/lib/types";
 import { usePlayback } from "@/lib/playback/usePlayback";
 import { useT } from "@/contexts/I18nContext";
@@ -12,10 +12,12 @@ import { PauseIcon, PlayIcon } from "lucide-react";
 export function PlayAllButton({
   tracks,
   name,
+  compact = false,
   className,
 }: {
   tracks: Track[];
   name?: string;
+  compact?: boolean;
   className?: string;
 }) {
   const t = useT();
@@ -27,7 +29,7 @@ export function PlayAllButton({
     <Button
       variant="play"
       size="play"
-      className={className}
+      className={cn(compact && "max-md:size-11", className)}
       disabled={tracks.length === 0}
       onClick={() => playSet(tracks)}
       aria-label={

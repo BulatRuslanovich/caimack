@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 export interface ArtistRef {
   id: string;
@@ -78,6 +77,7 @@ export interface MapPoint {
 export interface LibraryMap {
   points: MapPoint[];
   totalTracks: number;
+  updating?: boolean;
 }
 
 export interface Artist {

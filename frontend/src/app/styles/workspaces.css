@@ -17,9 +17,13 @@
   max-width: 70rem;
 }
 
-.settings-navigation {
+.settings-sidebar {
   position: sticky;
   top: 1rem;
+  min-width: 0;
+}
+
+.settings-navigation {
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -62,6 +66,87 @@
 .settings-content {
   min-width: 0;
   padding: 0.75rem 0 1.5rem;
+}
+
+.account-settings {
+  container: account-settings / inline-size;
+}
+
+.account-layout {
+  display: grid;
+}
+
+.account-profile {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--library-edge);
+}
+
+.account-panel {
+  min-width: 0;
+}
+
+.account-panel + .account-panel {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--library-edge);
+}
+
+.account-panel-title {
+  display: flex;
+  min-height: 2rem;
+  align-items: center;
+  gap: 0.625rem;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 500;
+  text-wrap: wrap;
+}
+
+.account-panel-title svg {
+  flex-shrink: 0;
+  color: var(--primary);
+}
+
+.account-sign-in-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.25rem 0.75rem;
+  padding-block: 0.75rem;
+}
+
+.account-sign-in-time {
+  grid-column: 2;
+}
+
+@container account-settings (width >= 35rem) {
+  .account-sign-in-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .account-sign-in-time {
+    grid-column: auto;
+    align-self: center;
+    text-align: right;
+  }
+}
+
+@container account-settings (width >= 44rem) {
+  .account-layout {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    align-items: start;
+    column-gap: clamp(2rem, 5cqi, 3rem);
+  }
+
+  .account-panel + .account-sessions {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .account-sign-ins {
+    grid-column: 1 / -1;
+  }
 }
 
 .settings-panel {
@@ -366,16 +451,12 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 1.25rem;
   }
-  .settings-navigation {
+  .settings-sidebar {
     position: static;
-    flex-direction: row;
-    overflow-x: auto;
-    padding-bottom: 0.25rem;
-    scrollbar-width: none;
   }
-  .settings-navigation a {
-    flex-shrink: 0;
-    white-space: nowrap;
+  .settings-navigation {
+    flex-direction: row;
+    flex-wrap: wrap;
   }
   .upload-workspace {
     grid-template-columns: minmax(0, 1fr);
@@ -411,11 +492,16 @@
     padding-block: 1rem;
   }
   .settings-navigation {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.25rem;
   }
   .settings-navigation a {
+    min-width: 0;
+    min-height: 2.75rem;
     padding: 0.5rem 0.625rem;
     gap: 0.5rem;
+    overflow-wrap: anywhere;
   }
   .settings-options[data-preview="true"] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -502,5 +588,16 @@
   }
   .map-footer > div > span:nth-child(2) {
     width: 3.5rem;
+  }
+}
+
+@media (width < 380px) {
+  .settings-navigation a {
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.25rem;
+    padding-inline: 0.25rem;
+    font-size: 0.8125rem;
+    text-align: center;
   }
 }

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -197,6 +196,7 @@ impl LibraryScanner {
         })
     }
 
+    #[tracing::instrument(name = "library_scan", level = "error", skip_all, fields(scan_id = %Uuid::now_v7()))]
     async fn scan(&self, root: &Path, cancel: &CancellationToken) {
         self.update(|progress| {
             *progress = Progress::default();
@@ -204,24 +204,38 @@ impl LibraryScanner {
             progress.status.started_at = Some(Utc::now());
         });
         let started = std::time::Instant::now();
-        if let Err(error) = self.run(root, cancel).await {
-            tracing::error!("Scanning the music folder failed: {error:#}");
+        tracing::info!(folder = %root.display(), "Music folder scan started");
+        let result = self.run(root, cancel).await;
+        if let Err(error) = &result {
+            tracing::error!(error = %format!("{error:#}"), "Music folder scan failed");
             self.problem(String::new(), message("The music folder could not be scanned."));
         } else if self.rename_files || self.export_metadata {
             self.maintain(cancel).await;
         }
         let status = self.status(Lang::En);
+        let outcome = if cancel.is_cancelled() {
+            "cancelled"
+        } else if result.is_err() {
+            "failed"
+        } else {
+            "completed"
+        };
         tracing::info!(
-            "Scanned the music folder in {:.1} s: {} files, {} added, {} moved, {} updated, {} skipped, {} failed, {} missing, {} removed",
-            started.elapsed().as_secs_f64(),
-            status.files,
-            status.added,
-            status.moved,
-            status.updated,
-            status.skipped,
-            status.failed,
-            status.missing,
-            status.removed
+            outcome,
+            elapsed_ms = started.elapsed().as_millis() as u64,
+            files = status.files,
+            checked = status.checked,
+            added = status.added,
+            moved = status.moved,
+            updated = status.updated,
+            renamed = status.renamed,
+            exported = status.exported,
+            skipped = status.skipped,
+            failed = status.failed,
+            missing = status.missing,
+            removed = status.removed,
+            unsupported = status.unsupported,
+            "Music folder scan finished"
         );
         self.update(|progress| {
             progress.status.running = false;
@@ -231,6 +245,7 @@ impl LibraryScanner {
 
     async fn run(&self, root: &Path, cancel: &CancellationToken) -> anyhow::Result<()> {
         let Some(_lock) = crate::file_names::lock(&self.storage)? else {
+            tracing::debug!("Music folder scan skipped: another process holds the library lock");
             return Ok(());
         };
         let exported = crate::metadata_export::recover(&self.db, &self.storage).await?;
@@ -289,11 +304,24 @@ impl LibraryScanner {
             .filter_map(|(path, row)| Some((row.content_hash.clone()?, (path.clone(), row.track_id?))))
             .collect();
 
+        let mut reported = std::time::Instant::now();
         for file in &walked.files {
             if cancel.is_cancelled() {
                 return Ok(());
             }
             self.update(|progress| progress.status.checked += 1);
+            if reported.elapsed() >= Duration::from_secs(30) {
+                let status = self.status(Lang::En);
+                tracing::info!(
+                    files = status.files,
+                    checked = status.checked,
+                    added = status.added,
+                    updated = status.updated,
+                    failed = status.failed,
+                    "Music folder scan progress"
+                );
+                reported = std::time::Instant::now();
+            }
             let action = match known.get(&file.path) {
                 Some(row) if row.size == file.size && row.modified == file.modified => {
                     Action::Unchanged { was_missing: row.missing_since.is_some() }
@@ -372,6 +400,13 @@ impl LibraryScanner {
         if self.export_metadata {
             match crate::metadata_export::run(&self.db, &self.storage, cancel).await {
                 Ok(report) => {
+                    if report.exported > 0 {
+                        tracing::info!(
+                            exported = report.exported,
+                            failed = report.problems.len(),
+                            "Artwork and lyrics export finished"
+                        );
+                    }
                     self.update(|p| p.status.exported += report.exported);
                     for path in report.problems {
                         self.failed(
@@ -383,7 +418,7 @@ impl LibraryScanner {
                     }
                 }
                 Err(error) => {
-                    tracing::error!("Metadata export failed: {error:#}");
+                    tracing::error!(error = %format!("{error:#}"), "Artwork and lyrics export failed");
                     self.problem(
                         String::new(),
                         message(
@@ -398,6 +433,13 @@ impl LibraryScanner {
     async fn rename(&self, cancel: &CancellationToken) {
         match crate::file_names::run(&self.db, &self.storage, cancel).await {
             Ok(report) => {
+                if report.renamed > 0 {
+                    tracing::info!(
+                        renamed = report.renamed,
+                        failed = report.problems.len(),
+                        "Music file renaming finished"
+                    );
+                }
                 self.update(|p| p.status.renamed += report.renamed);
                 for path in report.problems {
                     self.failed(
@@ -407,7 +449,7 @@ impl LibraryScanner {
                 }
             }
             Err(error) => {
-                tracing::error!("File renaming failed: {error:#}");
+                tracing::error!(error = %format!("{error:#}"), "Music file renaming failed");
                 self.problem(
                     String::new(),
                     message("The file could not be renamed. Check folder write permissions and the server log."),
@@ -500,7 +542,7 @@ impl LibraryScanner {
                 let reason = match error.message() {
                     Some(reason) => reason.clone(),
                     None => {
-                        tracing::error!("Importing {} failed: {error:#}", file.path);
+                        tracing::error!(file = %file.path, error = %format!("{error:#}"), "Importing library file failed");
                         message("The file could not be processed.")
                     }
                 };
@@ -515,12 +557,12 @@ impl LibraryScanner {
         match tokio::task::spawn_blocking(move || storage::hash_file(&path)).await {
             Ok(Ok(hashed)) => Some(hashed),
             Ok(Err(error)) => {
-                tracing::warn!("Could not read {}: {error}", file.path);
+                tracing::warn!(file = %file.path, %error, "Cannot read library file");
                 self.failed(&file.path, message("The file could not be read."));
                 None
             }
             Err(error) => {
-                tracing::error!("Hashing {} crashed: {error}", file.path);
+                tracing::error!(file = %file.path, %error, "Library file hashing task crashed");
                 None
             }
         }

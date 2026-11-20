@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 import { rgba } from "@/lib/cssColor";
 import { alongPath, smoothPath, toScreen, type MapView } from "@/lib/libraryMap";

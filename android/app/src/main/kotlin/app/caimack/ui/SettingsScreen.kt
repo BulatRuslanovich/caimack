@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 package app.caimack.ui
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.shape.CircleShape
 import kotlin.math.abs
 import androidx.compose.ui.semantics.stateDescription
@@ -74,7 +71,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.caimack.R
-import app.caimack.BuildConfig
 import app.caimack.playback.RadioTile
 import app.caimack.api.SettingsChanges
 import kotlinx.coroutines.launch
@@ -172,7 +168,7 @@ fun SettingsScreen(category: SettingsCategory? = null) {
             }
             if (visible.any { it.section == R.string.settings_playback }) {
                 Panel(stringResource(R.string.settings_playback)) {
-                    PlaybackDevicesButton()
+                    PlaybackDevicesButton(style = PlaybackDevicesStyle.Settings)
                     if (SettingKey.Quality in visible) {
                         Choice(
                             stringResource(R.string.settings_quality),
@@ -260,7 +256,7 @@ fun SettingsScreen(category: SettingsCategory? = null) {
                                 style = Type.body.copy(fontWeight = FontWeight.SemiBold),
                                 modifier = Modifier.weight(1f).padding(end = 12.dp),
                             )
-                            Toggle(recapReminder && notificationsAllowed, reminderChange)
+                            Toggle(recapReminder && notificationsAllowed, onCheckedChange = reminderChange)
                         }
                     }
 
@@ -428,7 +424,7 @@ fun SettingsScreen(category: SettingsCategory? = null) {
                     Text(stringResource(R.string.sign_out), color = palette.muted)
                 }
             }
-            SettingsAbout { sourceContext.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.SOURCE_URL))) }
+            SettingsAbout()
         }
     }
 }

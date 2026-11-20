@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
@@ -143,10 +142,11 @@ pub fn spawn(
     }
 
     handles.push(tokio::spawn(backfill(db, storage, queue, cancel)));
-    tracing::debug!("Transcode worker started: 1 urgent worker, {warmup_workers} warmup workers");
+    tracing::info!(urgent_workers = 1, warmup_workers, heavy_job_limit = workers, "HLS transcoding workers started");
     handles
 }
 
+#[tracing::instrument(name = "transcode", level = "error", skip_all, fields(file = %request.source, quality = request.quality.slug()))]
 async fn transcode(
     db: &PgPool,
     storage: &Storage,
@@ -177,7 +177,7 @@ async fn transcode(
         .fetch_optional(&mut *reading)
         .await?;
         let Some(source) = current.as_deref().and_then(|path| storage.existing(path)) else {
-            tracing::warn!("Skipped transcoding {key}: {} is missing from storage", request.source);
+            tracing::warn!("HLS transcoding skipped: source file is missing; check the music folder mount");
             return Ok(());
         };
         if storage.hls_variant_ready(&request.content_hash, request.quality) {
@@ -189,22 +189,18 @@ async fn transcode(
             tokio::fs::create_dir_all(parent).await?;
         }
         let started = Instant::now();
+        tracing::debug!(bitrate_kbps = bitrate, "HLS transcoding started");
         let done = media::ffmpeg::transcode_to_hls(&source, &target, bitrate, cancel).await?;
         reading.rollback().await?;
         if done {
-            tracing::debug!(
-                "Prepared the {} HLS rendition of {} in {:.1} s",
-                request.quality.slug(),
-                request.content_hash,
-                started.elapsed().as_secs_f64()
-            );
+            tracing::debug!(elapsed_ms = started.elapsed().as_millis() as u64, "HLS rendition prepared");
         }
         anyhow::Ok(())
     }
     .await;
 
     if let Err(error) = outcome {
-        tracing::error!("Transcoding {key} failed unexpectedly: {error:#}");
+        tracing::error!(error = %format!("{error:#}"), "HLS transcoding failed");
     }
     if let Ok(mut set) = running.lock() {
         set.remove(&key);
@@ -225,7 +221,7 @@ async fn backfill(db: PgPool, storage: Storage, queue: TranscodeQueue, cancel: C
     {
         Ok(tracks) => tracks,
         Err(error) => {
-            tracing::error!("Transcode backfill stopped unexpectedly: {error}");
+            tracing::error!(%error, "HLS cache warmup discovery failed; playback can still request transcoding");
             return;
         }
     };
@@ -238,7 +234,9 @@ async fn backfill(db: PgPool, storage: Storage, queue: TranscodeQueue, cancel: C
     if pending.is_empty() {
         return;
     }
-    tracing::info!("Warming {} missing renditions", pending.len());
+    let renditions = pending.len();
+    let started = Instant::now();
+    tracing::info!(renditions, "Scheduling missing HLS renditions for background transcoding");
 
     while !pending.is_empty() {
         let mut carried = Vec::new();
@@ -258,6 +256,11 @@ async fn backfill(db: PgPool, storage: Storage, queue: TranscodeQueue, cancel: C
             }
         }
     }
+    tracing::info!(
+        renditions,
+        elapsed_secs = started.elapsed().as_secs(),
+        "HLS cache warmup scheduling finished; workers continue transcoding"
+    );
 }
 
 #[cfg(test)]

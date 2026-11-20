@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Bulat Ruslanovich
 
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::random::Rng;
@@ -20,7 +20,7 @@ const SEED: u64 = 17;
 
 const CLUSTER_RADIUS: f32 = 0.08;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MapLayout {
     pub tracks: Vec<Uuid>,
     pub x: Vec<f32>,
@@ -37,11 +37,23 @@ impl MapLayout {
     }
 }
 
+/// Previous coordinates must belong to unchanged audio vectors in the same model space.
 pub fn layout(snapshot: &Snapshot, previous: Option<&MapLayout>) -> MapLayout {
     let count = snapshot.len();
     let tracks: Vec<Uuid> = snapshot.metas().iter().map(|meta| meta.track_id).collect();
     if count == 0 {
         return MapLayout::default();
+    }
+    let known: HashMap<_, _> = previous
+        .into_iter()
+        .flat_map(|p| p.tracks.iter().zip(p.x.iter().zip(&p.y)))
+        .map(|(&id, (&x, &y))| (id, (x, y)))
+        .collect();
+    let anchors: Vec<_> = tracks.iter().map(|id| known.get(id).copied()).collect();
+    let reused = anchors.iter().filter(|point| point.is_some()).count();
+    if reused == count {
+        let (x, y) = anchors.into_iter().flatten().unzip();
+        return MapLayout { tracks, x, y };
     }
     if count < 4 {
         #[expect(clippy::cast_precision_loss, reason = "fewer than four tracks")]
@@ -52,24 +64,33 @@ pub fn layout(snapshot: &Snapshot, previous: Option<&MapLayout>) -> MapLayout {
     let neighbours = nearest_neighbours(snapshot, NEIGHBOURS.min(count - 1));
     let edges = fuzzy_graph(&neighbours);
 
-    let (mut x, mut y, reused) = match previous.filter(|p| !p.is_empty()) {
-        Some(previous) => from_previous(&tracks, previous, &neighbours),
-        None => {
-            let (x, y) = principal_components(snapshot);
-            (x, y, 0)
-        }
-    };
-
-    let settled = reused * 5 >= count * 4;
-    let epochs = if settled {
+    // Large changes start from the same PCA initialization as a fresh build.
+    let incremental = reused * 5 >= count * 4;
+    let (mut x, mut y) =
+        if incremental { from_previous(&anchors, &neighbours) } else { principal_components(snapshot) };
+    let fixed: Vec<_> = anchors.iter().map(|point| incremental && point.is_some()).collect();
+    let epochs = if incremental {
         80
     } else if count <= 10_000 {
         400
     } else {
         200
     };
-    optimize(&mut x, &mut y, &edges, epochs, if settled { 0.3 } else { 1.0 });
-    normalize(&mut x, &mut y);
+    optimize(&mut x, &mut y, &edges, &fixed, epochs, if incremental { 0.3 } else { 1.0 });
+    if incremental {
+        for (row, anchor) in anchors.into_iter().enumerate() {
+            // Never normalize the whole map again: that would move every saved point.
+            let point = anchor.unwrap_or_else(|| {
+                (
+                    (x[row] / (2.0 * INITIAL_SPREAD) + 0.5).clamp(0.0, 1.0),
+                    (y[row] / (2.0 * INITIAL_SPREAD) + 0.5).clamp(0.0, 1.0),
+                )
+            });
+            (x[row], y[row]) = point;
+        }
+    } else {
+        normalize(&mut x, &mut y);
+    }
     MapLayout { tracks, x, y }
 }
 
@@ -207,29 +228,25 @@ fn power_iteration(snapshot: &Snapshot, mean: &[f32], exclude: Option<&[f32]>) -
     vector
 }
 
-fn from_previous(tracks: &[Uuid], previous: &MapLayout, neighbours: &[Neighbourhood]) -> (Vec<f32>, Vec<f32>, usize) {
-    let known: HashMap<Uuid, usize> = previous.tracks.iter().enumerate().map(|(index, id)| (*id, index)).collect();
-    let count = tracks.len();
-    let (mut x, mut y, mut placed) = (vec![0.0; count], vec![0.0; count], vec![false; count]);
-    let mut reused = 0;
+fn from_previous(anchors: &[Option<(f32, f32)>], neighbours: &[Neighbourhood]) -> (Vec<f32>, Vec<f32>) {
+    let count = anchors.len();
+    let (mut x, mut y) = (vec![0.0; count], vec![0.0; count]);
 
-    for (row, id) in tracks.iter().enumerate() {
-        if let Some(&index) = known.get(id) {
-            x[row] = (previous.x[index] - 0.5) * 2.0 * INITIAL_SPREAD;
-            y[row] = (previous.y[index] - 0.5) * 2.0 * INITIAL_SPREAD;
-            placed[row] = true;
-            reused += 1;
+    for (row, anchor) in anchors.iter().enumerate() {
+        if let Some((px, py)) = anchor {
+            x[row] = (px - 0.5) * 2.0 * INITIAL_SPREAD;
+            y[row] = (py - 0.5) * 2.0 * INITIAL_SPREAD;
         }
     }
 
     let mut rng = Rng::new(SEED);
     let jitter = INITIAL_SPREAD * 0.02;
     for row in 0..count {
-        if placed[row] {
+        if anchors[row].is_some() {
             continue;
         }
         let around: Vec<usize> =
-            neighbours[row].iter().map(|&(other, _)| other).filter(|&other| placed[other]).collect();
+            neighbours[row].iter().map(|&(other, _)| other).filter(|&other| anchors[other].is_some()).collect();
         #[expect(clippy::cast_precision_loss, reason = "k is small")]
         let (cx, cy) = if around.is_empty() {
             (0.0, 0.0)
@@ -243,10 +260,17 @@ fn from_previous(tracks: &[Uuid], previous: &MapLayout, neighbours: &[Neighbourh
             y[row] = cy + (rng.next_f64() - 0.5) as f32 * jitter;
         }
     }
-    (x, y, reused)
+    (x, y)
 }
 
-fn optimize(x: &mut [f32], y: &mut [f32], edges: &[(usize, usize, f32)], epochs: usize, learning_rate: f32) {
+fn optimize(
+    x: &mut [f32],
+    y: &mut [f32],
+    edges: &[(usize, usize, f32)],
+    fixed: &[bool],
+    epochs: usize,
+    learning_rate: f32,
+) {
     if edges.is_empty() {
         return;
     }
@@ -264,7 +288,7 @@ fn optimize(x: &mut [f32], y: &mut [f32], edges: &[(usize, usize, f32)], epochs:
         let (epoch_f, alpha) = (epoch as f32, learning_rate * (1.0 - (epoch - 1) as f32 / epochs as f32));
 
         for (e, &(from, to, _)) in edges.iter().enumerate() {
-            if next_at[e] > epoch_f {
+            if (fixed[from] && fixed[to]) || next_at[e] > epoch_f {
                 continue;
             }
 
@@ -274,15 +298,20 @@ fn optimize(x: &mut [f32], y: &mut [f32], edges: &[(usize, usize, f32)], epochs:
                 let power = squared.powf(CURVE_B);
                 let attract = -2.0 * CURVE_A * CURVE_B * power / squared / (CURVE_A * power + 1.0);
                 let (gx, gy) = (clip(attract * dx) * alpha, clip(attract * dy) * alpha);
-                x[from] += gx;
-                y[from] += gy;
-                x[to] -= gx;
-                y[to] -= gy;
+                if !fixed[from] {
+                    x[from] += gx;
+                    y[from] += gy;
+                }
+                if !fixed[to] {
+                    x[to] -= gx;
+                    y[to] -= gy;
+                }
             }
             next_at[e] += every[e];
 
             #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "a small non-negative count")]
             let negatives = ((epoch_f - next_negative_at[e]) / negative_every[e]).max(0.0) as usize;
+            let from = if fixed[from] { to } else { from };
             for _ in 0..negatives {
                 let other = rng.below(count);
                 if other == from {
@@ -394,9 +423,56 @@ mod tests {
         let snapshot = clusters();
         let first = layout(&snapshot, None);
         let again = layout(&snapshot, Some(&first));
-        let moved: f32 =
-            (0..40).map(|i| (first.x[i] - again.x[i]).abs() + (first.y[i] - again.y[i]).abs()).sum::<f32>() / 40.0;
-        assert!(moved < 0.15, "moved {moved}");
+        assert_eq!(first.x, again.x);
+        assert_eq!(first.y, again.y);
+    }
+
+    #[test]
+    fn adding_a_few_tracks_does_not_move_existing_tracks() {
+        let snapshot = clusters();
+        let mut first = layout(&snapshot, None);
+        first.tracks.truncate(36);
+        first.x.truncate(36);
+        first.y.truncate(36);
+        let updated = layout(&snapshot, Some(&first));
+        assert_eq!(&updated.x[..36], first.x);
+        assert_eq!(&updated.y[..36], first.y);
+        assert!(updated.x.iter().chain(&updated.y).all(|v| v.is_finite() && (0.0..=1.0).contains(v)));
+    }
+
+    #[test]
+    fn removing_tracks_preserves_coordinates_even_for_a_tiny_library() {
+        let snapshot = clusters();
+        let first = layout(&snapshot, None);
+        let remaining = Snapshot::new(4, vec![(snapshot.meta(5).clone(), snapshot.vector(5).to_vec())]);
+        let updated = layout(&remaining, Some(&first));
+        assert_eq!(updated.x, [first.x[5]]);
+        assert_eq!(updated.y, [first.y[5]]);
+    }
+
+    #[test]
+    fn a_major_change_uses_the_same_layout_as_a_fresh_build() {
+        let snapshot = clusters();
+        let mut previous = layout(&snapshot, None);
+        previous.tracks.truncate(10);
+        previous.x.truncate(10);
+        previous.y.truncate(10);
+        let updated = layout(&snapshot, Some(&previous));
+        let fresh = layout(&snapshot, None);
+        assert_eq!(updated.x, fresh.x);
+        assert_eq!(updated.y, fresh.y);
+    }
+
+    #[test]
+    fn reordered_tracks_keep_coordinates_by_id() {
+        let original = clusters();
+        let first = layout(&original, None);
+        let rows =
+            (0..original.len()).rev().map(|row| (original.meta(row).clone(), original.vector(row).to_vec())).collect();
+        let reordered = Snapshot::new(4, rows);
+        let updated = layout(&reordered, Some(&first));
+        assert!(updated.x.iter().eq(first.x.iter().rev()));
+        assert!(updated.y.iter().eq(first.y.iter().rev()));
     }
 
     #[test]
