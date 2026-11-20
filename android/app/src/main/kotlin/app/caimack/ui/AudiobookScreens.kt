@@ -394,14 +394,6 @@ private fun BookDetailActions(book: Audiobook, active: AudiobookPlaybackState?, 
         verticalAlignment = Alignment.CenterVertically,
     ) {
         CollectionTransportButton(playing, playing || catalog.canPlay(book)) { player.toggle(book) }
-        if (active != null && book.chapters.size > 1) {
-            IconButton(onClick = { player.skipChapter(false) }, enabled = book.chapters.first().id != active.chapterId) {
-                Icon(Lucide.SkipBack, stringResource(R.string.audiobook_previous_chapter), Modifier.size(18.dp))
-            }
-            IconButton(onClick = { player.skipChapter(true) }, enabled = book.chapters.last().id != active.chapterId) {
-                Icon(Lucide.SkipForward, stringResource(R.string.audiobook_next_chapter), Modifier.size(18.dp))
-            }
-        }
         Spacer(Modifier.weight(1f))
         IconButton(onClick = { container.audiobookStore.setSaved(book.id, !book.saved) }) {
             LibrarySaveIcon(book.saved, stringResource(if (book.saved) R.string.collection_remove else R.string.collection_add))
