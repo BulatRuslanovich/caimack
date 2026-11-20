@@ -1,0 +1,104 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+.catalog {
+  container: books / inline-size;
+}
+
+.feature {
+  display: grid;
+  gap: 1.5rem;
+}
+
+@container books (min-width: 40rem) {
+  .shelf > ul,
+  .compact > ul {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--library-card-min, 11rem), 1fr));
+    gap: var(--library-card-gap, 1.25rem);
+  }
+
+  .compact > ul {
+    grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  }
+
+  .shelf .row,
+  .compact .row {
+    padding: 0;
+    border: 0;
+  }
+
+  .shelf .row {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+  }
+
+  .shelf .art > span:first-child {
+    width: 100%;
+    height: auto;
+  }
+
+  .shelf .caption h3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .shelf .actions {
+    position: absolute;
+    inset: 0 0 auto;
+    aspect-ratio: 1;
+    padding: 0.55rem;
+    align-items: end;
+    justify-content: space-between;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 150ms ease;
+  }
+
+  .shelf .actions > button {
+    pointer-events: auto;
+    background-color: var(--card);
+    box-shadow: 0 1px 6px #0004;
+  }
+
+  .shelf .row:hover .actions,
+  .shelf .row:focus-within .actions {
+    opacity: 1;
+  }
+
+  .feature > section:first-child > div {
+    min-height: 12rem;
+    padding: 1.5rem;
+  }
+
+  .feature h3 {
+    font-size: clamp(1.25rem, 2.3cqi, 2rem);
+  }
+
+  .queue h3 {
+    font-size: 1rem;
+  }
+}
+
+@media (hover: none) {
+  .shelf .actions {
+    opacity: 1;
+  }
+}
+
+@container books (min-width: 57rem) {
+  .withQueue {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+
+  .queue > ul {
+    max-height: 14rem;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+}

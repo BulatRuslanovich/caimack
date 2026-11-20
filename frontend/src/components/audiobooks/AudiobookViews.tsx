@@ -16,6 +16,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { useEffect, useState, type CSSProperties } from "react";
+import styles from "./AudiobookCatalog.module.css";
 import { DetailHeader } from "@/components/DetailHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { Card } from "@/components/MediaCard";
@@ -108,7 +109,10 @@ export function AudiobookCover({
 function Credits({ book }: { book: Audiobook }) {
   const t = useT();
   return (
-    <span className="block truncate text-sm text-muted-foreground">
+    <span
+      title={[book.author, book.narrator].filter(Boolean).join(" · ")}
+      className="block truncate text-sm text-muted-foreground"
+    >
       {[book.author, book.narrator && t("audiobooks.narrator", { name: book.narrator })]
         .filter(Boolean)
         .join(" · ")}
@@ -228,8 +232,13 @@ export function AudiobookRow({ book }: { book: Audiobook }) {
   const artwork = useAudiobookArtwork(book);
   const working = transfer?.bookId === book.id;
   return (
-    <li className="flex items-center gap-3 py-3 first:pt-0 max-sm:gap-2.5">
-      <div className="relative shrink-0">
+    <li
+      className={cn(styles.row, "flex min-w-0 items-center gap-3 py-3 first:pt-0 max-sm:gap-2.5")}
+    >
+      <PrefetchLink
+        href={audiobookHref(book.id)}
+        className={cn(styles.art, "relative block shrink-0")}
+      >
         <AudiobookCover
           book={book}
           artwork={artwork}
@@ -245,8 +254,8 @@ export function AudiobookRow({ book }: { book: Audiobook }) {
             <CheckIcon size={12} />
           </span>
         )}
-      </div>
-      <div className="min-w-0 flex-1 space-y-1">
+      </PrefetchLink>
+      <div className={cn(styles.caption, "min-w-0 flex-1 space-y-1")}>
         <h3 className="truncate font-semibold" title={book.title}>
           <PrefetchLink href={audiobookHref(book.id)}>{book.title}</PrefetchLink>
         </h3>
@@ -259,7 +268,7 @@ export function AudiobookRow({ book }: { book: Audiobook }) {
           <BookProgress book={book} />
         )}
       </div>
-      <div className="flex shrink-0 items-center gap-1 max-sm:gap-0">
+      <div className={cn(styles.actions, "flex shrink-0 items-center gap-1 max-sm:gap-0")}>
         <PlayBookButton book={book} />
         <BookActions book={book} />
       </div>
@@ -267,10 +276,18 @@ export function AudiobookRow({ book }: { book: Audiobook }) {
   );
 }
 
-function BookSection({ title, books }: { title: string; books: Audiobook[] }) {
+function BookSection({
+  title,
+  books,
+  layout = "shelf",
+}: {
+  title: string;
+  books: Audiobook[];
+  layout?: "shelf" | "queue" | "compact";
+}) {
   if (!books.length) return null;
   return (
-    <section className="flex min-w-0 flex-col gap-3.5">
+    <section className={cn(styles[layout], "flex min-w-0 flex-col gap-3.5")}>
       <h2 className="min-w-0 text-heading font-semibold wrap-anywhere">{title}</h2>
       <ul className="divide-y divide-border">
         {books.map((book) => (
@@ -378,25 +395,38 @@ export function AudiobooksPage() {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-225 min-w-0 flex-col gap-6">
-      <PageHeader title={t("nav.audiobooks")} />
-      {filter === "all" && hero && <ContinueBook book={hero} />}
-      <div role="group" aria-label={t("nav.audiobooks")} className="flex flex-wrap gap-2">
-        {(["all", "duration", "downloaded", "saved"] as const).map((option) => (
-          <Button
-            key={option}
-            size="sm"
-            variant={filter === option ? "primary" : "outline"}
-            aria-pressed={filter === option}
-            onClick={() => setFilter(option)}
-          >
-            {option === "saved" && <BookmarkIcon size={16} />}
-            {option === "duration" && <Clock3Icon size={16} />}
-            {option === "downloaded" && <ArrowDownToLineIcon size={16} />}
-            {t(option === "all" ? "audiobooks.recent" : `audiobooks.${option}`)}
-          </Button>
-        ))}
-      </div>
+    <div className={cn(styles.catalog, "flex w-full min-w-0 flex-col gap-6")}>
+      <PageHeader
+        title={t("nav.audiobooks")}
+        actions={
+          <div role="group" aria-label={t("nav.audiobooks")} className="flex flex-wrap gap-2">
+            {(["all", "duration", "downloaded", "saved"] as const).map((option) => (
+              <Button
+                key={option}
+                size="sm"
+                variant={filter === option ? "primary" : "outline"}
+                aria-pressed={filter === option}
+                onClick={() => setFilter(option)}
+              >
+                {option === "saved" && <BookmarkIcon size={16} />}
+                {option === "duration" && <Clock3Icon size={16} />}
+                {option === "downloaded" && <ArrowDownToLineIcon size={16} />}
+                {t(option === "all" ? "audiobooks.recent" : `audiobooks.${option}`)}
+              </Button>
+            ))}
+          </div>
+        }
+      />
+      {filter === "all" && hero && (
+        <div className={cn(styles.feature, listening.length > 1 && styles.withQueue)}>
+          <ContinueBook book={hero} />
+          <BookSection
+            layout="queue"
+            title={t("audiobooks.listening")}
+            books={listening.slice(1)}
+          />
+        </div>
+      )}
       {result.isError && !books.length && online ? (
         <LoadError message={t("error.load")} onRetry={() => void result.refetch()} />
       ) : result.isPending && !books.length ? (
@@ -409,8 +439,8 @@ export function AudiobooksPage() {
         )
       ) : allBooks.length ? (
         <>
-          <BookSection title={t("audiobooks.listening")} books={listening} />
           <BookSection
+            layout="compact"
             title={t("audiobooks.saved")}
             books={saved.filter((book) => online || downloaded.has(book.id))}
           />
