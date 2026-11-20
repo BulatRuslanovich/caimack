@@ -381,25 +381,34 @@ fun AudiobookDetail(id: String) {
         item("header") {
             Box(Modifier.fillMaxWidth()) {
                 BookHeaderBackdrop(cover, book.title)
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 18.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Cover(cover, book.title, Modifier.size(96.dp).clip(Radius.panel), book = true)
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(book.title, style = Type.section.copy(fontSize = 21.sp, lineHeight = 26.sp), color = LocalPalette.current.foreground)
-                        book.author?.let { Text(it, style = Type.body, color = LocalPalette.current.foreground) }
-                        book.narrator?.let {
-                            Text(stringResource(R.string.audiobook_narrator, it), style = Type.small, color = LocalPalette.current.muted)
+                Column {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 18.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Cover(cover, book.title, Modifier.size(96.dp).clip(Radius.panel), book = true)
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(book.title, style = Type.section.copy(fontSize = 21.sp, lineHeight = 26.sp), color = LocalPalette.current.foreground)
+                            book.author?.let { Text(it, style = Type.body, color = LocalPalette.current.foreground) }
+                            book.narrator?.let {
+                                Text(stringResource(R.string.audiobook_narrator, it), style = Type.small, color = LocalPalette.current.muted)
+                            }
+                            val chapters = pluralStringResource(R.plurals.audiobook_chapter_count, book.chapters.size, book.chapters.size)
+                            Text("$chapters · ${bookTime(book.durationMs)}", Modifier.padding(top = 3.dp), style = Type.tiny, color = LocalPalette.current.muted)
                         }
-                        val chapters = pluralStringResource(R.plurals.audiobook_chapter_count, book.chapters.size, book.chapters.size)
-                        Text("$chapters · ${bookTime(book.durationMs)}", Modifier.padding(top = 3.dp), style = Type.tiny, color = LocalPalette.current.muted)
                     }
+                    BookDetailActions(book, active, catalog)
                 }
             }
+            Spacer(Modifier.height(8.dp))
         }
-        item("actions") { BookDetailActions(book, active, catalog) }
+        if (book.id in catalog.failedDownloads) {
+            item("download-error") {
+                Text(stringResource(R.string.audiobook_download_error), Modifier.padding(horizontal = 16.dp),
+                    style = Type.tiny, color = LocalPalette.current.muted)
+            }
+        }
         if (active != null || book.progress != null) {
             item("listening-position") { BookListeningPosition(book, active) }
         }
@@ -444,7 +453,7 @@ private fun BookDetailActions(book: Audiobook, active: AudiobookPlaybackState?, 
         else -> R.string.audiobook_download
     })
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         CollectionTransportButton(playing, playing || catalog.canPlay(book)) { player.toggle(book) }
@@ -468,10 +477,6 @@ private fun BookDetailActions(book: Audiobook, active: AudiobookPlaybackState?, 
                 Icon(if (downloaded) Lucide.CircleArrowDown else Lucide.Download, downloadLabel, tint = if (downloaded) palette.primary else palette.muted)
             }
         }
-    }
-    if (book.id in catalog.failedDownloads) {
-        Text(stringResource(R.string.audiobook_download_error), Modifier.padding(horizontal = 16.dp),
-            style = Type.tiny, color = palette.muted)
     }
 }
 
