@@ -352,10 +352,11 @@ export function AudiobooksPage() {
   const t = useT();
   const { books, result, downloaded, online } = useAudiobooks();
   const [filter, setFilter] = useState<"all" | "saved" | "downloaded">("all");
-  const listening = listeningBooks(books);
-  const hero = listening.find((book) => online || downloaded.has(book.id));
   const saved = books.filter((book) => book.saved);
   const allBooks = online ? books : books.filter((book) => downloaded.has(book.id));
+  const listening = listeningBooks(allBooks);
+  const hero = listening[0];
+  const catalog = allBooks.filter((book) => book.progress?.completed !== false);
   const filtered = filter === "saved" ? saved : allBooks.filter((book) => downloaded.has(book.id));
   const empty = t(
     filter === "saved"
@@ -396,15 +397,12 @@ export function AudiobooksPage() {
         )
       ) : allBooks.length ? (
         <>
-          <BookSection
-            title={t("audiobooks.listening")}
-            books={listening.filter((book) => online || downloaded.has(book.id))}
-          />
+          <BookSection title={t("audiobooks.listening")} books={listening} />
           <BookSection
             title={t("audiobooks.saved")}
             books={saved.filter((book) => online || downloaded.has(book.id))}
           />
-          <BookSection title={t("audiobooks.catalog")} books={allBooks} />
+          <BookSection title={t("audiobooks.catalog")} books={catalog} />
         </>
       ) : (
         <p className="text-sm text-muted-foreground">{empty}</p>

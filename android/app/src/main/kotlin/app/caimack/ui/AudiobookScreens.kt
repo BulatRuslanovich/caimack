@@ -72,7 +72,7 @@ fun AudiobookBrowse() {
     val sorted = when (filter) {
         DURATION -> books.sortedBy { it.durationMs }
         DOWNLOADED -> books.filter { it.id in catalog.downloaded }
-        else -> books.sortedByDescending { it.progress?.updatedAtMs ?: 0L }
+        else -> books.filterNot { it.progress?.completed == false }.sortedByDescending { it.progress?.updatedAtMs ?: 0L }
     }
     val inProgress = books.inProgress()
     LazyColumn(
@@ -105,7 +105,7 @@ fun AudiobookBrowse() {
                 else -> R.string.audiobook_all
             }
             bookSection("catalog", heading, sorted, catalog)
-        } else if (catalog.ready && (catalog.online || books.isNotEmpty())) {
+        } else if (catalog.ready && (catalog.online || books.isNotEmpty()) && (filter != RECENT || inProgress.isEmpty())) {
             item("empty") { Empty(stringResource(R.string.audiobook_empty)) }
         }
     }
