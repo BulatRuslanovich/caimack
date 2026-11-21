@@ -888,7 +888,8 @@ try {
   await browserSession.send("Target.closeTarget", { targetId: renderer.targetId });
   await until(() => devices.size === 1, "renderer disconnected");
   await until(
-    () => controller.page.eval(`[...document.querySelectorAll('audio')].some(audio =>
+    () =>
+      controller.page.eval(`[...document.querySelectorAll('audio')].some(audio =>
       audio.currentSrc.includes(${JSON.stringify(lastTrack)}) && !audio.paused &&
       audio.currentTime >= ${Math.max(0, lastPosition - 1)})`),
     "the controller resumes the same track and position locally",
