@@ -38,7 +38,6 @@ pub enum Layout {
     Tile,
     QuickTiles,
     Grid,
-    Chart,
     Circles,
 }
 
@@ -118,9 +117,8 @@ impl Recommendations {
 
         let quick_places = quick_places(&recently_played);
         let quick_album_ids: Vec<Uuid> = quick_places.iter().filter_map(|track| track.album_id).collect();
-        let (personal, top, mix, mut quick_albums) = tokio::try_join!(
+        let (personal, mix, mut quick_albums) = tokio::try_join!(
             async { if self.enabled { self.personal_shelves(user, &listener, shelf_size).await } else { Ok(vec![]) } },
-            self.top_tracks(user, size),
             async { if self.enabled { self.daily_mix_for(user, &listener).await } else { Ok(vec![]) } },
             self.albums_by_ids(&quick_album_ids),
         )?;
@@ -159,7 +157,6 @@ impl Recommendations {
                 playlists: Some(own_playlists),
                 ..HomeBlockDto::new("yourPlaylists", Layout::Shelf, Zone::Browse)
             }),
-            HomeBlockDto::tracks("topTracks", Layout::Chart, top),
             track_shelves.next().map(Hydrated::block),
         ];
         Ok(HomeFeedDto { blocks: blocks.into_iter().flatten().collect(), stats })

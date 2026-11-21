@@ -17,8 +17,7 @@ import { SearchField } from "@/components/SearchField";
 import { Query } from "@/components/Query";
 import { TrackList } from "@/components/TrackList";
 import { SearchIcon } from "lucide-react";
-import { hiddenScrollbar, Shelf } from "@/components/Shelf";
-import { RankedList } from "@/components/collection/RankedList";
+import { hiddenScrollbar } from "@/components/Shelf";
 import { ToggleGroup, ToggleGroupButton } from "@/components/ui/toggle-group";
 import { useT } from "@/contexts/I18nContext";
 import { useYandexMusicSettings } from "@/lib/useYandexMusic";
@@ -158,7 +157,7 @@ function SearchView() {
         {!yandexTab &&
           tab === null &&
           (query.length < SEARCH_MIN_LENGTH ? (
-            <SearchStart showPopular={query === ""} />
+            <SearchStart />
           ) : (
             <Query
               result={results}
@@ -293,7 +292,7 @@ function seeAll(query: string, tab: CatalogTab, shown: number): Route | undefine
   return shown > PREVIEW ? `/search?q=${encodeURIComponent(query)}&tab=${tab}` : undefined;
 }
 
-function SearchStart({ showPopular }: { showPopular: boolean }) {
+function SearchStart() {
   const t = useT();
   const genres = useQuery(queries.genres());
   const top = useMemo(
@@ -316,41 +315,6 @@ function SearchStart({ showPopular }: { showPopular: boolean }) {
           </Section>
         )}
       </Query>
-
-      {showPopular && <PopularSearch />}
     </>
-  );
-}
-
-function PopularSearch() {
-  const t = useT();
-  const result = useQuery(queries.searchPopular());
-
-  return (
-    <Query result={result}>
-      {({ tracks, albums, artists }) => (
-        <>
-          {tracks.length > 0 && (
-            <Section title={t("search.mostPlayedTracks")}>
-              <RankedList tracks={tracks} ranked={false} density="compact" />
-            </Section>
-          )}
-          {albums.length > 0 && (
-            <Shelf title={t("search.mostPlayedAlbums")} className="gap-2.5">
-              {albums.map((album) => (
-                <AlbumCard key={album.id} album={album} />
-              ))}
-            </Shelf>
-          )}
-          {artists.length > 0 && (
-            <Shelf title={t("search.mostPlayedArtists")} className="gap-2.5">
-              {artists.map((artist) => (
-                <ArtistCard key={artist.id} artist={artist} bare />
-              ))}
-            </Shelf>
-          )}
-        </>
-      )}
-    </Query>
   );
 }

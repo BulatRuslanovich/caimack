@@ -133,12 +133,19 @@ function Blocks({
 
   const seen = new Set(shown);
   const browse = [];
+  let includesPopular = false;
   const audiobookAnchor =
     blocks.find((block) => block.zone === "Browse" && block.baseKey === "newArrivals") ??
     blocks.find((block) => block.zone === "Browse" && block.baseKey === "newAlbums");
 
   for (const block of blocks) {
     if (block.zone !== "Browse") continue;
+
+    if (!offline && block.baseKey === "topTracks") {
+      browse.push(<PopularMusic key="popular-music" />);
+      includesPopular = true;
+      continue;
+    }
 
     const before = new Set(seen);
     let visible = block;
@@ -177,6 +184,7 @@ function Blocks({
 
       {!audiobookAnchor && <AudiobookHome />}
       {browse}
+      {!offline && !includesPopular && <PopularMusic />}
     </div>
   );
 }
@@ -288,4 +296,37 @@ function onePerAlbum(tracks: Track[]): Track[] {
   });
 
   return distinct.length >= MIN_DISTINCT ? distinct : tracks;
+}
+
+function PopularMusic() {
+  const t = useT();
+  const result = useQuery(queries.searchPopular());
+
+  return (
+    <Query result={result}>
+      {({ tracks, albums, artists }) => (
+        <>
+          {tracks.length > 0 && (
+            <Section title={t("search.mostPlayedTracks")}>
+              <RankedList tracks={tracks} ranked={false} density="compact" />
+            </Section>
+          )}
+          {albums.length > 0 && (
+            <Shelf title={t("search.mostPlayedAlbums")} className="gap-2.5">
+              {albums.map((album) => (
+                <AlbumCard key={album.id} album={album} />
+              ))}
+            </Shelf>
+          )}
+          {artists.length > 0 && (
+            <Shelf title={t("search.mostPlayedArtists")} className="gap-2.5">
+              {artists.map((artist) => (
+                <ArtistCard key={artist.id} artist={artist} bare />
+              ))}
+            </Shelf>
+          )}
+        </>
+      )}
+    </Query>
+  );
 }

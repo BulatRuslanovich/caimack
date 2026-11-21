@@ -195,6 +195,9 @@ interface CaimackApi {
     @GET("api/search")
     suspend fun search(@Query("q") query: String, @Query("limit") limit: Int = 8): SearchResults
 
+    @GET("api/search/popular")
+    suspend fun searchPopular(): SearchResults
+
     @GET("api/search/tracks")
     suspend fun searchTracks(@Query("q") query: String, @Query("page") page: Int, @Query("pageSize") pageSize: Int): Paged<Track>
 
