@@ -194,6 +194,15 @@ private fun AppContent(
     val palette = LocalPalette.current
     val container = LocalContainer.current
     val nav = rememberNavController()
+    val destination = nav.currentBackStackEntryAsState().value?.destination
+    LaunchedEffect(destination) {
+        if (destination != null && (
+            destination.hasRoute<HomeRoute>() || destination.hasRoute<SearchRoute>() ||
+                destination.hasRoute<LibraryRoute>() || destination.hasRoute<SavedAudiobooksRoute>() ||
+                destination.hasRoute<AudiobookRoute>()
+            )
+        ) container.audiobookStore.requestRefreshIfStale()
+    }
     var homeCategory by rememberSaveable { mutableStateOf("all") }
     var homeDownloads by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()

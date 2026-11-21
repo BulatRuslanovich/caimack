@@ -10,6 +10,7 @@ import android.widget.Toast
 import app.caimack.AppContainer
 import app.caimack.R
 import app.caimack.api.*
+import app.caimack.audiobooks.AudiobookAccount
 import app.caimack.session.SessionState
 import java.io.IOException
 import java.time.Instant
@@ -219,14 +220,17 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
     private suspend fun watch() {
         while (currentCoroutineContext().isActive) {
             try {
-                val url = container.server.resolve("api/playback/connect/events")?.newBuilder()
-                    ?.addQueryParameter("deviceId", container.deviceId)
-                    ?.addQueryParameter("deviceName", container.deviceName)
-                    ?.addQueryParameter("audiobooks", "true")
-                    ?.addQueryParameter("deviceKind", "android")?.build() ?: return
+                val owner = container.audiobookAccount() ?: return
+                val url = owner.server.newBuilder()
+                    .addPathSegments("api/playback/connect/events")
+                    .addQueryParameter("deviceId", container.deviceId)
+                    .addQueryParameter("deviceName", container.deviceName)
+                    .addQueryParameter("audiobooks", "true")
+                    .addQueryParameter("audiobookExperiment", "true")
+                    .addQueryParameter("deviceKind", "android").build()
                 val next = client.newCall(Request.Builder().url(url).header("Accept", "text/event-stream").build())
                 call = next
-                withContext(Dispatchers.IO) { readEvents(next) }
+                withContext(Dispatchers.IO) { readEvents(next, owner) }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { }
             transportLost()
@@ -234,7 +238,7 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
         }
     }
 
-    private suspend fun readEvents(call: Call) {
+    private suspend fun readEvents(call: Call, owner: AudiobookAccount) {
         call.execute().use { response ->
             if (!response.isSuccessful) throw IOException("Playback connection unavailable")
             val source = response.body.source()
@@ -250,6 +254,9 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
                                 when (event) {
                                     "snapshot" -> accept(container.json.decodeFromString<ConnectSnapshot>(payload), transport = true)
                                     "command" -> execute(container.json.decodeFromString<ConnectEnvelope>(payload))
+                                    "audiobook-experiment" -> payload.toBooleanStrictOrNull()?.let { enabled ->
+                                        if (container.receiveAudiobookExperiment(owner, enabled)) accept(snapshot)
+                                    }
                                 }
                             }
                         }
