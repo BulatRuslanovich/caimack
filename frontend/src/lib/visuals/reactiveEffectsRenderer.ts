@@ -32,7 +32,7 @@ export function createEffectsRenderer(
   const layout = createEffectLayout(trackKey);
   const gl = canvas.getContext("webgl", {
     alpha: true,
-    premultipliedAlpha: false,
+    premultipliedAlpha: true,
     antialias: false,
     depth: false,
     powerPreference: "low-power",
