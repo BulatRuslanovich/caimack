@@ -40,6 +40,10 @@ export function onSessionExpired(listener: SessionExpiredListener): () => void {
   return () => sessionExpiredListeners.delete(listener);
 }
 
+export function notifySessionExpired(): void {
+  sessionExpiredListeners.forEach((listener) => listener());
+}
+
 export async function refreshSession(): Promise<boolean> {
   refreshInFlight ??= (async () => {
     try {
@@ -197,7 +201,7 @@ async function send(path: string, options: RequestOptions = {}): Promise<Respons
     }
 
     if (!allowUnauthenticated) {
-      sessionExpiredListeners.forEach((listener) => listener());
+      notifySessionExpired();
     }
 
     throw new ApiError(401, tr("error.sessionExpired"));

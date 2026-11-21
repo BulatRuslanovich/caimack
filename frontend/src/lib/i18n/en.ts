@@ -97,6 +97,8 @@ export const en = {
   "audiobooks.uploadFormat": "Choose files in a supported audio format.",
   "audiobooks.uploadTooLarge": "The audiobook exceeds the 2 GB upload limit.",
   "audiobooks.uploading": "Uploading audiobook…",
+  "audiobooks.uploadProgress": "Audiobook upload progress",
+  "audiobooks.readingChapters": "Reading chapters…",
   "audiobooks.uploaded": "Audiobook added to the catalog.",
   "audiobooks.uploadFailed": "Could not upload the audiobook.",
   "audiobooks.delete": "Delete audiobook",

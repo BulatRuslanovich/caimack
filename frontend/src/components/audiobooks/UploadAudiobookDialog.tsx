@@ -23,6 +23,7 @@ export function UploadAudiobookDialog({
 }) {
   const t = useT();
   const [uploadId, setUploadId] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
   const form = useForm<{ title: string; files: FileList }>({ defaultValues: { title: "" } });
   const { errors, isSubmitting } = form.formState;
   const resetUploadId = () => setUploadId(null);
@@ -34,14 +35,18 @@ export function UploadAudiobookDialog({
       form={form}
       onClose={onClose}
       submitLabel={t("audiobooks.upload")}
-      pendingLabel={t("audiobooks.uploading")}
+      pendingLabel={t(progress === 100 ? "audiobooks.readingChapters" : "audiobooks.uploading")}
       successMessage={t("audiobooks.uploaded")}
       errorMessage={t("audiobooks.uploadFailed")}
       onSubmit={async ({ title, files }) => {
         const id = uploadId ?? crypto.randomUUID();
         setUploadId(id);
-        await audiobookApi.upload(id, title.trim(), Array.from(files));
-        onUploaded();
+        try {
+          await audiobookApi.upload(id, title.trim(), Array.from(files), setProgress);
+          onUploaded();
+        } finally {
+          setProgress(0);
+        }
       }}
     >
       <TextField
@@ -76,6 +81,17 @@ export function UploadAudiobookDialog({
         multiple
         disabled={isSubmitting}
       />
+      {isSubmitting && (
+        <div className="flex items-center gap-3">
+          <progress
+            aria-label={t("audiobooks.uploadProgress")}
+            className="h-2 w-full accent-primary"
+            max={100}
+            value={progress}
+          />
+          <span className="text-sm tabular-nums text-muted-foreground">{progress}%</span>
+        </div>
+      )}
     </FormDialog>
   );
 }

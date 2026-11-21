@@ -19,7 +19,7 @@ pub struct BookUpload {
     root: PathBuf,
     staging: PathBuf,
     id: Uuid,
-    chapters: usize,
+    chapters: Vec<String>,
 }
 
 impl BookUpload {
@@ -32,7 +32,7 @@ impl BookUpload {
             let root = root.canonicalize().context("Could not open the audiobook uploads folder")?;
             let staging = root.join(format!(".upload-{}", Uuid::new_v4()));
             std::fs::create_dir(&staging).context("Could not create the audiobook staging folder")?;
-            let upload = Self { root, staging, id, chapters: 0 };
+            let upload = Self { root, staging, id, chapters: Vec::new() };
             std::fs::create_dir(upload.book_dir()).context("Could not create the staged book folder")?;
             Ok(upload)
         })
@@ -52,7 +52,7 @@ impl BookUpload {
         {
             return Err(AppError::validation("Invalid audiobook chapter file: {0}.").arg(name));
         }
-        if self.chapters == MAX_CHAPTERS {
+        if self.chapters.len() == MAX_CHAPTERS {
             return Err(AppError::validation("An audiobook can have at most {0} chapters.").arg(MAX_CHAPTERS));
         }
 
@@ -63,7 +63,7 @@ impl BookUpload {
             }
             result => result.context("Could not create a staged audiobook chapter")?,
         };
-        self.chapters += 1;
+        self.chapters.push(name.to_owned());
         Ok(file)
     }
 
@@ -72,7 +72,7 @@ impl BookUpload {
         if title.is_empty() || title.chars().count() > 300 || title.chars().any(char::is_control) {
             return Err(AppError::validation("Enter a title of at most {0} characters.").arg(300));
         }
-        if self.chapters == 0 {
+        if self.chapters.is_empty() {
             return Err(AppError::validation("Choose at least one audiobook chapter."));
         }
         let title = title.to_owned();
@@ -80,8 +80,20 @@ impl BookUpload {
         let (upload, books) = tokio::task::spawn_blocking(move || {
             std::fs::write(self.book_dir().join(TITLE_FILE), title).context("Could not write the audiobook title")?;
             let staged = scan::read(&self.staging, &Snapshot::default(), &CancellationToken::new())?;
-            if staged.books.get(&self.id).is_none_or(|book| book.chapters.len() != self.chapters) {
-                return Err(AppError::validation("Some audiobook chapters could not be read."));
+            let book = staged.books.get(&self.id);
+            if book.is_none_or(|book| book.chapters.len() != self.chapters.len()) {
+                let unreadable = self.chapters.iter().find(|name| {
+                    book.is_none_or(|book| {
+                        !book
+                            .chapters
+                            .iter()
+                            .any(|chapter| chapter.path.file_name().is_some_and(|file| file == name.as_str()))
+                    })
+                });
+                return Err(match unreadable {
+                    Some(name) => AppError::validation("Could not read audiobook chapter: {0}.").arg(name),
+                    None => AppError::validation("Some audiobook chapters could not be read."),
+                });
             }
             Ok((self, staged.books))
         })

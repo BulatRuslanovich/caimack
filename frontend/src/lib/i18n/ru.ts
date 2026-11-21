@@ -97,6 +97,8 @@ export const ru: Dictionary = {
   "audiobooks.uploadFormat": "Выберите файлы в поддерживаемом аудиоформате.",
   "audiobooks.uploadTooLarge": "Размер аудиокниги превышает лимит в 2 ГБ.",
   "audiobooks.uploading": "Загружаем аудиокнигу…",
+  "audiobooks.uploadProgress": "Прогресс загрузки аудиокниги",
+  "audiobooks.readingChapters": "Читаем главы…",
   "audiobooks.uploaded": "Аудиокнига добавлена в каталог.",
   "audiobooks.uploadFailed": "Не удалось загрузить аудиокнигу.",
   "audiobooks.delete": "Удалить аудиокнигу",

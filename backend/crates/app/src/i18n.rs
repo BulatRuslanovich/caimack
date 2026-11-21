@@ -85,6 +85,7 @@ fn russian(template: &str) -> Option<&'static str> {
         "Audiobook chapter names must be unique: {0}." => "Имена файлов глав должны быть уникальными: {0}.",
         "Choose at least one audiobook chapter." => "Выберите хотя бы один файл главы.",
         "Some audiobook chapters could not be read." => "Не удалось прочитать некоторые главы аудиокниги.",
+        "Could not read audiobook chapter: {0}." => "Не удалось прочитать главу аудиокниги: {0}.",
         "An audiobook already uses this upload ID." => "Этот идентификатор загрузки уже используется.",
         "The audiobook exceeds the 2 GB upload limit." => "Размер аудиокниги превышает лимит в 2 ГБ.",
         "Enter a title of at most {0} characters." => "Введите название длиной до {0} символов.",
