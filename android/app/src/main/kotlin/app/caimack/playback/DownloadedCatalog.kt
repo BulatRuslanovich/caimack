@@ -130,10 +130,12 @@ class DownloadedCatalog(private val directory: File, private val json: Json, pri
                 Album(id, lead.albumTitle.orEmpty(), lead.artistId, lead.artistName, lead.year,
                     songs.size, songs.sumOf { it.durationSeconds }, songs.any { it.hasCover })
             }
-            val artists = unique.flatMap { song -> (song.artists.orEmpty() + ArtistRef(song.artistId, song.artistName)) }
-                .distinctBy { it.id }.map { artist -> Artist(artist.id, artist.name,
-                    unique.count { it.artistId == artist.id || it.artists.orEmpty().any { a -> a.id == artist.id } },
-                    knownArtists.any { it.id == artist.id && it.hasImage }) }
+            val artistCredits = unique.flatMap { song -> (song.artists.orEmpty() + ArtistRef(song.artistId, song.artistName)).distinctBy { it.id } }
+            val artistCounts = artistCredits.groupingBy { it.id }.eachCount()
+            val illustratedArtists = knownArtists.filter { it.hasImage }.mapTo(hashSetOf()) { it.id }
+            val artists = artistCredits.distinctBy { it.id }.map { artist ->
+                Artist(artist.id, artist.name, artistCounts.getValue(artist.id), artist.id in illustratedArtists)
+            }
             val savedPlaylists = playlists.map { it.copy(tracks = it.tracks.filter { song -> song.id in ids }, coverTrackId = it.coverTrackId?.takeIf { id -> id in ids } ?: it.tracks.firstOrNull { song -> song.id in ids }?.id) }.filter { it.tracks.isNotEmpty() }
             val syncedPlaylists = (synced?.get("playlists") as? JsonArray).orEmpty().map { it.jsonObject }
             val membership = buildJsonObject {

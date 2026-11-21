@@ -128,6 +128,10 @@ export function useDesktopDownloaded(id: string) {
   );
 }
 
+export function useDesktopOffline() {
+  return useSyncExternalStore(subscribe, () => status?.online === false, () => false);
+}
+
 export function useDesktopOfflinePlayback() {
   const check = () => Boolean(status && (!status.online || status.sync.enabled));
   return useSyncExternalStore(subscribe, check, () => false);

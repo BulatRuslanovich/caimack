@@ -99,6 +99,57 @@ async function context(t) {
   };
 }
 
+test("offline home preserves playable feed cards and falls back to downloads", async (t) => {
+  const { request, client, restart, state } = await context(t);
+  const home = async () => (await request("/desktop/offline-home")).json();
+  assert.deepEqual((await home()).downloads, []);
+  const song = { ...track, albumId: "album" };
+  await request("/desktop/downloads", { tracks: [song] });
+  await waitFor(() => client().status().downloads[0]?.status === "complete");
+  assert.deepEqual(
+    (await home()).downloads.map((item) => item.id),
+    [song.id],
+  );
+
+  const catalog = client().account.catalog;
+  const missing = { ...song, id: "missing", albumId: "other" };
+  const playlist = "eeeeeee1-0000-4000-8000-000000000001";
+  catalog.cache("/api/playlists/" + playlist, { tracks: [missing, song] });
+  catalog.cache("/api/home/feed", {
+    blocks: [
+      { key: "daily", baseKey: "dailyMix", tracks: [missing, song] },
+      {
+        key: "recent",
+        albums: [{ id: "other" }, { id: "album" }],
+        playlists: [{ id: playlist }],
+      },
+      { key: "empty", tracks: [missing] },
+    ],
+  });
+  state.online = false;
+  await restart();
+  assert.deepEqual(
+    (await (await request("/desktop/local-radio")).json()).tracks.map(
+      ({ track }) => track.id,
+    ),
+    [song.id],
+  );
+  const { blocks } = await home();
+  assert.deepEqual(
+    blocks.map((block) => block.key),
+    ["daily", "recent"],
+  );
+  assert.deepEqual(blocks[0].tracks, [song]);
+  assert.deepEqual(blocks[1].albums, [{ id: "album" }]);
+  assert.deepEqual(blocks[1].playlists, [{ id: playlist }]);
+  assert.deepEqual(
+    (await (await request("/api/home/mixes/daily")).json()).tracks,
+    [missing, song],
+  );
+  await request("/desktop/downloads/" + song.id, {});
+  assert.deepEqual(await home(), { blocks: [], downloads: [], radio: [] });
+});
+
 test("individual download resumes by range and plays after a restart without the server", async (t) => {
   const { state, request, client, restart } = await context(t);
   state.interrupted = true;

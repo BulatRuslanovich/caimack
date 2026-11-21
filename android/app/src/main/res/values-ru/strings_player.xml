@@ -30,6 +30,8 @@
     <string name="downloads_available">Доступно без сети</string>
     <string name="downloads_remove">Удалить загрузку</string>
     <string name="downloads_remove_all">Удалить все</string>
+    <string name="home_downloaded">Скачанное</string>
+    <string name="home_empty_downloads">На этом устройстве пока нет скачанной музыки</string>
     <string name="downloads_empty_title">Ничего не скачано</string>
     <string name="downloads_size">%1$s на телефоне</string>
     <plurals name="downloads_pending">

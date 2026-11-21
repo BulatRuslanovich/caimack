@@ -125,7 +125,7 @@ private fun DreamScreen() {
     val enabled by container.audiobooksEnabled.collectAsState()
     val book = if (enabled) catalog.books.find { it.id == playback?.bookId } else null
     val track = state.current.takeIf { book == null }
-    val bookCover = book?.let(container.audiobookStore::cover)
+    val bookCover = audiobookCover(book)
 
     var drift by remember { mutableStateOf(IntOffset.Zero) }
     var clock by remember { mutableStateOf(now()) }

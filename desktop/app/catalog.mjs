@@ -643,6 +643,102 @@ export class Catalog {
     };
   }
 
+  localTracks(sources) {
+    const view = this.view();
+    return Object.keys(sources)
+      .map(
+        (id) => view.tracks.get(id) ?? this.db.get(this.scope + "track:" + id),
+      )
+      .filter(Boolean);
+  }
+
+  localRadio(sources) {
+    const ranked = array(this.snapshot?.radio?.tracks).filter(({ track }) =>
+      Object.hasOwn(sources, track.id),
+    );
+    const seen = new Set(ranked.map(({ track }) => track.id));
+    const rest = this.localTracks(sources).filter(
+      (track) => !seen.has(track.id),
+    );
+    for (let end = rest.length - 1; end > 0; end--) {
+      const index = Math.floor(Math.random() * (end + 1));
+      [rest[end], rest[index]] = [rest[index], rest[end]];
+    }
+    return {
+      tracks: [
+        ...ranked,
+        ...rest.map((track) => ({
+          track,
+          reason: { kind: "localCollection" },
+        })),
+      ],
+    };
+  }
+
+  offlineHome(sources) {
+    const view = this.view();
+    const ready = (id) => Object.hasOwn(sources, id);
+    const tracks = this.localTracks(sources);
+    const albums = new Set(tracks.map((track) => track.albumId));
+    const artists = new Set(
+      tracks.flatMap((track) => [
+        track.artistId,
+        ...array(track.artists).map((credit) => credit.id),
+      ]),
+    );
+    const feed = this.snapshot?.feed ?? this.cached("/api/home/feed");
+    const blocks = array(feed?.blocks).flatMap((block) => {
+      let songs = array(block.tracks).filter((track) => ready(track.id));
+      if (!songs.length && block.baseKey === "favorites")
+        songs = tracks.filter((track) => track.isFavorite);
+      if (block.baseKey === "dailyMix")
+        songs = array(this.homeMix("daily")?.tracks).filter((track) =>
+          ready(track.id),
+        );
+      const visible = {
+        ...block,
+        tracks: songs,
+        albums: array(block.albums).filter((album) => albums.has(album.id)),
+        artists: array(block.artists).filter((artist) =>
+          artists.has(artist.id),
+        ),
+        playlists: array(block.playlists).filter(({ id }) => {
+          const members = view.members.get(id);
+          return members
+            ? members.some(ready)
+            : array(this.cached("/api/playlists/" + id)?.tracks).some((track) =>
+                ready(track.id),
+              );
+        }),
+      };
+      return [songs, visible.albums, visible.artists, visible.playlists].some(
+        (items) => items.length,
+      )
+        ? [visible]
+        : [];
+    });
+    return {
+      blocks,
+      downloads: blocks.length ? [] : tracks,
+      radio: tracks.slice(0, 3),
+    };
+  }
+
+  homeMix(kind) {
+    const full =
+      own(this.snapshot?.mixes, kind) ?? this.cached("/api/home/mixes/" + kind);
+    if (full) return full;
+    const key = { daily: "dailyMix", new: "newArrivals", top: "topTracks" }[
+      kind
+    ];
+    const feed = this.snapshot?.feed ?? this.cached("/api/home/feed");
+    return {
+      tracks:
+        array(feed?.blocks).find((block) => block.baseKey === key)?.tracks ??
+        [],
+    };
+  }
+
   read(path, params, method, body, ready) {
     const view = this.view();
     const q = lower(params.get("q"));
@@ -824,8 +920,7 @@ export class Catalog {
         this.snapshot?.feed ??
         exact ?? { blocks: [], stats: this.stats(tracks, albums) }
       );
-    if (path.startsWith("/api/home/mixes/"))
-      return own(this.snapshot?.mixes, detail) ?? exact ?? { tracks: [] };
+    if (path.startsWith("/api/home/mixes/")) return this.homeMix(detail);
     if (path === "/api/library/overview")
       return {
         stats: this.stats(tracks, albums),

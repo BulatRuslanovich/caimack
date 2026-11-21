@@ -45,6 +45,7 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun RadioHero(candidates: List<Track>) {
     val container = LocalContainer.current
+    val offline = LocalOfflineLibrary.current
     val palette = LocalPalette.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -87,7 +88,7 @@ internal fun RadioHero(candidates: List<Track>) {
             Column(Modifier.fillMaxWidth(0.56f).align(Alignment.CenterStart),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(stringResource(R.string.radio_mine), style = Type.title.copy(fontSize = 22.sp, lineHeight = 28.sp))
-                Text(stringResource(R.string.radio_hero_description), style = Type.small, color = palette.muted)
+                Text(stringResource(if (offline) R.string.radio_local_description else R.string.radio_hero_description), style = Type.small, color = palette.muted)
                 Row(Modifier.heightIn(min = 48.dp).testTag("radio-toggle").semantics { contentDescription = actionLabel }.clip(CircleShape).background(palette.action)
                     .clickable(enabled = !starting, role = Role.Button) {
                         if (active) container.player.toggle()
@@ -118,9 +119,9 @@ internal fun RadioHero(candidates: List<Track>) {
             horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Icon(Lucide.Radio, null, tint = palette.primary, modifier = Modifier.size(20.dp))
             Column(Modifier.weight(1f)) {
-                Text(if (active) playback.current!!.title else stringResource(R.string.radio_hero_ready),
+                Text(if (active) playback.current!!.title else stringResource(if (offline) R.string.radio_local_collection else R.string.radio_hero_ready),
                     style = Type.small, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(if (active) artistsOf(playback.current!!) else stringResource(R.string.radio_hero_hint),
+                if (active || !offline) Text(if (active) artistsOf(playback.current!!) else stringResource(R.string.radio_hero_hint),
                     style = Type.tiny, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             sleeves.firstOrNull()?.let { next ->

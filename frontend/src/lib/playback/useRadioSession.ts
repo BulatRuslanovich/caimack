@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useDesktopOfflinePlayback } from "@/desktop/api";
+import { desktopRequest, useDesktopOffline, useDesktopOfflinePlayback } from "@/desktop/api";
 
 import { useRecommendations } from "@/lib/useRecommendations";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -20,7 +20,7 @@ import { subscribePlaybackEvents } from "@/lib/events";
 import { appendTracks, radioStartAfterInsert } from "@/lib/playback/playerQueue";
 import { radioSource, sourceOf, tagSource } from "@/lib/playback/playSource";
 import type { RadioSessionState, RadioState, RepeatMode } from "@/lib/playback/playerTypes";
-import type { RadioFocus, Track } from "@/lib/types";
+import type { RadioBatch, RadioFocus, Track } from "@/lib/types";
 import { useT } from "@/contexts/I18nContext";
 import { useToast } from "@/lib/useToast";
 
@@ -67,6 +67,7 @@ export function useRadioSession({
 }: RadioSessionInput): RadioSession {
   const { notify, notifyError } = useToast();
   const recommendations = useRecommendations();
+  const offline = useDesktopOffline();
   const offlineQueue = useDesktopOfflinePlayback();
   const t = useT();
 
@@ -167,7 +168,7 @@ export function useRadioSession({
 
   const start = useCallback(
     async (seedTrack: Track | null = null, signal?: AbortSignal) => {
-      if (!recommendations) return null;
+      if (!offline && !recommendations) return null;
       if (seedTrack && offlineQueue) {
         notify(t("radio.empty"), "info");
         return null;
@@ -177,14 +178,16 @@ export function useRadioSession({
       setStarting(true);
 
       try {
-        const batch = await api.radio(
-          {
-            seedTrackId: seedTrack?.id ?? null,
-            exclude: [],
-            limit: RADIO_INITIAL_BATCH - (seedTrack ? 1 : 0),
-          },
-          signal,
-        );
+        const batch = offline
+          ? await desktopRequest<RadioBatch>("/local-radio")
+          : await api.radio(
+              {
+                seedTrackId: seedTrack?.id ?? null,
+                exclude: [],
+                limit: RADIO_INITIAL_BATCH - (seedTrack ? 1 : 0),
+              },
+              signal,
+            );
         if (generation !== generationRef.current || signal?.aborted) return null;
 
         if (batch.tracks.length === 0 && !seedTrack) {
@@ -206,7 +209,7 @@ export function useRadioSession({
         setStarting(false);
       }
     },
-    [notify, notifyError, t, recommendations, offlineQueue],
+    [notify, notifyError, t, recommendations, offline, offlineQueue],
   );
 
   useEffect(() => {

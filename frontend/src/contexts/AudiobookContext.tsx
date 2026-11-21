@@ -918,7 +918,11 @@ function AudiobookSession({
         clock: mirrored ? remoteClock : clock,
         scope,
         online,
-        books: enabled ? catalog.books : [],
+        books: !enabled
+          ? []
+          : online
+            ? catalog.books
+            : catalog.books.filter((book) => downloaded.has(book.id)),
         result: catalog.result,
         downloaded,
         transfer,

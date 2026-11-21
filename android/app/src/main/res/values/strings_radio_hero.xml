@@ -5,4 +5,6 @@
     <string name="radio_hero_resume">Resume</string>
     <string name="radio_hero_ready">From your collection</string>
     <string name="radio_hero_hint">A stream shaped by your listening</string>
+    <string name="radio_local_collection">From your local collection</string>
+    <string name="radio_local_description">Radio from the music saved on this device.</string>
 </resources>

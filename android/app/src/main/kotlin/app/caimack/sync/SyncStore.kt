@@ -86,6 +86,8 @@ class SyncStore(private val context: Context, val json: Json, private val server
     private var cachedAvailability = emptySet<String>()
     private var cachedTracks = emptyList<Track>()
     private var sourceRevision = 0L
+    private var viewRevision = -1L
+    private var projectedCatalog: JsonObject? = null
     private var decodedRevision = -1L
     private var decodedTracks = emptyList<Track>()
     private fun catalogChanged(metadata: Boolean = false) {
@@ -356,6 +358,16 @@ class SyncStore(private val context: Context, val json: Json, private val server
 
     fun audio(id: String): Uri? = if (active) index.files[id]?.uri?.let(Uri::parse) else null
 
+    @Synchronized
+    internal fun catalogView(): JsonObject? {
+        if (!active) return null
+        if (viewRevision != sourceRevision) {
+            projectedCatalog = snapshot?.let { OfflineCatalog.view(it, edits()) }
+            viewRevision = sourceRevision
+        }
+        return projectedCatalog
+    }
+
     /** The legacy index keeps previously exported audio playable while local downloads are prepared. */
     @Synchronized fun audioBytes(): Long = if (active) index.files.values.sumOf { it.sizeBytes } else 0L
 
@@ -364,11 +376,7 @@ class SyncStore(private val context: Context, val json: Json, private val server
         val revision = catalogRevision.value
         if (tracksRevision != revision || cachedAvailability != available) {
             if (decodedRevision != sourceRevision) {
-                decodedTracks = snapshot?.let {
-                    json.decodeFromJsonElement<List<Track>>(
-                        OfflineCatalog.view(it, edits()).getValue("tracks")
-                    )
-                }.orEmpty()
+                decodedTracks = catalogView()?.get("tracks")?.let { json.decodeFromJsonElement<List<Track>>(it) }.orEmpty()
                 decodedRevision = sourceRevision
             }
             cachedTracks = decodedTracks.filter { track -> track.id in index.files || track.id in available }

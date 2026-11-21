@@ -20,6 +20,7 @@ import {
 import {
   readAudiobookCatalog,
   readDownloadedAudiobooks,
+  refreshDownloadedArtwork,
   storeAudiobookCatalog,
 } from "./audiobookDownloads";
 import { ApiError } from "./http";
@@ -128,6 +129,18 @@ export function useAudiobookCatalog(scope: string | null, online: boolean, enabl
       return books.map((book) => applyProgress(book, saved, false));
     },
   });
+
+  useEffect(() => {
+    if (!scope || !online || !enabled || !result.data || !downloads.data?.length) return;
+    const saved = new Set(downloads.data.map((book) => book.id));
+    const controller = new AbortController();
+    void refreshDownloadedArtwork(
+      scope,
+      result.data.filter((book) => saved.has(book.id)),
+      controller.signal,
+    ).catch(() => {});
+    return () => controller.abort();
+  }, [scope, online, enabled, result.data, downloads.data]);
 
   const books = useMemo(() => {
     const available = new Map(downloads.data?.map((book) => [book.id, book]));

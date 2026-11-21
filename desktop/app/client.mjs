@@ -305,6 +305,19 @@ export class Client {
   }
 
   async desktop(request, path) {
+    if (
+      request.method === "GET" &&
+      ["/desktop/offline-home", "/desktop/local-radio"].includes(path)
+    ) {
+      const account = this.currentAccount();
+      if (!account) return problem("Sign in required.", 401);
+      const ready = account.ready();
+      return responseJson(
+        path === "/desktop/local-radio"
+          ? account.catalog.localRadio(ready)
+          : account.catalog.offlineHome(ready),
+      );
+    }
     if (request.method === "GET" && path === "/desktop/status")
       return responseJson(this.status());
     if (

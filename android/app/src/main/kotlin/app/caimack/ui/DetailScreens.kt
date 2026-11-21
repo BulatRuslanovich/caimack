@@ -37,6 +37,7 @@ import androidx.navigation.NavController
 import app.caimack.R
 import app.caimack.api.Album
 import app.caimack.api.Track
+import app.caimack.sync.OfflineCatalog
 import kotlinx.coroutines.launch
 
 @Composable
@@ -92,7 +93,7 @@ fun ArtistScreen(id: String, nav: NavController, play: (List<Track>, Int) -> Uni
                 ) { Cover(container.media.artistImage(artist.id, artist.hasImage, small = false), artist.name, it, round = true) }
             }
             item {
-                Load("artist-top:$id", { if (local) collectionTracks { api.artist(id, it, TRACK_PAGE_SIZE).tracks } else api.artistTopTracks(id) }) { top ->
+                Load("artist-top:$id", { if (local) collectionTracks { api.artist(id, it, OfflineCatalog.MAX_PAGE_SIZE).tracks } else api.artistTopTracks(id) }) { top ->
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Actions(top, play, libraryAction = { LibrarySaveButton("artist", id) })
                         SectionHeader(stringResource(if (local) R.string.nav_tracks else R.string.artists_top_tracks))
@@ -117,7 +118,7 @@ fun GenreScreen(id: String, name: String, play: (List<Track>, Int) -> Unit) {
 
 @Composable
 fun MixScreen(kind: String, play: (List<Track>, Int) -> Unit) {
-    if (!recommendationsEnabled()) return
+    if (!LocalOfflineLibrary.current && !recommendationsEnabled()) return
     val container = LocalContainer.current
     val api = catalogApi()
     val title = when (kind) {

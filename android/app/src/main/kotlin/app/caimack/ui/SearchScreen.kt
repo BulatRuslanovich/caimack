@@ -86,7 +86,7 @@ fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit, initialCa
     var query by rememberSaveable { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf(initialCategory) }
     val categoryState = rememberSaveableStateHolder()
-    val catalog by container.audiobookStore.state.collectAsStateWithLifecycle()
+    val catalog = browsingAudiobooks()
     val audiobooksEnabled by container.audiobooksEnabled.collectAsStateWithLifecycle()
     val selected = category.takeUnless { it == SearchCategory.Audiobooks && !audiobooksEnabled }
     val books = catalog.books.takeIf { audiobooksEnabled }.orEmpty()

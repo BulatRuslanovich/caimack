@@ -19,6 +19,7 @@ import androidx.compose.ui.layout.ContentScale
 import app.caimack.api.Track
 import coil3.compose.SubcomposeAsyncImage
 import coil3.compose.LocalPlatformContext
+import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 
@@ -52,11 +53,14 @@ fun Cover(url: String?, name: String, modifier: Modifier = Modifier, round: Bool
             fallback()
         } else {
             val context = LocalPlatformContext.current
-            val request = remember(resolvedUrl, context, fadeIn) {
-                ImageRequest.Builder(context).data(resolvedUrl).crossfade(fadeIn).build()
+            val offline = LocalOfflineLibrary.current
+            val request = remember(resolvedUrl, context, fadeIn, offline) {
+                ImageRequest.Builder(context).data(resolvedUrl).crossfade(fadeIn)
+                    .networkCachePolicy(if (offline) CachePolicy.DISABLED else CachePolicy.ENABLED)
+                    .build()
             }
             // A recycled image painter must never display the previous song while loading.
-            key(resolvedUrl) {
+            key(resolvedUrl, offline) {
                 SubcomposeAsyncImage(
                     model = request,
                     contentDescription = null,

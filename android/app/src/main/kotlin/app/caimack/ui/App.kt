@@ -70,8 +70,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
-import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -121,6 +121,8 @@ private val tabs = listOf(
     Tab(LibraryRoute, LibraryRoute::class, R.string.nav_library, Lucide.LibraryBig),
 )
 
+internal fun NavDestination.primaryTabIndex(): Int = tabs.indexOfFirst { hasRoute(it.type) }
+
 internal fun NavController.openSection(route: Any) {
     // Settings belongs to the account, not to a tab's saved navigation history.
     while (currentDestination?.let { it.hasRoute(SettingsRoute::class) || it.hasRoute(SettingsSectionRoute::class) || it.hasRoute(ListeningRoute::class) } == true) {
@@ -152,12 +154,7 @@ fun App(user: User, dark: Boolean, colorway: Colorway) {
     val activeAudiobook by remember(container) {
         derivedStateOf { if (audiobooksEnabled) audiobookCatalog.books.firstOrNull { it.id == audiobookPlayback?.bookId } else null }
     }
-    val activeBookDownloaded by remember(container) {
-        derivedStateOf { activeAudiobook?.id in audiobookCatalog.downloaded }
-    }
-    val bookCover = remember(activeAudiobook?.id, activeAudiobook?.coverUrl, activeBookDownloaded) {
-        activeAudiobook?.let(container.audiobookStore::cover)
-    }
+    val bookCover = audiobookCover(activeAudiobook)
     val toneEnabled by container.appearance.coverTone.collectAsStateWithLifecycle()
     val artworkRevision by container.downloadedCatalog.revision.collectAsStateWithLifecycle()
     val syncArtworkRevision by container.syncStore.artworkRevision.collectAsStateWithLifecycle()
@@ -197,6 +194,8 @@ private fun AppContent(
     val palette = LocalPalette.current
     val container = LocalContainer.current
     val nav = rememberNavController()
+    var homeCategory by rememberSaveable { mutableStateOf("all") }
+    var homeDownloads by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     var account by rememberSaveable { mutableStateOf(false) }
@@ -304,7 +303,12 @@ private fun AppContent(
                 UpdateBanner(appUpdate, onDetails = { updateDetails = true }, onDismiss = { container.updates.dismiss() })
             }
         },
-        bottomBar = { BottomBar(nav) },
+        bottomBar = {
+            BottomBar(nav) {
+                homeCategory = "all"
+                homeDownloads = false
+            }
+        },
         miniPlayer = {
             if (activeAudiobook != null && bookPlayback != null) {
                 AudiobookMiniPlayer(activeAudiobook, bookPlayback, bookCover,
@@ -312,12 +316,16 @@ private fun AppContent(
             } else MiniPlayer(playback) { expanded = true }
         },
     ) { padding ->
-        NavHost(
+        AppNavHost(
             nav,
-            startDestination = HomeRoute,
             modifier = Modifier.padding(padding).fillMaxSize().background(palette.background),
         ) {
-            composable<HomeRoute> { HomeScreen(nav) }
+            composable<HomeRoute> {
+                HomeScreen(nav, homeCategory, homeDownloads) { category, downloads ->
+                    homeCategory = category
+                    homeDownloads = downloads
+                }
+            }
             composable<SearchRoute> { SearchScreen(nav, play, it.toRoute<SearchRoute>().initialCategory()) }
             composable<LibraryRoute> { LibraryScreen(nav) }
             composable<SavedAudiobooksRoute> { LibraryScreen(nav, initialFilter = if (audiobooksEnabled) "audiobook" else "all") }
@@ -431,7 +439,7 @@ private fun Header(nav: NavController, user: User, onBack: () -> Unit, onAccount
 }
 
 @Composable
-internal fun BottomBar(nav: NavController) {
+internal fun BottomBar(nav: NavController, onHomeSelected: () -> Unit = {}) {
     val palette = LocalPalette.current
     val focus = LocalFocusManager.current
     val entry by nav.currentBackStackEntryAsState()
@@ -451,6 +459,7 @@ internal fun BottomBar(nav: NavController) {
                 val active = if (tab.route == LibraryRoute) inLibrary else section?.hasRoute(tab.type) == true
                 TabItem(stringResource(tab.label), tab.icon, active) {
                     focus.clearFocus()
+                    if (tab.route == HomeRoute) onHomeSelected()
                     nav.openSection(tab.route)
                 }
             }

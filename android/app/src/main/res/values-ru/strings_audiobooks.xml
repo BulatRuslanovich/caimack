@@ -42,4 +42,5 @@
     <string name="audiobook_back_time">Назад на 15 секунд</string>
     <string name="audiobook_forward_time">Вперёд на 30 секунд</string>
     <string name="audiobook_playback_error">Не удалось воспроизвести главу. Нажмите кнопку воспроизведения, чтобы повторить.</string>
+    <string name="audiobook_empty_downloads">На этом устройстве пока нет скачанных аудиокниг</string>
 </resources>

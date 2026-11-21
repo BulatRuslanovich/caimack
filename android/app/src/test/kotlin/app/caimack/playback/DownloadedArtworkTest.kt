@@ -7,8 +7,13 @@ import java.io.File
 import java.net.URI
 import java.nio.file.Files
 import java.util.Base64
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import mockwebserver3.Dispatcher
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
+import mockwebserver3.RecordedRequest
 import okhttp3.OkHttpClient
 import okio.Buffer
 import org.junit.Assert.*
@@ -128,6 +133,43 @@ class DownloadedArtworkTest {
                 assertNotEquals(oldUri, cache.asset(server, path))
                 assertEquals(3, web.requestCount)
             } finally { directory.deleteRecursively() }
+        }
+    }
+
+    @Test fun `cached artwork stays readable while another image waits on the server`() {
+        val directory = Files.createTempDirectory("artwork-concurrent").toFile()
+        val workers = Executors.newFixedThreadPool(2)
+        val started = CountDownLatch(1)
+        val reply = CountDownLatch(1)
+        MockWebServer().use { web ->
+            web.start()
+            val cache = DownloadedArtwork(directory)
+            val server = web.url("/").toString()
+            val client = OkHttpClient()
+            try {
+                web.enqueue(image())
+                cache.cache(server, listOf("cover"), client)
+                val ready = cache.asset(server, "cover")
+                assertNotNull(ready)
+                web.dispatcher = object : Dispatcher() {
+                    override fun dispatch(request: RecordedRequest): MockResponse {
+                        started.countDown()
+                        reply.await(5, TimeUnit.SECONDS)
+                        return image()
+                    }
+                }
+                val refresh = workers.submit { cache.cache(server, listOf("slow"), client) }
+                assertTrue(started.await(2, TimeUnit.SECONDS))
+                try {
+                    assertEquals(ready, workers.submit<String?> { cache.asset(server, "cover") }.get(2, TimeUnit.SECONDS))
+                } finally { reply.countDown() }
+                refresh.get(3, TimeUnit.SECONDS)
+                assertNotNull(cache.asset(server, "slow"))
+            } finally {
+                reply.countDown()
+                workers.shutdownNow()
+                directory.deleteRecursively()
+            }
         }
     }
 

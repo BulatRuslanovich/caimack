@@ -57,6 +57,35 @@ export async function downloadedArtwork(userId: string, bookId: string) {
   return response?.blob();
 }
 
+export async function refreshDownloadedArtwork(
+  userId: string,
+  books: Audiobook[],
+  signal: AbortSignal,
+) {
+  if (typeof caches === "undefined") return;
+  const cache = await getCache();
+  for (const book of books) {
+    signal.throwIfAborted();
+    const key = coverKey(userId, book.id);
+    if (!book.coverUrl) {
+      await cache.delete(key);
+      continue;
+    }
+    const cached = await cache.match(key);
+    if (cached?.url === new URL(book.coverUrl, location.href).href) continue;
+    try {
+      const cover = await fetchWithSession(book.coverUrl, { signal });
+      if (cover.ok && (await cache.match(bookPrefix(userId, book.id) + "book"))) {
+        signal.throwIfAborted();
+        await cache.put(key, cover);
+      }
+    } catch (error) {
+      if (signal.aborted) throw error;
+      // Keep the last downloaded cover until the server has a replacement.
+    }
+  }
+}
+
 export async function removeDownloadedAudiobook(userId: string, bookId: string) {
   const cache = await getCache();
   const base = bookPrefix(userId, bookId);

@@ -262,6 +262,8 @@ export const en = {
   "track.tempoKey": "{bpm} BPM, {key}",
   "column.actions": "Actions",
   "cover.alt": "Cover of {name}",
+  "home.downloaded": "Downloaded",
+  "home.emptyDownloads": "There is no downloaded music on this device yet.",
   "home.emptyTitle": "Nothing here yet",
   "home.uploadMusic": "Upload music",
   "home.dailyMix": "Daily mix",
@@ -279,6 +281,8 @@ export const en = {
   "radio.resume": "Resume",
   "radio.onAir": "On air",
   "radio.paused": "Paused",
+  "radio.localDescription": "Radio from the music saved on this device.",
+  "radio.fromLocalLibrary": "From your local collection",
   "radio.fromLibrary": "From your collection",
   "radio.failed": "Could not start the radio.",
 

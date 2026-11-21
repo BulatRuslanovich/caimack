@@ -81,7 +81,7 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
     val api = catalogApi()
     val palette = LocalPalette.current
     var selectedFilter by rememberSaveable { mutableStateOf(initialFilter) }
-    val audiobookCatalog by container.audiobookStore.state.collectAsStateWithLifecycle()
+    val audiobookCatalog = browsingAudiobooks()
     val audiobooksEnabled by container.audiobooksEnabled.collectAsStateWithLifecycle()
     val filter = if (!audiobooksEnabled && selectedFilter == "audiobook") "all" else selectedFilter
     val savedBooks = if (audiobooksEnabled) audiobookCatalog.books.filter { it.saved } else emptyList()
@@ -359,7 +359,7 @@ private fun libraryItemKeys(items: List<LibraryItem>, books: List<Audiobook>, al
 
 @Composable
 private fun LibraryAudiobookCard(book: Audiobook, catalog: AudiobookCatalog, grid: Boolean, open: () -> Unit) {
-    val cover = LocalContainer.current.audiobookStore.cover(book)
+    val cover = audiobookCover(book)
     val subtitle = listOfNotNull(
         stringResource(R.string.audiobook_kind), book.author,
         book.narrator?.let { stringResource(R.string.audiobook_narrator, it) },

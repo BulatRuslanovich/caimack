@@ -48,6 +48,7 @@ data class AudiobookCatalog(
     val failedDownloads: Set<String> = emptySet(),
     val ready: Boolean = false,
     val online: Boolean = true,
+    val artworkRevision: Long = 0,
 )
 
 @Serializable
@@ -144,12 +145,22 @@ internal class AudiobookStore(
             .coerceAtLeast(after + 1)
 
     fun remote(account: AudiobookAccount, path: String): HttpUrl =
-        account.server.newBuilder().addEncodedPathSegments(path.trimStart('/')).build()
+        account.server.newBuilder()
+            .addEncodedPathSegments(path.substringBefore('?').trimStart('/'))
+            .encodedQuery(path.substringAfter('?', "").ifEmpty { null })
+            .build()
 
     fun cover(book: Audiobook): String? {
         val account = currentAccount() ?: return null
-        val local = File(bookDirectory(account, book.id), "cover")
-        return if (local.isFile) local.toUri().toString() else book.coverUrl?.let { remote(account, it).toString() }
+        val path = book.coverUrl ?: return null
+        val folder = bookDirectory(account, book.id)
+        val file = coverFile(folder, path)
+        if (file.isFile) return file.toUri().toString()
+        if (!state.value.online && book.id in state.value.downloaded) {
+            folder.listFiles()?.firstOrNull { it.name == "cover" || it.name.startsWith("cover-") }
+                ?.let { return it.toUri().toString() }
+        }
+        return remote(account, path).toString()
     }
 
     fun audio(account: AudiobookAccount, book: Audiobook, chapter: AudiobookChapter): Uri {
@@ -225,8 +236,9 @@ internal class AudiobookStore(
                     if (chapterFile(staging, chapter).length() != chapter.sizeBytes) throw IOException("Incomplete audiobook chapter")
                 }
                 book.coverUrl?.let { path ->
-                    try { fetch(account, path, File(staging, "cover")) {} }
-                    catch (_: IOException) { File(staging, "cover").delete() }
+                    val cover = coverFile(staging, path)
+                    try { fetch(account, path, cover) {} }
+                    catch (_: IOException) { cover.delete() }
                 }
                 lock.withLock {
                     if (!enabled() || currentAccount() != account) return@withLock
@@ -300,9 +312,38 @@ internal class AudiobookStore(
                 persist(account, cache.copy(books = books.map { it.withLatestProgress(known[it.id]?.progress) } + retained))
                 current.update { it.copy(ready = true, online = true) }
             }
+            for (book in books) {
+                val path = book.coverUrl ?: continue
+                if (book.id in state.value.downloaded) refreshCover(account, book.id, path)
+            }
         } catch (error: Exception) {
             if (error is CancellationException) throw error
             if (currentAccount() == account) current.update { it.copy(ready = true, online = false) }
+        }
+    }
+
+    private fun coverFile(folder: File, path: String) = File(folder, "cover-" + sha256(path))
+
+    private suspend fun refreshCover(account: AudiobookAccount, id: String, path: String) {
+        val folder = bookDirectory(account, id)
+        val target = coverFile(folder, path)
+        if (target.isFile) return
+        try {
+            val temp = File.createTempFile("art-", ".part", accountDirectory(account))
+            try {
+                fetch(account, path, temp) {}
+                lock.withLock {
+                    if (currentAccount() != account || id !in cache.downloads || !folder.isDirectory ||
+                        cache.books.none { it.id == id && it.coverUrl == path }) return
+                    if (temp.renameTo(target)) {
+                        folder.listFiles()?.filter { it != target && (it.name == "cover" || it.name.startsWith("cover-")) }
+                            ?.forEach { it.delete() }
+                        current.update { it.copy(artworkRevision = it.artworkRevision + 1) }
+                    }
+                }
+            } finally { temp.delete() }
+        } catch (_: IOException) {
+            // Keep the previous offline artwork and retry on the next catalog refresh.
         }
     }
 
