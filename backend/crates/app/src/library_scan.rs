@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+mod artwork;
+
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -23,9 +25,6 @@ use crate::{AppError, json};
 const STARTUP_DELAY: Duration = Duration::from_secs(15);
 const MISSING_GRACE: chrono::Duration = chrono::Duration::days(30);
 const MAX_PROBLEMS: usize = 50;
-const MAX_COVER_BYTES: u64 = 20 * 1024 * 1024;
-const COVER_NAMES: [&str; 3] = ["cover", "folder", "front"];
-const COVER_EXTENSIONS: [&str; 3] = ["jpg", "jpeg", "png"];
 const OTHER_AUDIO: [&str; 12] = ["m4a", "aac", "ogg", "opus", "wav", "aif", "aiff", "ape", "wma", "wv", "alac", "dsf"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -390,7 +389,7 @@ impl LibraryScanner {
                 Some(_) => {}
             }
         }
-        Ok(())
+        artwork::fill_missing(&self.db, &self.storage, root, cancel).await
     }
 
     async fn maintain(&self, cancel: &CancellationToken) {
@@ -526,7 +525,9 @@ impl LibraryScanner {
             StoredFile { relative_path: library_path(&file.path), size_bytes: size, content_hash: hash.clone() };
         let directory = root.join(&file.path).parent().map(Path::to_path_buf);
         let cover = match directory {
-            Some(directory) => tokio::task::spawn_blocking(move || folder_cover(&directory)).await.unwrap_or(None),
+            Some(directory) => {
+                tokio::task::spawn_blocking(move || artwork::folder_cover(&directory)).await.unwrap_or(None)
+            }
             None => None,
         };
         match self.uploads.import(file_name(&file.path), &stored, format, cover).await {
@@ -678,27 +679,10 @@ fn walk(root: &Path) -> Walked {
     walked
 }
 
-fn folder_cover(directory: &Path) -> Option<Vec<u8>> {
-    let entries = std::fs::read_dir(directory).ok()?;
-    let mut candidates: Vec<(usize, PathBuf)> = entries
-        .filter_map(Result::ok)
-        .filter_map(|entry| {
-            let path = entry.path();
-            let stem = path.file_stem()?.to_str()?.to_ascii_lowercase();
-            let extension = path.extension()?.to_str()?.to_ascii_lowercase();
-            let rank = COVER_NAMES.iter().position(|name| *name == stem)?;
-            COVER_EXTENSIONS.contains(&extension.as_str()).then_some((rank, path))
-        })
-        .collect();
-    candidates.sort();
-    let (_, path) = candidates.into_iter().next()?;
-    let size = std::fs::metadata(&path).ok()?.len();
-    (size <= MAX_COVER_BYTES).then(|| std::fs::read(&path).ok()).flatten()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     fn folder() -> PathBuf {
         let dir = std::env::temp_dir().join(format!("caimack-library-{}", Uuid::now_v7().simple()));
@@ -739,10 +723,10 @@ mod tests {
         touch(&dir, "front.png", b"front");
         touch(&dir, "Folder.JPG", b"folder");
         touch(&dir, "Band.jpg", b"band");
-        assert_eq!(folder_cover(&dir).as_deref(), Some(&b"folder"[..]));
+        assert_eq!(artwork::folder_cover(&dir).as_deref(), Some(&b"folder"[..]));
 
         touch(&dir, "cover.jpeg", b"cover");
-        assert_eq!(folder_cover(&dir).as_deref(), Some(&b"cover"[..]));
+        assert_eq!(artwork::folder_cover(&dir).as_deref(), Some(&b"cover"[..]));
         std::fs::remove_dir_all(dir).unwrap_or_default();
     }
 
