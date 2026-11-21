@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { Route } from "next";
+import { audiobookCatalogHref } from "@/lib/audiobooks";
 import type { TranslationKey } from "@/lib/i18n";
 import {
   BookHeadphonesIcon,
@@ -37,7 +38,7 @@ const recent: NavEntry = {
 
 const library = { href: "/library", labelKey: "nav.mediaLibrary", icon: LibraryBigIcon } as const;
 const audiobooks = {
-  href: "/audiobooks",
+  href: audiobookCatalogHref,
   labelKey: "nav.audiobooks",
   icon: BookHeadphonesIcon,
 } as const;
@@ -68,5 +69,6 @@ export function serviceNav(isAdmin: boolean): NavEntry[] {
 }
 
 export function isActivePath(pathname: string, href: string): boolean {
-  return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+  const path = href.split(/[?#]/, 1)[0];
+  return path === "/" ? pathname === "/" : pathname === path || pathname.startsWith(`${path}/`);
 }

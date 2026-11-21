@@ -39,7 +39,12 @@ import { useAudiobooks } from "@/contexts/AudiobookContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useT } from "@/contexts/I18nContext";
 import { downloadedArtwork } from "@/lib/audiobookDownloads";
-import { audiobookHref, elapsedBookMs, type Audiobook } from "@/lib/audiobooks";
+import {
+  audiobookCatalogHref,
+  audiobookHref,
+  elapsedBookMs,
+  type Audiobook,
+} from "@/lib/audiobooks";
 import { cn } from "@/lib/cn";
 import { useParams } from "next/navigation";
 import { useFormat } from "@/lib/useFormat";
@@ -493,7 +498,7 @@ export function AudiobookDetailPage() {
       title={t("audiobooks.missing")}
       action={
         <Button variant="primary" asChild>
-          <PrefetchLink href="/audiobooks">{t("nav.audiobooks")}</PrefetchLink>
+          <PrefetchLink href={audiobookCatalogHref}>{t("nav.audiobooks")}</PrefetchLink>
         </Button>
       }
     />

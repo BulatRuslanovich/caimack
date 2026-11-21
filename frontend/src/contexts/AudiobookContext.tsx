@@ -17,6 +17,7 @@ import {
 } from "@/lib/audiobookDownloads";
 import {
   audiobookApi,
+  audiobookCatalogHref,
   audiobookHref,
   audiobookTarget,
   pausedAudiobookTarget,
@@ -791,7 +792,7 @@ function AudiobookSession({
     let displayedPercent = 0;
     try {
       const shell = Promise.all([
-        cacheAudiobookShell("/audiobooks"),
+        cacheAudiobookShell(audiobookCatalogHref),
         cacheAudiobookShell(audiobookHref(book.id)),
       ]);
       await downloadAudiobook(scope, book, abort.signal, (percent) => {
