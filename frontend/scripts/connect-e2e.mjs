@@ -516,6 +516,9 @@ try {
   assert.equal(requests.get("GET /api/audiobooks") ?? 0, 0);
   await setAudiobooks(true);
   await until(() => requests.get("GET /api/audiobooks") >= 2, "both devices load the catalog");
+  const enabledCatalogRequests = requests.get("GET /api/audiobooks");
+  await delay(21_000);
+  assert.equal(requests.get("GET /api/audiobooks"), enabledCatalogRequests);
   await setAudiobooks(false);
   const catalogRequests = requests.get("GET /api/audiobooks");
   await renderer.page.send("Page.bringToFront");

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   audiobookApi,
@@ -28,6 +29,8 @@ import { readStored, writeStored } from "./storage";
 
 export function useAudiobookCatalog(scope: string | null, online: boolean, enabled: boolean) {
   const client = useQueryClient();
+  const pathname = usePathname();
+  const lastPathname = useRef(pathname);
   const key = useMemo(() => ["audiobooks", scope], [scope]);
   const downloadKey = useMemo(() => ["audiobook-downloads", scope], [scope]);
   const journal = useRef<ProgressJournal>({});
@@ -84,7 +87,6 @@ export function useAudiobookCatalog(scope: string | null, online: boolean, enabl
     queryKey: key,
     enabled: enabled && scope !== null,
     staleTime: 20_000,
-    refetchInterval: online ? 20_000 : false,
     refetchOnWindowFocus: true,
     refetchOnReconnect: false,
     networkMode: "always",
@@ -260,6 +262,24 @@ export function useAudiobookCatalog(scope: string | null, online: boolean, enabl
   );
 
   const { refetch } = result;
+  useEffect(() => {
+    if (lastPathname.current === pathname) return;
+    lastPathname.current = pathname;
+    if (!scope || !enabled) return;
+    if (
+      pathname === "/" ||
+      pathname === "/library" ||
+      pathname === "/search" ||
+      pathname === "/audiobooks" ||
+      pathname.startsWith("/audiobooks/")
+    ) {
+      void client.refetchQueries(
+        { queryKey: key, exact: true, stale: true },
+        { cancelRefetch: false },
+      );
+    }
+  }, [client, enabled, key, pathname, scope]);
+
   useEffect(() => {
     if (!enabled && scope) void client.cancelQueries({ queryKey: key, exact: true });
   }, [client, enabled, key, scope]);
