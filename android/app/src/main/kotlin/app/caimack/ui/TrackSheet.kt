@@ -3,6 +3,9 @@
 package app.caimack.ui
 
 import android.widget.Toast
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.rememberScrollableState
+import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ModalBottomSheet
@@ -27,11 +31,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import app.caimack.R
 import app.caimack.api.AddTracksRequest
@@ -45,6 +52,13 @@ import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
 val LocalNavigate = staticCompositionLocalOf<(Any) -> Unit> { {} }
+
+private val trackSheetScrollConnection = object : NestedScrollConnection {
+    // Material3 starts a spring even at the expanded anchor when it receives leftover velocity.
+    // The sheet can still use pre-fling to expand from a partially dragged position.
+    override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity =
+        Velocity(0f, available.y.coerceAtMost(0f))
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,8 +107,20 @@ fun TrackSheet(track: Track, onRemoveFromPlaylist: (() -> Unit)? = null, positio
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = palette.card,
+        dragHandle = {
+            // Route drags on the handle through the same nested scroll path as the list.
+            BottomSheetDefaults.DragHandle(
+                Modifier.nestedScroll(trackSheetScrollConnection)
+                    .scrollable(rememberScrollableState { 0f }, Orientation.Vertical),
+            )
+        },
     ) {
-        Column(Modifier.navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Column(
+            Modifier.navigationBarsPadding()
+                .nestedScroll(trackSheetScrollConnection)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
