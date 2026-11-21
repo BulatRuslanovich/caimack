@@ -84,8 +84,15 @@ Android Home. Add books to your personal library and resume each book where you 
 positions sync when your devices reconnect to the same account. Download each book from its own
 menu to listen offline. Full music library synchronization leaves audiobook downloads to that menu.
 
+With the audiobook experiment enabled, administrators can use **Upload audiobook** on the web
+catalog. Choose one file or several chapters for the same book, up to 2 GB per upload. The book
+appears in the catalog after the server reads all chapters.
+Administrators can also delete a book from its detail page. This removes its audio file or entire
+book folder from the server and removes the book from everyone's catalog.
+
 In Compose, place audiobooks in the project’s `audiobooks/` directory or set `AUDIOBOOKS_PATH`.
-For a native backend, use `<STORAGE_ROOT>/audiobooks/`.
+For a native backend, use `<STORAGE_ROOT>/audiobooks/`. Web uploads go into that same directory.
+Give the backend user write access to the directory to enable uploads.
 Each top-level folder is one book, with audio files and nested disc folders played in natural
 filename order. Individual audio files in the root are also books. Supported containers include
 MP3, FLAC, M4A, M4B, Ogg, Opus, and WAV. An M4B file plays as one continuous file.
@@ -216,7 +223,7 @@ JWT_SIGNING_KEY=     # openssl rand -base64 48
 OWNER_PASSWORD=      # password for the first admin account
 PUBLIC_DOMAIN=       # domain for the automatic HTTPS certificate
 MUSIC_LIBRARY_PATH=  # optional: a folder with your music, mounted read-only (default ./library)
-AUDIOBOOKS_PATH=      # optional: audiobooks folder, mounted read-only (default ./audiobooks)
+AUDIOBOOKS_PATH=      # optional: audiobooks folder, writable for web uploads (default ./audiobooks)
 COMPOSE_FILE=docker-compose.yml:docker-compose.images.yml   # use the prebuilt images; leave out to build
 ```
 

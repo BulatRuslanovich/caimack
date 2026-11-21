@@ -31,7 +31,13 @@
 		reverse_proxy frontend:3000
 	}
 
-	request_body {
+	@audiobook_upload path /api/audiobooks/uploads/*
+	request_body @audiobook_upload {
+		max_size 2147483648
+	}
+
+	@other_requests not path /api/audiobooks/uploads/*
+	request_body @other_requests {
 		max_size {$MAX_UPLOAD_BODY_BYTES:268435456}
 	}
 

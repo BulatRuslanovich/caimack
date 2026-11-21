@@ -80,6 +80,7 @@ interface AudiobookState {
   removeDownload: (book: Audiobook) => void;
   cancelDownload: () => void;
   save: (book: Audiobook) => Promise<void>;
+  deleteBook: (id: string) => Promise<void>;
 }
 
 const AudiobookContext = createContext<AudiobookState | null>(null);
@@ -829,6 +830,12 @@ function AudiobookSession({
     }
   };
 
+  const deleteBook = async (id: string) => {
+    await audiobookApi.delete(id);
+    if (current.current?.book.id === id) close();
+    await catalog.forgetBook(id);
+  };
+
   const mirrored =
     remote && remoteBook && remoteChapter
       ? {
@@ -930,6 +937,7 @@ function AudiobookSession({
         removeDownload,
         cancelDownload: abortDownload,
         save,
+        deleteBook,
       }}
     >
       {children}

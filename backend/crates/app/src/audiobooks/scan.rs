@@ -11,7 +11,7 @@ use std::time::SystemTime;
 use media::{images, tags};
 use sha2::{Digest, Sha256};
 use tokio_util::sync::CancellationToken;
-use uuid::{Builder, Uuid};
+use uuid::{Builder, Uuid, Version};
 
 use super::names::{self, BookName};
 use super::{Artwork, Book, Chapter, ChapterFile, Snapshot};
@@ -23,6 +23,21 @@ pub(super) struct SourceFile {
     path: PathBuf,
     size_bytes: i64,
     modified: Option<SystemTime>,
+}
+
+impl SourceFile {
+    pub(super) fn matches(&self, root: &Path, relative: &Path) -> bool {
+        if self.path != relative {
+            return false;
+        }
+        let path = root.join(relative);
+        path.canonicalize().is_ok_and(|actual| actual == path)
+            && std::fs::symlink_metadata(&path).is_ok_and(|metadata| {
+                metadata.is_file()
+                    && i64::try_from(metadata.len()).ok() == Some(self.size_bytes)
+                    && metadata.modified().ok() == self.modified
+            })
+    }
 }
 
 #[derive(Default)]
@@ -95,18 +110,35 @@ pub(super) fn read(root: &Path, previous: &Snapshot, cancel: &CancellationToken)
         }
         files.chapters.sort_by(|a, b| compare_paths(&a.path, &b.path));
         files.covers.sort_by_key(|file| (cover_rank(&file.path), file.path.clone()));
-        let id = path_id("audiobook", &name);
+        let uploaded = uploaded_title(&root, &name);
+        let id = uploaded.as_ref().map_or_else(|| path_id("audiobook", &name), |(id, _)| *id);
         let mut fingerprint = files.chapters;
         let chapter_count = fingerprint.len();
         fingerprint.extend(files.covers);
-        let book = previous.books.get(&id).filter(|book| previous.root == root && book.fingerprint == fingerprint);
+        let book = previous.books.get(&id).filter(|book| {
+            previous.root == root
+                && book.fingerprint == fingerprint
+                && uploaded.as_ref().is_none_or(|(_, title)| title == &book.title)
+        });
         if let Some(book) = book {
             books.insert(id, Arc::clone(book));
-        } else if let Some(book) = read_book(&root, &name, id, fingerprint, chapter_count, cancel) {
+        } else if let Some(mut book) = read_book(&root, &name, id, fingerprint, chapter_count, cancel) {
+            if let Some((_, title)) = uploaded {
+                book.title = title;
+            }
             books.insert(id, Arc::new(book));
         }
     }
     Ok(Snapshot { root, books })
+}
+
+fn uploaded_title(root: &Path, name: &Path) -> Option<(Uuid, String)> {
+    let id = Uuid::parse_str(name.to_str()?).ok()?;
+    if id.get_version() != Some(Version::Random) {
+        return None;
+    }
+    let title = std::fs::read_to_string(root.join(name).join(super::upload::TITLE_FILE)).ok()?;
+    Some((id, title))
 }
 
 fn read_book(

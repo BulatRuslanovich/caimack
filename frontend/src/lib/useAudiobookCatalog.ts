@@ -316,6 +316,14 @@ export function useAudiobookCatalog(scope: string | null, online: boolean, enabl
     }
   };
 
+  const forgetBook = async (id: string) => {
+    await client.cancelQueries({ queryKey: key, exact: true });
+    const remaining = client.setQueryData<Audiobook[]>(key, (items) =>
+      items?.filter((book) => book.id !== id),
+    );
+    if (scope && remaining) await storeAudiobookCatalog(scope, remaining).catch(() => {});
+  };
+
   const latestForPlayback = async (book: Audiobook) => {
     const known = books.find((item) => item.id === book.id) ?? book;
     const latest = (item: Audiobook, fromServer = false) =>
@@ -336,5 +344,5 @@ export function useAudiobookCatalog(scope: string | null, online: boolean, enabl
     }
   };
 
-  return { result, books, downloads, checkpoint, savedChange, latestForPlayback };
+  return { result, books, downloads, checkpoint, savedChange, forgetBook, latestForPlayback };
 }

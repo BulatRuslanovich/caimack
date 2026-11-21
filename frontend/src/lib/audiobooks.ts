@@ -60,12 +60,19 @@ export const audiobookApi = {
     request<Audiobook[]>("/audiobooks", { signal, onResponse }),
   detail: (id: string, signal: AbortSignal, onResponse?: (headers: Headers) => void) =>
     request<Audiobook>(audiobookHref(id), { signal, onResponse }),
+  upload: (id: string, title: string, files: File[]) => {
+    const body = new FormData();
+    body.set("title", title);
+    for (const file of files) body.append("file", file);
+    return request<void>(`/audiobooks/uploads/${encodeURIComponent(id)}`, { method: "PUT", body });
+  },
   edit: (id: string, values: AudiobookValues, cover: File | null, removeCover: boolean) => {
     const body = new FormData();
     body.set("details", JSON.stringify({ ...values, removeCover }));
     if (cover) body.set("file", cover);
     return request<void>(audiobookHref(id), { method: "PUT", body });
   },
+  delete: (id: string) => request<void>(audiobookHref(id), { method: "DELETE" }),
   writeProgress: (
     id: string,
     body: AudiobookProgress,

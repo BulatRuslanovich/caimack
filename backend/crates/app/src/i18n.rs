@@ -73,6 +73,20 @@ fn russian(template: &str) -> Option<&'static str> {
         "Audiobook cover not found." => "Обложка аудиокниги не найдена.",
         "Audiobook audio file not found." => "Аудиофайл книги не найден.",
         "Invalid audiobook details." => "Некорректные данные аудиокниги.",
+        "The audiobook files have changed. Wait for the catalog to refresh and try again." => {
+            "Файлы аудиокниги изменились. Дождитесь обновления каталога и попробуйте ещё раз."
+        }
+        "The server needs write access to delete the audiobook." => {
+            "Для удаления аудиокниги серверу требуется доступ на запись."
+        }
+        "Invalid audiobook upload." => "Некорректный запрос на загрузку аудиокниги.",
+        "Invalid audiobook chapter file: {0}." => "Некорректный файл главы: {0}.",
+        "An audiobook can have at most {0} chapters." => "В аудиокниге может быть не более {0} глав.",
+        "Audiobook chapter names must be unique: {0}." => "Имена файлов глав должны быть уникальными: {0}.",
+        "Choose at least one audiobook chapter." => "Выберите хотя бы один файл главы.",
+        "Some audiobook chapters could not be read." => "Не удалось прочитать некоторые главы аудиокниги.",
+        "An audiobook already uses this upload ID." => "Этот идентификатор загрузки уже используется.",
+        "The audiobook exceeds the 2 GB upload limit." => "Размер аудиокниги превышает лимит в 2 ГБ.",
         "Enter a title of at most {0} characters." => "Введите название длиной до {0} символов.",
         "Enter a year between {0} and {1}." => "Введите год от {0} до {1}.",
         "Choose whether to replace or remove the cover." => "Выберите одно действие с обложкой: заменить или удалить.",
