@@ -82,6 +82,7 @@ let version = 0;
 const epoch = randomUUID();
 let playback = null;
 let holder = null;
+let audiobooksEnabled = false;
 const devices = new Map();
 const pending = new Map();
 const commands = [];
@@ -134,10 +135,12 @@ const backend = createServer(async (request, response) => {
         id,
         name: `Test output ${devices.size + 1}`,
         connectionId: randomUUID(),
+        audiobookExperiment: url.searchParams.get("audiobookExperiment") === "true",
         response,
       };
       devices.set(id, device);
       broadcast();
+      if (device.audiobookExperiment) event(response, "audiobook-experiment", audiobooksEnabled);
       response.on("close", () => {
         if (devices.get(id) === device) {
           devices.delete(id);
@@ -146,6 +149,17 @@ const backend = createServer(async (request, response) => {
       });
       return;
     }
+    if (path === "/api/experiments/audiobooks")
+      return json(response, { enabled: audiobooksEnabled });
+    if (path === "/api/admin/experiments/audiobooks") {
+      audiobooksEnabled = body.enabled;
+      for (const device of devices.values()) {
+        if (device.audiobookExperiment)
+          event(device.response, "audiobook-experiment", audiobooksEnabled);
+      }
+      return json(response, { enabled: audiobooksEnabled });
+    }
+    if (path === "/api/audiobooks") return json(response, [], audiobooksEnabled ? 200 : 403);
     if (path === "/api/playback/session") {
       response.writeHead(200, {
         "Content-Type": "text/event-stream",
@@ -484,10 +498,41 @@ try {
   const controller = await page();
   console.log("Both player pages loaded");
   await until(() => devices.size === 2, "both playback devices online");
+  const setAudiobooks = async (enabled) => {
+    const result = await fetch(`${backendUrl}/api/admin/experiments/audiobooks`, {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
+    });
+    assert.equal(result.ok, true);
+    await until(async () => {
+      const links = await Promise.all(
+        [renderer.page, controller.page].map((page) =>
+          page.eval(`Boolean(document.querySelector('a[href="/audiobooks?view=catalog"]'))`),
+        ),
+      );
+      return links.every((visible) => visible === enabled);
+    }, `audiobook navigation updates on both devices (${enabled})`);
+  };
+  assert.equal(requests.get("GET /api/audiobooks") ?? 0, 0);
+  await setAudiobooks(true);
+  await until(() => requests.get("GET /api/audiobooks") >= 2, "both devices load the catalog");
+  await setAudiobooks(false);
+  const catalogRequests = requests.get("GET /api/audiobooks");
   await renderer.page.send("Page.bringToFront");
   await click(renderer.page, "Play First tone");
   await until(() => playing(renderer.page), "renderer audio started");
   console.log("Renderer started");
+  await click(renderer.page, "Pause");
+  await until(() => playback?.isPlaying === false, "renderer reports the pause");
+  const pausedRequests = requests.get("PUT /api/playback/connect/state");
+  const experimentRequests = requests.get("GET /api/experiments/audiobooks");
+  await delay(4_500);
+  assert.equal(requests.get("PUT /api/playback/connect/state"), pausedRequests);
+  assert.equal(requests.get("GET /api/experiments/audiobooks"), experimentRequests);
+  assert.equal(requests.get("GET /api/audiobooks"), catalogRequests);
+  await click(renderer.page, "Play");
+  await until(() => playing(renderer.page), "renderer resumes after the pause");
+  console.log("Audiobook updates and idle requests passed");
   const mediaRace = await renderer.page.eval(`(async () => {
     const audio = [...document.querySelectorAll('audio')].find(audio => !audio.paused);
     const events = [];

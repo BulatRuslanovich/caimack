@@ -34,6 +34,7 @@ export function useAudiobookCatalog(scope: string | null, online: boolean, enabl
   const confirmed = useRef(new Map<string, AudiobookProgress>());
   const inFlight = useRef(new Set<string>());
   const scopeRequest = useRef<AbortController | null>(null);
+  const lastOnline = useRef(online);
   const clockKey = `caimack-audiobook-clock:${scope}`;
   const clockOffset = useRef<number | null>(null);
 
@@ -82,10 +83,10 @@ export function useAudiobookCatalog(scope: string | null, online: boolean, enabl
   const result = useQuery({
     queryKey: key,
     enabled: enabled && scope !== null,
-    staleTime: 0,
+    staleTime: 20_000,
     refetchInterval: online ? 20_000 : false,
     refetchOnWindowFocus: true,
-    refetchOnReconnect: "always",
+    refetchOnReconnect: false,
     networkMode: "always",
     meta: { handlesError: true },
     queryFn: async ({ signal }) => {
@@ -260,6 +261,10 @@ export function useAudiobookCatalog(scope: string | null, online: boolean, enabl
 
   const { refetch } = result;
   useEffect(() => {
+    if (!enabled && scope) void client.cancelQueries({ queryKey: key, exact: true });
+  }, [client, enabled, key, scope]);
+
+  useEffect(() => {
     if (!enabled) return;
     const controller = new AbortController();
     scopeRequest.current = controller;
@@ -267,13 +272,10 @@ export function useAudiobookCatalog(scope: string | null, online: boolean, enabl
   }, [enabled, scope]);
 
   useEffect(() => {
+    const networkChanged = lastOnline.current !== online;
+    lastOnline.current = online;
     if (!enabled || !scope) return;
     let active = true;
-    const onlineAgain = () => {
-      void flush().finally(() => {
-        if (active) void refetch();
-      });
-    };
     const onStorage = (event: StorageEvent) => {
       if (!isJournalKey(scope, event.key)) return;
       for (const [id, { progress, settled }] of Object.entries(readJournal())) {
@@ -286,19 +288,17 @@ export function useAudiobookCatalog(scope: string | null, online: boolean, enabl
     };
 
     const timer = window.setInterval(() => void flush(), 5_000);
-    window.addEventListener("online", onlineAgain);
-    window.addEventListener("caimack:refetch", onlineAgain);
     window.addEventListener("storage", onStorage);
-    onlineAgain();
+    void flush().finally(() => {
+      if (active && networkChanged) void refetch();
+    });
 
     return () => {
       active = false;
       window.clearInterval(timer);
-      window.removeEventListener("online", onlineAgain);
-      window.removeEventListener("caimack:refetch", onlineAgain);
       window.removeEventListener("storage", onStorage);
     };
-  }, [enabled, scope, flush, refetch, readJournal, updateBook]);
+  }, [enabled, scope, online, flush, refetch, readJournal, updateBook]);
 
   const savedChange = async (book: Audiobook) => {
     const saved = !book.saved;

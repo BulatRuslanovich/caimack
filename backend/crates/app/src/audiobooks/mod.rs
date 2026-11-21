@@ -14,7 +14,7 @@ use std::time::{Duration, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
-use tokio::sync::Notify;
+use tokio::sync::{Mutex, Notify, watch};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -28,6 +28,7 @@ pub use edits::BookEdit;
 pub struct Audiobooks {
     catalog: Arc<RwLock<Arc<Snapshot>>>,
     requested: Arc<Notify>,
+    experiment: Arc<Mutex<watch::Sender<Option<bool>>>>,
 }
 
 #[derive(Default)]
@@ -116,6 +117,7 @@ impl Audiobooks {
     }
 
     pub async fn set_experiment(&self, db: &PgPool, enabled: bool) -> AppResult<()> {
+        let experiment = self.experiment.lock().await;
         sqlx::query(
             "INSERT INTO server_experiments (name, enabled) VALUES ('audiobooks', $1)
                      ON CONFLICT (name) DO UPDATE SET enabled = EXCLUDED.enabled",
@@ -123,8 +125,17 @@ impl Audiobooks {
         .bind(enabled)
         .execute(db)
         .await?;
+        experiment.send_if_modified(|current| {
+            let changed = *current != Some(enabled);
+            *current = Some(enabled);
+            changed
+        });
         self.request_scan();
         Ok(())
+    }
+
+    pub async fn experiment_changes(&self) -> watch::Receiver<Option<bool>> {
+        self.experiment.lock().await.subscribe()
     }
 
     pub fn spawn(
