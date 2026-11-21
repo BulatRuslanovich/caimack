@@ -64,28 +64,13 @@ export function Card<T extends string>({
         className={cn(
           "line-clamp-2 text-body font-medium wrap-anywhere",
           current && "text-primary",
-          !list && menu && "pr-10",
         )}
       >
         {title}
       </span>
-      <span
-        className={cn(
-          "library-secondary line-clamp-2 text-sm leading-snug",
-          !list && menu && "pr-10",
-        )}
-      >
-        {subtitle}
-      </span>
+      <span className="library-secondary line-clamp-2 text-sm leading-snug">{subtitle}</span>
       {details && (
-        <span
-          className={cn(
-            "library-tertiary line-clamp-2 text-xs leading-snug",
-            !list && menu && "pr-10",
-          )}
-        >
-          {details}
-        </span>
+        <span className="library-tertiary line-clamp-2 text-xs leading-snug">{details}</span>
       )}
     </>
   );
@@ -156,7 +141,7 @@ export function Card<T extends string>({
         </button>
       )}
 
-      {menu && <div className={list ? "shrink-0" : "absolute right-0 bottom-0"}>{menu}</div>}
+      {menu && <div className={list ? "shrink-0" : "card-cover-menu"}>{menu}</div>}
       {action && !list && (
         <div className="card-art-overlay pointer-events-none absolute inset-x-0 top-0 aspect-square">
           {action}

@@ -27,6 +27,52 @@
   transition: --tone-a 400ms var(--ease);
 }
 
+.card-cover-menu {
+  position: absolute;
+  top: 0.625rem;
+  right: 0.625rem;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 65%);
+  color: white;
+  backdrop-filter: blur(6px);
+}
+
+.media-card[data-round="true"] > .card-cover-menu {
+  top: 0;
+  right: 0;
+  background: transparent;
+  color: var(--foreground);
+  backdrop-filter: none;
+}
+
+.media-card[data-round="true"] > .card-cover-menu > button {
+  background: transparent;
+}
+
+.card-cover-menu > button {
+  border-radius: inherit;
+  color: inherit;
+}
+
+@media (hover: hover) and (pointer: fine) and (not (any-pointer: coarse)) {
+  .card-cover-menu {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .media-card:is(:hover, :focus-within) .card-cover-menu,
+  .card-cover-menu:has([aria-expanded="true"]) {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .card-cover-menu {
+    transition: opacity 150ms ease;
+  }
+}
+
 .media-card .card-art {
   box-shadow: var(--library-art-shadow);
   transition:
