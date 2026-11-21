@@ -2,21 +2,6 @@
 
 import { describe, expect, it } from "vitest";
 import { leadArtists } from "@/components/home/DailyMix";
-import { tileLayout } from "@/components/home/QuickTiles";
-
-describe("tileLayout", () => {
-  it("keeps up to four tiles in a single row", () => {
-    expect(tileLayout(3)).toEqual({ perRow: 3, visible: 3 });
-    expect(tileLayout(4)).toEqual({ perRow: 4, visible: 4 });
-  });
-
-  it("never leaves a ragged last row", () => {
-    expect(tileLayout(5)).toEqual({ perRow: 4, visible: 4 });
-    expect(tileLayout(6)).toEqual({ perRow: 3, visible: 6 });
-    expect(tileLayout(7)).toEqual({ perRow: 3, visible: 6 });
-    expect(tileLayout(9)).toEqual({ perRow: 4, visible: 8 });
-  });
-});
 
 describe("leadArtists", () => {
   const track = (artistName: string) => ({ artistName });

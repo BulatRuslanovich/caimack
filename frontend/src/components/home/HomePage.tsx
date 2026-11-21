@@ -58,17 +58,21 @@ function OfflineHome({ status }: { status: DesktopStatus }) {
             <Blocks blocks={blocks} offline localRadio={radio} />
           ) : (
             <div className="home-page">
-              <RadioHero tracks={radio} offline />
-              <DailyMix
-                title={t("home.downloaded")}
-                block={{
-                  key: "downloads",
-                  baseKey: "downloads",
-                  zone: "Lead",
-                  layout: "Hero",
-                  tracks: downloads,
-                }}
-              />
+              <div className="home-listening-stage">
+                <RadioHero tracks={radio} offline />
+                <div className="home-daily-selection">
+                  <DailyMix
+                    title={t("home.downloaded")}
+                    block={{
+                      key: "downloads",
+                      baseKey: "downloads",
+                      zone: "Lead",
+                      layout: "Hero",
+                      tracks: downloads,
+                    }}
+                  />
+                </div>
+              </div>
             </div>
           )
         }
@@ -172,12 +176,14 @@ function Blocks({
     <div className="home-page [&_h2]:line-clamp-2 [&_h2]:whitespace-normal">
       <div className="home-listening-stage">
         <RadioHero tracks={localRadio ?? radioTracks} offline={offline} />
+        {lead.length > 0 && (
+          <div className="home-daily-selection">
+            {lead.map((block) => (
+              <Block key={block.key} block={block} shown={shown} />
+            ))}
+          </div>
+        )}
         {quick.length > 0 && <QuickTiles blocks={quick} />}
-        <div className="home-daily-selection">
-          {lead.map((block) => (
-            <Block key={block.key} block={block} shown={shown} />
-          ))}
-        </div>
       </div>
 
       {!offline && <RecapBanner />}
@@ -254,8 +260,16 @@ function BlockBody({ block, shown }: { block: HomeBlock; shown: Set<string> }) {
         );
       }
 
+      const wholeCards = block.baseKey === "newAlbums";
       return (
-        <Shelf title={title} titleHref={titleHref} note={note} href={href} className={section}>
+        <Shelf
+          title={title}
+          titleHref={titleHref}
+          note={note}
+          href={href}
+          className={wholeCards ? undefined : section}
+          wholeCards={wholeCards}
+        >
           <ShelfItems block={block} />
         </Shelf>
       );

@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { HeartIcon, ListMusicIcon } from "lucide-react";
 import type { Route } from "next";
 import { PrefetchLink as Link } from "@/components/PrefetchLink";
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { PlaySource } from "@/lib/playback/playSource";
 import { queries } from "@/lib/queries";
@@ -18,48 +18,31 @@ import type { HomeBlock, Track } from "@/lib/types";
 import { usePlayback } from "@/lib/playback/usePlayback";
 import { useNowPlaying } from "@/contexts/PlayerContext";
 import { useT } from "@/contexts/I18nContext";
-import { capFourOnMobile } from "@/components/home/layout";
 import { CoverMosaic } from "@/components/collection/CoverMosaic";
 import { AlbumCover, PlaylistCover, TrackCover } from "../Cover";
 import { CardPlayButton } from "../MediaCard";
 import { PlayBadge } from "../PlayBadge";
 
-export function tileLayout(count: number): { perRow: number; visible: number } {
-  if (count <= 4) return { perRow: Math.max(count, 1), visible: count };
-
-  const best = [4, 3]
-    .map((perRow) => ({ perRow, visible: Math.min(2, Math.floor(count / perRow)) * perRow }))
-    .sort((a, b) => b.visible - a.visible || b.perRow - a.perRow)[0];
-
-  return best;
-}
-
 export function QuickTiles({ blocks }: { blocks: HomeBlock[] }) {
   const ref = useShelfImpression<HTMLDivElement>("home:quickTiles");
+  const favorites = blocks.find((block) => block.layout === "Tile");
 
-  const tiles = blocks.flatMap((block) =>
-    block.layout === "Tile"
-      ? [<FavoritesTile key={block.key} block={block} />]
-      : recentTiles(block).map((tile) => (
-          <PlaySource key={tile.key} value={`home:${block.baseKey}`}>
-            {tile}
-          </PlaySource>
-        )),
-  );
+  const tiles = blocks
+    .filter((block) => block.layout !== "Tile")
+    .flatMap((block) =>
+      recentTiles(block).map((tile) => (
+        <PlaySource key={`${block.key}:${tile.key}`} value={`home:${block.baseKey}`}>
+          {tile}
+        </PlaySource>
+      )),
+    );
 
-  const { perRow, visible } = tileLayout(tiles.length);
+  if (!favorites && !tiles.length) return null;
 
   return (
-    <div
-      ref={ref}
-      className={cn(
-        "home-quick-access grid gap-2",
-        "grid-cols-[repeat(var(--per-row),minmax(0,1fr))] max-lg:grid-cols-2",
-        capFourOnMobile,
-      )}
-      style={{ "--per-row": perRow } as CSSProperties}
-    >
-      {tiles.slice(0, visible)}
+    <div ref={ref} className="home-quick-access">
+      {favorites && <FavoritesTile block={favorites} />}
+      {tiles.slice(0, favorites ? 3 : 4)}
     </div>
   );
 }
@@ -75,7 +58,13 @@ function FavoritesTile({ block }: { block: HomeBlock }) {
       sublabel={t("count.tracks", { count: block.totalCount ?? tracks.length })}
       art={<CoverMosaic tracks={tracks} />}
       toneSrc={tracks[0] ? trackCoverUrl(tracks[0], "thumb") : null}
-      action={<HeartIcon size={16} className="shrink-0 fill-current text-primary" />}
+      action={
+        <HeartIcon
+          size={16}
+          aria-hidden="true"
+          className="quick-tile-favorite shrink-0 fill-current text-primary"
+        />
+      }
     />
   );
 }
@@ -85,10 +74,10 @@ function recentTiles(block: HomeBlock) {
 
   return [
     ...(block.albums ?? []).map((album) => <AlbumTile key={album.id} album={album} />),
-    ...tracks.map((track) => <TrackTile key={track.id} track={track} context={tracks} />),
     ...(block.playlists ?? []).map((playlist) => (
       <PlaylistTile key={playlist.id} playlist={playlist} />
     )),
+    ...tracks.map((track) => <TrackTile key={track.id} track={track} context={tracks} />),
   ];
 }
 
@@ -110,7 +99,7 @@ function AlbumTile({ album }: { album: NonNullable<HomeBlock["albums"]>[number] 
           tracks={detail.data?.tracks}
           load={async () => (await client.fetchQuery(queries.album(album.id))).tracks}
           size={8}
-          className="quick-tile-play top-1/2 left-4 -translate-y-1/2 [@media(hover:none)]:hidden"
+          className="quick-tile-play [@media(hover:none)]:hidden"
         />
       }
     />
@@ -165,7 +154,7 @@ function PlaylistTile({ playlist }: { playlist: NonNullable<HomeBlock["playlists
             tracks={detail.data?.tracks}
             load={async () => (await client.fetchQuery(queries.playlist(playlist.id))).tracks}
             size={8}
-            className="quick-tile-play top-1/2 left-4 -translate-y-1/2 [@media(hover:none)]:hidden"
+            className="quick-tile-play [@media(hover:none)]:hidden"
           />
         )
       }
@@ -213,7 +202,7 @@ function Tile<T extends string>({
   );
 
   const shell =
-    "quick-tile flex min-h-16 w-full items-center gap-3 overflow-hidden rounded-sm bg-card py-1 pr-3 text-left transition-colors duration-150 ease-brand hover:bg-raised hover:no-underline";
+    "quick-tile flex min-h-16 w-full items-center gap-3 overflow-hidden rounded-sm py-1 pr-3 text-left transition-colors duration-150 ease-brand hover:no-underline";
 
   return (
     <div {...tone} className="group relative min-w-0">
