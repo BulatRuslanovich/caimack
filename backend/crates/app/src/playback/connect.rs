@@ -332,6 +332,9 @@ impl Account {
             return;
         }
         self.devices.remove(device_id);
+        if self.devices.len() < 2 {
+            self.playback = None;
+        }
         if let Some(book) = self.audiobook.as_mut().filter(|book| book.device_id == device_id) {
             book.device_id.clear();
             book.reported_at = Utc::now();
@@ -393,6 +396,10 @@ impl ConnectRegistry {
         }
         if let Some(previous) = account.devices.get(device_id) {
             account.disconnect(device_id, previous.device.connection_id);
+        }
+        if account.devices.len() == 1 {
+            // A report sent before the peer disconnected may have arrived while this device was alone.
+            account.playback = None;
         }
         let id = Uuid::now_v7();
         let (commands, receiver) = mpsc::channel(32);
@@ -543,7 +550,9 @@ impl ConnectRegistry {
                 || previous.state.track_ids != state.track_ids
                 || previous.state.order != state.order
         });
-        let queue_revision = previous.map_or(1, |previous| previous.queue_revision + u64::from(changed));
+        // Keep revisions increasing across disconnects, even when there is no saved playback.
+        let queue_revision =
+            previous.filter(|_| !changed).map_or(account.version + 1, |previous| previous.queue_revision);
         account.playback =
             Some(ActivePlayback { device_id: device_id.to_owned(), queue_revision, reported_at: Utc::now(), state });
         account.notify();
@@ -795,5 +804,29 @@ mod tests {
         playback.order.reverse();
         hub.report(user, "phone", connection.id, playback).unwrap();
         assert!(hub.snapshot(user).unwrap().playback.unwrap().queue_revision > revision);
+    }
+
+    #[test]
+    fn new_peer_waits_for_fresh_playback_after_the_previous_peer_disconnects() {
+        let hub = ConnectRegistry::default();
+        let user = Uuid::now_v7();
+        let phone = hub.register(user, "phone", "Phone").unwrap();
+        let web = hub.register(user, "web", "Web").unwrap();
+        let mut playback = Playback { track_ids: vec![Uuid::now_v7()], order: vec![0], ..Default::default() };
+        hub.report(user, "phone", phone.id, playback.clone()).unwrap();
+        let last = hub.snapshot(user).unwrap().playback.unwrap();
+
+        hub.unregister(user, "web", web.id);
+        assert!(hub.snapshot(user).unwrap().playback.is_none());
+        // An in-flight report can still arrive after the peer leaves.
+        hub.report(user, "phone", phone.id, playback.clone()).unwrap();
+        let _peer = hub.register(user, "desktop", "Desktop").unwrap();
+        assert!(hub.snapshot(user).unwrap().playback.is_none());
+
+        playback.position_seconds = 42.0;
+        hub.report(user, "phone", phone.id, playback).unwrap();
+        let fresh = hub.snapshot(user).unwrap().playback.unwrap();
+        assert!(fresh.queue_revision > last.queue_revision);
+        assert_eq!(fresh.state.position_seconds, 42.0);
     }
 }

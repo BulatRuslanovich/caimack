@@ -211,6 +211,7 @@ export function useConnectPlayback(
           if (
             !id ||
             id !== requestedConnection ||
+            currentSnapshot.current.devices.length < 2 ||
             value.selectedId ||
             (!value.local.queue.length &&
               currentSnapshot.current.playback?.deviceId !== own.current)
@@ -246,12 +247,13 @@ export function useConnectPlayback(
     setLease,
   });
 
+  const hasPeer = snapshot.devices.length > 1;
   useEffect(() => {
-    if (!connected || selectedId) return;
+    if (!connected || !hasPeer || selectedId) return;
     void report().catch(() => {});
     const interval = window.setInterval(() => void report().catch(() => {}), 2000);
     return () => clearInterval(interval);
-  }, [connected, selectedId, local, report]);
+  }, [connected, hasPeer, selectedId, local, report]);
 
   const available =
     connected &&

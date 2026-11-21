@@ -1,6 +1,9 @@
 # Android releases and in-app updates
 
 Pushing a version tag such as `v1.2.3` runs `.github/workflows/android-release.yml`.
+The workflow also builds the [desktop packages](desktop.md) and stages them
+with the APK before publishing the release. Manual runs can opt in to the
+desktop build with `include_desktop`.
 The tag must match `frontend/package.json`; the Android build reads that version.
 The workflow runs unit tests, builds and verifies a signed release APK, saves it
 as an Actions artifact for 30 days, attaches it to the matching GitHub Release,

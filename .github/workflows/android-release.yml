@@ -12,6 +12,10 @@ on:
         description: "Existing release tag to rebuild (for example v1.2.3)"
         required: true
         type: string
+      include_desktop:
+        description: Also build the desktop packages for this tag
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -23,9 +27,17 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  desktop:
+    if: github.event_name == 'push' || inputs.include_desktop
+    uses: ./.github/workflows/desktop-release.yml
+    with:
+      release_tag: ${{ inputs.release_tag || github.ref_name }}
+
   apk:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    outputs:
+      revision: ${{ steps.metadata.outputs.revision }}
     env:
       RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
     
@@ -43,6 +55,7 @@ jobs:
           ref: refs/tags/${{ env.RELEASE_TAG }}
       
       - name: Validate version and restore release signing key
+        id: metadata
         env:
           CAIMACK_KEYSTORE_BASE64: ${{ secrets.CAIMACK_KEYSTORE_BASE64 }}
           CAIMACK_KEYSTORE_PASSWORD: ${{ secrets.CAIMACK_KEYSTORE_PASSWORD }}
@@ -95,6 +108,8 @@ jobs:
           # INFO: Export environment variables for the next steps
           with open(os.environ['GITHUB_ENV'], 'a') as output:
               output.write(f'CAIMACK_KEYSTORE_FILE={target}\nAPK_NAME=caimack-v{version}-arm64.apk\nSOURCE_REVISION={revision}\n')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'revision={revision}\n')
           PY
 
       # INFO: Setup Java
@@ -142,7 +157,63 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      # INFO: Get actual script for release
+      - name: Remove signing key
+        if: always()
+        run: rm -f -- "$RUNNER_TEMP/caimack-release.jks"
+
+  publish:
+    needs: [apk, desktop]
+    if: ${{ !cancelled() && needs.apk.result == 'success' && (needs.desktop.result == 'success' || needs.desktop.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+      APK_NAME: caimack-${{ inputs.release_tag || github.ref_name }}-arm64.apk
+      SOURCE_REVISION: ${{ needs.apk.outputs.revision }}
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.SOURCE_REVISION }}
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: caimack-android-${{ env.RELEASE_TAG }}
+          path: dist
+
+      - uses: actions/download-artifact@v7
+        if: needs.desktop.result == 'success'
+        with:
+          pattern: caimack-desktop-*-${{ env.RELEASE_TAG }}
+          path: dist/desktop
+
+      - name: Stage desktop packages before publishing the release
+        if: needs.desktop.result == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mapfile -d '' assets < <(find dist/desktop -type f -print0 | sort -z)
+          if [[ ${#assets[@]} -ne 6 ]]; then
+            echo '::error::Expected two Windows and four Linux packages.'
+            exit 1
+          fi
+
+          if gh release view "$RELEASE_TAG" --json assets --jq '.assets[] | select(.size > 0) | .name' > existing-assets; then
+            for asset in "${assets[@]}"; do
+              if ! grep -Fxq -- "${asset##*/}" existing-assets; then
+                gh release upload "$RELEASE_TAG" "$asset" --clobber
+              fi
+            done
+          else
+            gh release create "$RELEASE_TAG" "${assets[@]}" --draft --verify-tag --generate-notes \
+              --title "Caimack ${RELEASE_TAG#v}"
+          fi
+          release_id=$(gh release view "$RELEASE_TAG" --json databaseId --jq .databaseId)
+          [[ "$release_id" =~ ^[1-9][0-9]*$ ]]
+          echo "RELEASE_ID=$release_id" >> "$GITHUB_ENV"
+
       - name: Check out release publishing tools
         uses: actions/checkout@v7
         with:
@@ -157,8 +228,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SOURCE_REPOSITORY: ${{ github.repository }}
         run: |
+          args=()
+          if [[ -n "${RELEASE_ID:-}" ]]; then
+            args+=(--release-id "$RELEASE_ID")
+          fi
           python3 .release-tools/scripts/publish_android_release.py --apk "dist/$APK_NAME" \
-            --tag "$RELEASE_TAG" --repository "$SOURCE_REPOSITORY"
+            --tag "$RELEASE_TAG" --repository "$SOURCE_REPOSITORY" "${args[@]}"
 
       - name: Send APK to the configured Telegram group
         env:
@@ -168,7 +243,3 @@ jobs:
         run: |
           python3 scripts/send_telegram_apk.py --apk "dist/$APK_NAME" \
             --tag "$RELEASE_TAG" --repository "$SOURCE_REPOSITORY" --revision "$SOURCE_REVISION"
-
-      - name: Remove signing key
-        if: always()
-        run: rm -f -- "$RUNNER_TEMP/caimack-release.jks"

@@ -25,8 +25,6 @@ export function useAudiobookExperiment(scope: string | null) {
     },
     enabled: scope !== null,
     networkMode: "always",
-    refetchInterval: 4_000,
-    refetchIntervalInBackground: true,
     refetchOnWindowFocus: "always",
     refetchOnReconnect: "always",
     meta: { handlesError: true },

@@ -43,6 +43,14 @@ class PublishTests(unittest.TestCase):
             self.publish()
         self.assertFalse(any(call.args[0] == "PATCH" for call in self.api.request.call_args_list))
 
+    def test_desktop_draft_is_reused_by_release_id(self):
+        draft = dict(self.draft, assets=[{"name": "caimack-desktop-1.2.3-windows-x64-setup.exe"}])
+        self.api.request.side_effect = [draft, self.asset, None, {"draft": False}]
+        release.publish(self.apk, "v1.2.3", "owner/music", self.api, release_id=7)
+        calls = self.api.request.call_args_list
+        self.assertEqual(("GET", "releases/7"), calls[0].args)
+        self.assertEqual(("PATCH", "releases/7"), calls[-1].args[:2])
+
     def test_unfinished_upload_does_not_publish_a_draft(self):
         self.api.request.side_effect = [None, self.draft, dict(self.asset, state="starter")]
         with self.assertRaises(release.PublishError):

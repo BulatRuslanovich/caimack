@@ -141,6 +141,7 @@ const backend = createServer(async (request, response) => {
       response.on("close", () => {
         if (devices.get(id) === device) {
           devices.delete(id);
+          if (devices.size < 2) playback = null;
           broadcast();
         }
       });
@@ -448,11 +449,17 @@ try {
       return false;
     }
   }, "headless browser startup");
+  const browserInfo = await (await fetch(`http://127.0.0.1:${debugging}/json/version`)).json();
+  const browserSession = await Cdp.open(browserInfo.webSocketDebuggerUrl);
+  sessions.push(browserSession);
   const page = async () => {
-    const target = await (
-      await fetch(`http://127.0.0.1:${debugging}/json/new?about:blank`, { method: "PUT" })
-    ).json();
-    const page = await Cdp.open(target.webSocketDebuggerUrl);
+    const { browserContextId } = await browserSession.send("Target.createBrowserContext");
+    const { targetId } = await browserSession.send("Target.createTarget", {
+      url: "about:blank",
+      browserContextId,
+      background: true,
+    });
+    const page = await Cdp.open(`ws://127.0.0.1:${debugging}/devtools/page/${targetId}`);
     sessions.push(page);
     await page.send("Runtime.enable");
     await page.send("Page.enable");
@@ -483,16 +490,27 @@ try {
       () => page.eval("Boolean(document.querySelector('[aria-label=\"Play First tone\"]'))"),
       "track list hydration",
     );
-    return { page, target };
+    return { page, targetId };
   };
   const renderer = await page();
-  const controller = await page();
-  console.log("Both player pages loaded");
-  await until(() => devices.size === 2, "both playback devices online");
+  await until(() => devices.size === 1, "renderer online on its own");
   await renderer.page.send("Page.bringToFront");
   await click(renderer.page, "Play First tone");
   await until(() => playing(renderer.page), "renderer audio started");
-  console.log("Renderer started");
+  const stateRequests = () => requests.get("PUT /api/playback/connect/state") ?? 0;
+  await delay(2200);
+  assert.equal(stateRequests(), 0, "a lone renderer does not publish playback state");
+
+  const controller = await page();
+  await until(() => devices.size === 2, "both playback devices online");
+  await renderer.page.send("Page.bringToFront");
+  await until(
+    () => playback?.trackIds[playback.index] === tracks[0].id && playback.positionSeconds > 0,
+    "peer receives current track and position",
+  );
+  if (!(await playing(renderer.page))) await click(renderer.page, "Play First tone");
+  await until(() => playing(renderer.page), "renderer is playing after the peer arrives");
+  console.log("Renderer sends playback state only after the controller arrives");
   const mediaRace = await renderer.page.eval(`(async () => {
     const audio = [...document.querySelectorAll('audio')].find(audio => !audio.paused);
     const events = [];
@@ -867,16 +885,17 @@ try {
   await writeFile(join(artifacts, "controller.png"), Buffer.from(shot.data, "base64"));
   const lastTrack = playback.trackIds[playback.index];
   const lastPosition = playback.positionSeconds;
-  await fetch(`http://127.0.0.1:${debugging}/json/close/${renderer.target.id}`);
+  await browserSession.send("Target.closeTarget", { targetId: renderer.targetId });
   await until(() => devices.size === 1, "renderer disconnected");
   await until(
-    async () =>
-      playback?.deviceId === devices.keys().next().value &&
-      playback?.trackIds[playback.index] === lastTrack &&
-      playback?.positionSeconds >= lastPosition - 1 &&
-      (await playing(controller.page)),
+    () => controller.page.eval(`[...document.querySelectorAll('audio')].some(audio =>
+      audio.currentSrc.includes(${JSON.stringify(lastTrack)}) && !audio.paused &&
+      audio.currentTime >= ${Math.max(0, lastPosition - 1)})`),
     "the controller resumes the same track and position locally",
   );
+  const reportsAfterFailover = stateRequests();
+  await delay(2200);
+  assert.equal(stateRequests(), reportsAfterFailover, "reporting stops after the last peer leaves");
   const commandCount = commands.length;
   await click(controller.page, "Pause");
   await until(
@@ -896,6 +915,7 @@ try {
         "queued pause/play events settle without feedback",
         "automatic track advance keeps playing",
         "discovery",
+        "playback reports begin at peer arrival and stop at peer departure",
         "mirrored player",
         "silent controller",
         "whole queue shuffle and sequential visible playback",

@@ -75,7 +75,7 @@ def positive_id(value) -> int:
     return value
 
 
-def publish(apk: Path, tag: str, repository: str, github: GitHub) -> str:
+def publish(apk: Path, tag: str, repository: str, github: GitHub, release_id: int | None = None) -> str:
     target = version(tag)
 
     if target is None or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
@@ -86,9 +86,10 @@ def publish(apk: Path, tag: str, repository: str, github: GitHub) -> str:
     if not apk.is_file() or apk.name != name or apk.stat().st_size == 0:
         raise PublishError(f"Expected the verified release APK named {name}.")
 
-    release = github.request("GET", f"releases/tags/{tag}")
+    release_path = f"releases/{positive_id(release_id)}" if release_id is not None else f"releases/tags/{tag}"
+    release = github.request("GET", release_path)
 
-    if release is None:
+    if release is None and release_id is None:
         release = github.request("POST", "releases", {
             "tag_name": tag,
             "name": f"Caimack {tag[1:]}",
@@ -140,6 +141,7 @@ def main() -> int:
     parser.add_argument("--apk", type=Path, required=True)
     parser.add_argument("--tag", required=True)
     parser.add_argument("--repository", required=True)
+    parser.add_argument("--release-id", type=int)
     args = parser.parse_args()
     token = os.environ.get("GH_TOKEN", "")
 
@@ -148,7 +150,7 @@ def main() -> int:
         return 1
     
     try:
-        url = publish(args.apk, args.tag, args.repository, GitHub(args.repository, token))
+        url = publish(args.apk, args.tag, args.repository, GitHub(args.repository, token), args.release_id)
     except (PublishError, OSError) as error:
         print(f"APK publication failed: {error if isinstance(error, PublishError) else 'Could not read the APK.'}", file=sys.stderr)
         return 1

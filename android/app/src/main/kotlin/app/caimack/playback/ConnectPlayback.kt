@@ -44,6 +44,7 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
     private val current = MutableStateFlow(ConnectUiState())
     val state: StateFlow<ConnectUiState> = current
     val isRemote: Boolean get() = current.value.selectedId != null
+    internal val hasPeer: Boolean get() = connectionId != null && snapshot.devices.size > 1
     // The server sends a snapshot at least every 15 seconds. Bound the read when a socket goes silent.
     private val client = container.http.newBuilder().readTimeout(25, TimeUnit.SECONDS)
         .connectionPool(ConnectionPool(0, 1, TimeUnit.SECONDS)).build()
@@ -154,7 +155,7 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
                         try {
                             if (beats++ % 5 == 0) connectionId?.let { container.api.connectHeartbeat(ConnectHeartbeat(container.deviceId, it)) }
                             reportBook()
-                            report()
+                            if (hasPeer) report()
                         }
                         catch (cancelled: CancellationException) { throw cancelled }
                         catch (_: Exception) { }
@@ -178,7 +179,7 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
     fun displaced() { wantsLocal = false }
 
     fun changed() {
-        if (isRemote || account == null) return
+        if (isRemote || !hasPeer) return
         changed?.cancel()
         changed = container.scope.launch(Dispatchers.Main) {
             delay(50)
@@ -271,9 +272,11 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
 
     private suspend fun accept(next: ConnectSnapshot, transport: Boolean = false) {
         if (next.epoch == snapshot.epoch && next.version < snapshot.version) return
+        val hadPeer = hasPeer
         val previousBook = snapshot.audiobook
         snapshot = next
         connectionId = next.devices.find { it.id == container.deviceId }?.connectionId
+        if (!hadPeer && hasPeer) changed()
         if (transport) {
             fallback?.cancel()
             fallback = null
@@ -611,7 +614,7 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
 
     suspend fun report() = reports.withLock {
         val id = connectionId ?: return@withLock
-        if (isRemote) return@withLock
+        if (isRemote || !hasPeer) return@withLock
         val value = rendererState?.invoke() ?: return@withLock
         if (value.trackIds.isEmpty() && snapshot.playback?.deviceId != container.deviceId) return@withLock
         val next = container.api.connectReport(ConnectReport(container.deviceId, id, value))

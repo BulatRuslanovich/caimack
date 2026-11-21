@@ -1,4 +1,5 @@
-.PHONY: db migrate model mert backend frontend test test-db fmt lint check sqlx apk
+.PHONY: db migrate model mert backend frontend test test-db fmt lint check sqlx apk \
+	desktop desktop-deps desktop-windows desktop-linux desktop-arch
 
 db:
 	@docker start caimack-rust-dev-db >/dev/null 2>&1 || MSYS_NO_PATHCONV=1 docker run -d --name caimack-rust-dev-db \
@@ -46,3 +47,22 @@ sqlx:
 
 apk:
 	cd android && ./gradlew :app:assembleRelease
+
+ifeq ($(OS),Windows_NT)
+desktop: desktop-windows
+else
+desktop: desktop-linux
+endif
+
+desktop-deps:
+	npm ci --prefix frontend
+	npm ci --prefix desktop
+
+desktop-windows: desktop-deps
+	npm run dist:windows --prefix desktop
+
+desktop-linux: desktop-deps
+	npm run dist:linux --prefix desktop
+
+desktop-arch: desktop-linux
+	cd desktop/release/arch && makepkg --force --clean

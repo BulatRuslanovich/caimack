@@ -708,7 +708,7 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private fun report(container: AppContainer, player: Player) {
-        if (container.connect.isRemote) return
+        if (container.connect.isRemote || !container.connect.hasPeer) return
         val ids = idsOf(player)
         if (ids.isEmpty()) return
         val current = player.currentMediaItemIndex.coerceIn(0, ids.size - 1)

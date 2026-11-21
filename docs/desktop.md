@@ -47,21 +47,28 @@ npm test --prefix desktop
 npm run test:smoke --prefix desktop
 ```
 
-Use `npm run dist:appimage --prefix desktop` on Linux to build only the x86-64
-AppImage in `desktop/release`. An AppImage can use
-`--appimage-extract-and-run` if FUSE is unavailable.
+`make desktop` installs the project dependencies and builds packages for the
+host. On Windows, `make desktop-windows` builds the x64 NSIS installer and
+portable executable. On Linux, `make desktop-linux` builds the x86-64 AppImage,
+Debian package and tarball. The output directory is `desktop/release`.
 
-Use `npm run dist:linux --prefix desktop` to build all Linux packages. The
-generated Arch recipe is in `desktop/release/arch` with its checksummed source
-bundle, icon and desktop entry. In that directory, use `makepkg -si` on Arch.
+On Arch Linux, `make desktop-arch` also builds the native `.pkg.tar.zst` with
+`makepkg`. Find it under `desktop/release/arch` and install it with
+`sudo pacman -U ./caimack-desktop-VERSION-1-x86_64.pkg.tar.zst` from that directory.
+The AppImage supports `--appimage-extract-and-run` if FUSE is unavailable.
 
-Use `npm run dist:windows --prefix desktop` on Windows for the x64 NSIS
-installer and portable executable. The portable executable keeps its profile
+The portable Windows executable keeps its profile
 and individual downloads in `Caimack Data` beside the executable. A music
 folder selected for synchronization remains a separate location. Windows may
 require a fresh sign-in after moving the portable profile to another machine.
 
-The [desktop CI workflow](../.github/workflows/desktop-ci.yml) tests the
-installer, portable executable, AppImage, Debian and Arch packages. It uploads
-the builds and Arch recipe as workflow artifacts. Local Windows builds are
-unsigned unless code-signing credentials are configured.
+## Releases
+
+Pushing a version tag such as `v1.2.3` starts the
+[release workflow](../.github/workflows/android-release.yml). It calls the
+[desktop build](../.github/workflows/desktop-release.yml), checks both npm
+package versions against the tag, and stages the Windows and Linux packages
+before publishing the same GitHub Release as the APK. The desktop packages are
+also available as workflow artifacts. For a manual rebuild, select **Also build
+the desktop packages for this tag** when starting the Android release workflow.
+Windows release executables are unsigned.
