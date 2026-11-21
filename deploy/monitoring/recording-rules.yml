@@ -1,0 +1,12 @@
+groups:
+  - name: caimack-host
+    rules:
+      - record: caimack:cpu_used:percent
+        expr: 100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{job="caimack-host", mode="idle"}[5m])))
+      - record: caimack:memory_available:percent
+        expr: 100 * node_memory_MemAvailable_bytes{job="caimack-host"} / node_memory_MemTotal_bytes{job="caimack-host"}
+      - record: caimack:disk_available:percent
+        expr: |
+          100 * node_filesystem_avail_bytes{job="caimack-host", fstype!~"tmpfs|ramfs|overlay|squashfs"}
+            / (node_filesystem_size_bytes{job="caimack-host"} > 0)
+            and (node_filesystem_readonly{job="caimack-host"} == 0)

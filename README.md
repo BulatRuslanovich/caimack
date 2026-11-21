@@ -172,6 +172,7 @@ JWT secrets are preserved. `setup.sh` remains a compatibility entry point.
 See the [server manager guide](docs/server-manager.md) for standalone installation,
 all commands and password reset behaviour.
 See [backend logging](docs/backend-logging.md) for log levels, request IDs and diagnostic filters.
+See [optional LAN monitoring](deploy/monitoring/README.md) for server health and resource graphs.
 
 Open `https://<PUBLIC_DOMAIN>` and sign in as the owner: the music folder is scanned on its
 own, and more music can be dropped onto the Upload page. Invite people from the Users page: each

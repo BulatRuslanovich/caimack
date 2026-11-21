@@ -1,0 +1,52 @@
+name: caimack-monitoring
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.16.0
+    restart: unless-stopped
+    configs:
+      - source: health-target
+        target: /etc/prometheus/health-target.yml
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./recording-rules.yml:/etc/prometheus/recording-rules.yml:ro
+      - prometheus-data:/prometheus
+
+  blackbox:
+    image: prom/blackbox-exporter:v0.28.0
+    restart: unless-stopped
+    command: [--config.file=/config/blackbox.yml]
+    extra_hosts:
+      - "${CAIMACK_MONITORING_DOMAIN:?Set the Caimack HTTPS hostname}=${CAIMACK_MONITORING_LAN_IP:?Set the Linux server LAN IP}"
+    volumes:
+      - ./blackbox.yml:/config/blackbox.yml:ro
+
+  grafana:
+    image: grafana/grafana:13.3.1
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${GRAFANA_LOCAL_PORT:-3030}:3000"
+    environment:
+      GF_SERVER_ROOT_URL: http://127.0.0.1:${GRAFANA_LOCAL_PORT:-3030}/
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set the initial Grafana admin password}
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/caimack.json
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+
+configs:
+  health-target:
+    content: |
+      - targets: ["https://${CAIMACK_MONITORING_DOMAIN:?Set the Caimack HTTPS hostname}/health"]
+
+volumes:
+  prometheus-data:
+  grafana-data:

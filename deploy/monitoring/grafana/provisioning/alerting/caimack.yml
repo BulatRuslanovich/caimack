@@ -1,0 +1,97 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Caimack health
+    folder: Caimack
+    interval: 30s
+    rules:
+      - &rule
+        uid: caimack-unavailable
+        title: Caimack HTTPS unavailable
+        condition: B
+        for: 1m
+        noDataState: Alerting
+        execErrState: Alerting
+        data:
+          - &query
+            refId: A
+            datasourceUid: caimack-prometheus
+            relativeTimeRange: {from: 300, to: 0}
+            model: &promql
+              refId: A
+              datasource: {type: prometheus, uid: caimack-prometheus}
+              instant: true
+              range: false
+              expr: '(max(probe_success{job="caimack-health"}) or vector(0)) < bool 1'
+          - &threshold
+            refId: B
+            datasourceUid: __expr__
+            relativeTimeRange: {from: 0, to: 0}
+            model:
+              refId: B
+              datasource: {type: __expr__, uid: __expr__}
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+        annotations:
+          summary: Caimack failed its local HTTPS health check.
+
+      - <<: *rule
+        uid: caimack-host-metrics-unavailable
+        title: Linux host metrics unavailable
+        for: 2m
+        noDataState: OK
+        data:
+          - <<: *query
+            model:
+              <<: *promql
+              expr: |
+                ((max(up{job="caimack-host"}) or vector(0)) < bool 1)
+                  * (max(probe_success{job="caimack-health"}) or vector(0))
+          - *threshold
+        annotations:
+          summary: Caimack answers over HTTPS, but Prometheus cannot scrape the Linux host.
+
+      - <<: *rule
+        uid: caimack-high-cpu
+        title: CPU usage above 85%
+        for: 10m
+        noDataState: OK
+        data:
+          - <<: *query
+            model:
+              <<: *promql
+              expr: caimack:cpu_used:percent > bool 85
+          - *threshold
+        annotations:
+          summary: Average CPU usage exceeded 85% for 10 minutes.
+
+      - <<: *rule
+        uid: caimack-low-ram
+        title: Available RAM below 10%
+        for: 10m
+        noDataState: OK
+        data:
+          - <<: *query
+            model:
+              <<: *promql
+              expr: caimack:memory_available:percent < bool 10
+          - *threshold
+        annotations:
+          summary: Available RAM stayed below 10% for 10 minutes.
+
+      - <<: *rule
+        uid: caimack-low-disk
+        title: Available disk space below 15%
+        for: 5m
+        noDataState: OK
+        data:
+          - <<: *query
+            model:
+              <<: *promql
+              expr: caimack:disk_available:percent < bool 15
+          - *threshold
+        annotations:
+          summary: A writable filesystem stayed below 15% available space for 5 minutes.

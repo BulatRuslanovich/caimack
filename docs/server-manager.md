@@ -79,6 +79,8 @@ non-interactive runs without a command display read-only status.
 ./caimack.sh doctor
 ```
 
+`./caimack.sh monitoring on`, `off`, or `status` manages the optional Linux metrics exporter. To control both computers from Windows, see [LAN monitoring](../deploy/monitoring/README.md).
+
 `update` pulls new images and recreates changed containers. A pinned version stays
 pinned unless another version is supplied. In a standalone, utility-managed
 installation it also refreshes deployment files from the matching release. In a

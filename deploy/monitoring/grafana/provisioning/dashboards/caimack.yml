@@ -1,0 +1,9 @@
+apiVersion: 1
+
+providers:
+  - name: Caimack
+    folder: Caimack
+    type: file
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards

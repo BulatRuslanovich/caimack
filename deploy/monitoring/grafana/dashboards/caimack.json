@@ -1,0 +1,136 @@
+{
+  "uid": "caimack-monitoring",
+  "title": "Caimack Server",
+  "schemaVersion": 39,
+  "tags": ["Caimack"],
+  "time": {"from":"now-30m","to":"now"},
+  "refresh": "30s",
+  "links": [{"title":"Alert rules","type":"link","url":"/alerting/list"}],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Caimack HTTPS",
+      "type": "stat",
+      "gridPos": {"x":0,"y":0,"w":6,"h":3},
+      "datasource": {"type":"prometheus","uid":"caimack-prometheus"},
+      "targets": [{"refId":"A","expr":"max(probe_success{job=\"caimack-health\"} or (0 * up{job=\"caimack-health\"})) or vector(0)","legendFormat":"","instant":true,"range":false}],
+      "options": {"orientation":"horizontal","justifyMode":"auto","wideLayout":false,"colorMode":"value","graphMode":"none","textMode":"value","reduceOptions":{"calcs":["lastNotNull"],"fields":"","values":false},"text":{"valueSize":30}},
+      "fieldConfig": {
+        "defaults": {"color":{"mode":"thresholds"},"thresholds":{"mode":"absolute","steps":[{"color":"#E47786","value":null},{"color":"#62C9AA","value":1}]},"mappings":[{"type":"value","options":{"0":{"text":"Unavailable","color":"#E47786"},"1":{"text":"Healthy","color":"#62C9AA"}}}]},
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "title": "Linux metrics",
+      "type": "stat",
+      "gridPos": {"x":6,"y":0,"w":6,"h":3},
+      "datasource": {"type":"prometheus","uid":"caimack-prometheus"},
+      "targets": [{"refId":"A","expr":"max(up{job=\"caimack-host\",instance=\"caimack-linux\"}) or vector(0)","legendFormat":"","instant":true,"range":false}],
+      "options": {"orientation":"horizontal","justifyMode":"auto","wideLayout":false,"colorMode":"value","graphMode":"none","textMode":"value","reduceOptions":{"calcs":["lastNotNull"],"fields":"","values":false},"text":{"valueSize":30}},
+      "fieldConfig": {
+        "defaults": {"color":{"mode":"thresholds"},"thresholds":{"mode":"absolute","steps":[{"color":"#E47786","value":null},{"color":"#62C9AA","value":1}]},"mappings":[{"type":"value","options":{"0":{"text":"Unavailable","color":"#E47786"},"1":{"text":"Connected","color":"#62C9AA"}}}]},
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "title": "HTTPS response",
+      "description": "Latest successful response in the selected range.",
+      "type": "stat",
+      "gridPos": {"x":12,"y":0,"w":6,"h":3},
+      "datasource": {"type":"prometheus","uid":"caimack-prometheus"},
+      "targets": [{"refId":"A","expr":"1000 * probe_duration_seconds{job=\"caimack-health\"} and probe_success{job=\"caimack-health\"} == 1","legendFormat":"HTTPS","instant":false,"range":true}],
+      "options": {"orientation":"horizontal","justifyMode":"auto","wideLayout":false,"colorMode":"value","graphMode":"area","textMode":"value","reduceOptions":{"calcs":["lastNotNull"],"fields":"","values":false},"text":{"valueSize":30}},
+      "fieldConfig": {
+        "defaults": {"color":{"mode":"fixed","fixedColor":"#EAB971"},"unit":"ms","decimals":0,"noValue":"No data"},
+        "overrides": []
+      }
+    },
+    {
+      "id": 8,
+      "title": "Root disk free",
+      "type": "stat",
+      "gridPos": {"x":18,"y":0,"w":6,"h":3},
+      "datasource": {"type":"prometheus","uid":"caimack-prometheus"},
+      "targets": [{"refId":"A","expr":"caimack:disk_available:percent{mountpoint=\"/\"}","legendFormat":"","instant":true,"range":false}],
+      "options": {"orientation":"horizontal","justifyMode":"auto","wideLayout":false,"colorMode":"value","graphMode":"none","textMode":"value","reduceOptions":{"calcs":["lastNotNull"],"fields":"","values":false},"text":{"valueSize":30}},
+      "fieldConfig": {
+        "defaults": {"color":{"mode":"thresholds"},"thresholds":{"mode":"absolute","steps":[{"value":null,"color":"#E47786"},{"value":15,"color":"#67C9C5"}]},"unit":"percent","decimals":1,"noValue":"No data"},
+        "overrides": []
+      }
+    },
+    {
+      "id": 9,
+      "title": "Availability history",
+      "description": "Gaps indicate periods with no samples from the monitoring computer.",
+      "type": "state-timeline",
+      "gridPos": {"x":0,"y":3,"w":16,"h":7},
+      "datasource": {"type":"prometheus","uid":"caimack-prometheus"},
+      "targets": [
+        {"refId":"A","expr":"max by (instance) ((probe_success{job=\"caimack-health\"} or (0 * up{job=\"caimack-health\"})) and on (job, instance) (time() - timestamp(up{job=\"caimack-health\"}) < 45))","legendFormat":"Caimack HTTPS","instant":false,"range":true},
+        {"refId":"B","expr":"up{job=\"caimack-host\",instance=\"caimack-linux\"} and (time() - timestamp(up{job=\"caimack-host\",instance=\"caimack-linux\"}) < 45)","legendFormat":"Linux metrics","instant":false,"range":true}
+      ],
+      "options": {"mergeValues":true,"showValue":"never","rowHeight":0.58,"alignValue":"left","legend":{"showLegend":true,"displayMode":"list","placement":"bottom"},"tooltip":{"mode":"single","sort":"none"}},
+      "fieldConfig": {
+        "defaults": {"color":{"mode":"fixed","fixedColor":"#62C9AA"},"mappings":[{"type":"value","options":{"0":{"text":"Unavailable","color":"#E47786"},"1":{"text":"Available","color":"#62C9AA"}}}],"custom":{"lineWidth":0,"fillOpacity":72,"spanNulls":false}},
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "title": "HTTPS response time",
+      "type": "timeseries",
+      "gridPos": {"x":16,"y":3,"w":8,"h":7},
+      "datasource": {"type":"prometheus","uid":"caimack-prometheus"},
+      "targets": [{"refId":"A","expr":"1000 * probe_duration_seconds{job=\"caimack-health\"} and probe_success{job=\"caimack-health\"} == 1","legendFormat":"HTTPS","instant":false,"range":true}],
+      "options": {"legend":{"showLegend":false,"displayMode":"list","placement":"bottom","calcs":[]},"tooltip":{"mode":"single","sort":"none"}},
+      "fieldConfig": {
+        "defaults": {"color":{"mode":"fixed","fixedColor":"#EAB971"},"unit":"ms","min":0,"custom":{"lineWidth":2,"fillOpacity":12,"gradientMode":"none","showPoints":"never","spanNulls":300,"thresholdsStyle":{"mode":"off"}}},
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "title": "CPU usage",
+      "description": "Alert after 10 minutes above 85%.",
+      "type": "timeseries",
+      "gridPos": {"x":0,"y":10,"w":8,"h":8},
+      "datasource": {"type":"prometheus","uid":"caimack-prometheus"},
+      "targets": [{"refId":"A","expr":"caimack:cpu_used:percent","legendFormat":"Used","instant":false,"range":true}],
+      "options": {"legend":{"showLegend":false,"displayMode":"list","placement":"bottom","calcs":[]},"tooltip":{"mode":"single","sort":"none"}},
+      "fieldConfig": {
+        "defaults": {"color":{"mode":"fixed","fixedColor":"#80AAF1"},"unit":"percent","min":0,"max":100,"thresholds":{"mode":"absolute","steps":[{"value":null,"color":"#80AAF1"},{"value":85,"color":"#E47786"}]},"custom":{"lineWidth":2,"fillOpacity":12,"gradientMode":"none","showPoints":"never","spanNulls":300,"thresholdsStyle":{"mode":"dashed"}}},
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "title": "Available RAM",
+      "description": "Alert after 10 minutes below 10%.",
+      "type": "timeseries",
+      "gridPos": {"x":8,"y":10,"w":8,"h":8},
+      "datasource": {"type":"prometheus","uid":"caimack-prometheus"},
+      "targets": [{"refId":"A","expr":"caimack:memory_available:percent","legendFormat":"Available","instant":false,"range":true}],
+      "options": {"legend":{"showLegend":false,"displayMode":"list","placement":"bottom","calcs":[]},"tooltip":{"mode":"single","sort":"none"}},
+      "fieldConfig": {
+        "defaults": {"color":{"mode":"fixed","fixedColor":"#B79AE9"},"unit":"percent","min":0,"max":100,"thresholds":{"mode":"absolute","steps":[{"value":null,"color":"#B79AE9"},{"value":10,"color":"#E47786"}]},"custom":{"lineWidth":2,"fillOpacity":12,"gradientMode":"none","showPoints":"never","spanNulls":300,"thresholdsStyle":{"mode":"dashed"}}},
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "title": "Available disk space",
+      "description": "Alert after 5 minutes below 15% on a writable filesystem.",
+      "type": "timeseries",
+      "gridPos": {"x":16,"y":10,"w":8,"h":8},
+      "datasource": {"type":"prometheus","uid":"caimack-prometheus"},
+      "targets": [{"refId":"A","expr":"caimack:disk_available:percent{mountpoint!=\"/boot/efi\"}","legendFormat":"{{mountpoint}}","instant":false,"range":true}],
+      "options": {"legend":{"showLegend":true,"displayMode":"list","placement":"bottom","calcs":[]},"tooltip":{"mode":"multi","sort":"none"}},
+      "fieldConfig": {
+        "defaults": {"color":{"mode":"palette-classic"},"unit":"percent","min":0,"max":100,"thresholds":{"mode":"absolute","steps":[{"value":null,"color":"#67C9C5"},{"value":15,"color":"#E47786"}]},"custom":{"lineWidth":2,"fillOpacity":12,"gradientMode":"none","showPoints":"never","spanNulls":300,"thresholdsStyle":{"mode":"dashed"}}},
+        "overrides": [{"matcher":{"id":"byName","options":"/"},"properties":[{"id":"color","value":{"mode":"fixed","fixedColor":"#67C9C5"}}]}]
+      }
+    }
+  ]
+}

@@ -28,6 +28,7 @@ class ServerCliTests(unittest.TestCase):
             "docker-compose.recommendations.yml",
             "docker-compose.mert-amd.yml",
             "deploy/Caddyfile",
+            "deploy/monitoring/exporter.compose.yml",
         ]:
             target = self.root / name
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -45,8 +46,10 @@ printf '\\n' >> "$TEST_LOG"
 case " $* " in
   *' pull '*) if [[ ${TEST_FAIL_PULL:-0} == 1 ]]; then exit 44; fi ;;
   *' up '*)
-    grep '^OWNER_RESET_PASSWORD=' .env >> "$TEST_STATES"
+    if [[ -f .env ]]; then grep '^OWNER_RESET_PASSWORD=' .env >> "$TEST_STATES"; fi
     if [[ ${TEST_FAIL_UP:-0} == 1 ]]; then exit 42; fi ;;
+  *' ps --quiet --filter label=com.docker.compose.project=caimack-monitoring-exporter '*)
+    if [[ ${TEST_EXPORTER_RUNNING:-0} == 1 ]]; then echo exporter-container; fi ;;
   *' run '*) if [[ ${TEST_FAIL_GPU:-0} == 1 ]]; then echo 'GPU unavailable' >&2; exit 43; fi ;;
 esac
 """,
@@ -119,6 +122,7 @@ esac
             "docker-compose.recommendations.yml",
             "docker-compose.mert-amd.yml",
             "deploy/Caddyfile",
+            "deploy/monitoring/exporter.compose.yml",
             "caimack.sh",
             "setup.sh",
         ]:
@@ -216,6 +220,17 @@ fi
         self.assertNotIn(":docker-compose.recommendations.yml", self.configuration())
         self.assertIn("custom.yml'", self.configuration())
         self.assertTrue(any("\tstop\tmert\tmert-init" in call for call in self.calls()))
+
+    def test_linux_monitoring_manages_only_the_exporter_project(self):
+        self.assertIn("exporter: off", self.run_cli("monitoring", "status").stdout)
+        self.run_cli("monitoring", "on")
+        running = self.run_cli("monitoring", "status", extra={"TEST_EXPORTER_RUNNING": "1"})
+        self.assertIn("exporter: on", running.stdout)
+        self.run_cli("monitoring", "off")
+        exporter = "compose\t--project-name\tcaimack-monitoring-exporter\t-f\tdeploy/monitoring/exporter.compose.yml\t"
+        self.assertIn(exporter + "up\t-d\t", self.calls())
+        self.assertIn(exporter + "stop\t", self.calls())
+        self.assertFalse((self.root / ".env").exists())
 
     def test_failed_gpu_probe_returns_to_cpu_configuration(self):
         self.install()
