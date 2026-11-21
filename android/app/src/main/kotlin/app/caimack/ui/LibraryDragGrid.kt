@@ -18,9 +18,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -49,6 +52,8 @@ internal fun LibraryDragGrid(
     canDrop: (String, String) -> Boolean,
     onOrder: suspend (List<String>) -> Unit, onFolder: suspend (String, String) -> Unit,
     empty: @Composable () -> Unit = {},
+    parentDropBounds: Rect? = null,
+    onParentDropActive: (Boolean) -> Unit = {},
     content: @Composable (String) -> Unit,
 ) {
     val state = rememberLazyGridState()
@@ -61,11 +66,14 @@ internal fun LibraryDragGrid(
     val latestOrder by rememberUpdatedState(onOrder)
     val latestFolder by rememberUpdatedState(onFolder)
     val latestDrop by rememberUpdatedState(canDrop)
+    val latestParentDropBounds by rememberUpdatedState(parentDropBounds)
+    val latestParentDropActive by rememberUpdatedState(onParentDropActive)
     var active by remember(scopeKey) { mutableStateOf<String?>(null) }
     var pendingKeys by remember(scopeKey) { mutableStateOf<List<String>?>(null) }
     var landed by remember(scopeKey) { mutableStateOf<String?>(null) }
     val shown = pendingKeys ?: keys
     var pointer by remember { mutableStateOf(Offset.Zero) }
+    var gridOrigin by remember { mutableStateOf(Offset.Zero) }
     var grab by remember { mutableStateOf(Offset.Zero) }
     var dragSize by remember { mutableStateOf(IntSize.Zero) }
     var destination by remember { mutableStateOf<String?>(null) }
@@ -75,6 +83,10 @@ internal fun LibraryDragGrid(
     fun target() {
         val moving = active ?: return
         edgeTarget = null
+        if (latestParentDropBounds?.contains(pointer + gridOrigin) == true && latestDrop(moving, "up")) {
+            destination = "up"
+            return
+        }
         val hit = state.layoutInfo.visibleItemsInfo.firstOrNull {
             pointer.x >= it.offset.x && pointer.x <= it.offset.x + it.size.width &&
                 pointer.y >= it.offset.y && pointer.y <= it.offset.y + it.size.height
@@ -82,7 +94,7 @@ internal fun LibraryDragGrid(
         val key = hit.key as? String ?: return
         if (key == moving) { destination = null; return }
         val edge = minOf(with(pixels) { 12.dp.toPx() }, hit.size.height * .2f)
-        val central = key == "up" || (pointer.y > hit.offset.y + edge && pointer.y < hit.offset.y + hit.size.height - edge)
+        val central = pointer.y > hit.offset.y + edge && pointer.y < hit.offset.y + hit.size.height - edge
         if (central && latestDrop(moving, key)) {
             destination = key
         } else {
@@ -93,7 +105,7 @@ internal fun LibraryDragGrid(
             }
             val from = latestKeys.indexOf(moving)
             val to = latestKeys.indexOf(key)
-            if (from >= 0 && to >= 0 && key != "up") {
+            if (from >= 0 && to >= 0) {
                 // Keep hit targets stationary during the gesture; animate placement on release.
                 edgeTarget = key to (from < to)
             }
@@ -115,8 +127,10 @@ internal fun LibraryDragGrid(
         }
     }
     LaunchedEffect(scopeKey, enabled) { reset() }
+    LaunchedEffect(destination == "up") { latestParentDropActive(destination == "up") }
     LaunchedEffect(scopeKey) { state.scrollToItem(0) }
-    Box(Modifier.fillMaxSize().testTag("library-drag-grid").pointerInput(enabled, scopeKey, pendingKeys != null) {
+    Box(Modifier.fillMaxSize().onGloballyPositioned { gridOrigin = it.positionInRoot() }
+        .testTag("library-drag-grid").pointerInput(enabled, scopeKey, pendingKeys != null) {
         if (!enabled || pendingKeys != null) return@pointerInput
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
@@ -127,7 +141,7 @@ internal fun LibraryDragGrid(
                     at.y >= it.offset.y && at.y <= it.offset.y + it.size.height
             }
             val key = hit?.key as? String
-            if (hit == null || key !in latestKeys || key == "up") return@awaitEachGesture
+            if (hit == null || key !in latestKeys) return@awaitEachGesture
             landed = null; active = key; pointer = at; dragSize = hit.size
             grab = at - Offset(hit.offset.x.toFloat(), hit.offset.y.toFloat())
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -157,7 +171,7 @@ internal fun LibraryDragGrid(
                             scope.launch {
                                 try {
                                     if (folder != null) latestFolder(key!!, folder)
-                                    else latestOrder(order.filter { it != "up" })
+                                    else latestOrder(order)
                                 } finally { pendingKeys = null }
                             }
                         }
@@ -175,7 +189,7 @@ internal fun LibraryDragGrid(
             horizontalArrangement = Arrangement.spacedBy(if (grid) density.gap else 0.dp),
             verticalArrangement = Arrangement.spacedBy(if (grid) 20.dp else 0.dp),
         ) {
-            items(shown, key = { it }, span = { if (it == "up") GridItemSpan(maxLineSpan) else GridItemSpan(1) }) { key ->
+            items(shown, key = { it }) { key ->
                 Box(Modifier.animateItem(fadeOutSpec = null, placementSpec = if (landed == key) null else spring(stiffness = 350f)).testTag("library-entry:$key")
                     .alpha(if (active == key) 0f else 1f)
                     .drawWithContent {
@@ -189,7 +203,7 @@ internal fun LibraryDragGrid(
                     content(key)
                 }
             }
-            if (keys.none { it != "up" && it != "downloads" && it != "favorites" }) item(span = { GridItemSpan(maxLineSpan) }) { empty() }
+            if (keys.none { it != "downloads" && it != "favorites" }) item(span = { GridItemSpan(maxLineSpan) }) { empty() }
         }
         active?.let { key ->
             Box(Modifier.offset { IntOffset((pointer.x - grab.x).roundToInt(), (pointer.y - grab.y).roundToInt()) }

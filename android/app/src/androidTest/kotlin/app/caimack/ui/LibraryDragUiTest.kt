@@ -7,6 +7,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.unit.dp
@@ -49,6 +53,33 @@ class LibraryDragUiTest {
         compose.runOnIdle { assertEquals(listOf("folder:a", "downloads", "album:b", "album:c"), keys); assertEquals(0, opened) }
         compose.onNodeWithText("album:b").performClick()
         compose.runOnIdle { assertEquals(1, opened) }
+    }
+
+    @Test fun folderToolbarAcceptsDropWithoutAParentRow() {
+        var moved: Pair<String, String>? = null
+        compose.setContent {
+            CaimackTheme {
+                var parentBounds by remember { mutableStateOf<Rect?>(null) }
+                Column {
+                    Box(Modifier.size(48.dp).testTag("folder-parent")
+                        .onGloballyPositioned { parentBounds = it.boundsInRoot() })
+                    LibraryDragGrid(
+                        listOf("album:a"), grid = false, enabled = true, scopeKey = "folder",
+                        canDrop = { _, target -> target == "up" },
+                        onOrder = {}, onFolder = { source, target -> moved = source to target },
+                        parentDropBounds = parentBounds,
+                    ) { key -> Text(key, Modifier.fillMaxWidth().height(84.dp)) }
+                }
+            }
+        }
+        compose.onNodeWithTag("library-entry:up").assertDoesNotExist()
+        val grid = compose.onNodeWithTag("library-drag-grid")
+        val origin = grid.fetchSemanticsNode().boundsInRoot.topLeft
+        val start = compose.onNodeWithTag("library-entry:album:a").fetchSemanticsNode().boundsInRoot.center - origin
+        val end = compose.onNodeWithTag("folder-parent").fetchSemanticsNode().boundsInRoot.center - origin
+        grid.performTouchInput { down(start); advanceEventTime(650); moveTo(start) }
+        grid.performTouchInput { moveTo(end, delayMillis = 150); up() }
+        compose.runOnIdle { assertEquals("album:a" to "up", moved) }
     }
     @Test fun gridFolderEdgeReordersInsteadOfMovingInside() {
         var keys by mutableStateOf(listOf("folder:a", "album:b", "album:c", "downloads"))

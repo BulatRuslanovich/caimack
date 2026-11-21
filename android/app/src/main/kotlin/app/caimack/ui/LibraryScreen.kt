@@ -136,6 +136,8 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
     var selectedFolder by rememberSaveable { mutableStateOf<String?>(null) }
     val currentFolder = folders.find { it.id == selectedFolder }
     val folderId = currentFolder?.id
+    var parentDropBounds by remember(folderId) { mutableStateOf<Rect?>(null) }
+    var parentDropActive by remember(folderId) { mutableStateOf(false) }
     BackHandler(currentFolder != null) { selectedFolder = currentFolder?.parentId }
     BackHandler(searchExpanded && search.isBlank() && !imeVisible) {
         focus.clearFocus(); search = ""; searchExpanded = false
@@ -175,7 +177,15 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
             }
         }) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (currentFolder != null) IconButton(onClick = { selectedFolder = currentFolder.parentId }) { Icon(Lucide.ArrowLeft, stringResource(R.string.folders_up)) }
+            if (currentFolder != null) {
+                IconButton(
+                    onClick = { selectedFolder = currentFolder.parentId },
+                    modifier = Modifier.onGloballyPositioned { parentDropBounds = it.boundsInRoot() },
+                ) {
+                    Icon(Lucide.ArrowLeft, stringResource(R.string.folders_up),
+                        tint = if (parentDropActive) palette.primary else LocalContentColor.current)
+                }
+            }
             Text(currentFolder?.name ?: stringResource(R.string.nav_library), style = Type.title, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (currentFolder != null) LibraryFolderMenu(currentFolder, folders)
             IconButton(
@@ -290,8 +300,10 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
                 }
             }
             LibraryDragGrid(
-                keys = (if (currentFolder != null && query.isEmpty()) listOf("up") else emptyList()) + visibleKeys,
+                keys = visibleKeys,
                 grid = grid, enabled = !local && !organizing && query.isEmpty(), scopeKey = "${folderId}:${filter}:${downloadedOnly}:${query}:${grid}",
+                parentDropBounds = parentDropBounds,
+                onParentDropActive = { parentDropActive = it },
                 canDrop = { moving, target ->
                     val destination = if (target == "up") currentFolder?.parentId else target.removePrefix("folder:")
                     moving !in listOf("favorites", "downloads") &&
@@ -323,9 +335,6 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
                 },
             ) { key ->
                 when (key) {
-                    "up" -> TextButton(onClick = { selectedFolder = currentFolder?.parentId }, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Lucide.ArrowLeft, null); Text(stringResource(R.string.folders_up))
-                    }
                     "favorites" -> LibraryEntry(stringResource(R.string.nav_favorites), stringResource(R.string.playlists_kind), Lucide.Heart,
                         grid = grid, details = favoriteCount?.let { pluralStringResource(R.plurals.count_tracks, it, it) },
                     ) { nav.navigate(FavoritesRoute) }
