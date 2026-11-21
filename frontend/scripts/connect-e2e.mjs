@@ -883,10 +883,39 @@ try {
   });
   const shot = await controller.page.send("Page.captureScreenshot", { format: "png" });
   await writeFile(join(artifacts, "controller.png"), Buffer.from(shot.data, "base64"));
+  const rendererId = playback.deviceId;
+  const rendererConnection = devices.get(rendererId).connectionId;
+  const rendererUnavailable = () =>
+    controller.page.eval(
+      `Boolean(document.querySelector('footer [role="status"][title$=" is unavailable"]'))`,
+    );
+  devices.get(rendererId).response.end();
+  await until(rendererUnavailable, "the controller shows the temporary loss of the renderer");
+  await until(
+    async () =>
+      devices.has(rendererId) &&
+      devices.get(rendererId).connectionId !== rendererConnection &&
+      playback?.deviceId === rendererId &&
+      !(await rendererUnavailable()),
+    "the same renderer reconnects and playback controls recover",
+  );
+  assert.equal(await playing(controller.page), false, "reconnecting does not start local audio");
+
   const lastTrack = playback.trackIds[playback.index];
   const lastPosition = playback.positionSeconds;
+  const disconnectedAt = performance.now();
   await browserSession.send("Target.closeTarget", { targetId: renderer.targetId });
   await until(() => devices.size === 1, "renderer disconnected");
+  await until(
+    rendererUnavailable,
+    "the disconnected renderer stays selected during the grace period",
+  );
+  await click(controller.page, "Pause");
+  assert.equal(
+    await rendererUnavailable(),
+    true,
+    "a remote command cannot bypass the grace period",
+  );
   await until(
     () =>
       controller.page.eval(`[...document.querySelectorAll('audio')].some(audio =>
@@ -894,6 +923,7 @@ try {
       audio.currentTime >= ${Math.max(0, lastPosition - 1)})`),
     "the controller resumes the same track and position locally",
   );
+  assert.ok(performance.now() - disconnectedAt >= 30_000, "fallback waits at least 30 seconds");
   const reportsAfterFailover = stateRequests();
   await delay(2200);
   assert.equal(stateRequests(), reportsAfterFailover, "reporting stops after the last peer leaves");
@@ -932,7 +962,8 @@ try {
         "lazy fullscreen and effects",
         "single responsive record",
         "fullscreen cleanup",
-        "automatic local playback after renderer disconnect",
+        "recovery after a brief renderer disconnect",
+        "30-second grace period before local playback after renderer disconnect",
       ],
       screenshot: join(artifacts, "controller.png"),
     }),
