@@ -18,6 +18,9 @@ import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.os.Environment
 import android.provider.MediaStore
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
@@ -28,6 +31,7 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -39,6 +43,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.platform.app.InstrumentationRegistry
 import app.caimack.CaimackApp
 import app.caimack.MainActivity
@@ -117,6 +122,8 @@ class VisualReviewTest {
                 return when {
                     path == "/api/auth/login" || path == "/api/auth/me" -> json(Json.encodeToString(user))
                     path == "/api/config" -> json("{\"recommendationsEnabled\":true}")
+                    path == "/api/experiments/audiobooks" -> json("{\"enabled\":false}")
+                    path == "/api/sync/identity" -> json("{\"serverId\":\"visual-fixture\",\"userId\":\"${user.id}\"}")
                     path == "/api/tracks/lookup" -> json(Json.encodeToString(tracks))
                     path == "/api/me/settings" -> json("{\"quality\":\"Original\"}")
                     path == "/api/me/library" -> json("""[{"kind":"album","id":"album-0","title":"Ночной город","subtitle":"Электрические сны","hasImage":false,"savedAt":"2026-11-15T09:00:00Z","trackCount":3,"durationSeconds":646},{"kind":"playlist","id":"review","title":"Вечерний маршрут","subtitle":"Визуальная проверка","hasImage":false,"savedAt":"2026-11-15T09:00:00Z","trackCount":3,"durationSeconds":646}]""")
@@ -308,10 +315,12 @@ class VisualReviewTest {
     }
 
     @Test fun auditSearchBrowseAndKeyboard() {
+        val album = Album("search-album", "Каталожный альбом", "artist", "Электрические сны")
         val previous = web.dispatcher
         web.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
                 val body = when (request.url.encodedPath) {
+                    "/api/albums" -> Json.encodeToString(Paged(listOf(album), 1, 1, 60))
                     "/api/genres" -> """[{"id":"electronic","name":"Electronic","trackCount":16,"coverAlbumIds":[]},{"id":"indie","name":"Indie","trackCount":12,"coverAlbumIds":[]},{"id":"rock","name":"Rock","trackCount":10,"coverAlbumIds":[]},{"id":"jazz","name":"Jazz","trackCount":8,"coverAlbumIds":[]},{"id":"pop","name":"Pop","trackCount":8,"coverAlbumIds":[]},{"id":"folk","name":"Folk","trackCount":6,"coverAlbumIds":[]}]"""
                     "/api/search" -> """{"tracks":${Json.encodeToString(original)},"albums":[],"artists":[],"genres":[]}"""
                     else -> return previous.dispatch(request)
@@ -324,8 +333,28 @@ class VisualReviewTest {
         compose.onNode(hasText(label(R.string.nav_search)) and hasClickAction()).performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText(label(R.string.genre_electronic)).fetchSemanticsNodes().isNotEmpty() }
         capture("search-browse", seedPlayback = false)
+
+        fun checkCategory(category: Int, result: String, count: String? = null) {
+            val title = label(category)
+            val filters = hasScrollToIndexAction() and SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange)
+            compose.onNode(filters).performScrollToNode(hasText(title))
+            compose.onNode(hasText(title) and hasClickAction()).performClick().assertIsSelected()
+            compose.waitUntil(10_000) { compose.onAllNodesWithText(result).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText(result).assertIsDisplayed()
+            compose.onAllNodesWithText(title).assertCountEquals(1)
+            count?.let { compose.onNodeWithText(it).assertIsDisplayed() }
+            compose.onNodeWithContentDescription(label(R.string.collection_clear_filter)).performClick()
+        }
+
+        checkCategory(R.string.nav_albums, album.title, localized.resources.getQuantityString(R.plurals.count_albums, 1, 1))
+        checkCategory(R.string.nav_artists, label(R.string.artists_empty))
+        checkCategory(R.string.nav_tracks, original.first().title)
+        checkCategory(R.string.nav_playlists, "Вечерний маршрут")
+        checkCategory(R.string.nav_genres, label(R.string.genre_electronic))
+
         compose.onNodeWithContentDescription(label(R.string.search_placeholder)).performTextInput("ночной")
         compose.waitUntil(10_000) { compose.onAllNodesWithText(original.first().title).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNode(hasText(label(R.string.nav_tracks)) and !hasClickAction()).assertIsDisplayed()
         capture("search-keyboard", seedPlayback = false)
         compose.onNodeWithContentDescription(label(R.string.search_clear)).performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText(label(R.string.genre_electronic)).fetchSemanticsNodes().isNotEmpty() }
