@@ -249,7 +249,7 @@ export default function LibraryPage() {
     }
     return (
       <>
-        <div className={grid ? undefined : "max-w-3xl"}>
+        <div>
           <LibraryDragList
             key={folderId ?? "root"}
             entries={entries}
