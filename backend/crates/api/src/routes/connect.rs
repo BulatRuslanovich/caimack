@@ -8,8 +8,8 @@ use app::playback::connect::{self, ConnectRegistry, Connection, Playback, Snapsh
 use app::playback::{self, PlaybackStateReport};
 use axum::Router;
 use axum::extract::{FromRef, Path, State};
-use axum::response::IntoResponse;
 use axum::response::sse::{Event, KeepAlive, Sse};
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post, put};
 use serde::Deserialize;
 use uuid::Uuid;
@@ -202,7 +202,8 @@ async fn command(
     State(state): State<ConnectApiState>,
     CurrentUser(user): CurrentUser,
     Json(request): Json<connect::CommandRequest>,
-) -> ApiResult<Json<Snapshot>> {
+) -> ApiResult<Response> {
+    let device_id = request.device_id.clone();
     let mut receipt = state.playback.connect.send(user.user_id, request)?;
     let outcome = tokio::time::timeout(connect::COMMAND_TIMEOUT, async {
         loop {
@@ -216,9 +217,19 @@ async fn command(
     })
     .await;
     match outcome {
-        Ok(Some(Ok(()))) => Ok(Json(state.playback.connect.snapshot(user.user_id)?)),
-        Ok(Some(Err(_))) => Err(AppError::conflict("Playback device could not apply the command.").into()),
-        _ => Err(AppError::conflict("Playback device is not responding.").into()),
+        Ok(Some(Ok(()))) => Ok(Json(state.playback.connect.snapshot(user.user_id)?).into_response()),
+        Ok(Some(Err(_))) => {
+            let snapshot = state.playback.connect.snapshot(user.user_id)?;
+            if !snapshot.devices.iter().any(|device| device.id == device_id) {
+                return Err(AppError::not_found("Playback device is offline.").into());
+            }
+            Err(AppError::conflict("Playback device could not apply the command.").into())
+        }
+        _ => Ok((
+            axum::http::StatusCode::GATEWAY_TIMEOUT,
+            crate::problem::ApiError::from(AppError::conflict("Playback device is not responding.")),
+        )
+            .into_response()),
     }
 }
 
@@ -371,6 +382,25 @@ mod tests {
         assert_eq!(task.await.unwrap().status(), reqwest::StatusCode::OK);
         let retry = client.post(format!("{url}/api/playback/connect/commands")).json(&request).send().await.unwrap();
         assert_eq!(retry.status(), reqwest::StatusCode::OK);
+        shutdown.cancel();
+    }
+
+    #[tokio::test]
+    async fn command_reports_an_offline_renderer_if_it_disconnects_before_acknowledging() {
+        let (url, client, shutdown) = server().await;
+        let mut renderer = device(&client, &url, "computer").await;
+        renderer.next("snapshot").await;
+        let sending = client.post(format!("{url}/api/playback/connect/commands")).json(&json!({
+            "id": Uuid::now_v7(),
+            "deviceId": "computer",
+            "command": { "type": "setPlaying", "playing": true },
+        }));
+        let task = tokio::spawn(async move { sending.send().await.unwrap() });
+        renderer.next("command").await;
+        drop(renderer);
+
+        let response = tokio::time::timeout(Duration::from_secs(3), task).await.unwrap().unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
         shutdown.cancel();
     }
 

@@ -412,8 +412,13 @@ const until = async (check, description, ms = 60000) => {
   throw new Error(`Timed out: ${description}`);
 };
 const click = (page, label) =>
-  page.eval(
-    `(() => { const b = [...document.querySelectorAll('button')].find(b => b.getAttribute('aria-label') === ${JSON.stringify(label)}); if (!b) throw Error('Missing button: ' + ${JSON.stringify(label)}); b.click(); })()`,
+  until(
+    () =>
+      page.eval(
+        `(() => { const b = [...document.querySelectorAll('button')].find(b => b.getAttribute('aria-label') === ${JSON.stringify(label)}); if (!b || b.disabled) return false; b.click(); return true; })()`,
+      ),
+    `button ${label}`,
+    10000,
   );
 const text = (page) => page.eval("document.querySelector('footer.player-shell')?.innerText || ''");
 const playing = (page) =>
@@ -473,7 +478,7 @@ try {
       ["ms_locale", "en"],
     ])
       await page.send("Network.setCookie", { name, value, url: frontendUrl });
-    await page.send("Page.navigate", { url: `${frontendUrl}/tracks` });
+    await page.send("Page.navigate", { url: `${frontendUrl}/search?tab=tracks` });
     await until(
       () => page.eval("Boolean(document.querySelector('[aria-label=\"Play First tone\"]'))"),
       "track list hydration",
@@ -587,13 +592,27 @@ try {
       `navigate to ${href}`,
     );
   };
-  const backToCatalog = async (href) => {
+  const switchCatalogTab = async (tab) => {
+    const label = tab[0].toUpperCase() + tab.slice(1);
+    await controller.page.eval(`(() => {
+      const button = [...document.querySelectorAll('[aria-label="Result types"] button')]
+        .find(button => button.textContent.trim() === ${JSON.stringify(label)});
+      if (!button) throw Error('Missing catalog tab: ' + ${JSON.stringify(label)});
+      button.click();
+    })()`);
+    await until(
+      () => controller.page.eval(`location.search === ${JSON.stringify(`?tab=${tab}`)}`),
+      `open the ${tab} catalog tab`,
+    );
+  };
+  const backToCatalog = async (tab) => {
     await controller.page.eval("history.back()");
     await until(
       () =>
-        controller.page.eval(`location.pathname === ${JSON.stringify(href)} &&
-        Boolean(document.querySelector('main a[href="/albums"]'))`),
-      `return to the catalog at ${href}`,
+        controller.page.eval(
+          `location.pathname === "/search" && location.search === ${JSON.stringify(`?tab=${tab}`)}`,
+        ),
+      `return to the ${tab} catalog tab`,
     );
   };
   const toggleCollection = async (scope, name) => {
@@ -625,8 +644,8 @@ try {
   };
   await navigate(`/albums/${albumId}`);
   await toggleCollection("#content header", "Test album");
-  await backToCatalog("/tracks");
-  await navigate("/playlists");
+  await backToCatalog("tracks");
+  await switchCatalogTab("playlists");
   await until(
     () =>
       controller.page.eval(`Boolean(document.querySelector('a[href="/playlists/${playlistId}"]'))`),
@@ -634,11 +653,11 @@ try {
   );
   await navigate(`/playlists/${playlistId}`);
   await toggleCollection("#content header", "Test playlist");
-  await backToCatalog("/playlists");
+  await backToCatalog("playlists");
   await toggleCollection("#content .media-card", "Test playlist");
-  await navigate("/albums");
+  await switchCatalogTab("albums");
   await toggleCollection("#content .media-card", "Test album");
-  await navigate("/tracks");
+  await switchCatalogTab("tracks");
   console.log("Collection header and card play/pause controls passed after shuffle");
   for (let index = 1; index < shuffledIds.length; index++) {
     await click(controller.page, "Next track");
@@ -846,17 +865,28 @@ try {
   });
   const shot = await controller.page.send("Page.captureScreenshot", { format: "png" });
   await writeFile(join(artifacts, "controller.png"), Buffer.from(shot.data, "base64"));
+  const lastTrack = playback.trackIds[playback.index];
+  const lastPosition = playback.positionSeconds;
   await fetch(`http://127.0.0.1:${debugging}/json/close/${renderer.target.id}`);
   await until(() => devices.size === 1, "renderer disconnected");
   await until(
-    async () => (await text(controller.page)).includes("unavailable"),
-    "offline output is explicit in the existing player",
+    async () =>
+      playback?.deviceId === devices.keys().next().value &&
+      playback?.trackIds[playback.index] === lastTrack &&
+      playback?.positionSeconds >= lastPosition - 1 &&
+      (await playing(controller.page)),
+    "the controller resumes the same track and position locally",
   );
-  await click(controller.page, "Next track");
+  const commandCount = commands.length;
+  await click(controller.page, "Pause");
+  await until(
+    async () => !(await playing(controller.page)),
+    "playback controls work locally after failover",
+  );
   assert.equal(
-    await playing(controller.page),
-    false,
-    "losing the renderer must never start local audio",
+    commands.length,
+    commandCount,
+    "local pause is never sent to the disconnected device",
   );
   assert.deepEqual(errors, [], "browser and API fixture should have no unhandled errors");
   console.log(
@@ -881,7 +911,7 @@ try {
         "lazy fullscreen and effects",
         "single responsive record",
         "fullscreen cleanup",
-        "offline output",
+        "automatic local playback after renderer disconnect",
       ],
       screenshot: join(artifacts, "controller.png"),
     }),
