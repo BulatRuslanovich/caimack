@@ -390,7 +390,7 @@ fun PlaylistsScreen(query: String, open: (Any) -> Unit) {
                         if (publicTab) ", ${playlist.ownerName}" else ""
                     val cover = container.media.playlistCover(playlist.id, playlist.hasCover, playlist.coverTrackId, small = true)
                     Card(playlist.name, subtitle, { open(PlaylistRoute(playlist.id)) }, toneUrl = cover) {
-                        Cover(cover, playlist.name, it)
+                        PlaylistArtwork(cover, playlist.coverTracks.takeUnless { playlist.hasCover }, playlist.name, it)
                     }
                 }
             }

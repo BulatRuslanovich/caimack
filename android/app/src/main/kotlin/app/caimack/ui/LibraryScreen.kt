@@ -344,7 +344,9 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
                     }
                     else -> if (key.startsWith("folder:")) {
                         folders.find { "folder:${it.id}" == key }?.let { folder ->
-                            LibraryFolderView(folder, folders, eligible.count { it.folderId == folder.id } + folders.count { it.parentId == folder.id && (!downloadedOnly || it.id in availableFolders) }, grid) { selectedFolder = folder.id }
+                            val items = eligible.filter { it.folderId == folder.id }
+                            val childCount = folders.count { it.parentId == folder.id && (!downloadedOnly || it.id in availableFolders) }
+                            LibraryFolderView(folder, folders, items, order[folder.id].orEmpty(), childCount, grid) { selectedFolder = folder.id }
                         }
                     } else if (key.startsWith("audiobook:")) {
                         shownBooks.find { it.id == key.substringAfter(':') }?.let { book ->
@@ -401,7 +403,10 @@ private fun LibraryItemView(item: LibraryItem, library: List<LibraryItem>, folde
         modifier = modifier.then(availability), round = item.kind == "artist", toneUrl = url,
         list = !grid, details = details,
         menu = if (local) null else { { LibraryItemMenu(item, library, folders) } },
-    ) { Cover(url, item.title, it, round = item.kind == "artist") }
+    ) {
+        if (item.kind == "playlist") PlaylistArtwork(url, item.coverTracks.takeUnless { item.hasImage }, item.title, it)
+        else Cover(url, item.title, it, round = item.kind == "artist")
+    }
 
 }
 

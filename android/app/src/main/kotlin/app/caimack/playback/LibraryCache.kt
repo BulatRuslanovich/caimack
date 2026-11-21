@@ -286,6 +286,7 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
                     "playlist" -> playlists.putIfAbsent(itemId, buildJsonObject {
                         put("id", itemId); put("name", title); put("ownerName", subtitle); put("hasCover", image)
                         put("coverTrackId", item["coverTrackId"] ?: JsonNull)
+                        item["coverTracks"]?.let { put("coverTracks", it) }
                         listOf("trackCount", "durationSeconds").forEach { key -> item[key]?.let { put(key, it) } }
                     })
                 }

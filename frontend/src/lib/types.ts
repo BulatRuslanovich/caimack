@@ -114,6 +114,8 @@ export interface Genre {
   coverAlbumIds: string[];
 }
 
+export type CoverTrack = Pick<Track, "id" | "title" | "albumId" | "albumTitle" | "hasCover">;
+
 export interface Playlist {
   id: string;
   name: string;
@@ -125,11 +127,12 @@ export interface Playlist {
   durationSeconds: number;
   hasCover: boolean;
   coverTrackId?: string | null;
+  coverTracks?: CoverTrack[];
   createdAt: string;
   updatedAt: string;
 }
 
-export type PlaylistDetail = Omit<Playlist, "trackCount"> & { tracks: Track[] };
+export type PlaylistDetail = Omit<Playlist, "trackCount" | "coverTracks"> & { tracks: Track[] };
 
 export interface SearchTopResult {
   kind: "Artist" | "Album" | "Track" | "Genre";
@@ -577,6 +580,7 @@ export interface LibraryItem {
   subtitle: string;
   hasImage: boolean;
   coverTrackId: string | null;
+  coverTracks?: CoverTrack[];
   savedAt: string;
   folderId: string | null;
   trackCount?: number;

@@ -61,6 +61,63 @@ async fn saved_cards_include_live_catalog_metadata(db: PgPool) -> anyhow::Result
 }
 
 #[sqlx::test(migrations = "../../../db/migrations")]
+async fn playlist_cover_tracks_use_distinct_albums_in_playlist_order(db: PgPool) -> anyhow::Result<()> {
+    let user = common::user(&db, "listener", false).await?;
+    let artist = Uuid::now_v7();
+    let albums = [(); 5].map(|_| Uuid::now_v7());
+    let tracks = [(); 7].map(|_| Uuid::now_v7());
+    let track_albums =
+        [Some(albums[0]), Some(albums[0]), None, Some(albums[1]), Some(albums[2]), Some(albums[3]), Some(albums[4])];
+    sqlx::query("INSERT INTO artists(id,name,normalized_name,created_at) VALUES ($1,'Artist','artist',now())")
+        .bind(artist)
+        .execute(&db)
+        .await?;
+    sqlx::query(
+        "INSERT INTO albums(id,title,normalized_title,artist_id,cover_path,created_at)
+         SELECT id, 'Album ' || position, 'album ' || position, $2, id::text || '.jpg', now()
+         FROM unnest($1::uuid[]) WITH ORDINALITY AS entries(id,position)",
+    )
+    .bind(&albums[..])
+    .bind(artist)
+    .execute(&db)
+    .await?;
+    sqlx::query(
+        "INSERT INTO tracks(id,title,normalized_title,artist_id,album_id,duration_seconds,file_path,original_file_name,mime_type,file_size,content_hash,created_at)
+         SELECT id, 'Song ' || position, 'song ' || position, $2, album_id,
+                185, id::text || '.flac', 'song.flac', 'audio/flac', 100, id::text, now()
+         FROM unnest($1::uuid[], $3::uuid[]) WITH ORDINALITY AS songs(id,album_id,position)",
+    )
+    .bind(&tracks[..])
+    .bind(artist)
+    .bind(&track_albums[..])
+    .execute(&db)
+    .await?;
+    let playlist =
+        playlists::create(&db, user, PlaylistRequest { name: "Mix".into(), description: None, is_public: true })
+            .await?;
+    assert!(playlist.cover_tracks.is_empty());
+    playlists::add_tracks(&db, user, playlist.id, &tracks).await?;
+    let before = playlists::public(&db).await?.remove(0);
+    assert_eq!(
+        before.cover_tracks.iter().map(|track| track.id).collect::<Vec<_>>(),
+        [tracks[0], tracks[3], tracks[4], tracks[5]]
+    );
+
+    let reordered = [tracks[6], tracks[2], tracks[1], tracks[0], tracks[3], tracks[4], tracks[5]];
+    playlists::reorder(&db, user, playlist.id, &reordered).await?;
+    let own = playlists::own(&db, user).await?.remove(0);
+    let saved = collection::list(&db, user).await?.remove(0).cover_tracks.unwrap();
+    for cover_tracks in [own.cover_tracks, saved] {
+        assert_eq!(
+            cover_tracks.iter().map(|track| track.id).collect::<Vec<_>>(),
+            [tracks[6], tracks[1], tracks[3], tracks[4]]
+        );
+    }
+    assert_eq!(playlists::detail(&db, user, playlist.id).await?.tracks[0].id, reordered[0]);
+    Ok(())
+}
+
+#[sqlx::test(migrations = "../../../db/migrations")]
 async fn saves_are_personal_idempotent_independent_and_cascade(db: PgPool) -> anyhow::Result<()> {
     let alice = common::user(&db, "alice", false).await?;
     let bob = common::user(&db, "bob", false).await?;

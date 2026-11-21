@@ -309,7 +309,7 @@ private fun Shelf(block: HomeBlock, nav: NavController, play: (List<Track>, Int)
             !block.playlists.isNullOrEmpty() -> items(block.playlists, key = { it.id }) { playlist ->
                 val cover = media.playlistCover(playlist.id, playlist.hasCover, playlist.coverTrackId, small = true)
                 Card(playlist.name, pluralStringResource(R.plurals.count_tracks, playlist.trackCount, playlist.trackCount), { nav.navigate(PlaylistRoute(playlist.id)) }, width, toneUrl = cover) {
-                    Cover(cover, playlist.name, it)
+                    PlaylistArtwork(cover, playlist.coverTracks.takeUnless { playlist.hasCover }, playlist.name, it)
                 }
             }
             else -> {
@@ -461,7 +461,7 @@ private fun QuickTiles(blocks: List<HomeBlock>, nav: NavController, play: (List<
             tiles += {
                 val cover = media.playlistCover(playlist.id, playlist.hasCover, playlist.coverTrackId, small = true)
                 Tile(playlist.name, pluralStringResource(R.plurals.count_tracks, playlist.trackCount, playlist.trackCount), { nav.navigate(PlaylistRoute(playlist.id)) }, cover) {
-                    Cover(cover, playlist.name, Modifier.fillMaxSize())
+                    PlaylistArtwork(cover, playlist.coverTracks.takeUnless { playlist.hasCover }, playlist.name, Modifier.fillMaxSize())
                 }
             }
         }

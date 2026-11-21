@@ -14,8 +14,8 @@ import { useFormat } from "@/lib/useFormat";
 import { useInvalidate } from "@/lib/useInvalidate";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/lib/useToast";
-import { CoverMosaic, mosaicBackdrop } from "@/components/collection/CoverMosaic";
-import { PlaylistCover } from "@/components/Cover";
+import { mosaicBackdrop } from "@/components/collection/CoverMosaic";
+import { PlaylistCover } from "@/components/collection/PlaylistCover";
 import { DetailHeader } from "@/components/DetailHeader";
 import { PlayAllButton } from "@/components/PlayAllButton";
 import { EmptyState } from "@/components/EmptyState";
@@ -80,6 +80,7 @@ export function PlaylistPage() {
             .filter((track): track is NonNullable<typeof track> => Boolean(track)),
         };
       }),
+    onSuccess: () => invalidate("playlists"),
     onError: () => client.invalidateQueries({ queryKey: key }),
   });
 
@@ -95,26 +96,21 @@ export function PlaylistPage() {
               title={detail.name}
               description={detail.description || undefined}
               backdrop={
-                detail.hasCover || detail.tracks.length < 4
+                detail.hasCover
                   ? playlistCoverUrl({
                       playlistId: detail.id,
                       hasCover: detail.hasCover,
-                      coverTrackId: detail.coverTrackId,
                       variant: "thumb",
                     })
                   : mosaicBackdrop(detail.tracks)
               }
               art={
-                detail.hasCover || detail.tracks.length < 4 ? (
-                  <PlaylistCover
-                    playlist={detail}
-                    variant="full"
-                    sizes="(min-width: 56.25rem) 280px, 128px"
-                    fallback={<ListMusicIcon size={48} />}
-                  />
-                ) : (
-                  <CoverMosaic tracks={detail.tracks} />
-                )
+                <PlaylistCover
+                  playlist={{ ...detail, coverTracks: detail.tracks }}
+                  variant="full"
+                  sizes="(min-width: 56.25rem) 280px, 128px"
+                  fallback={<ListMusicIcon size={48} />}
+                />
               }
               facts={[
                 !isOwner && t("playlists.by", { name: detail.ownerName }),

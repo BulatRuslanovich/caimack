@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 package app.caimack.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,7 +9,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -18,6 +16,7 @@ import app.caimack.R
 import app.caimack.api.CaimackApi
 import app.caimack.api.LibraryChange
 import app.caimack.api.LibraryFolder
+import app.caimack.api.LibraryItem
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -133,14 +132,37 @@ internal fun LibraryFolderMenu(folder: LibraryFolder, folders: List<LibraryFolde
 }
 
 @Composable
-internal fun LibraryFolderView(folder: LibraryFolder, folders: List<LibraryFolder>, count: Int, grid: Boolean, modifier: Modifier = Modifier, onOpen: () -> Unit) {
-    val palette = LocalPalette.current
-    Card(folder.name, stringResource(R.string.folders_items, count), onOpen,
-        modifier = modifier, list = !grid,
+internal fun LibraryFolderView(
+    folder: LibraryFolder,
+    folders: List<LibraryFolder>,
+    items: List<LibraryItem>,
+    order: List<String>,
+    childCount: Int,
+    grid: Boolean,
+    onOpen: () -> Unit,
+) {
+    val media = LocalContainer.current.media
+    val byKey = items.associateBy { "${it.kind}:${it.id}" }
+    val images = orderedLibraryKeys(byKey.keys.toList(), order).asSequence().mapNotNull { key ->
+        val item = byKey.getValue(key)
+        val url = when (item.kind) {
+            "album" -> media.cover(item.id, null, item.hasImage, small = true)
+            "artist" -> media.artistImage(item.id, item.hasImage, small = true)
+            else -> {
+                val lead = item.coverTracks?.firstOrNull { it.hasCover }
+                if (!item.hasImage && lead != null) media.cover(lead.albumId, lead.id, true, small = true)
+                else media.playlistCover(item.id, item.hasImage, item.coverTrackId, small = true)
+            }
+        }
+        url?.let { CoverTile(it, item.title) }
+    }.take(4).toList()
+    val tiles = if (images.size in 2..3) (images + images).take(4) else images
+    Card(folder.name, stringResource(R.string.folders_items, items.size + childCount), onOpen,
+        list = !grid,
         menu = if (LocalOfflineLibrary.current) null else { { LibraryFolderMenu(folder, folders) } },
     ) { size ->
-        Box(size.clip(Radius.cover).background(palette.raised), contentAlignment = Alignment.Center) {
-            Icon(Lucide.Folder, null, tint = palette.primary, modifier = Modifier.size(32.dp))
+        BadgedCover(Lucide.Folder, tiles.isNotEmpty(), size) {
+            if (tiles.isNotEmpty()) CoverMosaic(tiles, Modifier.fillMaxSize())
         }
     }
 }
