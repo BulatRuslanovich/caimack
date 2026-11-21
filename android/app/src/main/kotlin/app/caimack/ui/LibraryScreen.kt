@@ -65,6 +65,8 @@ import kotlinx.coroutines.sync.withLock
 internal const val SAVED_LIBRARY = "saved-library"
 internal val libraryMutation = Mutex()
 
+private data class CachedFavoriteCount(val total: Int, val downloadedTracks: Set<String>?)
+
 @Composable
 fun LibraryScreen(nav: NavController, initialFilter: String = "all") {
     val api = LocalContainer.current.api
@@ -115,12 +117,19 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
             if (search.isBlank()) { search = ""; searchExpanded = false }
         }
     }
-    var favoriteCount by remember(local) { mutableStateOf<Int?>(null) }
-    LaunchedEffect(local, downloadedOnly, availableTracks) {
-        favoriteCount = null
+    val downloadedTracks = availableTracks.takeIf { downloadedOnly }
+    val favoriteCountKey = "library-favorite-count:$local:$downloadedOnly"
+    var favoriteCount by remember(favoriteCountKey, downloadedTracks) {
+        val cached = Remote.cache[favoriteCountKey] as? CachedFavoriteCount
+        mutableStateOf(cached?.takeIf { it.downloadedTracks == downloadedTracks }?.total)
+    }
+    LaunchedEffect(favoriteCountKey, downloadedTracks) {
         try {
-            favoriteCount = if (downloadedOnly) collectionTracks { api.favorites(it, TRACK_PAGE_SIZE) }.count { it.id in availableTracks }
-                else api.favorites(1, 1).total
+            val total = if (downloadedTracks != null) {
+                collectionTracks { api.favorites(it, TRACK_PAGE_SIZE) }.count { it.id in downloadedTracks }
+            } else api.favorites(1, 1).total
+            Remote.cache[favoriteCountKey] = CachedFavoriteCount(total, downloadedTracks)
+            favoriteCount = total
         }
         catch (error: Exception) { if (error is CancellationException) throw error }
     }
@@ -337,6 +346,7 @@ internal fun LibraryBrowser(nav: NavController, folders: List<LibraryFolder>, or
                 when (key) {
                     "favorites" -> LibraryEntry(stringResource(R.string.nav_favorites), stringResource(R.string.playlists_kind), Lucide.Heart,
                         grid = grid, details = favoriteCount?.let { pluralStringResource(R.plurals.count_tracks, it, it) },
+                        reserveDetailsSpace = true,
                     ) { nav.navigate(FavoritesRoute) }
                     "downloads" -> {
                         val count = LocalAvailableTracks.current.size
@@ -490,9 +500,17 @@ private fun LibraryToggle(kind: String, id: String, library: List<LibraryItem>, 
 }
 
 @Composable
-internal fun LibraryEntry(title: String, hint: String?, icon: ImageVector, grid: Boolean = false, details: String? = null, onClick: () -> Unit) {
+internal fun LibraryEntry(
+    title: String,
+    hint: String?,
+    icon: ImageVector,
+    grid: Boolean = false,
+    details: String? = null,
+    reserveDetailsSpace: Boolean = false,
+    onClick: () -> Unit,
+) {
     val palette = LocalPalette.current
-    Card(title, hint.orEmpty(), onClick, list = !grid, details = details) { modifier ->
+    Card(title, hint.orEmpty(), onClick, list = !grid, details = details, reserveDetailsSpace = reserveDetailsSpace) { modifier ->
         Box(modifier.clip(Radius.cover).background(palette.primarySoft), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = palette.primary, modifier = Modifier.size(if (grid) 34.dp else 24.dp))
         }
