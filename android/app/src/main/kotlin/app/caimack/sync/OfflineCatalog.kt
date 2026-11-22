@@ -232,23 +232,33 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
                 }
             }
             val byId = tracks.associateBy { it.string("id") }
+            val editedPlaylists = actions.filter { it.kind in setOf("playlistCreate", "playlistAdd", "playlistRemove", "playlistOrder") }.mapNotNull { it.entityId }.toSet()
+            val coverFields = setOf("id", "title", "albumId", "albumTitle", "hasCover")
             playlists = playlists.map { playlist ->
+                val id = playlist.string("id")
                 // A saved shortcut may never have loaded its track membership.
                 // Missing membership is not an empty playlist.
-                if (membership[playlist.string("id")] == null) return@map playlist
+                if (membership[id] == null) return@map playlist
                 val members =
-                    (membership[playlist.string("id")] as? JsonArray).orEmpty().mapNotNull {
+                    (membership[id] as? JsonArray).orEmpty().mapNotNull {
                         byId[it.jsonPrimitive.content]
                     }
+                val coverTracks = (playlist["coverTracks"] as? JsonArray)?.takeUnless { id in editedPlaylists }
+                    ?: JsonArray(
+                        members.asSequence().filter { it["hasCover"]?.jsonPrimitive?.booleanOrNull == true }
+                            .distinctBy { it.string("albumId").ifEmpty { it.string("id") } }.take(4)
+                            .map { track -> JsonObject(track.filterKeys { it in coverFields }) }
+                            .toList(),
+                    )
                 playlist.with(
                     "trackCount" to JsonPrimitive(members.size),
                     "durationSeconds" to
                         JsonPrimitive(
                             members.sumOf { it["durationSeconds"]?.jsonPrimitive?.int ?: 0 }
                         ),
+                    "coverTracks" to coverTracks,
                 )
             }
-            val editedPlaylists = actions.filter { it.kind in setOf("playlistCreate", "playlistAdd", "playlistRemove", "playlistOrder") }.mapNotNull { it.entityId }.toSet()
             val sources = mutableMapOf<String, Map<String, JsonObject>>()
             savedLibrary = savedLibrary.mapNotNull { saved ->
                 val kind = saved.string("kind")
@@ -269,6 +279,7 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
                     "subtitle" to (source[when (kind) { "album" -> "artistName"; "playlist" -> "ownerName"; else -> "" }] ?: JsonPrimitive("")),
                     "hasImage" to (source[if (kind == "artist") "hasImage" else "hasCover"] ?: JsonPrimitive(false)),
                     "coverTrackId" to (source["coverTrackId"] ?: JsonNull),
+                    "coverTracks" to (source["coverTracks"] ?: saved["coverTracks"] ?: JsonNull),
                     "trackCount" to metadata("trackCount"),
                     "albumCount" to metadata("albumCount"),
                     "durationSeconds" to metadata("durationSeconds"),

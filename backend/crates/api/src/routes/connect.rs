@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 use std::convert::Infallible;
+use std::future::pending;
 use std::time::Duration;
 
 use app::AppError;
+use app::audiobooks::Audiobooks;
 use app::playback::connect::{self, ConnectRegistry, Connection, Playback, Snapshot};
 use app::playback::{self, PlaybackStateReport};
 use axum::Router;
@@ -26,13 +28,19 @@ pub fn router() -> Router<AppState> {
 #[derive(Clone)]
 struct ConnectApiState {
     db: sqlx::PgPool,
+    audiobooks: Audiobooks,
     playback: app::playback::registry::PlaybackRegistry,
     shutdown: tokio_util::sync::CancellationToken,
 }
 
 impl FromRef<AppState> for ConnectApiState {
     fn from_ref(state: &AppState) -> Self {
-        Self { db: state.db.clone(), playback: state.playback.clone(), shutdown: state.shutdown.clone() }
+        Self {
+            db: state.db.clone(),
+            audiobooks: state.audiobooks.clone(),
+            playback: state.playback.clone(),
+            shutdown: state.shutdown.clone(),
+        }
     }
 }
 
@@ -60,6 +68,8 @@ struct DeviceQuery {
     device_kind: String,
     #[serde(default)]
     audiobooks: bool,
+    #[serde(default)]
+    audiobook_experiment: bool,
 }
 
 struct Presence {
@@ -92,20 +102,40 @@ async fn events(
     if query.audiobooks {
         presence.registry.restore_book(&state.db, presence.user).await?;
     }
+    let (experiment, initial_experiment) = if query.audiobook_experiment {
+        let mut changes = state.audiobooks.experiment_changes().await;
+        let mut enabled = *changes.borrow_and_update();
+        if enabled.is_none() {
+            enabled = Audiobooks::experiment_enabled(&state.db).await.ok();
+            enabled = (*changes.borrow_and_update()).or(enabled);
+        }
+        (Some(changes), enabled)
+    } else {
+        (None, None)
+    };
     let stream = futures_util::stream::unfold(
-        (presence, true, state.shutdown),
-        |(mut presence, initial, shutdown)| async move {
+        (presence, true, experiment, initial_experiment, state.shutdown),
+        |(mut presence, initial, mut experiment, mut initial_experiment, shutdown)| async move {
             if shutdown.is_cancelled() {
                 return None;
             }
             let event = if initial {
                 Event::default().event("snapshot").json_data(presence.registry.snapshot(presence.user).ok()?).ok()?
+            } else if let Some(enabled) = initial_experiment.take() {
+                Event::default().event("audiobook-experiment").json_data(enabled).ok()?
             } else {
                 tokio::select! {
                     biased;
                     () = shutdown.cancelled() => return None,
                     command = presence.connection.commands.recv() => {
                         Event::default().event("command").json_data(command?).ok()?
+                    }
+                    enabled = async {
+                        let Some(changes) = experiment.as_mut() else { return pending().await };
+                        changes.changed().await.ok()?;
+                        *changes.borrow_and_update()
+                    } => {
+                        Event::default().event("audiobook-experiment").json_data(enabled?).ok()?
                     }
                     changed = presence.connection.changed.changed() => {
                         changed.ok()?;
@@ -116,7 +146,7 @@ async fn events(
                     }
                 }
             };
-            Some((Ok::<_, Infallible>(event), (presence, false, shutdown)))
+            Some((Ok::<_, Infallible>(event), (presence, false, experiment, initial_experiment, shutdown)))
         },
     );
     // Compression can buffer snapshots until the device lease expires, before
@@ -303,6 +333,7 @@ mod tests {
     async fn server() -> (String, reqwest::Client, tokio_util::sync::CancellationToken) {
         let state = ConnectApiState {
             db: sqlx::postgres::PgPoolOptions::new().connect_lazy("postgres://localhost/test").unwrap(),
+            audiobooks: Default::default(),
             playback: Default::default(),
             shutdown: Default::default(),
         };

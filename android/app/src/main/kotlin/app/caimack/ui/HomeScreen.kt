@@ -344,7 +344,7 @@ private fun Shelf(block: HomeBlock, nav: NavController, play: (List<Track>, Int)
             !block.playlists.isNullOrEmpty() -> items(block.playlists, key = { it.id }) { playlist ->
                 val cover = media.playlistCover(playlist.id, playlist.hasCover, playlist.coverTrackId, small = true)
                 Card(playlist.name, pluralStringResource(R.plurals.count_tracks, playlist.trackCount, playlist.trackCount), { nav.navigate(PlaylistRoute(playlist.id)) }, width, toneUrl = cover) {
-                    Cover(cover, playlist.name, it)
+                    PlaylistArtwork(cover, playlist.coverTracks.takeUnless { playlist.hasCover }, playlist.name, it)
                 }
             }
             else -> {
@@ -367,18 +367,21 @@ private fun DailyMix(tracks: List<Track>, total: Int, title: String, play: (List
     val collage = tracks.distinctBy { it.albumId ?: it.id }.take(4)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(1.dp).background(palette.border))
-        Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Collage(collage, lead, Modifier.size(44.dp).clip(Radius.cover))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(title, style = Type.section, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(pluralStringResource(R.plurals.count_tracks, total, total), style = Type.tiny, color = palette.muted)
+        Column(
+            Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = seeAll).padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Collage(collage, lead, Modifier.size(44.dp).clip(Radius.cover))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(title, style = Type.section, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(pluralStringResource(R.plurals.count_tracks, total, total), style = Type.tiny, color = palette.muted)
+                }
+                CollectionPlayButton(tracks.map { it.id }, size = 48.dp, iconSize = 20.dp) { play(tracks, 0) }
             }
-            CollectionPlayButton(tracks.map { it.id }, size = 48.dp, iconSize = 20.dp) { play(tracks, 0) }
+            Text(tracks.map { artistsOf(it) }.distinct().take(3).joinToString(" · "),
+                style = Type.small, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Text(tracks.map { artistsOf(it) }.distinct().take(3).joinToString(" · "),
-            style = Type.small, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 16.dp))
         Column {
             tracks.take(MOBILE_UP_NEXT).forEachIndexed { index, track -> TrackRow(track, { play(tracks, index) }) }
         }
@@ -496,7 +499,7 @@ private fun QuickTiles(blocks: List<HomeBlock>, nav: NavController, play: (List<
             tiles += {
                 val cover = media.playlistCover(playlist.id, playlist.hasCover, playlist.coverTrackId, small = true)
                 Tile(playlist.name, pluralStringResource(R.plurals.count_tracks, playlist.trackCount, playlist.trackCount), { nav.navigate(PlaylistRoute(playlist.id)) }, cover) {
-                    Cover(cover, playlist.name, Modifier.fillMaxSize())
+                    PlaylistArtwork(cover, playlist.coverTracks.takeUnless { playlist.hasCover }, playlist.name, Modifier.fillMaxSize())
                 }
             }
         }

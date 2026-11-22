@@ -2,12 +2,21 @@
 
 "use client";
 
-import type { ReactNode } from "react";
-import type { Track } from "@/lib/types";
+import { cloneElement, type ReactElement, type ReactNode } from "react";
+import type { CoverTrack } from "@/lib/types";
 import { trackCoverUrl } from "@/lib/media";
 import { Cover, TrackCover } from "@/components/Cover";
+import { cn } from "@/lib/cn";
 
-function Mosaic({ tiles, empty }: { tiles: ReactNode[]; empty?: ReactNode }) {
+export function Mosaic({
+  tiles,
+  empty,
+  layout,
+}: {
+  tiles: ReactElement[];
+  empty?: ReactNode;
+  layout?: "repeat" | "fit";
+}) {
   if (tiles.length === 0) {
     return (
       <div className="grid size-full place-items-center bg-raised text-faint [&_svg]:size-1/3">
@@ -16,20 +25,48 @@ function Mosaic({ tiles, empty }: { tiles: ReactNode[]; empty?: ReactNode }) {
     );
   }
 
-  if (tiles.length < 4) return <div className="size-full">{tiles[0]}</div>;
+  if (tiles.length === 1 || (!layout && tiles.length < 4)) {
+    return <div className="size-full">{tiles[0]}</div>;
+  }
 
-  return <div className="grid size-full grid-cols-2 grid-rows-2">{tiles.slice(0, 4)}</div>;
+  const cells = tiles.slice(0, 4);
+  if (layout === "repeat") {
+    for (let index = 0; cells.length < 4; index++) {
+      cells.push(cloneElement(tiles[index], { key: `repeat-${index}` }));
+    }
+  }
+
+  return (
+    <div
+      className={cn(
+        "grid size-full grid-cols-2",
+        cells.length === 2 ? "grid-rows-1" : "grid-rows-2",
+        cells.length === 3 && "[&>:first-child]:row-span-2",
+      )}
+    >
+      {cells}
+    </div>
+  );
 }
 
-export function mosaicBackdrop(tracks: Track[]): string | null {
+export function mosaicBackdrop(tracks: CoverTrack[]): string | null {
   const lead = tracks.find((track) => track.hasCover);
   return lead ? trackCoverUrl(lead, "thumb") : null;
 }
 
-export function CoverMosaic({ tracks, empty }: { tracks: Track[]; empty?: ReactNode }) {
+export function CoverMosaic({
+  tracks,
+  empty,
+  layout,
+}: {
+  tracks: CoverTrack[];
+  empty?: ReactNode;
+  layout?: "fit";
+}) {
   return (
     <Mosaic
       empty={empty}
+      layout={layout}
       tiles={tracks.slice(0, 4).map((track) => (
         <TrackCover key={track.id} track={track} />
       ))}

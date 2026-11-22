@@ -3,8 +3,11 @@
 use crate::{AppError, AppResult};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, PgConnection};
+use sqlx::types::Json;
+use sqlx::{AssertSqlSafe, FromRow, PgConnection};
 use uuid::Uuid;
+
+use super::playlists::{COVER_TRACKS_SQL, PlaylistCoverTrack};
 
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -22,6 +25,8 @@ pub struct LibraryItem {
     pub subtitle: String,
     pub has_image: bool,
     pub cover_track_id: Option<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cover_tracks: Option<Vec<Json<PlaylistCoverTrack>>>,
     pub folder_id: Option<Uuid>,
     pub track_count: i32,
     pub album_count: i32,
@@ -32,15 +37,18 @@ pub struct LibraryItem {
 }
 
 pub async fn list<'e>(db: impl sqlx::PgExecutor<'e>, user: Uuid) -> AppResult<Vec<LibraryItem>> {
-    Ok(sqlx::query_as(
+    // The interpolated subquery is static; the user ID is bound separately.
+    Ok(sqlx::query_as(AssertSqlSafe(format!(
         "SELECT 'album' AS kind, a.id, a.title, ar.name AS subtitle,
-        a.cover_path IS NOT NULL AS has_image, NULL::uuid AS cover_track_id, l.folder_id, l.saved_at,
+        a.cover_path IS NOT NULL AS has_image, NULL::uuid AS cover_track_id, NULL::jsonb[] AS cover_tracks,
+        l.folder_id, l.saved_at,
         (SELECT count(*)::int FROM tracks t WHERE t.album_id=a.id) AS track_count,
         0::int AS album_count,
         (SELECT COALESCE(sum(t.duration_seconds),0)::int FROM tracks t WHERE t.album_id=a.id) AS duration_seconds,
         a.year
         FROM library_items l JOIN albums a ON a.id=l.album_id JOIN artists ar ON ar.id=a.artist_id WHERE l.user_id=$1
-        UNION ALL SELECT 'artist', a.id, a.name, '', a.image_path IS NOT NULL, NULL::uuid, l.folder_id, l.saved_at,
+        UNION ALL SELECT 'artist', a.id, a.name, '', a.image_path IS NOT NULL, NULL::uuid, NULL::jsonb[],
+        l.folder_id, l.saved_at,
         (SELECT count(*)::int FROM track_artists ta WHERE ta.artist_id=a.id),
         (SELECT count(*)::int FROM albums aa WHERE aa.artist_id=a.id),
         0::int, NULL::int
@@ -48,14 +56,14 @@ pub async fn list<'e>(db: impl sqlx::PgExecutor<'e>, user: Uuid) -> AppResult<Ve
         UNION ALL SELECT 'playlist', p.id, p.name, u.username, p.cover_path IS NOT NULL,
         (SELECT pt.track_id FROM playlist_tracks pt JOIN tracks t ON t.id=pt.track_id
          JOIN albums a ON a.id=t.album_id WHERE pt.playlist_id=p.id AND a.cover_path IS NOT NULL
-         ORDER BY pt.position, pt.id LIMIT 1), l.folder_id, l.saved_at,
+         ORDER BY pt.position, pt.id LIMIT 1), {COVER_TRACKS_SQL}, l.folder_id, l.saved_at,
         (SELECT count(*)::int FROM playlist_tracks pt WHERE pt.playlist_id=p.id), 0::int,
         (SELECT COALESCE(sum(t.duration_seconds),0)::int FROM playlist_tracks pt
          JOIN tracks t ON t.id=pt.track_id WHERE pt.playlist_id=p.id), NULL::int
         FROM library_items l JOIN playlists p ON p.id=l.playlist_id JOIN users u ON u.id=p.user_id
         WHERE l.user_id=$1 AND (p.user_id=$1 OR p.is_public)
         ORDER BY saved_at DESC, kind, id",
-    )
+    )))
     .bind(user)
     .fetch_all(db)
     .await?)

@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import app.caimack.R
 import app.caimack.api.AddTracksRequest
+import app.caimack.api.PlaylistCoverTrack
 import app.caimack.api.PlaylistDetail
 import app.caimack.api.Track
 import kotlinx.coroutines.Dispatchers
@@ -225,7 +226,14 @@ private fun PlaylistContent(loaded: PlaylistDetail, play: (List<Track>, Int) -> 
         return
     }
 
-    val cover = { small: Boolean -> container.media.playlistCover(playlist.id, playlist.hasCover, playlist.coverTrackId, small) }
+    val coverTracks = remember(playlist.tracks, playlist.hasCover) {
+        if (playlist.hasCover) null
+        else playlist.tracks.asSequence().filter { it.hasCover }.distinctBy { it.albumId ?: it.id }
+            .take(4).map { PlaylistCoverTrack(it.id, it.title, it.albumId, it.albumTitle, it.hasCover) }.toList()
+    }
+    val cover = container.media.playlistCover(playlist.id, playlist.hasCover, null, small = false)
+    val backdrop = if (playlist.hasCover) container.media.playlistCover(playlist.id, true, null, small = true)
+    else coverTracks?.firstOrNull()?.let { container.media.cover(it.albumId, it.id, it.hasCover, small = true) }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(bottom = 24.dp)) {
         item {
@@ -237,8 +245,8 @@ private fun PlaylistContent(loaded: PlaylistDetail, play: (List<Track>, Int) -> 
                     stringResource(R.string.playlists_by, playlist.ownerName),
                     pluralStringResource(R.plurals.count_tracks, playlist.tracks.size, playlist.tracks.size),
                 ),
-                backdrop = cover(true),
-            ) { Cover(cover(false), playlist.name, it) }
+                backdrop = backdrop,
+            ) { PlaylistArtwork(cover, coverTracks, playlist.name, it) }
         }
         item { Actions(playlist.tracks, play, onMore = if (owner) ({ editing = Editing.Manage }) else null, libraryAction = { LibrarySaveButton("playlist", playlist.id) }, beforeDownload = { container.downloadedCatalog.remember(playlist)
             if (playlist.hasCover) container.scope.launch { container.downloadedCatalog.cacheArtwork(listOf("api/playlists/${playlist.id}/cover"), container.http) }

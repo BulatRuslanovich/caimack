@@ -7,8 +7,6 @@ import { api } from "@/lib/api";
 import { useConnect } from "@/lib/playback/useConnectPlayback";
 import type { AudiobookHandoff } from "@/lib/playback/connect";
 import { useT } from "@/contexts/I18nContext";
-import { useDesktopStatus } from "@/desktop/api";
-import { useAudiobookExperiment } from "@/lib/audiobookExperiment";
 import {
   downloadAudiobook,
   downloadedAudio,
@@ -17,6 +15,7 @@ import {
 } from "@/lib/audiobookDownloads";
 import {
   audiobookApi,
+  audiobookCatalogHref,
   audiobookHref,
   audiobookTarget,
   pausedAudiobookTarget,
@@ -124,7 +123,10 @@ function subscribeToNetwork(listener: () => void) {
 }
 
 interface AudiobookProviderProps {
-  userId: string | null;
+  scope: string | null;
+  serverOnline: boolean;
+  enabled: boolean;
+  experimentReady: boolean;
   musicPlaying: boolean;
   pauseMusic: () => void;
   onActiveChange: (active: boolean) => void;
@@ -135,24 +137,7 @@ interface AudiobookProviderProps {
   children: ReactNode;
 }
 
-export function AudiobookProvider(props: AudiobookProviderProps) {
-  const desktop = useDesktopStatus();
-  const id = props.userId;
-  const scope = id && (desktop?.server ? `${desktop.server}\n${id}` : id);
-  const experiment = useAudiobookExperiment(scope);
-  return (
-    <AudiobookSession
-      key={scope}
-      {...props}
-      enabled={experiment.enabled}
-      experimentReady={experiment.ready}
-      scope={scope}
-      serverOnline={desktop?.online ?? true}
-    />
-  );
-}
-
-function AudiobookSession({
+export function AudiobookProvider({
   scope,
   enabled,
   experimentReady,
@@ -165,12 +150,7 @@ function AudiobookSession({
   setVolume,
   toggleMute,
   children,
-}: AudiobookProviderProps & {
-  scope: string | null;
-  serverOnline: boolean;
-  enabled: boolean;
-  experimentReady: boolean;
-}) {
+}: AudiobookProviderProps) {
   const networkOnline = useSyncExternalStore(
     subscribeToNetwork,
     () => navigator.onLine,
@@ -792,7 +772,7 @@ function AudiobookSession({
     let displayedPercent = 0;
     try {
       const shell = Promise.all([
-        cacheAudiobookShell("/audiobooks"),
+        cacheAudiobookShell(audiobookCatalogHref),
         cacheAudiobookShell(audiobookHref(book.id)),
       ]);
       await downloadAudiobook(scope, book, abort.signal, (percent) => {

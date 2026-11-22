@@ -90,6 +90,7 @@ internal class AudiobookStore(
     private var metadata = AudiobookCache()
     private var status: AudiobookStatus? = null
     @Volatile private var serverClock: Pair<AudiobookAccount, Long>? = null
+    @Volatile private var lastCatalogRefresh: Pair<AudiobookAccount, Long>? = null
     private val downloadJobs = mutableSetOf<Pair<AudiobookAccount, String>>()
 
     init {
@@ -97,17 +98,15 @@ internal class AudiobookStore(
             accounts.collectLatest { account ->
                 lock.withLock { load(account) }
                 if (account == null) return@collectLatest
-                var lastFullRefresh = 0L
                 var initial = true
                 while (true) {
-                    val now = android.os.SystemClock.elapsedRealtime()
                     val requested = catalogRequested.getAndSet(false)
-                    val full = initial || requested || now - lastFullRefresh >= CATALOG_INTERVAL_MS
-                    refresh(account, full)
-                    if (full) lastFullRefresh = now
+                    refresh(account, initial || requested)
                     initial = false
-                    // Retry offline progress even when the same Wi-Fi connection remains up.
-                    withTimeoutOrNull((CATALOG_INTERVAL_MS - (android.os.SystemClock.elapsedRealtime() - lastFullRefresh)).coerceAtLeast(1)) {
+                    val pending = lock.withLock { cache.pendingProgress.isNotEmpty() || cache.pendingSaves.isNotEmpty() }
+                    if (pending) {
+                        withTimeoutOrNull(PENDING_RETRY_MS) { requests.receive() }
+                    } else {
                         requests.receive()
                     }
                 }
@@ -118,6 +117,14 @@ internal class AudiobookStore(
     fun requestRefresh() {
         catalogRequested.set(true)
         requests.trySend(Unit)
+    }
+
+    fun requestRefreshIfStale() {
+        if (!enabled()) return
+        val account = currentAccount() ?: return
+        val last = lastCatalogRefresh
+        if (last?.first == account && SystemClock.elapsedRealtime() - last.second < CATALOG_FRESH_MS) return
+        requestRefresh()
     }
 
     suspend fun refreshForPlayback(account: AudiobookAccount, id: String) {
@@ -278,7 +285,7 @@ internal class AudiobookStore(
     }
 
     private suspend fun refresh(account: AudiobookAccount, full: Boolean) = refreshLock.withLock refresh@ {
-        if (currentAccount() != account) return@refresh
+        if (!enabled() || currentAccount() != account) return@refresh
         val pending = lock.withLock { load(account); cache }
         try {
             for ((id, progress) in pending.pendingProgress) {
@@ -310,6 +317,7 @@ internal class AudiobookStore(
                 val known = cache.books.associateBy { it.id }
                 val retained = cache.books.filter { it.id !in freshIds && it.id in cache.downloads }
                 persist(account, cache.copy(books = books.map { it.withLatestProgress(known[it.id]?.progress) } + retained))
+                lastCatalogRefresh = account to SystemClock.elapsedRealtime()
                 current.update { it.copy(ready = true, online = true) }
             }
             for (book in books) {
@@ -443,7 +451,8 @@ internal class AudiobookStore(
         runCatching { json.decodeFromString<T>(file.readText()) }.getOrNull()
 
     private companion object {
-        const val CATALOG_INTERVAL_MS = 30_000L
+        const val CATALOG_FRESH_MS = 30_000L
+        const val PENDING_RETRY_MS = 30_000L
     }
 }
 

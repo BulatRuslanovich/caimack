@@ -85,6 +85,7 @@ export function useConnectPlayback(
   localProgress: PlayerProgress,
   output: (enabled: boolean) => void,
   load: (tracks: Track[], command: Extract<ConnectCommand, { type: "play" }>) => void,
+  receiveAudiobookExperiment: (enabled: boolean) => void,
 ) {
   const t = useT();
   const { notifyError } = useToast();
@@ -118,6 +119,9 @@ export function useConnectPlayback(
   const [commandQueue] = useState(() => new CommandQueue<ConnectCommand>());
   const executionChain = useRef(Promise.resolve());
   const reportChain = useRef(Promise.resolve());
+  const lastReport = useRef<{ connectionId: string; state: ReturnType<typeof playbackState> }>(
+    null,
+  );
   const selectionEpoch = useRef(0);
   const fallenBackFrom = useRef<number | null>(null);
   const hydrated = useRef(0);
@@ -218,12 +222,18 @@ export function useConnectPlayback(
               currentSnapshot.current.playback?.deviceId !== own.current)
           )
             return;
-          const next = await api.connectReport(
-            own.current!,
-            id,
-            playbackState(value.local, value.localProgress),
-            signal,
-          );
+          const state = playbackState(value.local, value.localProgress);
+          const previous = lastReport.current;
+          if (
+            !state.isPlaying &&
+            currentSnapshot.current.playback?.deviceId === own.current &&
+            previous?.connectionId === id &&
+            replaceEqualDeep(previous.state, state) === previous.state
+          ) {
+            return;
+          }
+          const next = await api.connectReport(own.current!, id, state, signal);
+          lastReport.current = { connectionId: id, state };
           if (id === connection.current && !latest.current.selectedId) receive(next);
         });
       reportChain.current = task.catch(() => {});
@@ -242,6 +252,7 @@ export function useConnectPlayback(
     wantsLocalRef: wantsLocal,
     executionChainRef: executionChain,
     receive,
+    receiveAudiobookExperiment,
     report,
     setConnected,
     setSelectedId,

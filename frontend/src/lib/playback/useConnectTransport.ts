@@ -34,6 +34,7 @@ interface TransportInput {
   wantsLocalRef: RefObject<boolean>;
   executionChainRef: RefObject<Promise<void>>;
   receive: (snapshot: ConnectSnapshot) => void;
+  receiveAudiobookExperiment: (enabled: boolean) => void;
   report: (signal?: AbortSignal) => Promise<void>;
   setConnected: Dispatch<SetStateAction<boolean>>;
   setSelectedId: Dispatch<SetStateAction<string | null>>;
@@ -50,6 +51,7 @@ export function useConnectTransport({
   wantsLocalRef,
   executionChainRef,
   receive,
+  receiveAudiobookExperiment,
   report,
   setConnected,
   setSelectedId,
@@ -66,7 +68,12 @@ export function useConnectTransport({
     const open = () => {
       if (stopped) return;
       source = new EventSource(
-        `${API_BASE}/playback/connect/events${qs({ deviceId: ownRef.current ?? undefined, deviceName: deviceName(), audiobooks: true })}`,
+        `${API_BASE}/playback/connect/events${qs({
+          deviceId: ownRef.current ?? undefined,
+          deviceName: deviceName(),
+          audiobooks: true,
+          audiobookExperiment: true,
+        })}`,
       );
       source.addEventListener("snapshot", (event) => {
         if (stopped) return;
@@ -76,6 +83,11 @@ export function useConnectTransport({
         } catch {
           /* Ignore malformed events; reconnect supplies a complete snapshot. */
         }
+      });
+      source.addEventListener("audiobook-experiment", (event) => {
+        if (stopped) return;
+        if (event.data === "true") receiveAudiobookExperiment(true);
+        else if (event.data === "false") receiveAudiobookExperiment(false);
       });
       source.addEventListener("command", (event) => {
         let envelope: ConnectEnvelope;
@@ -193,6 +205,7 @@ export function useConnectTransport({
     wantsLocalRef,
     executionChainRef,
     receive,
+    receiveAudiobookExperiment,
     report,
     setConnected,
     setSelectedId,

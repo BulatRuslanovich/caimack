@@ -19,7 +19,8 @@ import { usePlayback } from "@/lib/playback/usePlayback";
 import { useNowPlaying } from "@/contexts/PlayerContext";
 import { useT } from "@/contexts/I18nContext";
 import { CoverMosaic } from "@/components/collection/CoverMosaic";
-import { AlbumCover, PlaylistCover, TrackCover } from "../Cover";
+import { PlaylistCover } from "../collection/PlaylistCover";
+import { AlbumCover, TrackCover } from "../Cover";
 import { CardPlayButton } from "../MediaCard";
 import { PlayBadge } from "../PlayBadge";
 
