@@ -243,20 +243,22 @@ pub async fn delete_tracks(db: &PgPool, storage: &Storage, ids: &[Uuid]) -> AppR
     .await?
     .into_iter()
     .collect();
-    let removed = sqlx::query!("DELETE FROM tracks WHERE id = ANY($1) RETURNING id, file_path, content_hash", &wanted)
-        .fetch_all(&mut *tx)
-        .await?;
+    let removed: Vec<(Uuid, String, String, Option<String>)> =
+        sqlx::query_as("DELETE FROM tracks WHERE id = ANY($1) RETURNING id, file_path, content_hash, cover_path")
+            .bind(&wanted)
+            .fetch_all(&mut *tx)
+            .await?;
 
     let mut leftovers = Leftovers::default();
     clean_up_orphans(&mut tx, touched, &mut leftovers).await?;
     tx.commit().await?;
 
-    let found: Vec<Uuid> = removed.iter().map(|track| track.id).collect();
+    let found: Vec<Uuid> = removed.iter().map(|track| track.0).collect();
     leftovers.tracks = removed
         .into_iter()
-        .map(|track| {
-            let hash = cache_hashes.get(&track.id).cloned().unwrap_or(track.content_hash);
-            (track.file_path, hash)
+        .map(|(id, path, hash, cover)| {
+            leftovers.covers.extend(cover);
+            (path, cache_hashes.get(&id).cloned().unwrap_or(hash))
         })
         .collect();
     leftovers.remove(storage);

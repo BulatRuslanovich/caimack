@@ -3,7 +3,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { mediaUrl } from "@/lib/media";
+import { trackCoverUrl } from "@/lib/media";
 import { formatArtists } from "@/lib/format";
 import type { Track } from "@/lib/types";
 
@@ -22,11 +22,13 @@ const DEFAULT_SEEK_OFFSET = 10;
 const POSITION_INTERVAL_MS = 1_000;
 
 function artworkFor(track: Track): MediaImage[] | undefined {
-  if (!track.hasCover) return undefined;
+  const thumb = trackCoverUrl(track, "thumb");
+  const full = trackCoverUrl(track, "full");
+  if (!thumb || !full) return undefined;
 
   return [
-    { src: mediaUrl.trackCover(track.id, "thumb"), sizes: "256x256", type: "image/webp" },
-    { src: mediaUrl.trackCover(track.id, "full"), sizes: "640x640", type: "image/webp" },
+    { src: thumb, sizes: "256x256", type: "image/webp" },
+    { src: full, sizes: "640x640", type: "image/webp" },
   ];
 }
 

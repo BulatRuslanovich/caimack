@@ -73,6 +73,7 @@ pub struct TrackDto {
     pub original_file_name: String,
     pub is_favorite: bool,
     pub has_cover: bool,
+    pub cover_revision: Option<String>,
     pub has_lyrics: bool,
     #[serde(serialize_with = "json::time")]
     pub created_at: DateTime<Utc>,

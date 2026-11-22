@@ -104,6 +104,7 @@ pub async fn snapshot(db: &PgPool, storage: &Storage, user: Uuid) -> AppResult<V
     .await?;
     let assets: Vec<(String, String)> = sqlx::query_as(
         "SELECT 'api/albums/'||id||'/cover',cover_path FROM albums WHERE cover_path IS NOT NULL
+         UNION ALL SELECT 'api/tracks/'||id||'/cover',cover_path FROM tracks WHERE cover_path IS NOT NULL
          UNION ALL SELECT 'api/artists/'||id||'/image',image_path FROM artists WHERE image_path IS NOT NULL
          UNION ALL SELECT 'api/playlists/'||id||'/cover',cover_path FROM playlists
           WHERE cover_path IS NOT NULL AND (user_id=$1 OR is_public)",

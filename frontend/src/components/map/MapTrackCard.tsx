@@ -47,6 +47,7 @@ export function MapTrackCard({
           <Cover
             albumId={card.point.albumId}
             trackId={card.point.id}
+            coverRevision={card.point.coverRevision}
             hasCover={card.point.hasCover}
             name={card.point.title}
             size={picked ? "3rem" : "2.5rem"}

@@ -392,16 +392,15 @@ class SyncStore(private val context: Context, val json: Json, private val server
 
     internal fun assetFile(path: String, version: String) = File(directory, "asset-${sha256(path.toByteArray())}-$version")
 
-    fun asset(path: String): String? {
+    fun asset(path: String, revision: String? = null): String? {
         if (downloadOwner == null) return null
-        val resolved =
-            if (path.startsWith("api/tracks/")) {
-                val track =
-                    snapshot?.objects("tracks")?.find {
-                        it.string("id") == path.split('/').getOrNull(2)
-                    }
-                "api/albums/${track?.string("albumId")}/cover"
-            } else path
+        var resolved = path
+        if (path.startsWith("api/tracks/") && (revision != null || path !in index.assets)) {
+            val id = path.split('/').getOrNull(2)
+            val track = snapshot?.objects("tracks")?.find { it.string("id") == id } ?: return null
+            if (revision != null && track.string("coverRevision") != revision) return null
+            if (revision == null && path !in index.assets) resolved = "api/albums/${track.string("albumId")}/cover"
+        }
         val version = index.assets[resolved] ?: return null
         return assetFile(resolved, version)
             .takeIf { it.isFile }

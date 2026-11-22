@@ -55,7 +55,7 @@ pub async fn list<'e>(db: impl sqlx::PgExecutor<'e>, user: Uuid) -> AppResult<Ve
         FROM library_items l JOIN artists a ON a.id=l.artist_id WHERE l.user_id=$1
         UNION ALL SELECT 'playlist', p.id, p.name, u.username, p.cover_path IS NOT NULL,
         (SELECT pt.track_id FROM playlist_tracks pt JOIN tracks t ON t.id=pt.track_id
-         JOIN albums a ON a.id=t.album_id WHERE pt.playlist_id=p.id AND a.cover_path IS NOT NULL
+         LEFT JOIN albums a ON a.id=t.album_id WHERE pt.playlist_id=p.id AND COALESCE(t.cover_path,a.cover_path) IS NOT NULL
          ORDER BY pt.position, pt.id LIMIT 1), {COVER_TRACKS_SQL}, l.folder_id, l.saved_at,
         (SELECT count(*)::int FROM playlist_tracks pt WHERE pt.playlist_id=p.id), 0::int,
         (SELECT COALESCE(sum(t.duration_seconds),0)::int FROM playlist_tracks pt

@@ -111,7 +111,7 @@ async fn seed(db: &PgPool, storage: &Storage, audio: &Path) -> anyhow::Result<(U
 }
 
 async fn get_track(db: &PgPool, id: Uuid) -> sqlx::Result<Track> {
-    sqlx::query_as("SELECT t.id,t.file_path,t.content_hash,t.title,a.name AS artist,al.cover_path,COALESCE(l.plain,'') AS plain,COALESCE(l.synced,'[]'::jsonb) AS synced,s.source_hash AS exported_hash,s.cover_stamp,s.lyrics_hash,s.lyrics_extension FROM tracks t JOIN artists a ON a.id=t.artist_id LEFT JOIN albums al ON al.id=t.album_id LEFT JOIN track_lyrics l ON l.track_id=t.id LEFT JOIN file_metadata_state s ON s.track_id=t.id WHERE t.id=$1")
+    sqlx::query_as("SELECT t.id,t.file_path,t.content_hash,t.title,a.name AS artist,COALESCE(t.cover_path,al.cover_path) AS cover_path,COALESCE(l.plain,'') AS plain,COALESCE(l.synced,'[]'::jsonb) AS synced,s.source_hash AS exported_hash,s.cover_stamp,s.lyrics_hash,s.lyrics_extension FROM tracks t JOIN artists a ON a.id=t.artist_id LEFT JOIN albums al ON al.id=t.album_id LEFT JOIN track_lyrics l ON l.track_id=t.id LEFT JOIN file_metadata_state s ON s.track_id=t.id WHERE t.id=$1")
         .bind(id).fetch_one(db).await
 }
 

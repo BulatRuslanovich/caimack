@@ -2,7 +2,12 @@
 
 package app.caimack.ui
 
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import app.caimack.session.SessionState
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.rememberScrollableState
 import androidx.compose.foundation.gestures.scrollable
@@ -213,6 +218,10 @@ fun TrackSheet(track: Track, onRemoveFromPlaylist: (() -> Unit)? = null, positio
                 neverSuggest("artist", track.artistId)
             }
             SheetRow(stringResource(R.string.menu_add_to_playlist), Lucide.Plus) { choosingPlaylist = true }
+            val session by container.session.state.collectAsState()
+            if (!LocalOfflineLibrary.current && (session as? SessionState.SignedIn)?.user?.isAdmin == true) {
+                TrackCoverActions(track, onDismiss)
+            }
             SheetRow(stringResource(R.string.track_info_title), Lucide.Info) { showingInfo = true }
             SheetRow(stringResource(R.string.share_card), Lucide.Share2) { sharing = true }
             onRemoveFromPlaylist?.let { remove ->
@@ -246,4 +255,38 @@ private fun soundOf(track: Track): String? {
         track.loudness?.let { stringResource(R.string.track_lufs, it.lufs.roundToInt()) },
     )
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
+}
+
+@Composable
+private fun TrackCoverActions(track: Track, onDismiss: () -> Unit) {
+    val container = LocalContainer.current
+    val context = LocalContext.current
+    val resources = LocalResources.current
+
+    fun save(uri: Uri?) {
+        onDismiss()
+        container.scope.launch {
+            val saved = runCatching {
+                if (uri == null) container.api.removeTrackCover(track.id)
+                else container.api.uploadTrackCover(track.id, requireNotNull(coverPart(context, uri)))
+            }.isSuccess
+            withContext(Dispatchers.Main) {
+                if (saved) {
+                    container.media.markChanged("api/tracks/${track.id}/cover")
+                    Remote.trackArtworkChanged()
+                }
+                Toast.makeText(context, resources.getString(if (saved) R.string.track_cover_saved else R.string.track_cover_failed), Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) save(uri)
+    }
+    SheetRow(stringResource(if (track.hasCover) R.string.playlist_change_cover else R.string.playlist_add_cover), Lucide.Image) {
+        picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
+    if (track.coverRevision != null) {
+        SheetRow(stringResource(R.string.playlist_remove_cover), Lucide.Trash2) { save(null) }
+    }
 }

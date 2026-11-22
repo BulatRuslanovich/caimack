@@ -89,7 +89,8 @@ class Pager<T : Any>(private val scope: CoroutineScope, private val load: suspen
 fun <T : Any> rememberPager(key: String, load: suspend (Int) -> Paged<T>): Pager<T> {
     val scope = rememberCoroutineScope()
     val local = LocalOfflineLibrary.current
-    val pager = remember(key, local) { Pager(scope, load) }
+    val artworkRevision = if (local) 0 else Remote.trackArtworkRevision
+    val pager = remember(key, local, artworkRevision) { Pager(scope, load) }
     LaunchedEffect(pager) { pager.more() }
     DisposableEffect(pager) { onDispose { pager.cancel() } }
     return pager

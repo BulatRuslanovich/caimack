@@ -21,16 +21,17 @@ pub struct PlaylistCoverTrack {
     pub album_id: Option<Uuid>,
     pub album_title: Option<String>,
     pub has_cover: bool,
+    pub cover_revision: Option<String>,
 }
 
 pub(super) const COVER_TRACKS_SQL: &str = "
     ARRAY(SELECT jsonb_build_object('id', cover.track_id, 'title', cover.title, 'albumId', cover.album_id,
-                 'albumTitle', cover.album_title, 'hasCover', true)
-          FROM (SELECT DISTINCT ON (a.id) pt.track_id, t.title, a.id AS album_id, a.title AS album_title,
+                 'albumTitle', cover.album_title, 'hasCover', true, 'coverRevision', cover.revision)
+          FROM (SELECT DISTINCT ON (COALESCE(t.cover_path, a.cover_path)) md5(t.cover_path) AS revision, pt.track_id, t.title, a.id AS album_id, a.title AS album_title,
                        pt.position, pt.id AS entry_id
-                FROM playlist_tracks pt JOIN tracks t ON t.id = pt.track_id JOIN albums a ON a.id = t.album_id
-                WHERE pt.playlist_id = p.id AND a.cover_path IS NOT NULL
-                ORDER BY a.id, pt.position, pt.id) AS cover
+                FROM playlist_tracks pt JOIN tracks t ON t.id = pt.track_id LEFT JOIN albums a ON a.id = t.album_id
+                WHERE pt.playlist_id = p.id AND COALESCE(t.cover_path, a.cover_path) IS NOT NULL
+                ORDER BY COALESCE(t.cover_path, a.cover_path), pt.position, pt.id) AS cover
           ORDER BY cover.position, cover.entry_id LIMIT 4)";
 
 #[skip_serializing_none]
@@ -109,8 +110,8 @@ pub fn select() -> QueryBuilder<Postgres> {
                    JOIN tracks t ON t.id = pt.track_id WHERE pt.playlist_id = p.id) AS duration_seconds,
                 p.cover_path IS NOT NULL AS has_cover,
                 (SELECT pt.track_id FROM playlist_tracks pt
-                   JOIN tracks t ON t.id = pt.track_id JOIN albums a ON a.id = t.album_id
-                   WHERE pt.playlist_id = p.id AND a.cover_path IS NOT NULL
+                   JOIN tracks t ON t.id = pt.track_id LEFT JOIN albums a ON a.id = t.album_id
+                   WHERE pt.playlist_id = p.id AND COALESCE(t.cover_path, a.cover_path) IS NOT NULL
                    ORDER BY pt.position, pt.id LIMIT 1) AS cover_track_id,
                 {COVER_TRACKS_SQL} AS cover_tracks,
                 p.created_at, p.updated_at

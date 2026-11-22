@@ -141,6 +141,8 @@
     <string name="playlist_public">Visible to everyone</string>
     <string name="playlist_edit">Edit details</string>
     <string name="playlist_manage">Playlist actions</string>
+    <string name="track_cover_saved">Track cover saved</string>
+    <string name="track_cover_failed">Could not save the track cover</string>
     <string name="playlist_add_cover">Add a cover</string>
     <string name="playlist_change_cover">Change the cover</string>
     <string name="playlist_remove_cover">Remove the cover</string>

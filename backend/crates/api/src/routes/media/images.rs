@@ -127,6 +127,25 @@ pub(in crate::routes) async fn read_image_field(mut field: Field<'_>) -> AppResu
     Ok(UploadedImage { bytes, content_type, file_name })
 }
 
+pub(super) async fn set_track_cover(
+    State(state): State<AppState>,
+    Admin(user): Admin,
+    RoutePath(id): RoutePath<Uuid>,
+    form: Multipart,
+) -> ApiResult<impl IntoResponse> {
+    covers::change_track_cover(&state.db, &state.storage, id, Some(read_image(form).await?)).await?;
+    Ok(Json(app::catalog::tracks::get(&state.db, user.user_id, id).await?))
+}
+
+pub(super) async fn remove_track_cover(
+    State(state): State<AppState>,
+    Admin(user): Admin,
+    RoutePath(id): RoutePath<Uuid>,
+) -> ApiResult<impl IntoResponse> {
+    covers::change_track_cover(&state.db, &state.storage, id, None).await?;
+    Ok(Json(app::catalog::tracks::get(&state.db, user.user_id, id).await?))
+}
+
 pub(super) async fn set_album_cover(
     State(state): State<AppState>,
     Admin(_): Admin,

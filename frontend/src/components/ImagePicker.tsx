@@ -116,7 +116,7 @@ export function ImagePicker({
             disabled={disabled}
             onClick={() => {
               if (input.current) input.current.value = "";
-              onChange({ file: null, removed: currentUrl !== null });
+              onChange({ file: null, removed: ownImage && currentUrl !== null });
             }}
           >
             <Trash2Icon size={16} />

@@ -136,7 +136,7 @@ class DownloadedArtwork(private val directory: File, private val legacyDirectory
     companion object {
         fun paths(tracks: List<Track>): List<String> = buildList {
             tracks.filter { it.hasCover }.forEach {
-                add(if (it.albumId != null) "api/albums/${it.albumId}/cover" else "api/tracks/${it.id}/cover")
+                add(if (it.albumId != null && it.coverRevision == null) "api/albums/${it.albumId}/cover" else "api/tracks/${it.id}/cover")
             }
             tracks.forEach { track ->
                 add("api/artists/${track.artistId}/image")

@@ -41,6 +41,7 @@ pub struct MapPointDto {
     pub artist: String,
     pub album_id: Option<Uuid>,
     pub has_cover: bool,
+    pub cover_revision: Option<String>,
     pub genre: Option<String>,
     pub plays: i64,
 }
@@ -53,12 +54,14 @@ pub struct LibraryMapDto {
     pub updating: bool,
 }
 
+#[derive(sqlx::FromRow)]
 struct PointTrack {
     id: Uuid,
     title: String,
     artist: String,
     album_id: Option<Uuid>,
     has_cover: bool,
+    cover_revision: Option<String>,
     genre: Option<String>,
 }
 
@@ -120,9 +123,8 @@ impl Recommendations {
         let library = self.index.library();
         let (layout, updating) = self.map.layout(&self.db, &self.compute, &library).await?;
 
-        let tracks: HashMap<Uuid, PointTrack> = sqlx::query_as!(
-            PointTrack,
-            r#"SELECT t.id, t.title, ar.name AS artist, t.album_id, al.cover_path IS NOT NULL AS "has_cover!", g.name AS "genre?"
+        let tracks: HashMap<Uuid, PointTrack> = sqlx::query_as::<_, PointTrack>(
+            r#"SELECT t.id, t.title, ar.name AS artist, t.album_id, COALESCE(t.cover_path, al.cover_path) IS NOT NULL AS has_cover, md5(t.cover_path) AS cover_revision, g.name AS genre
                FROM tracks t JOIN artists ar ON ar.id = t.artist_id
                LEFT JOIN albums al ON al.id = t.album_id LEFT JOIN genres g ON g.id = t.genre_id"#
         )
@@ -155,6 +157,7 @@ impl Recommendations {
                         artist: track.artist.clone(),
                         album_id: track.album_id,
                         has_cover: track.has_cover,
+                        cover_revision: track.cover_revision.clone(),
                         genre: track.genre.clone(),
                         plays: plays.get(id).copied().unwrap_or(0),
                     });

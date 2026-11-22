@@ -166,7 +166,9 @@ private fun DialogButton(
 
 fun coverPart(context: Context, uri: Uri): MultipartBody.Part? {
     val resolver = context.contentResolver
-    val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
+    val maxBytes = 8 * 1024 * 1024
+    val bytes = resolver.openInputStream(uri)?.use { it.readNBytes(maxBytes + 1) } ?: return null
+    if (bytes.size > maxBytes) return null
     val type = resolver.getType(uri) ?: "image/jpeg"
     val extension = type.substringAfter('/', "jpg")
     return MultipartBody.Part.createFormData("file", "cover.$extension", bytes.toRequestBody(type.toMediaTypeOrNull()))

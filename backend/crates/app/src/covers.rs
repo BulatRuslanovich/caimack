@@ -9,6 +9,7 @@ use crate::catalog::dto::{AlbumDto, ArtistDto};
 use crate::catalog::{albums, artists};
 use crate::library::playlists::{self, PlaylistDto};
 use crate::storage::{ARTIST_IMAGE_DIRECTORY, COVER_DIRECTORY, PLAYLIST_COVER_DIRECTORY, Storage};
+use crate::upload::cover::PreparedCover;
 use crate::{AppError, AppResult};
 
 pub const MAX_IMAGE_BYTES: i64 = 8 * 1024 * 1024;
@@ -62,6 +63,37 @@ async fn renditions_for_edges(bytes: Vec<u8>, edges: &'static [u32]) -> AppResul
         ImageError::TooManyPixels => AppError::validation("That image has too many pixels to process."),
         ImageError::Unreadable => AppError::validation("That file could not be read as an image."),
     })
+}
+
+pub async fn change_track_cover(
+    db: &PgPool,
+    storage: &Storage,
+    id: Uuid,
+    image: Option<UploadedImage>,
+) -> AppResult<()> {
+    let mut cover = match image {
+        Some(image) => Some(PreparedCover::save(storage, &accept(image).await?).await?),
+        None => None,
+    };
+    let mut tx = db.begin().await?;
+    let old: Option<String> = sqlx::query_scalar("SELECT cover_path FROM tracks WHERE id=$1 FOR UPDATE")
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| AppError::not_found("Track not found."))?;
+    sqlx::query("UPDATE tracks SET cover_path=$2 WHERE id=$1")
+        .bind(id)
+        .bind(cover.as_ref().map(PreparedCover::path))
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    if let Some(cover) = &mut cover {
+        cover.persist();
+    }
+    if let Some(path) = old {
+        storage.delete_cover(&path);
+    }
+    Ok(())
 }
 
 pub async fn set_album_cover(db: &PgPool, storage: &Storage, id: Uuid, image: UploadedImage) -> AppResult<AlbumDto> {

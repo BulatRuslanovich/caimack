@@ -5,7 +5,7 @@ package app.caimack.api
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class User(val id: String, val username: String)
+data class User(val id: String, val username: String, val isAdmin: Boolean = false)
 
 @Serializable
 data class LoginRequest(
@@ -47,6 +47,7 @@ data class Track(
     val bitrateKbps: Int? = null,
     val sampleRateHz: Int? = null,
     val bitsPerSample: Int? = null,
+    val coverRevision: String? = null,
 )
 
 @Serializable
@@ -122,6 +123,7 @@ data class PlaylistCoverTrack(
     val albumId: String? = null,
     val albumTitle: String? = null,
     val hasCover: Boolean = false,
+    val coverRevision: String? = null,
 )
 
 @Serializable

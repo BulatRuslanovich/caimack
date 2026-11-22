@@ -43,6 +43,7 @@ struct TrackRow {
     original_file_name: String,
     is_favorite: bool,
     has_cover: bool,
+    cover_revision: Option<String>,
     has_lyrics: bool,
     created_at: chrono::DateTime<chrono::Utc>,
     codec: Option<String>,
@@ -89,6 +90,7 @@ impl From<TrackRow> for TrackDto {
             original_file_name: row.original_file_name,
             is_favorite: row.is_favorite,
             has_cover: row.has_cover,
+            cover_revision: row.cover_revision,
             has_lyrics: row.has_lyrics,
             created_at: row.created_at,
             codec: row.codec,
@@ -115,7 +117,7 @@ pub fn select(user: Uuid) -> QueryBuilder<Postgres> {
     query.push_bind(user);
     query.push(
         ") AS is_favorite,
-            al.cover_path IS NOT NULL AS has_cover,
+            COALESCE(t.cover_path, al.cover_path) IS NOT NULL AS has_cover, md5(t.cover_path) AS cover_revision,
             EXISTS (SELECT 1 FROM track_lyrics l WHERE l.track_id = t.id) AS has_lyrics,
             t.created_at, t.codec, t.bitrate_kbps, t.sample_rate_hz, t.bits_per_sample,
             c.succeeded AS cues_succeeded, c.audio_start_seconds, c.audio_end_seconds,

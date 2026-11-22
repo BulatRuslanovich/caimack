@@ -33,6 +33,16 @@ it("finds the first four different album covers in playlist order", () => {
   );
 });
 
+it("shows a track override next to artwork inherited from the same album", () => {
+  const [first, second] = playlist.coverTracks;
+  const coverTracks = [{ ...first, coverRevision: "new-art" }, second];
+  const html = renderToStaticMarkup(<PlaylistCover playlist={{ ...playlist, coverTracks }} />);
+  expect(artworkSources(html)).toEqual([
+    "/api/tracks/0/cover?size=thumb&amp;v=new-art",
+    "/api/albums/a/cover?size=thumb",
+  ]);
+});
+
 it.each([
   [4, ["a", "b"], "grid-rows-1"],
   [5, ["a", "b", "c"], "row-span-2"],

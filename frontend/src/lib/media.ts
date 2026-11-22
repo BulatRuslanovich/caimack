@@ -82,28 +82,41 @@ export function playlistCoverUrl({
 export function coverUrl({
   albumId,
   trackId,
+  coverRevision,
   hasCover = true,
   variant = "full",
 }: {
   albumId?: string | null;
   trackId?: string | null;
+  coverRevision?: string | null;
   hasCover?: boolean;
   variant?: CoverVariant;
 }): string | null {
   if (!hasCover) return null;
+  if (trackId && coverRevision) {
+    const url = mediaUrl.trackCover(trackId, variant);
+    return `${url}${url.includes("?") ? "&" : "?"}v=${encodeURIComponent(coverRevision)}`;
+  }
   if (albumId) return versioned(mediaUrl.albumCover(albumId, variant), `album:${albumId}`);
   if (trackId) return mediaUrl.trackCover(trackId, variant);
   return null;
 }
 
 export function trackCoverUrl(
-  track: Pick<Track, "albumId" | "id" | "hasCover">,
+  track: Pick<Track, "albumId" | "id" | "hasCover" | "coverRevision">,
   variant: CoverVariant = "full",
 ): string | null {
-  return coverUrl({ albumId: track.albumId, trackId: track.id, hasCover: track.hasCover, variant });
+  return coverUrl({
+    albumId: track.albumId,
+    trackId: track.id,
+    hasCover: track.hasCover,
+    coverRevision: track.coverRevision,
+    variant,
+  });
 }
 
 export function coverSrcSet(options: {
+  coverRevision?: string | null;
   albumId?: string | null;
   trackId?: string | null;
   hasCover?: boolean;
