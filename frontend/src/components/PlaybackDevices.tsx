@@ -79,6 +79,8 @@ export function PlaybackDevices({
           className,
         )}
         aria-label={label}
+        aria-haspopup="dialog"
+        aria-expanded={open}
         title={label}
         onClick={() => setOpen(true)}
       >
