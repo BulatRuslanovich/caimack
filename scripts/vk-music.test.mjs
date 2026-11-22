@@ -102,6 +102,64 @@ test("an empty VK response is a successful search", async (t) => {
   assert.deepEqual(await vkMusicRequest(query, null), { tracks: [] });
 });
 
+test("search returns a small VK cover URL without fetching the artwork", async (t) => {
+  const coverUrl = "https://sun9-1.userapi.com/cover-small.jpg";
+  const fetch = vkFixture(t, [
+    {
+      ...song,
+      thumb: {
+        photo_600: "https://sun9-1.userapi.com/cover.jpg",
+        photo_68: coverUrl,
+      },
+    },
+    {
+      ...song,
+      id: 18,
+      coverUrl_s: "https://userapi.com.example.test/cover.jpg",
+    },
+  ]);
+  const { tracks } = await vkMusicRequest(query, null);
+  assert.equal(tracks[0].coverUrl, coverUrl);
+  assert.equal(tracks[1].coverUrl, undefined);
+  assert.equal(fetch.mock.callCount(), 1);
+});
+
+for (const contentType of [
+  "text/html; charset=windows-1251",
+  "text/html",
+  "application/json",
+]) {
+  test(`search decodes track names and entities in ${contentType}`, async (t) => {
+    const fetch = vkFixture(t, []);
+    const rows = [
+      {
+        ...song,
+        title: "Звезда",
+        artist: "Heuss L&#39;enfoir&#233; feat. &#x416;",
+      },
+    ];
+    const body = `<!--${JSON.stringify({ payload: [0, [0, { playlist: { list: rows } }]] })}`;
+    const bytes =
+      contentType === "application/json"
+        ? new TextEncoder().encode(body)
+        : Uint8Array.from(body, (char) => {
+            const point = char.charCodeAt(0);
+            return point >= 0x410 && point <= 0x44f
+              ? point - 0x410 + 0xc0
+              : point;
+          });
+    fetch.mock.mockImplementationOnce(
+      async () =>
+        new Response(bytes, { headers: { "Content-Type": contentType } }),
+    );
+    const {
+      tracks: [track],
+    } = await vkMusicRequest(query, null);
+    assert.equal(track.title, "Звезда");
+    assert.equal(track.artist, "Heuss L'enfoiré feat. Ж");
+  });
+}
+
 test("reads a VK playlist in its source order even when metadata arrives reordered", async (t) => {
   const source = "123_2_access";
   const fetch = vkFixture(

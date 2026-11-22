@@ -25,7 +25,7 @@ export interface YandexSearch {
   albums: YandexAlbum[];
 }
 
-export type YandexImportKind = "Likes" | "Album" | "Track";
+export type YandexImportKind = "Likes" | "Album" | "Track" | "Playlist";
 
 export type YandexImportStatus = "Queued" | "Running" | "Finished" | "Failed" | "Cancelled";
 
@@ -39,6 +39,7 @@ export interface YandexImport {
   done: number;
   added: number;
   skipped: number;
+  playlistId?: string;
   current?: string | null;
   failures: { title: string; reason: string }[];
   createdAt: string;

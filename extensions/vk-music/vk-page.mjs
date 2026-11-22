@@ -4,15 +4,15 @@
 export async function vkMusicRequest(query, trackId, playlistSource = null) {
   const maxBytes = 24 * 1024 * 1024;
   const maxCoverBytes = 2 * 1024 * 1024;
-  const mediaHosts = [
-    "vk.ru",
-    "vk.com",
+  const cdnHosts = [
     "vkuseraudio.net",
     "vkuseraudio.ru",
     "okcdn.ru",
     "vkcdn.ru",
     "userapi.com",
   ];
+  const mediaHosts = ["vk.ru", "vk.com", ...cdnHosts];
+  const previewHosts = ["vkuserphoto.ru", ...cdnHosts];
   const signal = AbortSignal.timeout(trackId ? 60_000 : 12_000);
 
   function fail(code) {
@@ -25,17 +25,26 @@ export async function vkMusicRequest(query, trackId, playlistSource = null) {
     return raw
       .replace(/<[^>]*>/g, "")
       .replace(
-        /&(amp|quot|apos|lt|gt|nbsp|#39);/g,
-        (entity) =>
-          ({
-            "&amp;": "&",
-            "&quot;": '"',
-            "&apos;": "'",
-            "&lt;": "<",
-            "&gt;": ">",
-            "&nbsp;": " ",
-            "&#39;": "'",
-          })[entity],
+        /&(amp|quot|apos|lt|gt|nbsp|#(?:\d{1,7}|x[\da-f]{1,6}));/gi,
+        (entity, value) => {
+          const code = value.toLowerCase();
+          if (!code.startsWith("#"))
+            return {
+              amp: "&",
+              quot: '"',
+              apos: "'",
+              lt: "<",
+              gt: ">",
+              nbsp: " ",
+            }[code];
+          const hex = code.startsWith("#x");
+          const point = Number.parseInt(code.slice(hex ? 2 : 1), hex ? 16 : 10);
+          return point > 0 &&
+            point <= 0x10ffff &&
+            (point < 0xd800 || point > 0xdfff)
+            ? String.fromCodePoint(point)
+            : entity;
+        },
       )
       .trim()
       .slice(0, 200);
@@ -113,7 +122,21 @@ export async function vkMusicRequest(query, trackId, playlistSource = null) {
     });
     if (response.status === 401 || response.status === 403) fail("signInVk");
     if (!response.ok) fail("vkChanged");
-    const body = await response.text();
+    const bytes = await response.arrayBuffer();
+    const charset = response.headers
+      .get("content-type")
+      ?.match(/;\s*charset\s*=\s*["']?([\w-]+)/i)?.[1];
+    let body;
+    for (const encoding of new Set([charset ?? "utf-8", "utf-8"])) {
+      try {
+        body = new TextDecoder(encoding, { fatal: true }).decode(bytes);
+        break;
+      } catch {
+        // Try the next encoding when the response cannot be decoded as declared.
+      }
+    }
+    // Old VK responses can omit the charset header.
+    body ??= new TextDecoder("windows-1251").decode(bytes);
     return JSON.parse(body.replace(/^\s*<!--/, "")).payload?.[1];
   }
 
@@ -507,13 +530,21 @@ export async function vkMusicRequest(query, trackId, playlistSource = null) {
         ...(playlist && { name: playlist.title, omitted: playlist.omitted }),
         tracks: Array.from(
           tracks.values(),
-          ({ id, title, artist, duration, restricted }) => ({
-            id,
-            title,
-            artist,
-            duration,
-            restricted,
-          }),
+          ({ id, title, artist, duration, restricted, covers }) => {
+            const preview = playlist
+              ? null
+              : covers
+                  .map((value) => httpsUrl(value))
+                  .findLast((url) => url && onHost(url, previewHosts));
+            return {
+              id,
+              title,
+              artist,
+              duration,
+              restricted,
+              ...(preview && { coverUrl: preview.href }),
+            };
+          },
         ),
       };
     }

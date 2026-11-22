@@ -8,8 +8,9 @@ metadata and the selected audio file. The VK login, access tokens, and audio URL
    `edge://extensions`), enable developer mode and use **Load unpacked** to select this
    `extensions/vk-music` directory.
 2. Sign in to VK in that browser profile and leave the [VK Music tab](https://vk.ru/audio) open.
-3. Open an updated Caimack instance as an administrator. Enable **Import from VK Music** in
+3. Open an updated Caimack instance as an administrator. Enable **VK Music** in
    **Settings → Experimental**, then go to **Search → VK Music** and search for a track or artist.
+   Search shows cover thumbnails when VK includes them in the results.
 4. Select **Add to library** for a track. The music goes through Caimack's normal library upload.
    The import keeps the album name and artwork when VK provides them. Artwork goes into the file
    tags and, when there is an album, into the Caimack album cover.
@@ -21,6 +22,7 @@ available tracks in source order. The result shows tracks it could not add.
 The unpacked extension accepts requests from `https://music.caimack.ru` and local development
 addresses. For another self-hosted instance, add its exact origin with the `/*` suffix in
 `externally_connectable.matches` in `manifest.json`, then reload the extension.
+Reload the unpacked extension after updating its files.
 
 This version imports direct MP3 and FLAC files and clear HLS VOD with separate segment files up to
 24 MiB. The server converts supported streamed audio to MP3. Search uses VK's web music interface,

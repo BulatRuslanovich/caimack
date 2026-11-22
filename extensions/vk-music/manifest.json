@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Caimack VK Music",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Search VK Music and import selected tracks into Caimack.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxtxALNL7dJnkndy71WF4a6vxTEUzhFpoQ4kh9vjwqUvQLA1VqKKEnK0KD5DvdWiGhOvMrrJY5vAxluc5MWLZfNS7jhVOIpLkXjBp6TBhbEeUg/hN5uNnicnMgb1FFf+BZSc8rBwV9cv8YKb9qiL8UFT1Nt4NyeOiWlkjAihCho+FO8YN70T9+VwncNhVyh+Gt4DhnlWu+NqPl/4VH29GW3i+PMysPG4m1zhLa9m0AxMiq4bHvGMcQzySrzMy9w3TnSlh6uR5qRuI7pF2iQRsMsFh1/1F4hR00GFZ/yhK3OHMFJ+12WS39ejcabfaZLCc/kZW3Eb8wMjQkE13wIXIgQIDAQAB",
   "permissions": ["scripting"],

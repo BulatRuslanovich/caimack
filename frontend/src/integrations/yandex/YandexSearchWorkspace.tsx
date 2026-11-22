@@ -3,40 +3,35 @@
 "use client";
 
 import Link from "next/link";
-import { SearchIcon } from "lucide-react";
 import { useT } from "@/contexts/I18nContext";
 import { useYandexMusicSettings } from "./useYandexMusic";
 import { SEARCH_MIN_LENGTH } from "@/lib/queries";
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/EmptyState";
-import { YandexImportButton } from "./YandexImportButton";
 import { YandexSearchResults } from "./YandexSearchResults";
+import { ProviderAction } from "../ui";
+import { YandexImportActivity } from "./YandexImports";
+import { YandexPlaylistImport } from "./YandexPlaylistImport";
 
 export function YandexSearchWorkspace({ query }: { query: string }) {
   const t = useT();
-  const settings = useYandexMusicSettings();
+  const { hasToken } = useYandexMusicSettings();
   const searching = query.length >= SEARCH_MIN_LENGTH;
-  if (!settings.hasToken)
-    return (
-      <EmptyState
-        icon={<SearchIcon size={24} />}
-        title={t("yandex.connectTitle")}
-        description={t("yandex.connectHint")}
-        action={
-          <Button asChild variant="primary">
+  return (
+    <>
+      <ProviderAction
+        title={t(hasToken ? "yandex.playlist.title" : "yandex.connectTitle")}
+        description={t(hasToken ? "yandex.playlist.summary" : "yandex.connectHint")}
+      >
+        {hasToken ? (
+          <YandexPlaylistImport />
+        ) : (
+          <Button asChild size="sm">
             <Link href="/settings?tab=experimental">{t("yandex.connect")}</Link>
           </Button>
-        }
-      />
-    );
-  if (searching) return <YandexSearchResults query={query} />;
-  return (
-    <section className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-card p-3">
-      <div className="max-w-xl space-y-1">
-        <h2 className="text-section font-semibold">{t("yandex.searchTitle")}</h2>
-        <p className="text-sm text-muted-foreground">{t("yandex.searchHint")}</p>
-      </div>
-      <YandexImportButton source={{ kind: "Likes", title: t("yandex.likes") }} />
-    </section>
+        )}
+        <YandexImportActivity />
+      </ProviderAction>
+      {hasToken && searching && <YandexSearchResults query={query} />}
+    </>
   );
 }

@@ -2,7 +2,7 @@
 
 "use client";
 
-import { CheckIcon, HeartIcon, LoaderCircleIcon, PlusIcon, RotateCcwIcon } from "lucide-react";
+import { PlusIcon, RotateCcwIcon } from "lucide-react";
 import {
   useYandexImports,
   isYandexImportActive,
@@ -10,14 +10,14 @@ import {
   type YandexSource,
 } from "./YandexMusicContext";
 import { useT } from "@/contexts/I18nContext";
-import { Button } from "@/components/ui/button";
+import { ProviderImportButton } from "../ui";
 
 export function YandexImportButton({
   source,
   inLibrary = false,
   unavailable = false,
 }: {
-  source: YandexSource;
+  source: YandexSource & { kind: "Album" | "Track" };
   inLibrary?: boolean;
   unavailable?: boolean;
 }) {
@@ -30,7 +30,7 @@ export function YandexImportButton({
     Boolean(errors[key]) ||
     job?.status === "Failed" ||
     (job?.status === "Finished" && job.failures.length > 0);
-  const done = inLibrary || (source.kind !== "Likes" && job?.status === "Finished" && !failed);
+  const done = inLibrary || (job?.status === "Finished" && !failed);
   const label = unavailable
     ? t("yandex.unavailable")
     : done
@@ -39,39 +39,25 @@ export function YandexImportButton({
         ? t("yandex.adding")
         : failed
           ? t("yandex.retry")
-          : source.kind === "Likes"
-            ? t("yandex.importLikes")
-            : source.kind === "Album"
-              ? t("yandex.addAlbum")
-              : t("yandex.addTrack");
-  const Icon = done
-    ? CheckIcon
-    : busy
-      ? LoaderCircleIcon
-      : failed
-        ? RotateCcwIcon
-        : source.kind === "Likes"
-          ? HeartIcon
-          : PlusIcon;
+          : source.kind === "Album"
+            ? t("yandex.addAlbum")
+            : t("yandex.addTrack");
+  const state = unavailable ? "unavailable" : done ? "done" : busy ? "busy" : "ready";
 
   return (
     <span className="flex max-w-full shrink-0 flex-col items-end gap-1">
-      <Button
-        variant={done || busy || unavailable ? "ghost" : "outline"}
-        size="sm"
-        className="h-auto min-h-8 max-w-full py-1.5 whitespace-normal disabled:opacity-100 pointer-coarse:min-h-11"
-        disabled={Boolean(busy) || done || unavailable}
-        onClick={() => start(source)}
-        aria-label={
-          busy || done || unavailable
-            ? `${source.title}: ${label}`
-            : t("yandex.addNamed", { name: source.title })
+      <ProviderImportButton
+        icon={failed ? RotateCcwIcon : PlusIcon}
+        label={label}
+        state={state}
+        compact={source.kind === "Track"}
+        onClick={() => void start(source)}
+        name={
+          state === "ready" && !failed
+            ? t("yandex.addNamed", { name: source.title })
+            : `${source.title}: ${label}`
         }
-        aria-busy={Boolean(busy)}
-      >
-        {!unavailable && <Icon size={14} className={busy ? "animate-spin" : undefined} />}
-        {label}
-      </Button>
+      />
       {failed && !busy && (
         <details className="max-w-52 text-right text-xs text-destructive">
           <summary className="cursor-pointer">{t("yandex.addFailed")}</summary>

@@ -3,6 +3,7 @@
 mod client;
 mod importer;
 mod imports;
+mod playlist;
 
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -122,10 +123,23 @@ impl YandexMusic {
         Ok(SearchDto { tracks, albums })
     }
 
-    pub fn start(&self, token: Option<&str>, request: StartImportRequest, lang: Lang) -> AppResult<ImportDto> {
+    pub fn start(
+        &self,
+        user: Uuid,
+        token: Option<&str>,
+        request: StartImportRequest,
+        lang: Lang,
+    ) -> AppResult<ImportDto> {
         let token = require_token(token)?;
         let source = match request.kind {
             ImportKind::Likes => None,
+            ImportKind::Playlist => Some(
+                request
+                    .id
+                    .as_deref()
+                    .and_then(playlist::api_path)
+                    .ok_or_else(|| AppError::validation("Enter a Yandex Music playlist link."))?,
+            ),
             ImportKind::Album | ImportKind::Track => {
                 let id = request.id.as_deref().map(str::trim).filter(|id| !id.is_empty());
                 match id {
@@ -134,15 +148,15 @@ impl YandexMusic {
                 }
             }
         };
-        self.queue.enqueue(request.kind, source, token.to_owned(), lang)
+        self.queue.enqueue(user, request.kind, source, token.to_owned(), lang)
     }
 
-    pub fn list(&self) -> Vec<ImportDto> {
-        self.queue.list()
+    pub fn list(&self, user: Uuid) -> Vec<ImportDto> {
+        self.queue.list(user)
     }
 
-    pub fn remove(&self, id: Uuid) -> AppResult<()> {
-        if self.queue.remove(id) { Ok(()) } else { Err(AppError::not_found("Import not found.")) }
+    pub fn remove(&self, user: Uuid, id: Uuid) -> AppResult<()> {
+        if self.queue.remove(user, id) { Ok(()) } else { Err(AppError::not_found("Import not found.")) }
     }
 }
 

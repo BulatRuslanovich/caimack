@@ -41,25 +41,25 @@ async fn search(
     Ok(Json(state.yandex.search(token(&headers), query.q.as_deref()).await?))
 }
 
-async fn imports(State(state): State<AppState>, Admin(_): Admin) -> impl IntoResponse {
-    Json(state.yandex.list())
+async fn imports(State(state): State<AppState>, Admin(user): Admin) -> impl IntoResponse {
+    Json(state.yandex.list(user.user_id))
 }
 
 async fn start(
     State(state): State<AppState>,
-    Admin(_): Admin,
+    Admin(user): Admin,
     RequestLang(lang): RequestLang,
     headers: HeaderMap,
     Json(request): Json<StartImportRequest>,
 ) -> ApiResult<impl IntoResponse> {
-    Ok((StatusCode::ACCEPTED, Json(state.yandex.start(token(&headers), request, lang)?)))
+    Ok((StatusCode::ACCEPTED, Json(state.yandex.start(user.user_id, token(&headers), request, lang)?)))
 }
 
 async fn remove(
     State(state): State<AppState>,
-    Admin(_): Admin,
+    Admin(user): Admin,
     RoutePath(id): RoutePath<Uuid>,
 ) -> ApiResult<StatusCode> {
-    state.yandex.remove(id)?;
+    state.yandex.remove(user.user_id, id)?;
     Ok(StatusCode::NO_CONTENT)
 }

@@ -126,6 +126,45 @@ impl YandexClient {
         Ok((read_album(&result), tracks))
     }
 
+    pub async fn playlist(&self, token: &str, path: &str) -> AppResult<(String, Vec<YandexTrack>)> {
+        let invalid = || AppError::validation("Yandex Music returned an incomplete playlist. Try importing it again.");
+        let mut tracks = Vec::new();
+        let mut name = None;
+        let mut snapshot = None;
+        let mut page = 0u64;
+        loop {
+            let result = self
+                .get(token, path, &[("rich-tracks", "true"), ("page-size", "100"), ("page", &page.to_string())])
+                .await?;
+            let rows = result.get("tracks").and_then(Value::as_array).ok_or_else(invalid)?;
+            let pager = result.get("pager");
+            let total = pager
+                .and_then(|pager| pager.get("total"))
+                .or_else(|| result.get("trackCount"))
+                .and_then(Value::as_u64)
+                .and_then(|total| usize::try_from(total).ok())
+                .unwrap_or(rows.len());
+            let revision = result.get("revision").and_then(Value::as_u64);
+            if page == 0 {
+                name = text(&result, "title");
+                snapshot = Some((total, revision));
+            } else if pager.and_then(|pager| pager.get("page")).and_then(Value::as_u64) != Some(page)
+                || snapshot != Some((total, revision))
+                || rows.is_empty()
+            {
+                return Err(invalid());
+            }
+            tracks.extend(rows.iter().map(read_playlist_track));
+            if tracks.len() == total {
+                return Ok((name.ok_or_else(invalid)?, tracks));
+            }
+            if tracks.len() > total || rows.is_empty() {
+                return Err(invalid());
+            }
+            page += 1;
+        }
+    }
+
     pub async fn file_info(
         &self,
         token: &str,
@@ -390,15 +429,28 @@ fn read_track(track: &Value) -> YandexTrack {
     }
 }
 
+fn read_playlist_track(row: &Value) -> YandexTrack {
+    let mut track = read_track(row.get("track").unwrap_or(row));
+    if track.id.is_empty() {
+        track.id = text(row, "id").unwrap_or_default();
+    }
+    if track.title.is_empty() {
+        track.title.clone_from(&track.id);
+        track.available = false;
+    }
+    track.available &= !track.id.is_empty();
+    track
+}
+
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use serde_json::json;
     use tokio::io::AsyncReadExt;
     use tokio::net::TcpListener;
 
     use super::*;
 
-    async fn lyrics_server(
+    pub(in crate::integrations::yandex) async fn mock_server(
         replies: Vec<(&'static str, &'static str, &'static str)>,
     ) -> (YandexClient, tokio::task::JoinHandle<()>) {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -434,6 +486,8 @@ mod tests {
                     let timestamp = parameters.get("timeStamp").unwrap();
                     let signature = format!("{}=", sign("kzqU4XhfCaY6B6JTHODeq5", &format!("42{timestamp}")));
                     assert_eq!(parameters.get("sign").unwrap().as_ref(), signature);
+                } else if path.starts_with("/playlist/") || path == "/genres" {
+                    assert!(request.to_ascii_lowercase().contains("authorization: oauth test-token\r\n"));
                 } else {
                     assert!(
                         !request.to_ascii_lowercase().contains("authorization:"),
@@ -451,7 +505,7 @@ mod tests {
 
     #[tokio::test]
     async fn synced_lyrics_keep_their_timestamps_and_do_not_request_plain_text() {
-        let (client, server) = lyrics_server(vec![
+        let (client, server) = mock_server(vec![
             ("/tracks/42/lyrics?format=LRC", "200 OK", r#"{"result":{"downloadUrl":"{url}/synced"}}"#),
             ("/synced", "200 OK", "\u{feff}[00:01.250]First\n[00:11.000]Second"),
         ])
@@ -464,7 +518,7 @@ mod tests {
 
     #[tokio::test]
     async fn missing_lrc_falls_back_to_plain_text() {
-        let (client, server) = lyrics_server(vec![
+        let (client, server) = mock_server(vec![
             ("/tracks/42/lyrics?format=LRC", "404 Not Found", "{}"),
             ("/tracks/42/lyrics?format=TEXT", "200 OK", r#"{"result":{"downloadUrl":"{url}/plain"}}"#),
             ("/plain", "200 OK", "First line\nSecond line"),
@@ -476,7 +530,7 @@ mod tests {
 
     #[tokio::test]
     async fn empty_synced_text_does_not_hide_available_plain_lyrics() {
-        let (client, server) = lyrics_server(vec![
+        let (client, server) = mock_server(vec![
             ("/tracks/42/lyrics?format=LRC", "200 OK", r#"{"result":{"downloadUrl":"{url}/synced"}}"#),
             ("/synced", "200 OK", "[ar:Artist]\n[ti:Title]\n"),
             ("/tracks/42/lyrics?format=TEXT", "200 OK", r#"{"result":{"downloadUrl":"{url}/plain"}}"#),
@@ -489,7 +543,7 @@ mod tests {
 
     #[tokio::test]
     async fn tracks_without_lyrics_can_still_be_imported() {
-        let (client, server) = lyrics_server(vec![
+        let (client, server) = mock_server(vec![
             ("/tracks/42/lyrics?format=LRC", "404 Not Found", "{}"),
             ("/tracks/42/lyrics?format=TEXT", "200 OK", r#"{"result":null}"#),
         ])
@@ -500,7 +554,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_failed_lyrics_download_is_optional() {
-        let (client, server) = lyrics_server(vec![
+        let (client, server) = mock_server(vec![
             ("/tracks/42/lyrics?format=LRC", "200 OK", r#"{"result":{"downloadUrl":"{url}/synced"}}"#),
             ("/synced", "503 Service Unavailable", "unavailable"),
             ("/tracks/42/lyrics?format=TEXT", "404 Not Found", "{}"),

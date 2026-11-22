@@ -903,8 +903,6 @@ export const ru: Dictionary = {
   "settings.experimental": "Эксперименты",
   "settings.audiobooksHint":
     "Включить аудиокниги на всех устройствах, подключённых к этому серверу.",
-  "settings.yandexMusic": "Импорт из Яндекс Музыки",
-  "settings.vkMusic": "Импорт из VK Музыки",
   "settings.yandexToken": "Токен Яндекс Музыки",
   "settings.yandexTokenSave": "Сохранить токен",
   "settings.yandexTokenSaved": "Токен сохранён в этом браузере.",
@@ -912,6 +910,7 @@ export const ru: Dictionary = {
 
   "yandex.title": "Яндекс Музыка",
   "vkMusic.title": "VK Музыка",
+  "vkMusic.connectTitle": "Подключите VK Музыку",
   "vkMusic.placeholder": "Трек или исполнитель в VK Музыке",
   "vkMusic.search": "Найти",
   "vkMusic.searching": "Ищем в VK Музыке…",
@@ -924,7 +923,7 @@ export const ru: Dictionary = {
   "vkMusic.downloading": "Скачиваем…",
   "vkMusic.uploading": "Добавляем…",
   "vkMusic.added": "Трек добавлен в медиатеку.",
-  "vkMusic.inLibrary": "Добавлен",
+  "vkMusic.inLibrary": "В медиатеке",
   "vkMusic.restricted": "Недоступен",
   "vkMusic.error.extensionMissing":
     "Установите или перезагрузите расширение Caimack VK Music и повторите поиск.",
@@ -934,6 +933,8 @@ export const ru: Dictionary = {
   "vkMusic.error.playlistUnavailable":
     "Не удалось прочитать плейлист. Откройте его по ссылке в авторизованной вкладке VK и повторите импорт.",
   "vkMusic.playlist.import": "Импорт плейлиста",
+  "vkMusic.playlist.title": "Плейлист по ссылке",
+  "vkMusic.playlist.summary": "Вставьте ссылку VK Музыки, чтобы сохранить плейлист в медиатеку.",
   "vkMusic.playlist.hint":
     "Вставьте ссылку на плейлист VK Музыки. Caimack создаст приватный плейлист с тем же порядком треков.",
   "vkMusic.playlist.link": "Ссылка на плейлист VK Музыки",
@@ -960,9 +961,16 @@ export const ru: Dictionary = {
   "vkMusic.error.vkChanged":
     "VK Музыка не вернула результаты. Перезагрузите её вкладку и повторите поиск.",
   "yandex.likes": "Мне нравится",
-  "yandex.importLikes": "Добавить «Мне нравится»",
+  "yandex.playlist.title": "Плейлист по ссылке",
+  "yandex.playlist.summary": "Вставьте ссылку Яндекс Музыки, чтобы сохранить плейлист в медиатеку.",
+  "yandex.playlist.import": "Импорт плейлиста",
+  "yandex.playlist.hint": "Caimack создаст приватный плейлист и сохранит исходный порядок треков.",
+  "yandex.playlist.link": "Ссылка на плейлист Яндекс Музыки",
+  "yandex.playlist.invalidLink": "Вставьте ссылку на плейлист с music.yandex.ru.",
+  "yandex.playlist.created": "Плейлист сохранён",
+  "yandex.playlist.open": "Открыть плейлист",
   "yandex.started": "Импорт запущен.",
-  "yandex.inLibrary": "Уже в библиотеке",
+  "yandex.inLibrary": "В медиатеке",
   "yandex.unavailable": "Недоступен",
   "yandex.queued": "В очереди",
   "yandex.addNamed": "Добавить «{name}» в библиотеку",
@@ -1292,15 +1300,15 @@ export const ru: Dictionary = {
     "Укажите токен своего аккаунта Яндекс Музыки. Он сохранится в этом браузере; его можно удалить кнопкой ниже.",
   "settings.yandexTokenRequired": "Введите токен, чтобы продолжить.",
   "settings.yandexConfigured": "Токен сохранён. Можно искать и добавлять музыку.",
-  "yandex.activity": "Добавления",
-  "yandex.activityTitle": "Добавление из Яндекс Музыки",
+  "yandex.activity": "Статус импорта",
+  "yandex.activityTitle": "Импорт из Яндекс Музыки",
   "yandex.activityHint":
     "Музыка сохраняется в вашу библиотеку. Это окно можно закрыть и продолжить слушать.",
   "yandex.activityFailed": "Не удалось загрузить список добавлений.",
   "yandex.activityEmpty": "Пока ничего не добавляли",
   "yandex.activityEmptyHint": "Добавьте трек или альбом из поиска — здесь появится его статус.",
   "yandex.recentActivity": "Недавние добавления",
-  "yandex.addTrack": "Добавить",
+  "yandex.addTrack": "В медиатеку",
   "yandex.adding": "Добавляем…",
   "yandex.retry": "Повторить",
   "yandex.addFailed": "Не удалось добавить",
@@ -1312,10 +1320,7 @@ export const ru: Dictionary = {
   "yandex.stopNamed": "Остановить добавление «{name}»",
   "yandex.dismissNamed": "Убрать «{name}» из списка",
   "yandex.failureDetails": "Что произошло",
-  "yandex.searchTitle": "Добавить из Яндекс Музыки",
   "yandex.resultsHint": "Найденную музыку можно добавить в библиотеку.",
-  "yandex.searchHint":
-    "Ищите по треку, исполнителю или альбому. Статус добавления появится рядом с результатом.",
   "yandex.searchPlaceholder": "Трек, исполнитель или альбом в Яндекс Музыке",
   "yandex.connectTitle": "Подключите Яндекс Музыку",
   "yandex.connectHint":

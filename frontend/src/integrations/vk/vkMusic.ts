@@ -7,6 +7,14 @@ const EXTENSION_ID = "nboiinigncmofgemflodijebiebgkcbo";
 const PROTOCOL = "caimack-vk-music-v1";
 const LIMIT = 24 * 1024 * 1024;
 const COVER_LIMIT = 2 * 1024 * 1024;
+const COVER_HOSTS = [
+  "vkuserphoto.ru",
+  "vkuseraudio.net",
+  "vkuseraudio.ru",
+  "okcdn.ru",
+  "vkcdn.ru",
+  "userapi.com",
+];
 const errors = [
   "busy",
   "invalidRequest",
@@ -40,6 +48,7 @@ export interface VkTrack {
   artist: string;
   duration: number;
   restricted: boolean;
+  coverUrl?: string;
 }
 
 type Message =
@@ -107,7 +116,22 @@ export async function searchVkMusic(query: string): Promise<VkTrack[]> {
   if (!Array.isArray(tracks) || tracks.length > 30 || !tracks.every(isTrack)) {
     throw new VkMusicError("vkChanged");
   }
-  return tracks;
+  return tracks.map(({ coverUrl, ...track }) => {
+    const url = vkCoverUrl(coverUrl);
+    return url ? { ...track, coverUrl: url.href } : track;
+  });
+}
+
+function vkCoverUrl(value: unknown): URL | undefined {
+  if (typeof value !== "string" || value.length > 4096) return;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password || url.port) return;
+    if (COVER_HOSTS.some((host) => url.hostname === host || url.hostname.endsWith(`.${host}`)))
+      return url;
+  } catch {
+    return;
+  }
 }
 
 export async function importVkMusic(

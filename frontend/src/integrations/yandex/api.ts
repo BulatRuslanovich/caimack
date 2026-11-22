@@ -37,9 +37,9 @@ export const yandexQueries = {
       staleTime: 60_000,
     }),
 
-  yandexImports: () =>
+  yandexImports: (userId: string) =>
     queryOptions({
-      queryKey: ["yandexImports"],
+      queryKey: ["yandexImports", userId],
       queryFn: () => yandexApi.yandexImports(),
       refetchInterval: (query) =>
         query.state.data?.some((job) => job.status === "Queued" || job.status === "Running")

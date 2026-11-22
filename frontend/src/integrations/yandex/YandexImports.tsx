@@ -3,74 +3,47 @@
 "use client";
 
 import Link from "next/link";
-import {
-  CheckIcon,
-  DownloadIcon,
-  LoaderCircleIcon,
-  MusicIcon,
-  RotateCcwIcon,
-  XIcon,
-} from "lucide-react";
+import { Trigger as DialogTrigger } from "@radix-ui/react-dialog";
+import { CheckIcon, DownloadIcon, LoaderCircleIcon, RotateCcwIcon, XIcon } from "lucide-react";
+import { useState } from "react";
 import { useYandexImports, isYandexImportActive } from "./YandexMusicContext";
 import type { YandexImport } from "./types";
 import { useT } from "@/contexts/I18nContext";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/EmptyState";
-import { useYandexMusicSettings } from "./useYandexMusic";
-import { YandexImportButton } from "./YandexImportButton";
+import { ImportProgress, ProviderArtwork } from "../ui";
 
-export function YandexActivityButton({ compact = false }: { compact?: boolean }) {
+export function YandexImportActivity() {
   const t = useT();
-  const { jobs, setActivityOpen } = useYandexImports();
-  const active = jobs.filter(isYandexImportActive).length;
-  return (
-    <Button
-      variant={compact ? "ghost" : "outline"}
-      size="sm"
-      onClick={() => setActivityOpen(true)}
-      className={compact ? "w-full justify-start px-3" : undefined}
-    >
-      {active > 0 ? (
-        <LoaderCircleIcon size={15} className="animate-spin" />
-      ) : (
-        <DownloadIcon size={15} />
-      )}
-      {t("yandex.activity")}
-      {active > 0 && (
-        <span className="ml-1 rounded-full bg-primary/15 px-1.5 text-xs text-primary tabular-nums">
-          {active}
-        </span>
-      )}
-    </Button>
-  );
-}
-
-export function YandexImports() {
-  const t = useT();
-  const { hasToken } = useYandexMusicSettings();
-  const { jobs, loading, failed, refresh, activityOpen, setActivityOpen } = useYandexImports();
+  const [open, setOpen] = useState(false);
+  const { jobs, loading, failed, refresh } = useYandexImports();
   const active = jobs.filter(isYandexImportActive);
   const completed = jobs.filter((job) => !isYandexImportActive(job));
   return (
-    <Dialog open={activityOpen} onOpenChange={setActivityOpen}>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm">
+          {t("yandex.activity")}
+          {active.length > 0 && (
+            <span className="rounded-full bg-primary/15 px-1.5 text-xs text-primary tabular-nums">
+              {active.length}
+            </span>
+          )}
+        </Button>
+      </DialogTrigger>
       <DialogContent
         title={t("yandex.activityTitle")}
         description={t("yandex.activityHint")}
         className="w-[min(38rem,100%)]"
         footer={
           <Button asChild variant="outline">
-            <Link href="/search?tab=tracks" onClick={() => setActivityOpen(false)}>
+            <Link href="/search?tab=tracks" onClick={() => setOpen(false)}>
               {t("action.browseTracks")}
             </Link>
           </Button>
         }
       >
-        {hasToken && (
-          <div className="mb-5 flex">
-            <YandexImportButton source={{ kind: "Likes", title: t("yandex.likes") }} />
-          </div>
-        )}
         {loading ? (
           <p role="status" className="py-8 text-center text-sm text-muted-foreground">
             {t("common.loading")}
@@ -95,7 +68,7 @@ export function YandexImports() {
               <section className="space-y-2" aria-label={t("yandex.adding")}>
                 <h3 className="text-sm font-medium text-muted-foreground">{t("yandex.adding")}</h3>
                 {active.map((job) => (
-                  <ImportRow key={job.id} job={job} />
+                  <YandexImportRow key={job.id} job={job} />
                 ))}
               </section>
             )}
@@ -105,7 +78,7 @@ export function YandexImports() {
                   {t("yandex.recentActivity")}
                 </h3>
                 {completed.map((job) => (
-                  <ImportRow key={job.id} job={job} />
+                  <YandexImportRow key={job.id} job={job} />
                 ))}
               </section>
             )}
@@ -116,14 +89,23 @@ export function YandexImports() {
   );
 }
 
-function ImportRow({ job }: { job: YandexImport }) {
+export function YandexImportRow({
+  job,
+  onRetry,
+}: {
+  job: YandexImport;
+  onRetry?: (id: string) => void;
+}) {
   const t = useT();
   const { sources, remove, removing, start, pending } = useYandexImports();
   const source = Object.values(sources).find((each) => each.jobId === job.id);
   const active = isYandexImportActive(job);
   const failed = job.status === "Failed" || (job.status === "Finished" && job.failures.length > 0);
   const title =
-    source?.title ?? (job.kind === "Likes" ? t("yandex.likes") : (job.title ?? t("yandex.title")));
+    job.kind === "Playlist"
+      ? (job.title ?? t("yandex.playlist.import"))
+      : (source?.title ??
+        (job.kind === "Likes" ? t("yandex.likes") : (job.title ?? t("yandex.title"))));
   const summary =
     job.status === "Queued"
       ? t("yandex.preparing")
@@ -133,23 +115,19 @@ function ImportRow({ job }: { job: YandexImport }) {
           : t("yandex.adding")
         : job.status === "Cancelled"
           ? t("yandex.cancelled")
-          : failed
-            ? job.added > 0
-              ? t("yandex.partial", { count: job.added })
-              : t("yandex.addFailed")
-            : job.added === 0 && job.skipped > 0
-              ? t("yandex.inLibrary")
-              : t("yandex.added", { count: job.added });
+          : job.playlistId
+            ? t("yandex.playlist.created")
+            : failed
+              ? job.added > 0
+                ? t("yandex.partial", { count: job.added })
+                : t("yandex.addFailed")
+              : job.added === 0 && job.skipped > 0
+                ? t("yandex.inLibrary")
+                : t("yandex.added", { count: job.added });
   return (
-    <article className="rounded-md bg-card p-3">
+    <article className="rounded-lg border border-border bg-card/60 p-3.5">
       <div className="flex items-start gap-3">
-        <span className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-sm bg-raised text-muted-foreground">
-          {source?.coverUrl ? (
-            <img src={source.coverUrl} alt="" className="size-full object-cover" />
-          ) : (
-            <MusicIcon size={20} />
-          )}
-        </span>
+        <ProviderArtwork url={source?.coverUrl} className="size-10 shrink-0 rounded-md" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{title}</p>
           {source?.artist && (
@@ -160,19 +138,27 @@ function ImportRow({ job }: { job: YandexImport }) {
             className={`mt-1 flex items-center gap-1.5 text-xs ${failed ? "text-destructive" : "text-muted-foreground"}`}
           >
             {active ? (
-              <LoaderCircleIcon size={12} className="shrink-0 animate-spin" />
+              <LoaderCircleIcon
+                size={12}
+                className="shrink-0 motion-safe:animate-spin"
+                aria-hidden
+              />
             ) : !failed && job.status === "Finished" ? (
-              <CheckIcon size={12} className="shrink-0" />
+              <CheckIcon size={12} className="shrink-0 text-success" aria-hidden />
             ) : null}
             {summary}
           </p>
         </div>
-        {(failed || job.status === "Cancelled") && source && (
+        {!job.playlistId && (failed || job.status === "Cancelled") && source && (
           <Button
             variant="ghost"
             size="icon"
             disabled={pending.size > 0}
-            onClick={() => start(source)}
+            onClick={() => {
+              void start(source).then((next) => {
+                if (next) onRetry?.(next.id);
+              });
+            }}
             aria-label={t("yandex.retryNamed", { name: title })}
           >
             <RotateCcwIcon size={15} />
@@ -193,22 +179,17 @@ function ImportRow({ job }: { job: YandexImport }) {
         </Button>
       </div>
       {active && job.total > 0 && (
-        <div
-          role="progressbar"
-          aria-label={title}
-          aria-valuemin={0}
-          aria-valuemax={job.total}
-          aria-valuenow={job.done}
-          className="mt-3 h-1 overflow-hidden rounded-full bg-border"
-        >
-          <div
-            className="h-full bg-primary transition-[width]"
-            style={{ width: `${Math.min(100, (job.done / job.total) * 100)}%` }}
-          />
+        <div className="mt-3">
+          <ImportProgress value={job.done} total={job.total} label={title} />
         </div>
       )}
       {active && job.current && job.total > 1 && (
         <p className="mt-2 truncate text-xs text-faint">{job.current}</p>
+      )}
+      {job.playlistId && (
+        <Button asChild size="sm" className="mt-3">
+          <Link href={`/playlists/${job.playlistId}`}>{t("yandex.playlist.open")}</Link>
+        </Button>
       )}
       {failed && (
         <details className="mt-3 text-xs text-muted-foreground">

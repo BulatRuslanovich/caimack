@@ -35,9 +35,7 @@ interface YandexMusicImports {
   loading: boolean;
   failed: boolean;
   removing: boolean;
-  activityOpen: boolean;
-  setActivityOpen: (value: boolean) => void;
-  start: (source: YandexSource) => void;
+  start: (source: YandexSource) => Promise<YandexImport | undefined>;
   remove: (id: string) => void;
   refresh: () => void;
 }
@@ -55,7 +53,7 @@ function readSources(key: string): Sources {
         return (
           typeof source.jobId === "string" &&
           typeof source.title === "string" &&
-          ["Track", "Album", "Likes"].includes(source.kind ?? "") &&
+          ["Track", "Album", "Likes", "Playlist"].includes(source.kind ?? "") &&
           (source.id === undefined || typeof source.id === "string")
         );
       })
@@ -72,12 +70,9 @@ export function YandexMusicProvider({
 }) {
   const { user } = useAuth();
   const settings = useYandexMusicSettings();
+  const userId = user?.id ?? "guest";
   return (
-    <YandexMusicState
-      key={user?.id ?? "guest"}
-      storageKey={`music-streaming.yandex-sources.${user?.id ?? "guest"}`}
-      enabled={available && settings.enabled}
-    >
+    <YandexMusicState key={userId} userId={userId} enabled={available && settings.enabled}>
       {children}
     </YandexMusicState>
   );
@@ -85,42 +80,52 @@ export function YandexMusicProvider({
 
 function YandexMusicState({
   children,
-  storageKey,
+  userId,
   enabled,
 }: {
   children: ReactNode;
-  storageKey: string;
+  userId: string;
   enabled: boolean;
 }) {
   const client = useQueryClient();
   const invalidate = useInvalidate();
+  const importQuery = yandexQueries.yandexImports(userId);
   const imports = useQuery({
-    ...yandexQueries.yandexImports(),
+    ...importQuery,
     enabled,
     refetchOnWindowFocus: true,
   });
+  const storageKey = `music-streaming.yandex-sources.${userId}`;
   const [sources, setSources] = useState<Sources>(() => readSources(storageKey));
   const sourcesRef = useRef(sources);
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
   const pendingRef = useRef(new Set<string>());
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [activityOpen, setActivityOpen] = useState(false);
-  const observed = useRef(new Map<string, { added: number; status: string }>());
+  const observed = useRef(
+    new Map<string, { added: number; status: string; playlistId?: string }>(),
+  );
 
   const jobs = imports.data;
   useEffect(() => {
     if (!jobs) return;
     let changed = false;
     let finished = false;
+    let playlistCreated = false;
     for (const job of jobs) {
       const before = observed.current.get(job.id);
       if (before && (job.added > before.added || job.status !== before.status)) {
         changed ||= job.added > before.added;
         finished ||= !isYandexImportActive(job);
       }
-      observed.current.set(job.id, { added: job.added, status: job.status });
+      playlistCreated ||= Boolean(job.playlistId && job.playlistId !== before?.playlistId);
+      observed.current.set(job.id, {
+        added: job.added,
+        status: job.status,
+        playlistId: job.playlistId,
+      });
     }
     if (changed || finished) invalidate("library");
+    if (playlistCreated) invalidate("playlists");
     if (finished) void client.invalidateQueries({ queryKey: ["yandexSearch"] });
   }, [jobs, client, invalidate]);
 
@@ -136,11 +141,11 @@ function YandexMusicState({
       sourcesRef.current = bounded;
       setSources(bounded);
       writeStoredJson(storageKey, bounded);
-      client.setQueryData<YandexImport[]>(["yandexImports"], (previous = []) => [
+      client.setQueryData<YandexImport[]>(importQuery.queryKey, (previous = []) => [
         job,
         ...previous.filter((each) => each.id !== job.id),
       ]);
-      void client.invalidateQueries({ queryKey: ["yandexImports"] });
+      void client.invalidateQueries({ queryKey: importQuery.queryKey });
     },
     onError: (error, source) => {
       setErrors((previous) => ({ ...previous, [yandexSourceKey(source)]: error.message }));
@@ -158,11 +163,11 @@ function YandexMusicState({
     },
   });
 
-  const start = (source: YandexSource) => {
+  const start = async (source: YandexSource) => {
     const key = yandexSourceKey(source);
     if (pendingRef.current.has(key)) return;
     const job = jobs?.find((each) => each.id === sourcesRef.current[key]?.jobId);
-    if (job && isYandexImportActive(job)) return;
+    if (job && isYandexImportActive(job)) return job;
     pendingRef.current.add(key);
     setPending(new Set(pendingRef.current));
     setErrors((previous) => {
@@ -170,7 +175,12 @@ function YandexMusicState({
       delete next[key];
       return next;
     });
-    mutation.mutate(source);
+    try {
+      return await mutation.mutateAsync(source);
+    } catch {
+      // The import button or dialog reads the error stored by the mutation.
+      return undefined;
+    }
   };
 
   return (
@@ -183,8 +193,6 @@ function YandexMusicState({
         loading: imports.isLoading,
         failed: imports.isError,
         removing: remove.isPending,
-        activityOpen,
-        setActivityOpen,
         start,
         remove: remove.mutate,
         refresh: () => {

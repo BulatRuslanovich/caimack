@@ -3,20 +3,21 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
-import { DownloadIcon, MusicIcon, SearchIcon } from "lucide-react";
+import { LoaderCircleIcon, PlusIcon, SearchIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { EmptyState } from "@/components/EmptyState";
+import { Section } from "@/components/PageHeader";
 import { LoadError } from "@/components/Query";
 import { SearchField } from "@/components/SearchField";
 import { VkPlaylistImport } from "./VkPlaylistImport";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/contexts/I18nContext";
-import { formatDuration } from "@/lib/format";
 import { SEARCH_MIN_LENGTH } from "@/lib/queries";
 import { useInvalidate } from "@/lib/useInvalidate";
 import { useToast } from "@/lib/useToast";
 import { VkMusicError, importVkMusic, searchVkMusic } from "./vkMusic";
+import { ProviderAction, ProviderImportButton, ProviderTrack } from "../ui";
 
 const VK_MUSIC_URL = "https://vk.ru/audio";
 
@@ -82,7 +83,7 @@ export function VkMusicSearch({
   const tracks = submitted ? search.data : undefined;
   return (
     <>
-      <div className="flex items-center gap-2">
+      <div className="flex w-full max-w-xl items-center gap-2">
         <SearchField
           value={query}
           onChange={onChange}
@@ -100,14 +101,16 @@ export function VkMusicSearch({
           {t("vkMusic.search")}
         </Button>
       </div>
-      <div>
-        <VkPlaylistImport
-          disabled={search.isPending || download.isPending}
-          onImporting={setPlaylistImporting}
-        />
-      </div>
+      <VkPlaylistImport
+        disabled={search.isPending || download.isPending}
+        onImporting={setPlaylistImporting}
+      />
       {search.isPending ? (
-        <p role="status" className="px-2.5 py-3 text-sm text-muted-foreground">
+        <p
+          role="status"
+          className="flex items-center gap-2 px-2.5 py-3 text-sm text-muted-foreground"
+        >
+          <LoaderCircleIcon size={16} aria-hidden className="motion-safe:animate-spin" />
           {t("vkMusic.searching")}
         </p>
       ) : searchError ? (
@@ -122,57 +125,58 @@ export function VkMusicSearch({
       ) : tracks?.length === 0 ? (
         <EmptyState icon={<SearchIcon size={24} />} title={t("search.nothingFound")} />
       ) : tracks ? (
-        <ul aria-label={t("nav.tracks")} className="divide-y divide-border">
-          {tracks.map((track) => {
-            const active = download.isPending && download.variables?.id === track.id;
-            const added = imported.has(track.id);
-            return (
-              <li key={track.id} className="flex min-h-14 items-center gap-3 px-2.5 py-1.5">
-                <MusicIcon size={17} className="shrink-0 text-faint max-sm:hidden" aria-hidden />
-                <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-sm font-medium">{track.title}</span>
-                  <span className="truncate text-sm text-muted-foreground">{track.artist}</span>
-                </div>
-                {track.duration > 0 && (
-                  <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
-                    {formatDuration(track.duration)}
-                  </span>
-                )}
-                {track.restricted ? (
-                  <span className="text-sm text-faint">{t("vkMusic.restricted")}</span>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={added || download.isPending || playlistImporting}
-                    aria-label={
-                      active || added ? undefined : t("vkMusic.addTrack", { name: track.title })
-                    }
-                    onClick={() => download.mutate({ text: query, id: track.id })}
-                  >
-                    {!active && !added && <DownloadIcon size={14} aria-hidden />}
-                    {active
-                      ? t(uploading ? "vkMusic.uploading" : "vkMusic.downloading")
-                      : t(added ? "vkMusic.inLibrary" : "vkMusic.add")}
-                  </Button>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        <Section title={t("nav.tracks")} className="gap-2.5">
+          <ul className="divide-y divide-border">
+            {tracks.map((track) => {
+              const active = download.isPending && download.variables?.id === track.id;
+              const added = imported.has(track.id);
+              const state = track.restricted
+                ? "unavailable"
+                : added
+                  ? "done"
+                  : active
+                    ? "busy"
+                    : "ready";
+              const label = track.restricted
+                ? t("vkMusic.restricted")
+                : active
+                  ? t(uploading ? "vkMusic.uploading" : "vkMusic.downloading")
+                  : t(added ? "vkMusic.inLibrary" : "vkMusic.add");
+              return (
+                <ProviderTrack
+                  key={track.id}
+                  title={track.title}
+                  artist={track.artist}
+                  coverUrl={track.coverUrl}
+                  duration={track.duration}
+                  action={
+                    <ProviderImportButton
+                      icon={PlusIcon}
+                      label={label}
+                      name={
+                        state === "ready"
+                          ? t("vkMusic.addTrack", { name: track.title })
+                          : `${track.title}: ${label}`
+                      }
+                      state={state}
+                      disabled={download.isPending || playlistImporting}
+                      compact
+                      onClick={() => download.mutate({ text: query, id: track.id })}
+                    />
+                  }
+                />
+              );
+            })}
+          </ul>
+        </Section>
       ) : (
-        <EmptyState
-          icon={<SearchIcon size={24} />}
-          title={t("vkMusic.title")}
-          description={t("vkMusic.startHint")}
-          action={
-            <Button asChild size="sm">
-              <a href={VK_MUSIC_URL} target="_blank" rel="noreferrer">
-                {t("vkMusic.open")}
-              </a>
-            </Button>
-          }
-        />
+        <ProviderAction title={t("vkMusic.connectTitle")} description={t("vkMusic.startHint")}>
+          <Button asChild size="sm">
+            <a href={VK_MUSIC_URL} target="_blank" rel="noreferrer">
+              {t("vkMusic.open")}
+            </a>
+          </Button>
+        </ProviderAction>
       )}
     </>
   );

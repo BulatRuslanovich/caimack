@@ -20,6 +20,7 @@ pub enum ImportKind {
     Likes,
     Album,
     Track,
+    Playlist,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -50,6 +51,7 @@ pub struct ImportDto {
     pub done: usize,
     pub added: usize,
     pub skipped: usize,
+    pub playlist_id: Option<Uuid>,
     pub current: Option<String>,
     pub failures: Vec<ImportFailure>,
     #[serde(serialize_with = "json::time")]
@@ -58,6 +60,7 @@ pub struct ImportDto {
 
 pub struct ImportJob {
     pub id: Uuid,
+    pub user_id: Uuid,
     pub kind: ImportKind,
     pub source_id: Option<String>,
     pub token: String,
@@ -77,6 +80,7 @@ struct Progress {
     done: usize,
     added: usize,
     skipped: usize,
+    playlist_id: Option<Uuid>,
     failures: Vec<ImportFailure>,
 }
 
@@ -118,9 +122,17 @@ impl ImportJob {
         progress.step();
     }
 
+    pub fn record_playlist(&self, id: Uuid) {
+        self.progress().playlist_id = Some(id);
+    }
+
     pub fn finish(&self) {
         let mut progress = self.progress();
-        progress.status = if self.cancelled.is_cancelled() { ImportStatus::Cancelled } else { ImportStatus::Finished };
+        progress.status = if progress.playlist_id.is_none() && self.cancelled.is_cancelled() {
+            ImportStatus::Cancelled
+        } else {
+            ImportStatus::Finished
+        };
         progress.current = None;
     }
 
@@ -143,6 +155,7 @@ impl ImportJob {
             done: progress.done,
             added: progress.added,
             skipped: progress.skipped,
+            playlist_id: progress.playlist_id,
             current: progress.current.clone(),
             failures: progress.failures.clone(),
             created_at: self.created_at,
@@ -175,18 +188,23 @@ impl ImportQueue {
 
     pub fn enqueue(
         &self,
+        user_id: Uuid,
         kind: ImportKind,
         source_id: Option<String>,
         token: String,
         lang: Lang,
     ) -> AppResult<ImportDto> {
         let mut jobs = self.jobs();
-        if jobs.values().any(|job| job.is_active() && job.kind == kind && job.source_id == source_id) {
+        if jobs
+            .values()
+            .any(|job| job.user_id == user_id && job.is_active() && job.kind == kind && job.source_id == source_id)
+        {
             return Err(AppError::conflict("This import is already running."));
         }
 
         let job = Arc::new(ImportJob {
             id: Uuid::now_v7(),
+            user_id,
             kind,
             source_id,
             token,
@@ -202,6 +220,7 @@ impl ImportQueue {
                 done: 0,
                 added: 0,
                 skipped: 0,
+                playlist_id: None,
                 failures: Vec::new(),
             }),
         });
@@ -215,15 +234,16 @@ impl ImportQueue {
         Ok(dto)
     }
 
-    pub fn list(&self) -> Vec<ImportDto> {
-        let mut list: Vec<ImportDto> = self.jobs().values().map(|job| job.dto()).collect();
+    pub fn list(&self, user: Uuid) -> Vec<ImportDto> {
+        let mut list: Vec<ImportDto> =
+            self.jobs().values().filter(|job| job.user_id == user).map(|job| job.dto()).collect();
         list.sort_by(|a, b| b.created_at.cmp(&a.created_at).then(b.id.cmp(&a.id)));
         list
     }
 
-    pub fn remove(&self, id: Uuid) -> bool {
+    pub fn remove(&self, user: Uuid, id: Uuid) -> bool {
         let mut jobs = self.jobs();
-        let Some(job) = jobs.get(&id) else { return false };
+        let Some(job) = jobs.get(&id).filter(|job| job.user_id == user) else { return false };
         if job.is_active() {
             job.cancelled.cancel();
         } else {
@@ -253,34 +273,38 @@ mod tests {
     #[test]
     fn the_same_source_cannot_run_twice() {
         let (queue, _receiver) = queue();
-        let first = queue.enqueue(ImportKind::Album, Some("1".into()), "t".into(), Lang::En);
+        let user = Uuid::now_v7();
+        let first = queue.enqueue(user, ImportKind::Album, Some("1".into()), "t".into(), Lang::En);
         assert!(first.is_ok());
-        let again = queue.enqueue(ImportKind::Album, Some("1".into()), "t".into(), Lang::En);
+        let again = queue.enqueue(user, ImportKind::Album, Some("1".into()), "t".into(), Lang::En);
         assert!(matches!(again, Err(AppError::Conflict(_))));
-        assert!(queue.enqueue(ImportKind::Album, Some("2".into()), "t".into(), Lang::En).is_ok());
+        assert!(queue.enqueue(user, ImportKind::Album, Some("2".into()), "t".into(), Lang::En).is_ok());
     }
 
     #[test]
     fn removing_cancels_a_running_import_and_forgets_a_finished_one() -> AppResult<()> {
         let (queue, mut receiver) = queue();
-        let dto = queue.enqueue(ImportKind::Likes, None, "t".into(), Lang::En)?;
+        let user = Uuid::now_v7();
+        let dto = queue.enqueue(user, ImportKind::Likes, None, "t".into(), Lang::En)?;
         let job = receiver.try_recv().map_err(AppError::internal)?;
 
-        assert!(queue.remove(dto.id));
+        assert!(!queue.remove(Uuid::nil(), dto.id));
+        assert!(queue.list(Uuid::nil()).is_empty());
+        assert!(queue.remove(user, dto.id));
         assert!(job.cancelled.is_cancelled());
         job.finish();
-        assert_eq!(queue.list()[0].status, ImportStatus::Cancelled);
+        assert_eq!(queue.list(user)[0].status, ImportStatus::Cancelled);
 
-        assert!(queue.remove(dto.id));
-        assert!(queue.list().is_empty());
-        assert!(!queue.remove(dto.id));
+        assert!(queue.remove(user, dto.id));
+        assert!(queue.list(user).is_empty());
+        assert!(!queue.remove(user, dto.id));
         Ok(())
     }
 
     #[test]
     fn progress_counts_every_track_once() -> AppResult<()> {
         let (queue, mut receiver) = queue();
-        queue.enqueue(ImportKind::Likes, None, "t".into(), Lang::En)?;
+        queue.enqueue(Uuid::nil(), ImportKind::Likes, None, "t".into(), Lang::En)?;
         let job = receiver.try_recv().map_err(AppError::internal)?;
 
         job.start(Some("Likes".into()), 3);

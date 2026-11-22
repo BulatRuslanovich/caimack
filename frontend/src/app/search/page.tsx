@@ -101,14 +101,11 @@ function SearchView() {
       : audiobooksEnabled
         ? "search.placeholderWithAudiobooks"
         : "search.placeholder";
-  const actions = integrations.flatMap(({ id, search: { Activity } }) =>
-    Activity ? [<Activity key={id} />] : [],
-  );
 
   return (
     <div className="search-page flex min-w-0 flex-col gap-3">
       <div className="search-controls flex min-w-0 flex-col gap-3 [&>header]:items-center">
-        <PageHeader title={t("nav.search")} actions={actions.length > 0 ? actions : undefined} />
+        <PageHeader title={t("nav.search")} />
 
         {integrations.length > 0 && (
           <ToggleGroup aria-label={t("search.source")}>

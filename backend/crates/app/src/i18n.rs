@@ -219,6 +219,11 @@ fn russian(template: &str) -> Option<&'static str> {
         "This import is already running." => "Этот импорт уже идёт.",
         "Import not found." => "Импорт не найден.",
         "Nothing to import here." => "Здесь нечего импортировать.",
+        "Enter a Yandex Music playlist link." => "Вставьте ссылку на плейлист Яндекс Музыки.",
+        "Yandex Music returned an incomplete playlist. Try importing it again." => {
+            "Яндекс Музыка вернула неполный плейлист. Попробуйте импортировать его снова."
+        }
+        "No tracks were available to add to the playlist." => "В плейлисте нет треков, доступных для добавления.",
         "This track is not available on Yandex Music." => "Трек недоступен в Яндекс Музыке.",
         "Yandex Music did not give a download link for this track." => "Яндекс Музыка не дала ссылку на этот трек.",
         "Yandex Music offered only {0}, which Caimack does not store." => {

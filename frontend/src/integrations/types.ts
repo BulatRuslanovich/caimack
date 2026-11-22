@@ -15,7 +15,6 @@ export interface IntegrationModule {
     label: TranslationKey;
     placeholder?: TranslationKey;
     Workspace: ComponentType<{ query: string; onChange: (query: string) => void }>;
-    Activity?: ComponentType;
   };
 }
 
