@@ -96,18 +96,12 @@ export function AlbumPage() {
                 }
               />
             }
+            byline={<Link href={`/artists/${detail.artistId}`}>{detail.artistName}</Link>}
             facts={[
-              <Link
-                key="artist"
-                href={`/artists/${detail.artistId}`}
-                className="font-medium text-foreground"
-              >
-                {detail.artistName}
-              </Link>,
               detail.year,
               t("count.tracks", { count: detail.tracks.length }),
               detail.durationSeconds > 0 && format.totalDuration(detail.durationSeconds),
-              albumSpec,
+              albumSpec && <span className="text-xs">{albumSpec}</span>,
             ]}
             actions={
               <>

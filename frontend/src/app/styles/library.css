@@ -155,6 +155,10 @@
   padding-block: 0.25rem;
 }
 
+.search-top-result {
+  background-image: radial-gradient(ellipse at 12% 0%, var(--tone-wash), transparent 78%);
+}
+
 .search-page .section-heading {
   align-items: center;
 }

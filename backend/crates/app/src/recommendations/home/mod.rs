@@ -150,8 +150,8 @@ impl Recommendations {
                 albums: Some(new_albums),
                 ..HomeBlockDto::new("newAlbums", Layout::Shelf, Zone::Browse)
             }),
-            HomeBlockDto::tracks("newArrivals", Layout::Grid, recently_added),
             artist_shelf.map(Hydrated::block),
+            HomeBlockDto::tracks("newArrivals", Layout::Grid, recently_added),
             track_shelves.next().map(Hydrated::block),
             (!own_playlists.is_empty()).then(|| HomeBlockDto {
                 playlists: Some(own_playlists),

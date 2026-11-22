@@ -11,6 +11,7 @@ import { isDesktop } from "@/desktop/runtime";
 export function DetailHeader({
   kind,
   title,
+  byline,
   art,
   facts = [],
   description,
@@ -22,6 +23,7 @@ export function DetailHeader({
 }: {
   kind: string;
   title: string;
+  byline?: ReactNode;
   art: ReactNode;
   facts?: ReactNode[];
   description?: ReactNode;
@@ -50,14 +52,17 @@ export function DetailHeader({
       </div>
 
       <div className="flex min-w-0 flex-col gap-3">
-        <h1
-          className={cn(
-            displayTitleClass(title),
-            "text-balance wrap-anywhere max-md:text-[clamp(1.75rem,7.7vw,2rem)] max-md:leading-tight",
-          )}
-        >
-          {title}
-        </h1>
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <h1
+            className={cn(
+              displayTitleClass(title),
+              "text-balance wrap-anywhere max-md:text-[clamp(1.75rem,7.7vw,2rem)] max-md:leading-tight",
+            )}
+          >
+            {title}
+          </h1>
+          {byline && <p className="text-lg leading-tight font-semibold wrap-anywhere">{byline}</p>}
+        </div>
         {description && (
           <p className="max-w-[62ch] text-muted-foreground max-md:text-sm">{description}</p>
         )}
