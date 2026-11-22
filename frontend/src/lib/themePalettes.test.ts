@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { describe, expect, it, vi } from "vitest";
 import {
+  COLORWAYS,
   COLORWAY_STORAGE_KEY,
   NO_FLASH_THEME_SCRIPT,
   THEME_COLORS,
@@ -34,7 +35,16 @@ const contrast = (a: number[], b: number[]) => {
 };
 
 describe("shared application palettes", () => {
-  it("covers all ten fixed theme variants", () => expect(palettes).toHaveLength(10));
+  it("covers both modes of every fixed colorway", () => {
+    for (const name of COLORWAYS.filter((colorway) => colorway !== "cover")) {
+      expect(
+        palettes
+          .filter((p) => p.name === name)
+          .map((p) => p.mode)
+          .sort(),
+      ).toEqual(["dark", "light"]);
+    }
+  });
   it.each(["dark", "light"] as const)(
     "restores the cover palette in %s mode before art loads",
     (theme) => {

@@ -863,6 +863,7 @@ export const ru: Dictionary = {
   "settings.colorway.midnight": "Полночь",
   "settings.colorway.plum": "Слива и персик",
   "settings.colorway.studio": "Xвоя и лайм",
+  "settings.colorway.dodo": "Восходящий апельсин",
   "settings.colorway.cover": "По обложке трека",
   "settings.language": "Язык",
   "settings.playback": "Воспроизведение",

@@ -61,6 +61,7 @@ enum class Colorway(val key: String) {
     Midnight("midnight"),
     Plum("plum"),
     Studio("studio"),
+    Dodo("dodo"),
     Cover("cover");
 
     companion object {
@@ -307,12 +308,61 @@ private val StudioLight = Palette(
     dark = false,
 )
 
+private val DodoDark = Palette(
+    background = Color(0xFF1D1713),
+    card = Color(0xFF2B211B),
+    popover = Color(0xFF352821),
+    raised = Color(0xFF403029),
+    accent = Color(0xFF514033),
+    foreground = Color(0xFFFFF7F0),
+    muted = Color(0xFFD6C4B6),
+    faint = Color(0xFFBBA79A),
+    primary = Color(0xFFFF9C58),
+    onPrimary = Color(0xFF2E1707),
+    primarySoft = Color(0x1AFF9C58),
+    action = Color(0xFFFF6900),
+    onAction = Color(0xFF291508),
+    destructive = Color(0xFFFF867E),
+    warning = Color(0xFFF5C35A),
+    success = Color(0xFF85CDA2),
+    sleeves = listOf(
+        Color(0xFF58311C), Color(0xFF513E22), Color(0xFF423026),
+        Color(0xFF50312C), Color(0xFF36402F), Color(0xFF423749),
+    ),
+    dark = true,
+)
+
+private val DodoLight = Palette(
+    background = Color(0xFFFFF8F1),
+    card = Color(0xFFFFFDFB),
+    popover = Color(0xFFFFFFFF),
+    raised = Color(0xFFFFFFFF),
+    accent = Color(0xFFFFE6D1),
+    foreground = Color(0xFF291C15),
+    muted = Color(0xFF675447),
+    faint = Color(0xFF786355),
+    primary = Color(0xFF984000),
+    onPrimary = Color(0xFFFFFFFF),
+    primarySoft = Color(0x17984000),
+    action = Color(0xFFFF6900),
+    onAction = Color(0xFF291508),
+    destructive = Color(0xFFB42318),
+    warning = Color(0xFF875F00),
+    success = Color(0xFF23745B),
+    sleeves = listOf(
+        Color(0xFFFFD4AE), Color(0xFFF3DFAC), Color(0xFFE5C9B3),
+        Color(0xFFF5C9BD), Color(0xFFD6DFC5), Color(0xFFDFCFDB),
+    ),
+    dark = false,
+)
+
 fun paletteOf(colorway: Colorway, dark: Boolean): Palette = when (colorway) {
     Colorway.Coffee, Colorway.Cover -> if (dark) CoffeeDark else CoffeeLight
     Colorway.Graphite -> if (dark) GraphiteDark else GraphiteLight
     Colorway.Midnight -> if (dark) MidnightDark else MidnightLight
     Colorway.Plum -> if (dark) PlumDark else PlumLight
     Colorway.Studio -> if (dark) StudioDark else StudioLight
+    Colorway.Dodo -> if (dark) DodoDark else DodoLight
 }
 
 /** The cover supplies the stage colour; library palette and light mode never tint its controls. */

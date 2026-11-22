@@ -817,6 +817,7 @@ export const en = {
   "settings.colorway.midnight": "Midnight Blue",
   "settings.colorway.plum": "Plum Violet",
   "settings.colorway.studio": "Studio: Pine & Lime",
+  "settings.colorway.dodo": "Rising Orange",
   "settings.colorway.cover": "From track artwork",
   "settings.language": "Language",
   "settings.playback": "Playback",

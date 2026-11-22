@@ -10,7 +10,15 @@ export const PALETTES = ["dark", "light"] as const;
 
 export type Palette = (typeof PALETTES)[number];
 
-export const COLORWAYS = ["coffee", "graphite", "midnight", "plum", "studio", "cover"] as const;
+export const COLORWAYS = [
+  "coffee",
+  "graphite",
+  "midnight",
+  "plum",
+  "studio",
+  "dodo",
+  "cover",
+] as const;
 
 export type Colorway = (typeof COLORWAYS)[number];
 
@@ -24,6 +32,7 @@ export const THEME_COLORS: Record<Colorway, Record<Palette, string>> = {
   midnight: { dark: "#14171c", light: "#eff0f2" },
   plum: { dark: "#19171b", light: "#f2eff0" },
   studio: { dark: "#151a17", light: "#eff2ef" },
+  dodo: { dark: "#1d1713", light: "#fff8f1" },
   cover: COFFEE_COLORS,
 };
 
