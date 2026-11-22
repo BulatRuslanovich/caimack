@@ -163,9 +163,84 @@ pub async fn remux_flac(source: &Path, target: &Path) -> anyhow::Result<bool> {
     Ok(false)
 }
 
+pub async fn convert_uploaded_audio_to_mp3(source: &Path, target: &Path) -> anyhow::Result<bool> {
+    const OUTPUT_LIMIT: u64 = 64 * 1024 * 1024;
+    let output_size = OUTPUT_LIMIT.to_string();
+    // Read a single uploaded media body. Do not let a demuxer open a URL or another file.
+    let input = tokio::fs::File::open(source).await?.into_std().await;
+    let mut child = command()
+        .stdin(Stdio::from(input))
+        .stderr(Stdio::null())
+        .args([
+            "-nostdin",
+            "-hide_banner",
+            "-max_alloc",
+            "67108864",
+            "-protocol_whitelist",
+            "pipe",
+            "-format_whitelist",
+            "aac,mpegts,mov,mp3,flac",
+            "-threads",
+            "1",
+            "-i",
+            "pipe:0",
+            "-map",
+            "0:a:0",
+            "-map_metadata",
+            "-1",
+            "-vn",
+            "-fs",
+            &output_size,
+            "-threads",
+            "1",
+            "-c:a",
+            "libmp3lame",
+            "-q:a",
+            "0",
+            "-f",
+            "mp3",
+        ])
+        .arg(target)
+        .spawn()
+        .context("ffmpeg could not be started")?;
+    match tokio::time::timeout(std::time::Duration::from_secs(60), child.wait()).await {
+        Ok(status) => {
+            if !status?.success() {
+                return Ok(false);
+            }
+            let size = tokio::fs::metadata(target).await?.len();
+            Ok(size > 0 && size < OUTPUT_LIMIT)
+        }
+        Err(_) => {
+            child.kill().await.context("Could not stop ffmpeg")?;
+            Ok(false)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn converts_uploaded_transport_stream_to_mp3() -> anyhow::Result<()> {
+        if !is_present().await {
+            return Ok(());
+        }
+        let scratch = PartialHls(std::env::temp_dir().join(format!("caimack-ffmpeg-{}", uuid::Uuid::now_v7())));
+        tokio::fs::create_dir(&scratch.0).await?;
+        let source = scratch.0.join("source");
+        let target = scratch.0.join("track.mp3");
+        let generated = command()
+            .args(["-f", "lavfi", "-i", "sine=frequency=440:duration=1", "-c:a", "aac", "-f", "mpegts"])
+            .arg(&source)
+            .output()
+            .await?;
+        assert!(generated.status.success(), "{}", String::from_utf8_lossy(&generated.stderr));
+        assert!(convert_uploaded_audio_to_mp3(&source, &target).await?);
+        assert_eq!(crate::tags::read(&target).and_then(|tags| tags.codec), Some("mp3"));
+        Ok(())
+    }
 
     #[tokio::test]
     async fn aborting_a_future_removes_its_partial_rendition() -> anyhow::Result<()> {

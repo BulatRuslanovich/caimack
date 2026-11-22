@@ -205,6 +205,13 @@ fn russian(template: &str) -> Option<&'static str> {
         "Select the tracks to remove." => "Выберите треки, которые убрать.",
 
         "Add a Yandex Music token in the settings first." => "Сначала добавьте токен Яндекс Музыки в настройках.",
+        "Invalid VK Music upload." => "Некорректная загрузка из VK Музыки.",
+        "The VK Music upload is too large." => "Загрузка из VK Музыки слишком большая.",
+        "The VK Music file exceeds the 24 MB upload limit." => "Файл из VK Музыки превышает лимит в 24 МБ.",
+        "The VK Music track has invalid title or artist information." => {
+            "У трека VK Музыки некорректное название или имя исполнителя."
+        }
+        "Could not read the audio from VK Music." => "Не удалось прочитать аудио из VK Музыки.",
         "The Yandex Music token is too long." => "Токен Яндекс Музыки слишком длинный.",
         "Yandex Music rejected the token." => "Яндекс Музыка не приняла токен.",
         "Yandex Music did not answer ({0})." => "Яндекс Музыка не ответила ({0}).",

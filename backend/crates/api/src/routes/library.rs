@@ -64,6 +64,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/history", get(list_history).post(record_play).delete(clear_history))
         .route("/api/history/recent", get(recently_played))
         .route("/api/playlists", get(own_playlists).post(create_playlist))
+        .route("/api/playlists/with-tracks", post(create_playlist_with_tracks))
         .route("/api/playlists/public", get(public_playlists))
         .route("/api/playlists/{id}", get(playlist_detail).put(update_playlist).delete(delete_playlist))
         .route("/api/playlists/{id}/tracks", post(add_playlist_tracks))
@@ -205,6 +206,24 @@ async fn create_playlist(
     Json(request): Json<PlaylistRequest>,
 ) -> ApiResult<impl IntoResponse> {
     let playlist = playlists::create(&state.db, user.user_id, request).await?;
+    let location = format!("/api/playlists/{}", playlist.id);
+    Ok((StatusCode::CREATED, created_at(&location), Json(playlist)))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CreatePlaylistWithTracksRequest {
+    #[serde(flatten)]
+    playlist: PlaylistRequest,
+    track_ids: Vec<Uuid>,
+}
+
+async fn create_playlist_with_tracks(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Json(request): Json<CreatePlaylistWithTracksRequest>,
+) -> ApiResult<impl IntoResponse> {
+    let playlist = playlists::create_with_tracks(&state.db, user.user_id, request.playlist, &request.track_ids).await?;
     let location = format!("/api/playlists/{}", playlist.id);
     Ok((StatusCode::CREATED, created_at(&location), Json(playlist)))
 }

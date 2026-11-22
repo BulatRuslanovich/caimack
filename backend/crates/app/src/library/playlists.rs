@@ -181,9 +181,19 @@ fn trim_to_none(value: Option<&str>) -> Option<String> {
 }
 
 pub async fn create(db: &PgPool, user: Uuid, request: PlaylistRequest) -> AppResult<PlaylistDto> {
+    create_with_tracks(db, user, request, &[]).await
+}
+
+pub async fn create_with_tracks(
+    db: &PgPool,
+    user: Uuid,
+    request: PlaylistRequest,
+    track_ids: &[Uuid],
+) -> AppResult<PlaylistDto> {
     request.validate()?;
     let id = Uuid::now_v7();
     let now = Utc::now();
+    let mut tx = db.begin().await?;
     sqlx::query!(
         "INSERT INTO playlists (id, user_id, name, description, is_public, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $6)",
@@ -194,8 +204,12 @@ pub async fn create(db: &PgPool, user: Uuid, request: PlaylistRequest) -> AppRes
         request.is_public,
         now
     )
-    .execute(db)
+    .execute(&mut *tx)
     .await?;
+    if !track_ids.is_empty() {
+        add_tracks_to_row(&mut tx, id, track_ids).await?;
+    }
+    tx.commit().await?;
     summary(db, id).await
 }
 
@@ -276,15 +290,22 @@ async fn renumber(conn: &mut sqlx::PgConnection, id: Uuid) -> AppResult<()> {
 }
 
 pub async fn add_tracks(db: &PgPool, user: Uuid, id: Uuid, track_ids: &[Uuid]) -> AppResult<()> {
-    let wanted = distinct(track_ids.iter().copied());
     let mut tx = db.begin().await?;
     require_owned(&mut tx, user, id).await?;
+    add_tracks_to_row(&mut tx, id, track_ids).await?;
+    touch(&mut tx, id).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+async fn add_tracks_to_row(conn: &mut sqlx::PgConnection, id: Uuid, track_ids: &[Uuid]) -> AppResult<()> {
+    let wanted = distinct(track_ids.iter().copied());
     if wanted.is_empty() {
         return Err(AppError::validation("At least one track id is required."));
     }
 
     let known = sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM tracks WHERE id = ANY($1)"#, &wanted)
-        .fetch_one(&mut *tx)
+        .fetch_one(&mut *conn)
         .await?;
     if usize::try_from(known).unwrap_or(0) != wanted.len() {
         return Err(AppError::not_found("Track not found."));
@@ -301,14 +322,12 @@ pub async fn add_tracks(db: &PgPool, user: Uuid, id: Uuid, track_ids: &[Uuid]) -
         &wanted,
         &row_ids
     )
-    .execute(&mut *tx)
+    .execute(&mut *conn)
     .await?;
 
     if usize::try_from(inserted.rows_affected()).unwrap_or(0) < wanted.len() {
-        renumber(&mut tx, id).await?;
+        renumber(conn, id).await?;
     }
-    touch(&mut tx, id).await?;
-    tx.commit().await?;
     Ok(())
 }
 

@@ -271,6 +271,8 @@ export const api = {
   playlist: (id: string) => request<PlaylistDetail>(`/playlists/${id}`),
   createPlaylist: (name: string, description?: string, isPublic = false) =>
     request<Playlist>("/playlists", { method: "POST", body: { name, description, isPublic } }),
+  createPlaylistWithTracks: (name: string, trackIds: string[]) =>
+    request<Playlist>("/playlists/with-tracks", { method: "POST", body: { name, trackIds } }),
   updatePlaylist: (id: string, name: string, description?: string | null, isPublic = false) =>
     request<Playlist>(`/playlists/${id}`, {
       method: "PUT",

@@ -5,7 +5,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import SearchPage from "./page";
 
-const route = vi.hoisted(() => ({ search: "", audiobooksEnabled: true }));
+const route = vi.hoisted(() => ({
+  search: "",
+  audiobooksEnabled: true,
+  isAdmin: false,
+  vkEnabled: false,
+}));
 const books = vi.hoisted(() => [
   {
     id: "quantum",
@@ -20,9 +25,12 @@ const books = vi.hoisted(() => [
     narrator: "Михаил Росляков",
   },
 ]);
-vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(route.search) }));
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(route.search),
+  useRouter: () => ({ push: vi.fn() }),
+}));
 vi.mock("@/contexts/I18nContext", () => ({ useT: () => (key: string) => key }));
-vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ isAdmin: false }) }));
+vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ isAdmin: route.isAdmin }) }));
 vi.mock("@/contexts/AudiobookContext", () => ({
   useAudiobooks: () => ({
     enabled: route.audiobooksEnabled,
@@ -34,6 +42,7 @@ vi.mock("@/components/audiobooks/AudiobookViews", () => ({
   AudiobookRow: ({ book }: { book: (typeof books)[number] }) => <li>{book.title}</li>,
 }));
 vi.mock("@/lib/useYandexMusic", () => ({ useYandexMusicSettings: () => ({ enabled: false }) }));
+vi.mock("@/lib/useVkMusicExperiment", () => ({ useVkMusicExperiment: () => route.vkEnabled }));
 vi.mock("./RecentSearches", () => ({ RecentSearches: () => <p>recent searches</p> }));
 vi.mock("@/app/tracks/TracksPage", () => ({
   TracksPage: ({ query }: { query: string }) => <p data-tracks-query={query} />,
@@ -45,9 +54,14 @@ vi.mock("@/app/genres/GenresPage", () => ({
   GenresPage: ({ selected }: { selected: string }) => <p data-selected-genre={selected} />,
 }));
 
-function render(search: string, audiobooksEnabled = true) {
+function render(
+  search: string,
+  { audiobooksEnabled = true, isAdmin = false, vkEnabled = false } = {},
+) {
   route.search = search;
   route.audiobooksEnabled = audiobooksEnabled;
+  route.isAdmin = isAdmin;
+  route.vkEnabled = vkEnabled;
   const client = new QueryClient();
   return renderToStaticMarkup(
     <QueryClientProvider client={client}>
@@ -66,9 +80,20 @@ it("shows all catalog tabs on the search start screen", () => {
 });
 
 it("hides the audiobook search filter while its experiment is disabled", () => {
-  const markup = render("tab=audiobooks&q=Hawking", false);
+  const markup = render("tab=audiobooks&q=Hawking", { audiobooksEnabled: false });
   expect(markup).not.toContain(">nav.audiobooks</button>");
   expect(markup).not.toContain("search.audiobookPlaceholder");
+});
+
+it("opens VK search and playlist import when the administrator enables the experiment", () => {
+  const search = "tab=vk&q=Kingdom+of+Predators";
+  const markup = render(search, { isAdmin: true, vkEnabled: true });
+  expect(markup).toContain("vkMusic.placeholder");
+  expect(markup).toContain("vkMusic.playlist.import");
+  expect(markup).toContain('value="Kingdom of Predators"');
+  expect(markup).not.toContain(">nav.tracks</button>");
+  expect(render(search, { isAdmin: true })).not.toContain("vkMusic.placeholder");
+  expect(render(search, { vkEnabled: true })).not.toContain("vkMusic.placeholder");
 });
 
 it("opens the selected catalog category with or without a query", () => {

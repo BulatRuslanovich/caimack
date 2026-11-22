@@ -20,12 +20,15 @@ import { SearchIcon } from "lucide-react";
 import { hiddenScrollbar } from "@/components/Shelf";
 import { ToggleGroup, ToggleGroupButton } from "@/components/ui/toggle-group";
 import { useT } from "@/contexts/I18nContext";
+import { useVkMusicExperiment } from "@/lib/useVkMusicExperiment";
 import { useYandexMusicSettings } from "@/lib/useYandexMusic";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAudiobooks } from "@/contexts/AudiobookContext";
 import { filterAudiobooks, type Audiobook } from "@/lib/audiobooks";
 import { YandexSearchWorkspace } from "@/components/yandex/YandexSearchWorkspace";
 import { YandexActivityButton } from "@/components/yandex/YandexImports";
+import { VkMusicSearch } from "@/components/VkMusicSearch";
+import { isDesktop } from "@/desktop/runtime";
 import { TracksPage } from "@/app/tracks/TracksPage";
 import { AlbumsPage } from "@/app/albums/(list)/AlbumsPage";
 import { ArtistsPage } from "@/app/artists/(list)/ArtistsPage";
@@ -41,8 +44,9 @@ const PREVIEW = 5;
 const START_GENRES = 8;
 
 const YANDEX_TAB = "yandex";
+const VK_TAB = "vk";
 
-type Tab = CatalogTab | typeof YANDEX_TAB;
+type Tab = CatalogTab | typeof YANDEX_TAB | typeof VK_TAB;
 
 const previewRow = cn(
   "grid grid-cols-5 gap-3",
@@ -68,11 +72,15 @@ function SearchView() {
   const { isAdmin } = useAuth();
   const { enabled: audiobooksEnabled, books, result: audiobookCatalog } = useAudiobooks();
   const yandexSettings = useYandexMusicSettings();
+  const vkEnabled = useVkMusicExperiment();
   const yandex = isAdmin && yandexSettings.enabled;
+  const vk = isAdmin && !isDesktop && vkEnabled;
 
   const query = (params.get("q") ?? "").trim();
   const tabParam = params.get("tab");
   const yandexTab = yandex && tabParam === YANDEX_TAB;
+  const vkTab = vk && tabParam === VK_TAB;
+  const libraryTab = !yandexTab && !vkTab;
   const tab =
     isCatalogTab(tabParam) && (tabParam !== "audiobooks" || audiobooksEnabled) ? tabParam : null;
   const [visited, setVisited] = useState<CatalogTab[]>([]);
@@ -91,7 +99,7 @@ function SearchView() {
 
   const results = useQuery({
     ...queries.search(query),
-    enabled: !yandexTab && tab === null && query.length >= SEARCH_MIN_LENGTH,
+    enabled: libraryTab && tab === null && query.length >= SEARCH_MIN_LENGTH,
   });
 
   const previewTracks = useMemo(() => results.data?.tracks.slice(0, PREVIEW) ?? [], [results.data]);
@@ -109,32 +117,44 @@ function SearchView() {
       <div className="search-controls flex min-w-0 flex-col gap-3 [&>header]:items-center">
         <PageHeader title={t("nav.search")} actions={yandex && <YandexActivityButton />} />
 
-        {yandex && (
+        {(yandex || vk) && (
           <ToggleGroup aria-label={t("search.source")}>
             <ToggleGroupButton
-              active={!yandexTab}
-              onClick={() => yandexTab && navigate(query, null, true)}
+              active={libraryTab}
+              onClick={() => !libraryTab && navigate(query, null, true)}
             >
               {t("search.source.library")}
             </ToggleGroupButton>
-            <ToggleGroupButton
-              active={yandexTab}
-              onClick={() => !yandexTab && navigate(query, YANDEX_TAB, true)}
-            >
-              {t("yandex.title")}
-            </ToggleGroupButton>
+            {yandex && (
+              <ToggleGroupButton
+                active={yandexTab}
+                onClick={() => !yandexTab && navigate(query, YANDEX_TAB, true)}
+              >
+                {t("yandex.title")}
+              </ToggleGroupButton>
+            )}
+            {vk && (
+              <ToggleGroupButton
+                active={vkTab}
+                onClick={() => !vkTab && navigate(query, VK_TAB, true)}
+              >
+                {t("vkMusic.title")}
+              </ToggleGroupButton>
+            )}
           </ToggleGroup>
         )}
 
-        <SearchField
-          value={query}
-          onChange={(next) => navigate(next, yandexTab ? YANDEX_TAB : tab)}
-          placeholder={t(searchPlaceholder)}
-          autoFocus
-        />
+        {!vkTab && (
+          <SearchField
+            value={query}
+            onChange={(next) => navigate(next, yandexTab ? YANDEX_TAB : tab)}
+            placeholder={t(searchPlaceholder)}
+            autoFocus
+          />
+        )}
       </div>
 
-      {!yandexTab && (
+      {libraryTab && (
         <SearchTabs
           tab={tab}
           audiobooksEnabled={audiobooksEnabled}
@@ -154,7 +174,8 @@ function SearchView() {
         }}
       >
         {yandexTab && <YandexSearchWorkspace query={query} />}
-        {!yandexTab &&
+        {vkTab && <VkMusicSearch query={query} onChange={(next) => navigate(next, VK_TAB)} />}
+        {libraryTab &&
           tab === null &&
           (query.length < SEARCH_MIN_LENGTH ? (
             <SearchStart />
@@ -233,7 +254,7 @@ function SearchView() {
               )}
             </Query>
           ))}
-        {!yandexTab &&
+        {libraryTab &&
           tab === null &&
           query.length >= SEARCH_MIN_LENGTH &&
           bookMatches.length > 0 && (
@@ -244,7 +265,7 @@ function SearchView() {
               <AudiobookMatches books={bookMatches.slice(0, PREVIEW)} />
             </Section>
           )}
-        {!yandexTab &&
+        {libraryTab &&
           tab === "audiobooks" &&
           (bookMatches.length > 0 ? (
             <AudiobookMatches books={bookMatches} />
@@ -261,7 +282,7 @@ function SearchView() {
             </Query>
           ))}
         {visited.map((category) => (
-          <Activity key={category} mode={tab === category && !yandexTab ? "visible" : "hidden"}>
+          <Activity key={category} mode={tab === category && libraryTab ? "visible" : "hidden"}>
             {category === "tracks" && <TracksPage query={query} />}
             {category === "albums" && <AlbumsPage query={query} />}
             {category === "artists" && <ArtistsPage query={query} />}

@@ -16,6 +16,8 @@ import { useToast } from "@/lib/useToast";
 import { Panel } from "./Panel";
 import { useSetAudiobookExperiment } from "@/lib/audiobookExperiment";
 import { useAudiobooks } from "@/contexts/AudiobookContext";
+import { isDesktop } from "@/desktop/runtime";
+import { setVkMusicEnabled, useVkMusicExperiment } from "@/lib/useVkMusicExperiment";
 
 export function Experimental() {
   const t = useT();
@@ -39,7 +41,31 @@ export function Experimental() {
         </span>
       </label>
       <AdminExperiments />
+      {!isDesktop && <VkMusicExperiment />}
     </Panel>
+  );
+}
+
+function VkMusicExperiment() {
+  const t = useT();
+  const enabled = useVkMusicExperiment();
+  return (
+    <>
+      <label className="flex cursor-pointer items-center gap-3">
+        <Switch checked={enabled} onCheckedChange={setVkMusicEnabled} />
+        <span className="font-medium">
+          <SettingHelp hint={t("settings.help.vkMusic")}>{t("settings.vkMusic")}</SettingHelp>
+        </span>
+      </label>
+      {enabled && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg bg-card p-5 max-md:p-4">
+          <p className="min-w-0 flex-1 text-sm text-muted-foreground">{t("vkMusic.startHint")}</p>
+          <Button asChild size="sm">
+            <Link href="/search?tab=vk">{t("vkMusic.findMusic")}</Link>
+          </Button>
+        </div>
+      )}
+    </>
   );
 }
 

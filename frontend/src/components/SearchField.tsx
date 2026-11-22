@@ -17,6 +17,7 @@ export function SearchField({
   autoFocus = false,
   className,
   inputRef,
+  onSubmit,
   onBlur,
   onEmptyEscape,
 }: {
@@ -26,6 +27,7 @@ export function SearchField({
   autoFocus?: boolean;
   className?: string;
   inputRef?: Ref<HTMLInputElement>;
+  onSubmit?: (value: string) => void;
   onBlur?: (value: string) => void;
   onEmptyEscape?: () => void;
 }) {
@@ -95,10 +97,12 @@ export function SearchField({
           if (
             event.key === "Enter" &&
             !event.nativeEvent.isComposing &&
-            input.trim() !== committed
+            (onSubmit || input.trim() !== committed)
           ) {
             event.preventDefault();
-            commit(input.trim());
+            const trimmed = input.trim();
+            if (trimmed !== committed) commit(trimmed);
+            onSubmit?.(trimmed);
           }
           if (event.key === "Escape" && (input !== "" || onEmptyEscape)) {
             event.preventDefault();
