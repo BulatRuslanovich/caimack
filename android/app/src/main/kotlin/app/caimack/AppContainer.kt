@@ -177,7 +177,7 @@ class AppContainer(context: Context) {
         onLogout = { loggingOut = true; syncStore.logout() })
 
     val media = Media(server,
-        local = { path, revision -> syncStore.asset(path, revision) ?: downloadedCatalog.asset(path, revision) },
+        local = { path -> syncStore.asset(path) ?: downloadedCatalog.asset(path) },
         changed = { path ->
             downloadedCatalog.invalidateArtwork(path)
             scope.launch { downloadedCatalog.cacheArtwork(listOf(path), http) }

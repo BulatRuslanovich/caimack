@@ -269,7 +269,7 @@ export class Catalog {
           title: track.albumTitle ?? track.title,
           artistId: track.artistId,
           artistName: track.artistName,
-          hasCover: false,
+          hasCover: track.hasCover,
           year: track.year,
           createdAt: track.createdAt,
           trackCount: 0,
@@ -278,7 +278,6 @@ export class Catalog {
       }
       const album = catalog.albums.get(track.albumId);
       if (album) {
-        if (track.hasCover && !track.coverRevision) album.hasCover = true;
         album.trackCount++;
         album.durationSeconds += track.durationSeconds ?? 0;
       }
@@ -317,11 +316,11 @@ export class Catalog {
       for (const trackId of members) {
         const track = catalog.tracks.get(trackId);
         if (!track?.hasCover) continue;
-        const { id, title, albumId, albumTitle, hasCover, coverRevision } = track;
-        const key = coverRevision ?? albumId ?? id;
+        const { id, title, albumId, albumTitle, hasCover } = track;
+        const key = albumId ?? id;
         if (seen.has(key)) continue;
         seen.add(key);
-        coverTracks.push({ id, title, albumId, albumTitle, hasCover, coverRevision });
+        coverTracks.push({ id, title, albumId, albumTitle, hasCover });
         if (coverTracks.length === 4) break;
       }
       catalog.playlists.set(id, { ...playlist, coverTracks });

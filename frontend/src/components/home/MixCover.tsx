@@ -12,9 +12,7 @@ export function MixCover({ tracks, title }: { tracks: Track[]; title: string }) 
     .filter(
       (track, index, covered) =>
         covered.findIndex(
-          (other) =>
-            (other.coverRevision ?? other.albumId ?? other.id) ===
-            (track.coverRevision ?? track.albumId ?? track.id),
+          (other) => (other.albumId ?? other.id) === (track.albumId ?? track.id),
         ) === index,
     );
 

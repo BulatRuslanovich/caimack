@@ -3,10 +3,6 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
-import { Disc3Icon } from "lucide-react";
-import { trackCoverUrl } from "@/lib/media";
-import { ImagePicker, noImageChosen, type ImageChoice } from "./ImagePicker";
 import { useForm } from "react-hook-form";
 import { api } from "@/lib/api";
 import { formatArtists } from "@/lib/format";
@@ -27,7 +23,6 @@ export function EditTrackDialog({
   onSaved?: () => void;
 }) {
   const t = useT();
-  const [cover, setCover] = useState<ImageChoice>(noImageChosen);
   const player = usePlayerActions();
 
   const form = useForm<TrackInput, unknown, TrackValues>({
@@ -43,8 +38,6 @@ export function EditTrackDialog({
     },
   });
 
-  const { isDirty, isSubmitting } = form.formState;
-
   return (
     <FormDialog
       title={t("dialog.editTrack.title")}
@@ -53,45 +46,20 @@ export function EditTrackDialog({
       successMessage={t("dialog.editTrack.saved")}
       errorMessage={t("dialog.editTrack.failed")}
       onSubmit={async (values) => {
-        let updated: Track | undefined;
-        try {
-          if (isDirty) {
-            updated = await api.updateTrack(track.id, {
-              title: values.title || track.title,
-              artist: values.artist || undefined,
-              album: values.album,
-              genre: values.genre,
-              year: values.year,
-              trackNumber: values.trackNumber,
-              discNumber: values.discNumber,
-            });
-            form.reset(form.getValues());
-          }
-          if (cover.file) updated = await api.uploadTrackCover(track.id, cover.file);
-          else if (cover.removed && track.coverRevision)
-            updated = await api.removeTrackCover(track.id);
-        } finally {
-          if (updated) {
-            player.patchTrack(track.id, {
-              ...updated,
-              coverRevision: updated.coverRevision ?? null,
-            });
-            onSaved?.();
-          }
-        }
+        const updated = await api.updateTrack(track.id, {
+          title: values.title || track.title,
+          artist: values.artist || undefined,
+          album: values.album,
+          genre: values.genre,
+          year: values.year,
+          trackNumber: values.trackNumber,
+          discNumber: values.discNumber,
+        });
+
+        player.patchTrack(track.id, updated);
+        onSaved?.();
       }}
     >
-      <ImagePicker
-        value={cover}
-        onChange={setCover}
-        currentUrl={trackCoverUrl(track)}
-        fallback={<Disc3Icon size={32} aria-hidden="true" />}
-        disabled={isSubmitting}
-        kind="cover"
-        name={track.title}
-        ownImage={Boolean(track.coverRevision)}
-      />
-
       <TextField
         label={t("field.title")}
         registration={form.register("title")}

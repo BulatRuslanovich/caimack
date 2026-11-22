@@ -20,7 +20,6 @@ import { useT } from "@/contexts/I18nContext";
 interface CoverProps {
   albumId?: string | null;
   trackId?: string | null;
-  coverRevision?: string | null;
   artistId?: string | null;
   playlistId?: string | null;
   coverTrackId?: string | null;
@@ -38,7 +37,6 @@ interface CoverProps {
 export function Cover({
   albumId,
   trackId,
-  coverRevision,
   artistId,
   playlistId,
   coverTrackId,
@@ -60,7 +58,7 @@ export function Cover({
     ? artistImageUrl({ artistId, hasImage: hasCover, variant })
     : playlistId
       ? playlistCoverUrl({ playlistId, hasCover, coverTrackId, variant })
-      : coverUrl({ albumId, trackId, coverRevision, hasCover, variant });
+      : coverUrl({ albumId, trackId, hasCover, variant });
   const showImage = source !== null && failedSource !== source;
 
   const srcSet = !sizes
@@ -69,7 +67,7 @@ export function Cover({
       ? artistImageSrcSet({ artistId, hasImage: hasCover })
       : playlistId
         ? playlistCoverSrcSet({ playlistId, hasCover, coverTrackId })
-        : coverSrcSet({ albumId, trackId, coverRevision, hasCover });
+        : coverSrcSet({ albumId, trackId, hasCover });
 
   const loaded = source !== null && loadedSource === source;
 
@@ -168,14 +166,7 @@ function BlankSleeve({ name }: { name: string }) {
 
 export type CoverLook = Omit<
   CoverProps,
-  | "albumId"
-  | "trackId"
-  | "coverRevision"
-  | "artistId"
-  | "playlistId"
-  | "coverTrackId"
-  | "hasCover"
-  | "name"
+  "albumId" | "trackId" | "artistId" | "playlistId" | "coverTrackId" | "hasCover" | "name"
 >;
 
 export function TrackCover({
@@ -188,7 +179,6 @@ export function TrackCover({
     <Cover
       albumId={track.albumId}
       trackId={track.id}
-      coverRevision={track.coverRevision}
       hasCover={track.hasCover}
       name={track.albumTitle ?? track.title}
       {...look}

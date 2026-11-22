@@ -392,7 +392,7 @@ pub(super) async fn run(db: &PgPool, storage: &Storage, cancel: &CancellationTok
         crate::file_names::recover(db, storage).await?.problems.is_empty(),
         "Pending file names must be recovered first"
     );
-    let tracks: Vec<Track> = sqlx::query_as("SELECT t.id,t.file_path,t.content_hash,t.title,a.name AS artist,COALESCE(t.cover_path,al.cover_path) AS cover_path,COALESCE(l.plain,'') AS plain,COALESCE(l.synced,'[]'::jsonb) AS synced,s.source_hash AS exported_hash,s.cover_stamp,s.lyrics_hash,s.lyrics_extension FROM tracks t JOIN artists a ON a.id=t.artist_id LEFT JOIN albums al ON al.id=t.album_id LEFT JOIN track_lyrics l ON l.track_id=t.id LEFT JOIN file_metadata_state s ON s.track_id=t.id WHERE NOT EXISTS(SELECT 1 FROM file_metadata_exports j WHERE j.track_id=t.id AND j.completed_at IS NULL) ORDER BY t.created_at,t.id")
+    let tracks: Vec<Track> = sqlx::query_as("SELECT t.id,t.file_path,t.content_hash,t.title,a.name AS artist,al.cover_path,COALESCE(l.plain,'') AS plain,COALESCE(l.synced,'[]'::jsonb) AS synced,s.source_hash AS exported_hash,s.cover_stamp,s.lyrics_hash,s.lyrics_extension FROM tracks t JOIN artists a ON a.id=t.artist_id LEFT JOIN albums al ON al.id=t.album_id LEFT JOIN track_lyrics l ON l.track_id=t.id LEFT JOIN file_metadata_state s ON s.track_id=t.id WHERE NOT EXISTS(SELECT 1 FROM file_metadata_exports j WHERE j.track_id=t.id AND j.completed_at IS NULL) ORDER BY t.created_at,t.id")
         .fetch_all(db).await?;
     for track in tracks {
         if cancel.is_cancelled() {

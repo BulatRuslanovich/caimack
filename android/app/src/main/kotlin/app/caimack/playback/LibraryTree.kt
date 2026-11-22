@@ -332,7 +332,7 @@ class LibraryTree(
         lists[id] = tracks
 
         val artists = tracks.map { it.artistName }.distinct()
-        val cover = tracks.firstOrNull { it.hasCover }?.let { container.media.cover(it.albumId, it.id, it.hasCover, small = true, revision = it.coverRevision) }
+        val cover = tracks.firstOrNull { it.hasCover }?.let { container.media.cover(it.albumId, it.id, it.hasCover, small = true) }
         return MediaItem.Builder()
             .setMediaId(id)
             .setMediaMetadata(
@@ -375,7 +375,7 @@ class LibraryTree(
             .setMediaId(parentId + SEPARATOR + track.id)
             .setMediaMetadata(
                 item.mediaMetadata.buildUpon()
-                    .setArtworkUri(ArtworkProvider.uriFor(container.media.cover(track.albumId, track.id, track.hasCover, small = true, revision = track.coverRevision)))
+                    .setArtworkUri(ArtworkProvider.uriFor(container.media.cover(track.albumId, track.id, track.hasCover, small = true)))
                     .setIsBrowsable(false)
                     .setIsPlayable(true)
                     .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)

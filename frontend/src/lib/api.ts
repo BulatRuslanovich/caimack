@@ -252,9 +252,6 @@ export const api = {
     withoutImage(request<void>(`/artists/${id}/image`, { method: "DELETE" }), "artist", id),
   updateAlbum: (id: string, changes: { title?: string; artist?: string; year?: number | null }) =>
     request<Album>(`/albums/${id}`, { method: "PUT", body: changes }),
-  uploadTrackCover: (id: string, file: File) =>
-    request<Track>(`/tracks/${id}/cover`, { method: "POST", body: fileForm(file) }),
-  removeTrackCover: (id: string) => request<Track>(`/tracks/${id}/cover`, { method: "DELETE" }),
   uploadAlbumCover: (id: string, file: File) =>
     withImage(
       request<Album>(`/albums/${id}/cover`, { method: "POST", body: fileForm(file) }),

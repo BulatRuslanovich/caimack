@@ -156,8 +156,6 @@
     <string name="playlist_public">Виден всем</string>
     <string name="playlist_edit">Изменить</string>
     <string name="playlist_manage">Действия с плейлистом</string>
-    <string name="track_cover_saved">Обложка трека сохранена</string>
-    <string name="track_cover_failed">Не удалось сохранить обложку трека</string>
     <string name="playlist_add_cover">Добавить обложку</string>
     <string name="playlist_change_cover">Сменить обложку</string>
     <string name="playlist_remove_cover">Убрать обложку</string>

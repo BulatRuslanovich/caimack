@@ -12,7 +12,7 @@ function uniqueCoverTracks(tracks: CoverTrack[]) {
   const seen = new Set<string>();
   const selected: CoverTrack[] = [];
   for (const track of tracks) {
-    const key = track.coverRevision ?? track.albumId ?? track.id;
+    const key = track.albumId ?? track.id;
     if (!track.hasCover || seen.has(key)) continue;
     seen.add(key);
     selected.push(track);

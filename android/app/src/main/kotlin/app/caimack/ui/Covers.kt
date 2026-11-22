@@ -97,7 +97,7 @@ private fun initialsOf(name: String): String {
     }
 }
 @Composable
-fun trackCover(track: Track, small: Boolean = true): String? = LocalContainer.current.media.cover(track.albumId, track.id, track.hasCover, small, revision = track.coverRevision)
+fun trackCover(track: Track, small: Boolean = true): String? = LocalContainer.current.media.cover(track.albumId, track.id, track.hasCover, small)
 
 internal data class CoverTile(val url: String, val name: String)
 
@@ -131,9 +131,9 @@ internal fun PlaylistArtwork(
     val media = LocalContainer.current.media
     val tiles = coverTracks.orEmpty().asSequence()
         .filter { it.hasCover }
-        .distinctBy { it.coverRevision ?: it.albumId ?: it.id }
+        .distinctBy { it.albumId ?: it.id }
         .mapNotNull { track ->
-            media.cover(track.albumId, track.id, track.hasCover, small = true, revision = track.coverRevision)
+            media.cover(track.albumId, track.id, track.hasCover, small = true)
                 ?.let { CoverTile(it, track.albumTitle ?: track.title) }
         }
         .take(4)

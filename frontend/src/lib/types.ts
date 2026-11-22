@@ -40,7 +40,6 @@ export interface Track {
   originalFileName: string;
   isFavorite: boolean;
   hasCover: boolean;
-  coverRevision?: string | null;
   hasLyrics: boolean;
   createdAt: string;
   codec?: string | null;
@@ -71,7 +70,6 @@ export interface MapPoint {
   artist: string;
   albumId?: string | null;
   hasCover: boolean;
-  coverRevision?: string | null;
   genre?: string | null;
   plays: number;
 }
@@ -116,10 +114,7 @@ export interface Genre {
   coverAlbumIds: string[];
 }
 
-export type CoverTrack = Pick<
-  Track,
-  "id" | "title" | "albumId" | "albumTitle" | "hasCover" | "coverRevision"
->;
+export type CoverTrack = Pick<Track, "id" | "title" | "albumId" | "albumTitle" | "hasCover">;
 
 export interface Playlist {
   id: string;

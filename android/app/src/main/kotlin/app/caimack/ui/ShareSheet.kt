@@ -66,7 +66,7 @@ fun ShareSheet(track: Track, positionMs: Long, onDismiss: () -> Unit) {
 
     val sources by produceState<ShareSources?>(null, track.id) {
         value = withContext(Dispatchers.IO) {
-            val coverUrl = container.media.cover(track.albumId, track.id, track.hasCover, small = false, revision = track.coverRevision)
+            val coverUrl = container.media.cover(track.albumId, track.id, track.hasCover, small = false)
             val cover = coverUrl?.let { url ->
                 val request = ImageRequest.Builder(context).data(url).allowHardware(false).build()
                 (SingletonImageLoader.get(context).execute(request) as? SuccessResult)?.image?.toBitmap()

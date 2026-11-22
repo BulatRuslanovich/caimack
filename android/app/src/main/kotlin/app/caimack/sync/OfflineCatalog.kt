@@ -233,7 +233,7 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
             }
             val byId = tracks.associateBy { it.string("id") }
             val editedPlaylists = actions.filter { it.kind in setOf("playlistCreate", "playlistAdd", "playlistRemove", "playlistOrder") }.mapNotNull { it.entityId }.toSet()
-            val coverFields = setOf("id", "title", "albumId", "albumTitle", "hasCover", "coverRevision")
+            val coverFields = setOf("id", "title", "albumId", "albumTitle", "hasCover")
             playlists = playlists.map { playlist ->
                 val id = playlist.string("id")
                 // A saved shortcut may never have loaded its track membership.
@@ -246,7 +246,7 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
                 val coverTracks = (playlist["coverTracks"] as? JsonArray)?.takeUnless { id in editedPlaylists }
                     ?: JsonArray(
                         members.asSequence().filter { it["hasCover"]?.jsonPrimitive?.booleanOrNull == true }
-                            .distinctBy { it.string("coverRevision").ifEmpty { it.string("albumId").ifEmpty { it.string("id") } } }.take(4)
+                            .distinctBy { it.string("albumId").ifEmpty { it.string("id") } }.take(4)
                             .map { track -> JsonObject(track.filterKeys { it in coverFields }) }
                             .toList(),
                     )

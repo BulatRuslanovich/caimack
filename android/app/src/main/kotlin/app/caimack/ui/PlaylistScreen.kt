@@ -228,12 +228,12 @@ private fun PlaylistContent(loaded: PlaylistDetail, play: (List<Track>, Int) -> 
 
     val coverTracks = remember(playlist.tracks, playlist.hasCover) {
         if (playlist.hasCover) null
-        else playlist.tracks.asSequence().filter { it.hasCover }.distinctBy { it.coverRevision ?: it.albumId ?: it.id }
-            .take(4).map { PlaylistCoverTrack(it.id, it.title, it.albumId, it.albumTitle, it.hasCover, it.coverRevision) }.toList()
+        else playlist.tracks.asSequence().filter { it.hasCover }.distinctBy { it.albumId ?: it.id }
+            .take(4).map { PlaylistCoverTrack(it.id, it.title, it.albumId, it.albumTitle, it.hasCover) }.toList()
     }
     val cover = container.media.playlistCover(playlist.id, playlist.hasCover, null, small = false)
     val backdrop = if (playlist.hasCover) container.media.playlistCover(playlist.id, true, null, small = true)
-    else coverTracks?.firstOrNull()?.let { container.media.cover(it.albumId, it.id, it.hasCover, small = true, revision = it.coverRevision) }
+    else coverTracks?.firstOrNull()?.let { container.media.cover(it.albumId, it.id, it.hasCover, small = true) }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(bottom = 24.dp)) {
         item {

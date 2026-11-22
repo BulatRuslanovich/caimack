@@ -203,14 +203,12 @@ pub struct ImageFile {
 }
 
 pub async fn track_cover(db: &PgPool, storage: &Storage, id: Uuid, size: CoverSize) -> AppResult<ImageFile> {
-    let path: Option<String> = sqlx::query_scalar(
-        "SELECT COALESCE(t.cover_path, a.cover_path) FROM tracks t LEFT JOIN albums a ON a.id=t.album_id WHERE t.id=$1",
-    )
-    .bind(id)
-    .fetch_optional(db)
-    .await?
-    .flatten();
-    open_variant(storage, &path.ok_or_else(|| AppError::not_found("This track has no cover art."))?, size)
+    let album =
+        sqlx::query_scalar!("SELECT album_id FROM tracks WHERE id = $1", id).fetch_optional(db).await?.flatten();
+    match album {
+        Some(album) => album_cover(db, storage, album, size).await,
+        None => Err(AppError::not_found("This track has no cover art.")),
+    }
 }
 
 pub async fn album_cover(db: &PgPool, storage: &Storage, id: Uuid, size: CoverSize) -> AppResult<ImageFile> {

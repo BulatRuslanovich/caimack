@@ -62,11 +62,6 @@ internal fun catalogApi() = LocalContainer.current.api
 
 val LocalSnackbar = staticCompositionLocalOf<androidx.compose.material3.SnackbarHostState> { error("No snackbar host") }
 object Remote {
-    var trackArtworkRevision by mutableIntStateOf(0)
-        private set
-
-    fun trackArtworkChanged() { trackArtworkRevision++ }
-
     val cache = ConcurrentHashMap<String, Any>()
     val updates = MutableSharedFlow<Pair<String, Any>>(extraBufferCapacity = 16, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
@@ -88,7 +83,7 @@ fun <T : Any> Load(
     content: @Composable (T) -> Unit,
 ) {
     val local = LocalOfflineLibrary.current
-    val artworkRevision = if (local) LocalArtworkRevision.current else Remote.trackArtworkRevision.toLong()
+    val artworkRevision = if (local) LocalArtworkRevision.current else 0L
     @Suppress("UNCHECKED_CAST")
     var value by remember(key, local) { mutableStateOf(if (local) null else Remote.cache[key] as T?) }
     var failed by remember(key) { mutableStateOf(false) }

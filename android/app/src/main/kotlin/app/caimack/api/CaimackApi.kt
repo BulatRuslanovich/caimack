@@ -168,13 +168,6 @@ interface CaimackApi {
     @DELETE("api/playlists/{id}/cover")
     suspend fun deletePlaylistCover(@Path("id") id: String): Response<Unit>
 
-    @Multipart
-    @POST("api/tracks/{id}/cover")
-    suspend fun uploadTrackCover(@Path("id") id: String, @Part file: MultipartBody.Part): Track
-
-    @DELETE("api/tracks/{id}/cover")
-    suspend fun removeTrackCover(@Path("id") id: String): Track
-
     @POST("api/tracks/lookup")
     suspend fun lookupTracks(@Body request: TrackLookup): List<Track>
 

@@ -22,15 +22,11 @@ class DownloadedCatalog(private val directory: File, private val json: Json, pri
     private var metadataFor: String? = null
     private var cachedMetadata: JsonObject = buildJsonObject {}
 
-    fun asset(path: String, revision: String? = null): String? {
+    fun asset(path: String): String? {
         val server = address() ?: return null
         val account = identity() ?: return null
-        if (revision != null) {
-            val id = path.split('/').getOrNull(2)
-            if (tracks().none { it.id == id && it.coverRevision == revision }) return null
-        }
         artwork.asset(server, path, account)?.let { return it }
-        if (revision == null && path.startsWith("api/tracks/") && path.endsWith("/cover")) {
+        if (path.startsWith("api/tracks/") && path.endsWith("/cover")) {
             val id = path.split('/').getOrNull(2)
             val album = tracks().firstOrNull { it.id == id }?.albumId ?: return null
             return artwork.asset(server, "api/albums/$album/cover", account)
@@ -132,7 +128,7 @@ class DownloadedCatalog(private val directory: File, private val json: Json, pri
             val albums = unique.filter { it.albumId != null }.groupBy { it.albumId!! }.map { (id, songs) ->
                 val lead = songs.first()
                 Album(id, lead.albumTitle.orEmpty(), lead.artistId, lead.artistName, lead.year,
-                    songs.size, songs.sumOf { it.durationSeconds }, songs.any { it.hasCover && it.coverRevision == null })
+                    songs.size, songs.sumOf { it.durationSeconds }, songs.any { it.hasCover })
             }
             val artistCredits = unique.flatMap { song -> (song.artists.orEmpty() + ArtistRef(song.artistId, song.artistName)).distinctBy { it.id } }
             val artistCounts = artistCredits.groupingBy { it.id }.eachCount()

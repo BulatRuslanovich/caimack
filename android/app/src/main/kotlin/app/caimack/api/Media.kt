@@ -5,7 +5,7 @@ package app.caimack.api
 import app.caimack.session.Server
 
 class Media(private val server: Server, private val changed: (String) -> Unit = {},
-    private val local: (String, String?) -> String? = { _, _ -> null }) {
+    private val local: (String) -> String? = { null }) {
     private val versions = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     fun markChanged(path: String) {
@@ -14,9 +14,8 @@ class Media(private val server: Server, private val changed: (String) -> Unit = 
     }
 
     fun playlistCoverPath(id: String) = "api/playlists/$id/cover"
-    fun cover(albumId: String?, trackId: String?, hasCover: Boolean, small: Boolean, revision: String? = null): String? = when {
+    fun cover(albumId: String?, trackId: String?, hasCover: Boolean, small: Boolean): String? = when {
         !hasCover -> null
-        revision != null && trackId != null -> url("api/tracks/$trackId/cover", small, revision)
         albumId != null -> url("api/albums/$albumId/cover", small)
         trackId != null -> url("api/tracks/$trackId/cover", small)
         else -> null
@@ -33,9 +32,9 @@ class Media(private val server: Server, private val changed: (String) -> Unit = 
         else -> null
     }
 
-    private fun url(path: String, small: Boolean, revision: String? = null): String? =
-        local(path, revision) ?: server.resolve(path)?.newBuilder()?.apply {
+    private fun url(path: String, small: Boolean): String? =
+        local(path) ?: server.resolve(path)?.newBuilder()?.apply {
             if (small) addQueryParameter("size", "thumb")
-            (revision ?: versions[path]?.toString())?.let { addQueryParameter("v", it) }
+            versions[path]?.let { addQueryParameter("v", it.toString()) }
         }?.build()?.toString()
 }

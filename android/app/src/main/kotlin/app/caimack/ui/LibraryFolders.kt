@@ -150,7 +150,7 @@ internal fun LibraryFolderView(
             "artist" -> media.artistImage(item.id, item.hasImage, small = true)
             else -> {
                 val lead = item.coverTracks?.firstOrNull { it.hasCover }
-                if (!item.hasImage && lead != null) media.cover(lead.albumId, lead.id, true, small = true, revision = lead.coverRevision)
+                if (!item.hasImage && lead != null) media.cover(lead.albumId, lead.id, true, small = true)
                 else media.playlistCover(item.id, item.hasImage, item.coverTrackId, small = true)
             }
         }

@@ -846,7 +846,7 @@ export class LibrarySync {
       mirror.retire("cover:" + key);
       return;
     }
-    const asset = track.albumId && !track.coverRevision
+    const asset = track.albumId
       ? "/api/albums/" + track.albumId + "/cover"
       : "/api/tracks/" + key + "/cover";
     await this.assets.save(asset, { signal, lan: true }).catch(() => {});

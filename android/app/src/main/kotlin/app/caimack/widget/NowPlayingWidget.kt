@@ -91,7 +91,7 @@ class NowPlayingWidget : AppWidgetProvider() {
                     putString(TRACK, track.id)
                     putString(TITLE, track.title)
                     putString(ARTIST, artistsOf(track))
-                    putString(COVER, container.media.cover(track.albumId, track.id, track.hasCover, small = true, revision = track.coverRevision))
+                    putString(COVER, container.media.cover(track.albumId, track.id, track.hasCover, small = true))
                     putString(ART_NAME, track.albumTitle ?: track.title)
                     putBoolean(LIKED, container.favorites.isFavorite(track))
                     putLong(POSITION, positionMs)
