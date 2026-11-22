@@ -8,8 +8,7 @@ import SearchPage from "./page";
 const route = vi.hoisted(() => ({
   search: "",
   audiobooksEnabled: true,
-  isAdmin: false,
-  vkEnabled: false,
+  providerEnabled: false,
 }));
 const books = vi.hoisted(() => [
   {
@@ -30,7 +29,6 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 vi.mock("@/contexts/I18nContext", () => ({ useT: () => (key: string) => key }));
-vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ isAdmin: route.isAdmin }) }));
 vi.mock("@/contexts/AudiobookContext", () => ({
   useAudiobooks: () => ({
     enabled: route.audiobooksEnabled,
@@ -41,8 +39,20 @@ vi.mock("@/contexts/AudiobookContext", () => ({
 vi.mock("@/components/audiobooks/AudiobookViews", () => ({
   AudiobookRow: ({ book }: { book: (typeof books)[number] }) => <li>{book.title}</li>,
 }));
-vi.mock("@/lib/useYandexMusic", () => ({ useYandexMusicSettings: () => ({ enabled: false }) }));
-vi.mock("@/lib/useVkMusicExperiment", () => ({ useVkMusicExperiment: () => route.vkEnabled }));
+vi.mock("@/integrations/registry", () => ({
+  useEnabledIntegrations: () =>
+    route.providerEnabled
+      ? [
+          {
+            id: "provider",
+            search: {
+              label: "Provider",
+              Workspace: ({ query }: { query: string }) => <p data-provider-query={query} />,
+            },
+          },
+        ]
+      : [],
+}));
 vi.mock("./RecentSearches", () => ({ RecentSearches: () => <p>recent searches</p> }));
 vi.mock("@/app/tracks/TracksPage", () => ({
   TracksPage: ({ query }: { query: string }) => <p data-tracks-query={query} />,
@@ -54,14 +64,10 @@ vi.mock("@/app/genres/GenresPage", () => ({
   GenresPage: ({ selected }: { selected: string }) => <p data-selected-genre={selected} />,
 }));
 
-function render(
-  search: string,
-  { audiobooksEnabled = true, isAdmin = false, vkEnabled = false } = {},
-) {
+function render(search: string, { audiobooksEnabled = true, providerEnabled = false } = {}) {
   route.search = search;
   route.audiobooksEnabled = audiobooksEnabled;
-  route.isAdmin = isAdmin;
-  route.vkEnabled = vkEnabled;
+  route.providerEnabled = providerEnabled;
   const client = new QueryClient();
   return renderToStaticMarkup(
     <QueryClientProvider client={client}>
@@ -85,15 +91,15 @@ it("hides the audiobook search filter while its experiment is disabled", () => {
   expect(markup).not.toContain("search.audiobookPlaceholder");
 });
 
-it("opens VK search and playlist import when the administrator enables the experiment", () => {
-  const search = "tab=vk&q=Kingdom+of+Predators";
-  const markup = render(search, { isAdmin: true, vkEnabled: true });
-  expect(markup).toContain("vkMusic.placeholder");
-  expect(markup).toContain("vkMusic.playlist.import");
-  expect(markup).toContain('value="Kingdom of Predators"');
+it("opens the selected integration only while it is enabled", () => {
+  const search = "tab=provider&q=Kingdom+of+Predators";
+  const markup = render(search, { providerEnabled: true });
+  expect(markup).toContain(">Provider</button>");
+  expect(markup).toContain('data-provider-query="Kingdom of Predators"');
+  expect(markup).not.toContain('value="Kingdom of Predators"');
   expect(markup).not.toContain(">nav.tracks</button>");
-  expect(render(search, { isAdmin: true })).not.toContain("vkMusic.placeholder");
-  expect(render(search, { vkEnabled: true })).not.toContain("vkMusic.placeholder");
+  expect(render(search)).toContain(">nav.tracks</button>");
+  expect(render(search)).not.toContain("data-provider-query");
 });
 
 it("opens the selected catalog category with or without a query", () => {

@@ -2,7 +2,10 @@
 
 import { readFileSync } from "node:fs";
 import type { NextConfig } from "next";
+import { generateIntegrations } from "./scripts/generate-integrations.mjs";
 import { catalogRedirects } from "./src/lib/searchNavigation";
+
+generateIntegrations();
 
 const backendUrl = process.env.BACKEND_INTERNAL_URL ?? "http://127.0.0.1:5199";
 const proxyApiInDev = process.env.NEXT_DISABLE_API_PROXY !== "1";

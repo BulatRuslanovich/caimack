@@ -4,10 +4,10 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { MusicIcon, SearchIcon } from "lucide-react";
-import { queries } from "@/lib/queries";
+import { yandexQueries } from "./api";
 import { formatDuration } from "@/lib/format";
 import { cn } from "@/lib/cn";
-import type { YandexAlbum, YandexTrack } from "@/lib/types";
+import type { YandexAlbum, YandexTrack } from "./types";
 import { CardGrid, Section } from "@/components/PageHeader";
 import { Query } from "@/components/Query";
 import { useT } from "@/contexts/I18nContext";
@@ -15,7 +15,7 @@ import { YandexImportButton } from "./YandexImportButton";
 
 export function YandexSearchResults({ query }: { query: string }) {
   const t = useT();
-  const result = useQuery(queries.yandexSearch(query));
+  const result = useQuery(yandexQueries.yandexSearch(query));
   return (
     <Query
       result={result}

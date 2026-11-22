@@ -55,11 +55,7 @@ import type {
   UploadProbeResult,
   User,
   UserSettings,
-  YandexImport,
-  YandexImportKind,
-  YandexSearch,
 } from "@/lib/types";
-import { yandexMusicToken } from "@/lib/yandexMusic";
 import type {
   BookPlayback,
   ConnectCommand,
@@ -78,11 +74,6 @@ export interface SearchTabResult {
 }
 
 export type SearchTab = keyof SearchTabResult;
-
-function yandexHeaders(): Record<string, string> {
-  const token = yandexMusicToken();
-  return token ? { "X-Yandex-Music-Token": token } : {};
-}
 
 async function withImage<T>(upload: Promise<T>, kind: "album" | "artist" | "playlist", id: string) {
   const result = await upload;
@@ -360,19 +351,4 @@ export const api = {
     request<void>(`/admin/users/${id}/password`, { method: "POST", body: { newPassword } }),
   revokeUserSessions: (id: string) =>
     request<void>(`/admin/users/${id}/sessions/revoke`, { method: "POST" }),
-
-  yandexSearch: (q: string, signal?: AbortSignal) =>
-    request<YandexSearch>(`/integrations/yandex-music/search${qs({ q })}`, {
-      signal,
-      headers: yandexHeaders(),
-    }),
-  yandexImports: () => request<YandexImport[]>("/integrations/yandex-music/imports"),
-  startYandexImport: (kind: YandexImportKind, id?: string) =>
-    request<YandexImport>("/integrations/yandex-music/imports", {
-      method: "POST",
-      body: { kind, id },
-      headers: yandexHeaders(),
-    }),
-  removeYandexImport: (id: string) =>
-    request<void>(`/integrations/yandex-music/imports/${id}`, { method: "DELETE" }),
 };

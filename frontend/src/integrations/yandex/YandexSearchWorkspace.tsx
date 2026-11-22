@@ -5,7 +5,7 @@
 import Link from "next/link";
 import { SearchIcon } from "lucide-react";
 import { useT } from "@/contexts/I18nContext";
-import { useYandexMusicSettings } from "@/lib/useYandexMusic";
+import { useYandexMusicSettings } from "./useYandexMusic";
 import { SEARCH_MIN_LENGTH } from "@/lib/queries";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";

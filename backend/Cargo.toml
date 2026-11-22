@@ -10,7 +10,7 @@ license = "AGPL-3.0-only"
 publish = false
 
 [workspace.dependencies]
-app = { path = "crates/app" }
+app = { path = "crates/app", default-features = false }
 media = { path = "crates/media" }
 reco = { path = "crates/reco" }
 

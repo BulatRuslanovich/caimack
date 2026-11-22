@@ -25,10 +25,8 @@ use app::config::{Config, DatabaseConfig, ModelConfig};
 use app::integrations::deezer::Deezer;
 use app::integrations::enrichment::{self, Enrichment, EnrichmentQueue};
 use app::integrations::lrclib::Lrclib;
+#[cfg(feature = "integration-yandex")]
 use app::integrations::yandex::YandexMusic;
-use app::integrations::yandex::client::YandexClient;
-use app::integrations::yandex::importer::{self, Importer};
-use app::integrations::yandex::imports::ImportQueue;
 use app::library_scan::LibraryScanner;
 use app::recommendations::Recommendations;
 use app::storage::Storage;
@@ -146,11 +144,13 @@ async fn run() -> anyhow::Result<()> {
         background.clone(),
     ));
 
-    let yandex_client = YandexClient::new(config.yandex_music.clone());
-    let (imports, import_jobs) = ImportQueue::new();
-    let importer = Importer { yandex: yandex_client.clone(), uploads: uploads.clone() };
-    workers.push(importer::spawn(importer, import_jobs, background.clone()));
-    let yandex = YandexMusic { db: db.clone(), client: yandex_client, queue: imports };
+    #[cfg(feature = "integration-yandex")]
+    let yandex = {
+        let (yandex, worker) =
+            YandexMusic::start_worker(config.yandex_music.clone(), uploads.clone(), background.clone());
+        workers.push(worker);
+        yandex
+    };
     let state = AppState {
         shutdown: background.clone(),
         config: Arc::clone(&config),
@@ -164,6 +164,7 @@ async fn run() -> anyhow::Result<()> {
         library,
         audiobooks,
         playback: Default::default(),
+        #[cfg(feature = "integration-yandex")]
         yandex,
         recommendations,
     };

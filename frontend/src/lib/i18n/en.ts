@@ -1255,7 +1255,6 @@ export const en = {
   "yandex.connectTitle": "Connect Yandex Music",
   "yandex.connectHint": "Save your account token in settings to search and add music.",
   "yandex.connect": "Set up connection",
-  "yandex.uploadHint": "Find tracks and albums and add them straight to your library.",
   "yandex.findMusic": "Find music",
   "map.layersCount": "Layers · {count}",
   "map.layer.route": "Queue",

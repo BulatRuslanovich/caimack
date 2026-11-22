@@ -2,7 +2,7 @@
 
 import { api } from "@/lib/api";
 import type { Playlist, UploadProbeFile } from "@/lib/types";
-import { VkMusicError, getVkPlaylist, importVkPlaylistTrack } from "@/lib/vkMusic";
+import { VkMusicError, getVkPlaylist, importVkPlaylistTrack } from "./vkMusic";
 
 type TrackProgress = { current: number; total: number; title: string };
 

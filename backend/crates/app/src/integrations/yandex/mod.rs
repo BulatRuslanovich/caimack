@@ -1,18 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-pub mod client;
-pub mod importer;
-pub mod imports;
+mod client;
+mod importer;
+mod imports;
 
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use sqlx::PgPool;
+use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use self::client::{YandexClient, thumbnail_url};
 use self::imports::{ImportDto, ImportKind, ImportQueue};
+use crate::config::YandexMusicConfig;
 use crate::i18n::Lang;
-use crate::upload::{self, ProbeVerdict};
+use crate::upload::{self, ProbeVerdict, Uploads};
 use crate::{AppError, AppResult};
 
 const TOKEN_MAX_LENGTH: usize = 512;
@@ -57,12 +60,25 @@ pub struct StartImportRequest {
 
 #[derive(Clone)]
 pub struct YandexMusic {
-    pub db: PgPool,
-    pub client: YandexClient,
-    pub queue: ImportQueue,
+    db: PgPool,
+    client: YandexClient,
+    queue: ImportQueue,
 }
 
 impl YandexMusic {
+    pub fn start_worker(
+        config: YandexMusicConfig,
+        uploads: Uploads,
+        shutdown: CancellationToken,
+    ) -> (Self, JoinHandle<()>) {
+        let db = uploads.db.clone();
+        let client = YandexClient::new(config);
+        let (queue, jobs) = ImportQueue::new();
+        let importer = importer::Importer { yandex: client.clone(), uploads };
+        let worker = importer::spawn(importer, jobs, shutdown);
+        (Self { db, client, queue }, worker)
+    }
+
     pub async fn search(&self, token: Option<&str>, text: Option<&str>) -> AppResult<SearchDto> {
         let token = require_token(token)?;
         let Some(text) = text.map(str::trim).filter(|t| !t.is_empty()) else {

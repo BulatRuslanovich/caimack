@@ -287,6 +287,28 @@ tests, and `make test-db` for the PostgreSQL integration checks used by CI. SQL 
 compile time; after changing a query, run `make sqlx` so builds without a database (CI,
 Docker) see it.
 
+### Music integrations
+
+The default build includes Yandex Music and VK Music. An administrator can enable
+each provider in **Settings → Experiments** when it is included in both the client
+and server builds. VK Music is available in the web client and uses the browser
+extension in `extensions/vk-music`.
+
+The frontend discovers modules in `frontend/src/integrations` from their
+`manifest.json` files. Set `CAIMACK_INTEGRATIONS` to a comma-separated list of
+module IDs to select a subset, or set it to an empty string to exclude all modules.
+The backend uses Cargo features `integration-yandex` and `integration-vk`. For
+example, build just VK Music with:
+
+```bash
+(cd frontend && CAIMACK_INTEGRATIONS=vk npm run build)
+(cd backend && SQLX_OFFLINE=true cargo build --locked -p api --no-default-features --features integration-vk)
+```
+
+Omit `--features` with `--no-default-features` to build the server without music integrations.
+
+### Local development options
+
 To enable recommendations with the local backend, set these values in `backend/.env`
 and restart the backend:
 

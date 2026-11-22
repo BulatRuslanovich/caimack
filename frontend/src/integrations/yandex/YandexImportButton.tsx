@@ -8,7 +8,7 @@ import {
   isYandexImportActive,
   yandexSourceKey,
   type YandexSource,
-} from "@/contexts/YandexMusicContext";
+} from "./YandexMusicContext";
 import { useT } from "@/contexts/I18nContext";
 import { Button } from "@/components/ui/button";
 

@@ -9,14 +9,14 @@ import { useRef, useState } from "react";
 import { EmptyState } from "@/components/EmptyState";
 import { LoadError } from "@/components/Query";
 import { SearchField } from "@/components/SearchField";
-import { VkPlaylistImport } from "@/components/VkPlaylistImport";
+import { VkPlaylistImport } from "./VkPlaylistImport";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/contexts/I18nContext";
 import { formatDuration } from "@/lib/format";
 import { SEARCH_MIN_LENGTH } from "@/lib/queries";
 import { useInvalidate } from "@/lib/useInvalidate";
 import { useToast } from "@/lib/useToast";
-import { VkMusicError, importVkMusic, searchVkMusic } from "@/lib/vkMusic";
+import { VkMusicError, importVkMusic, searchVkMusic } from "./vkMusic";
 
 const VK_MUSIC_URL = "https://vk.ru/audio";
 

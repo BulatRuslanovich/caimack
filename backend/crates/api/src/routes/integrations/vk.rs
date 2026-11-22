@@ -2,73 +2,23 @@
 
 use app::AppError;
 use app::integrations::vk::{self, MAX_BYTES, MAX_COVER_BYTES, VkAudio};
-use app::integrations::yandex::StartImportRequest;
 use axum::Router;
 use axum::extract::multipart::MultipartError;
 use axum::extract::{DefaultBodyLimit, Multipart, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::routing::{delete, get, post};
-use serde::Deserialize;
-use uuid::Uuid;
+use axum::routing::post;
 
 use crate::auth::Admin;
-use crate::extract::{Json, Query, RequestLang, RoutePath};
+use crate::extract::{Json, RequestLang};
 use crate::problem::{ApiError, ApiResult};
 use crate::state::AppState;
 
-const TOKEN_HEADER: &str = "x-yandex-music-token";
-
 pub fn router() -> Router<AppState> {
-    Router::new()
-        .route("/api/integrations/yandex-music/search", get(search))
-        .route("/api/integrations/yandex-music/imports", get(imports).post(start))
-        .route("/api/integrations/yandex-music/imports/{id}", delete(remove))
-        .route(
-            "/api/integrations/vk-music/import",
-            post(import_vk_audio).layer(DefaultBodyLimit::max(MAX_BYTES + MAX_COVER_BYTES + 8192)),
-        )
-}
-
-fn token(headers: &HeaderMap) -> Option<&str> {
-    headers.get(TOKEN_HEADER).and_then(|value| value.to_str().ok())
-}
-
-#[derive(Deserialize)]
-struct SearchQuery {
-    q: Option<String>,
-}
-
-async fn search(
-    State(state): State<AppState>,
-    Admin(_): Admin,
-    headers: HeaderMap,
-    Query(query): Query<SearchQuery>,
-) -> ApiResult<impl IntoResponse> {
-    Ok(Json(state.yandex.search(token(&headers), query.q.as_deref()).await?))
-}
-
-async fn imports(State(state): State<AppState>, Admin(_): Admin) -> impl IntoResponse {
-    Json(state.yandex.list())
-}
-
-async fn start(
-    State(state): State<AppState>,
-    Admin(_): Admin,
-    RequestLang(lang): RequestLang,
-    headers: HeaderMap,
-    Json(request): Json<StartImportRequest>,
-) -> ApiResult<impl IntoResponse> {
-    Ok((StatusCode::ACCEPTED, Json(state.yandex.start(token(&headers), request, lang)?)))
-}
-
-async fn remove(
-    State(state): State<AppState>,
-    Admin(_): Admin,
-    RoutePath(id): RoutePath<Uuid>,
-) -> ApiResult<StatusCode> {
-    state.yandex.remove(id)?;
-    Ok(StatusCode::NO_CONTENT)
+    Router::new().route(
+        "/api/integrations/vk-music/import",
+        post(import_vk_audio).layer(DefaultBodyLimit::max(MAX_BYTES + MAX_COVER_BYTES + 8192)),
+    )
 }
 
 async fn import_vk_audio(

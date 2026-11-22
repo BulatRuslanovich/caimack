@@ -20,7 +20,6 @@ import { PlaybackFooter } from "./audiobooks/AudiobookPlayer";
 import { SecretCat } from "./SecretCat";
 import { ShortcutsHelp } from "./ShortcutsHelp";
 import { Sidebar } from "./Sidebar";
-import { YandexImports } from "./yandex/YandexImports";
 import { QueuePanel } from "./QueuePanel";
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -111,7 +110,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       <ShortcutsHelp />
       {!audiobook.active && <LeanBack />}
       <SecretCat />
-      <YandexImports />
     </div>
   );
 }

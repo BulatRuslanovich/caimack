@@ -1321,7 +1321,6 @@ export const ru: Dictionary = {
   "yandex.connectHint":
     "Сохраните токен своего аккаунта в настройках, чтобы искать и добавлять музыку.",
   "yandex.connect": "Настроить подключение",
-  "yandex.uploadHint": "Находите треки и альбомы и добавляйте их прямо в библиотеку.",
   "yandex.findMusic": "Найти музыку",
   "map.layersCount": "Слои · {count}",
   "map.layer.route": "Очередь",

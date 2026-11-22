@@ -27,6 +27,7 @@ import React, {
 interface AuthState {
   user: User | null;
   isAdmin: boolean;
+  supportedIntegrations: readonly string[] | undefined;
   loading: boolean;
   signIn: (username: string, password: string) => Promise<void>;
   register: (token: string, username: string, password: string) => Promise<void>;
@@ -65,6 +66,7 @@ export function AuthProvider({
   const loading = resolved === null && hint === null;
 
   const config = useQuery({ ...queries.config(), enabled: user !== null });
+  const supportedIntegrations = config.data?.integrations;
   useSessionRenewal(user !== null, config.data?.accessTokenMinutes ?? 0);
 
   useEffect(() => {
@@ -142,8 +144,16 @@ export function AuthProvider({
   }, [client, router]);
 
   const value = useMemo<AuthState>(
-    () => ({ user, isAdmin: user?.isAdmin ?? false, loading, signIn, register, signOut }),
-    [user, loading, signIn, register, signOut],
+    () => ({
+      user,
+      isAdmin: user?.isAdmin ?? false,
+      supportedIntegrations,
+      loading,
+      signIn,
+      register,
+      signOut,
+    }),
+    [user, supportedIntegrations, loading, signIn, register, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

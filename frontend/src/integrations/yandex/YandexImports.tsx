@@ -11,13 +11,13 @@ import {
   RotateCcwIcon,
   XIcon,
 } from "lucide-react";
-import { useYandexImports, isYandexImportActive } from "@/contexts/YandexMusicContext";
-import type { YandexImport } from "@/lib/types";
+import { useYandexImports, isYandexImportActive } from "./YandexMusicContext";
+import type { YandexImport } from "./types";
 import { useT } from "@/contexts/I18nContext";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/EmptyState";
-import { useYandexMusicSettings } from "@/lib/useYandexMusic";
+import { useYandexMusicSettings } from "./useYandexMusic";
 import { YandexImportButton } from "./YandexImportButton";
 
 export function YandexActivityButton({ compact = false }: { compact?: boolean }) {

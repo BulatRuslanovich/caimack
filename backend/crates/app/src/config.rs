@@ -20,6 +20,7 @@ pub struct Config {
     pub lrclib_base_url: String,
     pub better_lyrics_api_key: Option<String>,
     pub deezer_base_url: String,
+    #[cfg(feature = "integration-yandex")]
     pub yandex_music: YandexMusicConfig,
     pub trusted_proxies: Vec<IpNet>,
     pub library_scan_interval: Option<Duration>,
@@ -92,6 +93,7 @@ pub struct OwnerConfig {
     pub reset_password: bool,
 }
 
+#[cfg(feature = "integration-yandex")]
 #[derive(Debug, Clone)]
 pub struct YandexMusicConfig {
     pub base_url: String,
@@ -129,10 +131,13 @@ struct Env {
     better_lyrics_api_key: Option<String>,
     #[serde(default = "default_deezer_base_url")]
     deezer_base_url: String,
+    #[cfg(feature = "integration-yandex")]
     #[serde(default = "default_yandex_base_url")]
     yandex_music_base_url: String,
+    #[cfg(feature = "integration-yandex")]
     #[serde(default = "default_yandex_client")]
     yandex_music_client: String,
+    #[cfg(feature = "integration-yandex")]
     #[serde(default = "default_yandex_sign_key")]
     yandex_music_sign_key: String,
     trusted_proxies: Option<String>,
@@ -201,8 +206,11 @@ impl Config {
         for (name, value) in [
             ("LRCLIB_BASE_URL", &env.lrclib_base_url),
             ("DEEZER_BASE_URL", &env.deezer_base_url),
+            #[cfg(feature = "integration-yandex")]
             ("YANDEX_MUSIC_BASE_URL", &env.yandex_music_base_url),
+            #[cfg(feature = "integration-yandex")]
             ("YANDEX_MUSIC_CLIENT", &env.yandex_music_client),
+            #[cfg(feature = "integration-yandex")]
             ("YANDEX_MUSIC_SIGN_KEY", &env.yandex_music_sign_key),
         ] {
             if value.trim().is_empty() {
@@ -235,6 +243,7 @@ impl Config {
             lrclib_base_url: env.lrclib_base_url,
             better_lyrics_api_key: env.better_lyrics_api_key.filter(|key| !key.trim().is_empty()),
             deezer_base_url: env.deezer_base_url,
+            #[cfg(feature = "integration-yandex")]
             yandex_music: YandexMusicConfig {
                 base_url: env.yandex_music_base_url,
                 client: env.yandex_music_client,
@@ -287,14 +296,17 @@ fn default_lrclib_base_url() -> String {
     "https://lrclib.net".to_owned()
 }
 
+#[cfg(feature = "integration-yandex")]
 fn default_yandex_base_url() -> String {
     "https://api.music.yandex.net".to_owned()
 }
 
+#[cfg(feature = "integration-yandex")]
 fn default_yandex_client() -> String {
     "YandexMusicWebNext/1.0.0".to_owned()
 }
 
+#[cfg(feature = "integration-yandex")]
 fn default_yandex_sign_key() -> String {
     "7tvSmFbyf5hJnIHhCimDDD".to_owned()
 }

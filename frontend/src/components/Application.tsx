@@ -7,7 +7,7 @@ import { I18nProvider } from "@/contexts/I18nContext";
 import { PlayerProvider } from "@/contexts/PlayerContext";
 import { PlayerUiProvider } from "@/contexts/PlayerUiContext";
 import { UploadProvider } from "@/contexts/UploadContext";
-import { YandexMusicProvider } from "@/contexts/YandexMusicContext";
+import { IntegrationRuntime } from "@/integrations/registry";
 import type { Dictionary, Locale } from "@/lib/i18n";
 import type { User } from "@/lib/types";
 import type { ReactNode } from "react";
@@ -34,9 +34,9 @@ export function Application({
             <PlayerProvider>
               <UploadProvider>
                 <PlayerUiProvider>
-                  <YandexMusicProvider>
+                  <IntegrationRuntime>
                     <AppShell>{children}</AppShell>
-                  </YandexMusicProvider>
+                  </IntegrationRuntime>
                 </PlayerUiProvider>
               </UploadProvider>
             </PlayerProvider>

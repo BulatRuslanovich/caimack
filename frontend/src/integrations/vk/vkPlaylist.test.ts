@@ -3,14 +3,14 @@
 import { expect, it, vi } from "vitest";
 import { api } from "@/lib/api";
 import type { Track } from "@/lib/types";
-import { VkMusicError, getVkPlaylist, importVkPlaylistTrack } from "@/lib/vkMusic";
+import { VkMusicError, getVkPlaylist, importVkPlaylistTrack } from "./vkMusic";
 import { importVkPlaylist, vkPlaylistSource } from "./vkPlaylist";
 
 vi.mock("@/lib/api", () => ({
   api: { checkUpload: vi.fn(), createPlaylistWithTracks: vi.fn() },
 }));
-vi.mock("@/lib/vkMusic", async (original) => ({
-  ...(await original<typeof import("@/lib/vkMusic")>()),
+vi.mock("./vkMusic", async (original) => ({
+  ...(await original<typeof import("./vkMusic")>()),
   getVkPlaylist: vi.fn(),
   importVkPlaylistTrack: vi.fn(),
 }));

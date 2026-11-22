@@ -10,6 +10,11 @@ publish.workspace = true
 name = "caimack"
 path = "src/main.rs"
 
+[features]
+default = ["integration-yandex", "integration-vk"]
+integration-yandex = ["app/integration-yandex"]
+integration-vk = ["app/integration-vk"]
+
 [dependencies]
 app.workspace = true
 

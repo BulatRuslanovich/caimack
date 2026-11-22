@@ -4,13 +4,12 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { api } from "@/lib/api";
-import { queries } from "@/lib/queries";
+import { yandexApi, yandexQueries } from "./api";
 import { readStoredJson, writeStoredJson } from "@/lib/storage";
 import { useInvalidate } from "@/lib/useInvalidate";
-import { useYandexMusicSettings } from "@/lib/useYandexMusic";
-import type { YandexImport, YandexImportKind } from "@/lib/types";
-import { useAuth } from "./AuthContext";
+import { useYandexMusicSettings } from "./useYandexMusic";
+import type { YandexImport, YandexImportKind } from "./types";
+import { useAuth } from "@/contexts/AuthContext";
 
 export interface YandexSource {
   kind: YandexImportKind;
@@ -64,14 +63,20 @@ function readSources(key: string): Sources {
   );
 }
 
-export function YandexMusicProvider({ children }: { children: ReactNode }) {
-  const { user, isAdmin } = useAuth();
+export function YandexMusicProvider({
+  children,
+  available,
+}: {
+  children: ReactNode;
+  available: boolean;
+}) {
+  const { user } = useAuth();
   const settings = useYandexMusicSettings();
   return (
     <YandexMusicState
       key={user?.id ?? "guest"}
       storageKey={`music-streaming.yandex-sources.${user?.id ?? "guest"}`}
-      enabled={isAdmin && settings.enabled}
+      enabled={available && settings.enabled}
     >
       {children}
     </YandexMusicState>
@@ -89,7 +94,11 @@ function YandexMusicState({
 }) {
   const client = useQueryClient();
   const invalidate = useInvalidate();
-  const imports = useQuery({ ...queries.yandexImports(), enabled, refetchOnWindowFocus: true });
+  const imports = useQuery({
+    ...yandexQueries.yandexImports(),
+    enabled,
+    refetchOnWindowFocus: true,
+  });
   const [sources, setSources] = useState<Sources>(() => readSources(storageKey));
   const sourcesRef = useRef(sources);
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
@@ -117,7 +126,7 @@ function YandexMusicState({
 
   const mutation = useMutation({
     meta: { handlesError: true },
-    mutationFn: (source: YandexSource) => api.startYandexImport(source.kind, source.id),
+    mutationFn: (source: YandexSource) => yandexApi.startYandexImport(source.kind, source.id),
     onSuccess: (job, source) => {
       const next = {
         ...sourcesRef.current,
@@ -143,7 +152,7 @@ function YandexMusicState({
   });
 
   const remove = useMutation({
-    mutationFn: (id: string) => api.removeYandexImport(id),
+    mutationFn: (id: string) => yandexApi.removeYandexImport(id),
     onSuccess: () => {
       void imports.refetch();
     },

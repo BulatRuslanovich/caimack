@@ -12,8 +12,8 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { TextField } from "@/components/ui/form";
 import { useT } from "@/contexts/I18nContext";
 import { useInvalidate } from "@/lib/useInvalidate";
-import { VkMusicError } from "@/lib/vkMusic";
-import { importVkPlaylist, vkPlaylistSource } from "@/lib/vkPlaylist";
+import { VkMusicError } from "./vkMusic";
+import { importVkPlaylist, vkPlaylistSource } from "./vkPlaylist";
 
 export function VkPlaylistImport({
   disabled,

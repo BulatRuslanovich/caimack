@@ -2,27 +2,18 @@
 
 "use client";
 
-import { useForm } from "react-hook-form";
-import Link from "next/link";
-import { CheckIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { TextField } from "@/components/ui/form";
-import { SettingHelp } from "./SettingHelp";
 import { Switch } from "@/components/ui/switch";
-import { setYandexMusicEnabled, setYandexMusicToken } from "@/lib/yandexMusic";
-import { useYandexMusicSettings } from "@/lib/useYandexMusic";
+import { useAvailableIntegrations } from "@/integrations/registry";
 import { useT } from "@/contexts/I18nContext";
-import { useToast } from "@/lib/useToast";
 import { Panel } from "./Panel";
 import { useSetAudiobookExperiment } from "@/lib/audiobookExperiment";
 import { useAudiobooks } from "@/contexts/AudiobookContext";
-import { isDesktop } from "@/desktop/runtime";
-import { setVkMusicEnabled, useVkMusicExperiment } from "@/lib/useVkMusicExperiment";
 
 export function Experimental() {
   const t = useT();
   const { enabled, experimentReady, scope } = useAudiobooks();
   const change = useSetAudiobookExperiment(scope);
+  const integrations = useAvailableIntegrations();
   return (
     <Panel title={t("settings.experimental")}>
       <label className="flex cursor-pointer items-start gap-3">
@@ -40,106 +31,9 @@ export function Experimental() {
           </span>
         </span>
       </label>
-      <AdminExperiments />
-      {!isDesktop && <VkMusicExperiment />}
+      {integrations.map(({ id, Settings }) => (
+        <Settings key={id} />
+      ))}
     </Panel>
-  );
-}
-
-function VkMusicExperiment() {
-  const t = useT();
-  const enabled = useVkMusicExperiment();
-  return (
-    <>
-      <label className="flex cursor-pointer items-center gap-3">
-        <Switch checked={enabled} onCheckedChange={setVkMusicEnabled} />
-        <span className="font-medium">
-          <SettingHelp hint={t("settings.help.vkMusic")}>{t("settings.vkMusic")}</SettingHelp>
-        </span>
-      </label>
-      {enabled && (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg bg-card p-5 max-md:p-4">
-          <p className="min-w-0 flex-1 text-sm text-muted-foreground">{t("vkMusic.startHint")}</p>
-          <Button asChild size="sm">
-            <Link href="/search?tab=vk">{t("vkMusic.findMusic")}</Link>
-          </Button>
-        </div>
-      )}
-    </>
-  );
-}
-
-function AdminExperiments() {
-  const t = useT();
-  const { notify } = useToast();
-  const yandex = useYandexMusicSettings();
-  const form = useForm<{ token: string }>({ defaultValues: { token: "" } });
-
-  const save = form.handleSubmit(({ token }) => {
-    setYandexMusicToken(token);
-    form.reset();
-    notify(t("settings.yandexTokenSaved"), "success");
-  });
-
-  return (
-    <>
-      <label className="flex cursor-pointer items-center gap-3">
-        <Switch checked={yandex.enabled} onCheckedChange={setYandexMusicEnabled} />
-        <span className="font-medium">
-          <SettingHelp hint={t("settings.help.yandexMusic")}>
-            {t("settings.yandexMusic")}
-          </SettingHelp>
-        </span>
-      </label>
-
-      {yandex.enabled && (
-        <div className="flex flex-col gap-4 rounded-lg bg-card p-5 max-md:p-4">
-          {yandex.hasToken && (
-            <div className="flex flex-wrap items-center gap-3">
-              <p role="status" className="flex flex-1 items-center gap-2 text-sm">
-                <CheckIcon size={16} className="shrink-0 text-primary" />
-                {t("settings.yandexConfigured")}
-              </p>
-              <Button asChild size="sm">
-                <Link href="/search?tab=yandex">{t("yandex.findMusic")}</Link>
-              </Button>
-            </div>
-          )}
-          <form
-            onSubmit={(event) => void save(event)}
-            className="flex max-w-sm flex-col gap-3"
-            noValidate
-          >
-            <TextField
-              label={t("settings.yandexToken")}
-              type="password"
-              autoComplete="off"
-              placeholder={yandex.hasToken ? "••••••••••••" : undefined}
-              hint={t("settings.yandexTokenHint")}
-              error={form.formState.errors.token?.message}
-              registration={form.register("token", {
-                validate: (value) => Boolean(value.trim()) || t("settings.yandexTokenRequired"),
-              })}
-            />
-
-            <div className="flex items-center gap-5">
-              <Button variant="primary" type="submit">
-                {t("settings.yandexTokenSave")}
-              </Button>
-              {yandex.hasToken && (
-                <Button
-                  variant="text"
-                  size="auto"
-                  type="button"
-                  onClick={() => setYandexMusicToken("")}
-                >
-                  {t("settings.yandexTokenForget")}
-                </Button>
-              )}
-            </div>
-          </form>
-        </div>
-      )}
-    </>
   );
 }

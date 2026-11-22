@@ -8,12 +8,12 @@ import { readStored, writeStored } from "@/lib/storage";
 const KEY = "music-streaming.vkMusic";
 const listeners = new Set<() => void>();
 
-function subscribeVkMusicExperiment(listener: () => void): () => void {
+export function subscribeVkMusicExperiment(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
 
-function vkMusicEnabled(): boolean {
+export function vkMusicEnabled(): boolean {
   return readStored(KEY) === "on";
 }
 

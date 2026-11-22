@@ -1,4 +1,7 @@
 import { defineConfig } from "vitest/config";
+import { generateIntegrations } from "./scripts/generate-integrations.mjs";
+
+generateIntegrations();
 
 export default defineConfig({
   resolve: {

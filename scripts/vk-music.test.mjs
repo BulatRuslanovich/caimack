@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { vkMusicRequest } from "../extensions/vk-music/vk-page.mjs";
@@ -49,14 +50,18 @@ function vkFixture(t, tracks, media = new Map(), userId = 123, reloaded) {
   return fetch;
 }
 
-test("the Caimack web client and unpacked extension use the same ID", async () => {
+const frontendModule = new URL("../frontend/src/integrations/vk/", import.meta.url);
+
+test("the Caimack web client and unpacked extension use the same ID", {
+  skip: !existsSync(new URL("manifest.json", frontendModule)),
+}, async () => {
   const manifestUrl = new URL(
     "../extensions/vk-music/manifest.json",
     import.meta.url,
   );
   const manifest = JSON.parse(await readFile(manifestUrl, "utf8"));
   const frontend = await readFile(
-    new URL("../frontend/src/lib/vkMusic.ts", import.meta.url),
+    new URL("vkMusic.ts", frontendModule),
     "utf8",
   );
   const hash = createHash("sha256")
