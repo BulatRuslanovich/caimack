@@ -10,6 +10,7 @@ import { playlistCoverUrl } from "@/lib/media";
 import { limits, playlistSchema, type PlaylistValues } from "@/lib/schemas";
 import type { Playlist, PlaylistDetail } from "@/lib/types";
 import { useT } from "@/contexts/I18nContext";
+import { PlaylistCover } from "./collection/PlaylistCover";
 import { FormDialog } from "./FormDialog";
 import { ImagePicker, noImageChosen, type ImageChoice } from "./ImagePicker";
 import { CheckboxField, TextField } from "./ui/form";
@@ -30,6 +31,7 @@ export function PlaylistDialog({
 }) {
   const t = useT();
   const [cover, setCover] = useState<ImageChoice>(noImageChosen);
+  const coverTracks = playlist && ("tracks" in playlist ? playlist.tracks : playlist.coverTracks);
 
   const form = useForm<PlaylistValues>({
     resolver: zodResolver(playlistSchema),
@@ -82,9 +84,17 @@ export function PlaylistDialog({
           currentUrl={playlistCoverUrl({
             playlistId: playlist.id,
             hasCover: playlist.hasCover,
-            coverTrackId: playlist.coverTrackId,
           })}
-          fallback={<ListMusicIcon size={34} />}
+          fallback={
+            playlist.hasCover ? (
+              <ListMusicIcon size={34} />
+            ) : (
+              <PlaylistCover
+                playlist={{ ...playlist, coverTracks }}
+                fallback={<ListMusicIcon size={34} />}
+              />
+            )
+          }
           disabled={form.formState.isSubmitting}
           kind="cover"
           name={playlist.name}

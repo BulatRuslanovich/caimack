@@ -11,6 +11,7 @@ pub const THUMB_EDGE: u32 = 256;
 pub const EDGES: [u32; 3] = [LARGE_EDGE, FULL_EDGE, THUMB_EDGE];
 
 const MAX_PIXELS: u64 = 12_000_000;
+const MAX_FOLDER_COVER_PIXELS: u64 = 32_000_000;
 const WEBP_QUALITY: f32 = 82.0;
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -44,7 +45,15 @@ pub fn plan_renditions(edges: &[u32], source_edge: u32) -> Vec<(u32, u32)> {
 }
 
 pub fn square_webp_set(bytes: &[u8], edges: &[u32]) -> Result<Vec<Rendition>, ImageError> {
-    let image = decode(bytes)?;
+    square_webp_set_limited(bytes, edges, MAX_PIXELS)
+}
+
+pub fn folder_cover_set(bytes: &[u8]) -> Result<Vec<Rendition>, ImageError> {
+    square_webp_set_limited(bytes, &EDGES, MAX_FOLDER_COVER_PIXELS)
+}
+
+fn square_webp_set_limited(bytes: &[u8], edges: &[u32], max_pixels: u64) -> Result<Vec<Rendition>, ImageError> {
+    let image = decode(bytes, max_pixels)?;
     let side = image.width().min(image.height());
     if side == 0 {
         return Err(ImageError::Unreadable);
@@ -65,7 +74,7 @@ pub fn square_webp_set(bytes: &[u8], edges: &[u32]) -> Result<Vec<Rendition>, Im
 
 /// JPEG front art for portable audio tags (ID3 APIC / FLAC PICTURE).
 pub fn cover_jpeg(bytes: &[u8]) -> Result<Vec<u8>, ImageError> {
-    let image = decode(bytes)?.to_rgb8();
+    let image = decode(bytes, MAX_PIXELS)?.to_rgb8();
     let mut result = Vec::new();
     image::codecs::jpeg::JpegEncoder::new_with_quality(&mut result, 90)
         .encode_image(&image)
@@ -73,7 +82,7 @@ pub fn cover_jpeg(bytes: &[u8]) -> Result<Vec<u8>, ImageError> {
     Ok(result)
 }
 
-fn decode(bytes: &[u8]) -> Result<DynamicImage, ImageError> {
+fn decode(bytes: &[u8], max_pixels: u64) -> Result<DynamicImage, ImageError> {
     let reader = ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(|_| ImageError::Unreadable)?;
     if !matches!(reader.format(), Some(ImageFormat::Jpeg | ImageFormat::Png | ImageFormat::WebP)) {
         return Err(ImageError::Unreadable);
@@ -81,7 +90,7 @@ fn decode(bytes: &[u8]) -> Result<DynamicImage, ImageError> {
 
     let mut decoder = reader.into_decoder().map_err(|_| ImageError::Unreadable)?;
     let (width, height) = decoder.dimensions();
-    if u64::from(width) * u64::from(height) > MAX_PIXELS {
+    if u64::from(width) * u64::from(height) > max_pixels {
         return Err(ImageError::TooManyPixels);
     }
 
@@ -96,6 +105,18 @@ fn decode(bytes: &[u8]) -> Result<DynamicImage, ImageError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn folder_scans_accept_larger_images_than_uploads() -> Result<(), ImageError> {
+        let image = DynamicImage::ImageLuma8(image::GrayImage::new(4000, 4000));
+        let mut bytes = Cursor::new(Vec::new());
+        image.write_to(&mut bytes, ImageFormat::Jpeg).map_err(|_| ImageError::Unreadable)?;
+        let bytes = bytes.into_inner();
+        assert!(matches!(square_webp_set(&bytes, &EDGES), Err(ImageError::TooManyPixels)));
+        let renditions = folder_cover_set(&bytes)?;
+        assert_eq!(renditions.iter().map(|r| r.edge).collect::<Vec<_>>(), [1024, 640, 256]);
+        Ok(())
+    }
 
     #[test]
     fn small_source_keeps_its_size_as_full_and_skips_large() {

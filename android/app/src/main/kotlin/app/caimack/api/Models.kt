@@ -116,6 +116,15 @@ data class AlbumDetail(
 data class Genre(val id: String, val name: String, val trackCount: Int = 0, val coverAlbumIds: List<String> = emptyList())
 
 @Serializable
+data class PlaylistCoverTrack(
+    val id: String,
+    val title: String,
+    val albumId: String? = null,
+    val albumTitle: String? = null,
+    val hasCover: Boolean = false,
+)
+
+@Serializable
 data class Playlist(
     val id: String,
     val name: String,
@@ -127,6 +136,7 @@ data class Playlist(
     val durationSeconds: Int = 0,
     val hasCover: Boolean = false,
     val coverTrackId: String? = null,
+    val coverTracks: List<PlaylistCoverTrack>? = null,
 )
 
 @Serializable
@@ -314,6 +324,7 @@ data class LibraryItem(
     val folderId: String? = null,
     val trackCount: Int? = null, val albumCount: Int? = null,
     val durationSeconds: Int? = null, val year: Int? = null,
+    val coverTracks: List<PlaylistCoverTrack>? = null,
 )
 
 @Serializable

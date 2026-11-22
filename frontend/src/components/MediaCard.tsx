@@ -15,7 +15,8 @@ import { useFormat } from "@/lib/useFormat";
 import { artistImageUrl, coverUrl, playlistCoverUrl } from "@/lib/media";
 import { useTone } from "@/lib/useCoverTone";
 import { useT } from "@/contexts/I18nContext";
-import { AlbumCover, ArtistCover, Cover, PlaylistCover } from "./Cover";
+import { PlaylistCover } from "./collection/PlaylistCover";
+import { AlbumCover, ArtistCover, Cover } from "./Cover";
 import { ListMusicIcon } from "lucide-react";
 import { BufferingRing } from "./PlaybackIndicators";
 import { LibraryItemMenu } from "./LibrarySaveButton";
@@ -193,15 +194,26 @@ export const SavedLibraryCard = memo(function SavedLibraryCard({
       details={details}
       round={item.kind === "artist"}
       cover={
-        <Cover
-          name={item.title}
-          hasCover={item.hasImage}
-          rounded={item.kind === "artist"}
-          albumId={item.kind === "album" ? item.id : undefined}
-          artistId={item.kind === "artist" ? item.id : undefined}
-          playlistId={item.kind === "playlist" ? item.id : undefined}
-          coverTrackId={item.coverTrackId}
-        />
+        item.kind === "playlist" ? (
+          <PlaylistCover
+            playlist={{
+              id: item.id,
+              name: item.title,
+              hasCover: item.hasImage,
+              coverTrackId: item.coverTrackId,
+              coverTracks: item.coverTracks,
+            }}
+            fallback={<ListMusicIcon size={34} />}
+          />
+        ) : (
+          <Cover
+            name={item.title}
+            hasCover={item.hasImage}
+            rounded={item.kind === "artist"}
+            albumId={item.kind === "album" ? item.id : undefined}
+            artistId={item.kind === "artist" ? item.id : undefined}
+          />
+        )
       }
       menu={<LibraryItemMenu kind={item.kind} id={item.id} title={item.title} />}
     />

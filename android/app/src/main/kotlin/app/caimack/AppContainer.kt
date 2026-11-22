@@ -57,7 +57,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
@@ -84,6 +83,8 @@ class AppContainer(context: Context) {
     val recommendationsEnabled = MutableStateFlow(false)
     private val audiobookExperimentPreferences = context.getSharedPreferences("server_experiments", Context.MODE_PRIVATE)
     private val audiobookExperiment = MutableStateFlow(false)
+    private val audiobookExperimentRefresh = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
+    private var audiobookExperimentStreamOwner: AudiobookAccount? = null
     val audiobooksEnabled = audiobookExperiment.asStateFlow()
     private var capabilitiesFor: String? = null
     suspend fun refreshCapabilities() {
@@ -315,6 +316,16 @@ class AppContainer(context: Context) {
         audiobookExperiment.value = enabled
     }
 
+    internal fun receiveAudiobookExperiment(owner: AudiobookAccount, enabled: Boolean): Boolean {
+        if (audiobookAccount() != owner) return false
+        audiobookExperimentStreamOwner = owner
+        audiobookExperimentPreferences.edit { putBoolean(owner.server.toString(), enabled) }
+        val changed = enabled != audiobooksEnabled.value
+        applyAudiobookExperiment(enabled)
+        if (enabled && !changed) audiobookStore.requestRefreshIfStale()
+        return changed
+    }
+
     private val artworkRefresh = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
     private val lyricsRefresh = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
     fun refreshDownloadMetadata() {
@@ -338,6 +349,7 @@ class AppContainer(context: Context) {
     private val connectionProbe = kotlinx.coroutines.sync.Mutex()
     fun refreshLibraryConnection() {
         playbackSync.request()
+        audiobookExperimentRefresh.trySend(Unit)
         if (audiobooksEnabled.value) audiobookStore.requestRefresh()
         probeLibraryConnection()
     }
@@ -356,15 +368,21 @@ class AppContainer(context: Context) {
 
     init {
         playbackSync.start(scope)
-        scope.launch {
+        scope.launch(Dispatchers.Main) {
             combine(session.state, server.url) { state, address ->
-                address?.takeIf { state is SessionState.SignedIn }
-            }.distinctUntilChanged().collectLatest { address ->
-                withContext(Dispatchers.Main) { applyAudiobookExperiment(false) }
-                if (address == null) return@collectLatest
-                val key = address.toString()
+                val user = (state as? SessionState.SignedIn)?.user
+                if (address != null && user != null) AudiobookAccount(address, user.id) else null
+            }.distinctUntilChanged().collectLatest { owner ->
+                if (owner == null || audiobookExperimentStreamOwner != owner) {
+                    audiobookExperimentStreamOwner = null
+                    applyAudiobookExperiment(false)
+                }
+                if (owner == null) return@collectLatest
+                val key = owner.server.toString()
                 var first = true
-                while (isActive) {
+                audiobookExperimentRefresh.trySend(Unit)
+                for (request in audiobookExperimentRefresh) {
+                    if (audiobookExperimentStreamOwner == owner) continue
                     val remote = try {
                         withTimeoutOrNull(4_000) { api.audiobookExperiment().enabled }
                     } catch (_: IOException) {
@@ -372,15 +390,12 @@ class AppContainer(context: Context) {
                     } catch (error: retrofit2.HttpException) {
                         if (error.code() == 404) false else null
                     }
+                    if (audiobookAccount() != owner || audiobookExperimentStreamOwner == owner) continue
                     if (remote != null) audiobookExperimentPreferences.edit { putBoolean(key, remote) }
                     if (remote != null || first) {
-                        val enabled = remote ?: audiobookExperimentPreferences.getBoolean(key, false)
-                        withContext(Dispatchers.Main) {
-                            if (server.url.value == address) applyAudiobookExperiment(enabled)
-                        }
+                        applyAudiobookExperiment(remote ?: audiobookExperimentPreferences.getBoolean(key, false))
                     }
                     first = false
-                    delay(4_000)
                 }
             }
         }

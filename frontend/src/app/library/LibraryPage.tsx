@@ -36,6 +36,7 @@ import { useT } from "@/contexts/I18nContext";
 import { useInvalidate } from "@/lib/useInvalidate";
 import { Query } from "@/components/Query";
 import { Card, SavedLibraryCard } from "@/components/MediaCard";
+import { FolderCover } from "@/components/collection/FolderCover";
 import { PageHeader } from "@/components/PageHeader";
 import { SortSelect } from "@/components/PageToolbar";
 import { SearchField } from "@/components/SearchField";
@@ -218,29 +219,25 @@ export default function LibraryPage() {
             },
           ]
         : []),
-      ...shownFolders.map((folder) => ({
-        key: `folder:${folder.id}`,
-        id: folder.id,
-        kind: "folder",
-        node: (
-          <Card
-            layout={grid ? "grid" : "list"}
-            onClick={() => openFolder(folder.id)}
-            title={folder.name}
-            subtitle={t("folders.items", {
-              count:
-                items.filter((item) => item.folderId === folder.id).length +
-                folders.filter((child) => child.parentId === folder.id).length,
-            })}
-            cover={
-              <div className="grid size-full place-items-center bg-raised text-primary">
-                <FolderIcon size={32} />
-              </div>
-            }
-            menu={<LibraryFolderMenu folder={folder} />}
-          />
-        ),
-      })),
+      ...shownFolders.map((folder) => {
+        const folderItems = items.filter((item) => item.folderId === folder.id);
+        const childCount = folders.filter((child) => child.parentId === folder.id).length;
+        return {
+          key: `folder:${folder.id}`,
+          id: folder.id,
+          kind: "folder",
+          node: (
+            <Card
+              layout={grid ? "grid" : "list"}
+              onClick={() => openFolder(folder.id)}
+              title={folder.name}
+              subtitle={t("folders.items", { count: folderItems.length + childCount })}
+              cover={<FolderCover items={folderItems} order={orderResult.data?.[folder.id]} />}
+              menu={<LibraryFolderMenu folder={folder} />}
+            />
+          ),
+        };
+      }),
       ...shown,
     ];
     if (sort === "manual" && !q) {

@@ -74,19 +74,24 @@ it("leaves Next.js chunks to the network under next dev", () => {
 });
 
 function worker(fetch: () => Promise<Response>, cached: Map<string, Response>) {
-  const cache = { match: async (url: string) => cached.get(url), put: vi.fn() };
+  const cache = {
+    match: async (key: string | Request) =>
+      cached.get(typeof key === "string" ? key : key.url.slice("https://music.test".length)),
+    put: vi.fn(),
+  };
   const shell = runInNewContext(`${source}\nshell`, {
     self: { location: { origin: "https://music.test", search: "" }, addEventListener: vi.fn() },
     caches: { open: async () => cache },
+    URL,
     fetch,
     Response,
     Set,
     Promise,
   }) as (
     event: { waitUntil: (work: Promise<unknown>) => void },
-    request: string,
+    request: Request,
   ) => Promise<Response>;
-  return (path: string) => shell({ waitUntil: () => {} }, path);
+  return (path: string) => shell({ waitUntil: () => {} }, new Request(`https://music.test${path}`));
 }
 
 it("does not serve the cached home HTML when opening another route online", async () => {
@@ -105,4 +110,30 @@ it("keeps the saved route available when the network is unavailable", async () =
     new Map([["/albums", new Response("saved albums")]]),
   );
   expect(await (await shell("/albums")).text()).toBe("saved albums");
+});
+
+it("opens the previously saved audiobook catalog from the current URL offline", async () => {
+  const shell = worker(
+    async () => {
+      throw new TypeError("Offline");
+    },
+    new Map([["/audiobooks", new Response("saved catalog")]]),
+  );
+  expect(await (await shell("/audiobooks?view=catalog")).text()).toBe("saved catalog");
+});
+
+it("ignores an old redirect to Search stored under the audiobook catalog URL", async () => {
+  const redirected = Object.defineProperty(new Response("search page"), "redirected", {
+    value: true,
+  });
+  const shell = worker(
+    async () => {
+      throw new TypeError("Offline");
+    },
+    new Map([
+      ["/audiobooks", redirected],
+      ["/", new Response("home page")],
+    ]),
+  );
+  expect(await (await shell("/audiobooks?view=catalog")).text()).toBe("home page");
 });

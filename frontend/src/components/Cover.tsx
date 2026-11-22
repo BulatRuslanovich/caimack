@@ -14,7 +14,7 @@ import {
   type CoverVariant,
 } from "@/lib/media";
 import { initialsFor } from "@/lib/format";
-import type { Track } from "@/lib/types";
+import type { CoverTrack } from "@/lib/types";
 import { useT } from "@/contexts/I18nContext";
 
 interface CoverProps {
@@ -164,7 +164,7 @@ function BlankSleeve({ name }: { name: string }) {
   );
 }
 
-type CoverLook = Omit<
+export type CoverLook = Omit<
   CoverProps,
   "albumId" | "trackId" | "artistId" | "playlistId" | "coverTrackId" | "hasCover" | "name"
 >;
@@ -173,7 +173,7 @@ export function TrackCover({
   track,
   ...look
 }: {
-  track: Pick<Track, "id" | "title" | "albumId" | "albumTitle" | "hasCover">;
+  track: CoverTrack;
 } & CoverLook) {
   return (
     <Cover
@@ -203,22 +203,5 @@ export function ArtistCover({
 } & CoverLook) {
   return (
     <Cover artistId={artist.id} hasCover={artist.hasImage} name={artist.name} rounded {...look} />
-  );
-}
-
-export function PlaylistCover({
-  playlist,
-  ...look
-}: {
-  playlist: { id: string; name: string; hasCover: boolean; coverTrackId?: string | null };
-} & CoverLook) {
-  return (
-    <Cover
-      playlistId={playlist.id}
-      hasCover={playlist.hasCover}
-      coverTrackId={playlist.coverTrackId}
-      name={playlist.name}
-      {...look}
-    />
   );
 }

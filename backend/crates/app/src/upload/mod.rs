@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 mod assemble;
-mod cover;
+pub(crate) mod cover;
 mod probe;
 
 use media::formats::{self, AudioFormat};

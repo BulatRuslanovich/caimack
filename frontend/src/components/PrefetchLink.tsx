@@ -42,7 +42,7 @@ export function PrefetchLink<T extends string>({
           !isDesktop &&
           !navigator.onLine &&
           typeof props.href === "string" &&
-          (isAudiobookPath(props.href) ||
+          (isAudiobookPath(event.currentTarget.pathname) ||
             (isAudiobookPath(location.pathname) && props.href === "/")) &&
           event.button === 0 &&
           !event.metaKey &&

@@ -293,17 +293,25 @@ async function image(event, request) {
 }
 
 async function shell(event, request) {
+  const url = new URL(request.url);
+  const catalog = url.pathname === "/audiobooks";
   const cache = await caches.open(SHELL_CACHE);
+  const match = (key) => cache.match(key, { ignoreVary: true });
   try {
     const response = await fetch(request);
-    if (response.ok) event.waitUntil(cache.put(request, response.clone()));
+    if (response.ok && (!catalog || !response.redirected)) {
+      event.waitUntil(cache.put(request, response.clone()));
+    }
     return response;
   } catch {
-    return (
-      (await cache.match(request, { ignoreVary: true })) ??
-      (await cache.match("/", { ignoreVary: true })) ??
-      Response.error()
-    );
+    const exact = await match(request);
+    if (exact && (!catalog || !exact.redirected)) return exact;
+    if (catalog && url.search) {
+      // Downloads made before the catalog URL changed can use their saved page.
+      const oldCatalog = await match("/audiobooks");
+      if (oldCatalog && !oldCatalog.redirected) return oldCatalog;
+    }
+    return (await match("/")) ?? Response.error();
   }
 }
 

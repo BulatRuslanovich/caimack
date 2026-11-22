@@ -7,7 +7,7 @@ use crate::AppResult;
 use crate::covers;
 use crate::storage::{COVER_DIRECTORY, Storage};
 
-pub(super) struct PreparedCover {
+pub(crate) struct PreparedCover {
     storage: Storage,
     path: String,
     persisted: bool,
@@ -26,7 +26,7 @@ impl PreparedCover {
         Self::save(storage, &set).await.map(Some)
     }
 
-    async fn save(storage: &Storage, set: &[Rendition]) -> AppResult<Self> {
+    pub(crate) async fn save(storage: &Storage, set: &[Rendition]) -> AppResult<Self> {
         let owner = Uuid::now_v7();
         // A unique path keeps rollback cleanup from touching another upload's cover.
         let cover = Self {

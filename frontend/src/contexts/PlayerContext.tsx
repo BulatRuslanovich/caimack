@@ -2,9 +2,10 @@
 
 "use client";
 
-import { canPlayLocally, isDesktop } from "@/desktop/api";
+import { canPlayLocally, isDesktop, useDesktopStatus } from "@/desktop/api";
 
 import { api } from "@/lib/api";
+import { useAudiobookExperiment } from "@/lib/audiobookExperiment";
 import { deviceId, recordEvent } from "@/lib/events";
 import { connectEqualizer } from "@/lib/playback/equalizer";
 import {
@@ -80,6 +81,9 @@ function PlayerSessionProvider({
   userId: string | null;
 }) {
   const { notifyError } = useToast();
+  const desktop = useDesktopStatus();
+  const audiobookScope = userId && (desktop?.server ? `${desktop.server}\n${userId}` : userId);
+  const audiobookExperiment = useAudiobookExperiment(audiobookScope);
 
   const {
     queue,
@@ -693,7 +697,15 @@ function PlayerSessionProvider({
     },
     [takeOver, restoreRadioSession],
   );
-  const connected = useConnectPlayback(userId, state, actions, progress, output, load);
+  const connected = useConnectPlayback(
+    userId,
+    state,
+    actions,
+    progress,
+    output,
+    load,
+    audiobookExperiment.receive,
+  );
   const artwork = useArtworkNavigation(
     connected.state,
     connected.actions,
@@ -738,7 +750,11 @@ function PlayerSessionProvider({
                 <ArtworkDirectionContext.Provider value={artwork.direction}>
                   <PlayerQueueContext.Provider value={connected.state.queue}>
                     <AudiobookProvider
-                      userId={userId}
+                      key={audiobookScope}
+                      scope={audiobookScope}
+                      serverOnline={desktop?.online ?? true}
+                      enabled={audiobookExperiment.enabled}
+                      experimentReady={audiobookExperiment.ready}
                       musicPlaying={displayedPlaying}
                       pauseMusic={connected.pauseForAudiobook}
                       onActiveChange={setAudiobookActive}

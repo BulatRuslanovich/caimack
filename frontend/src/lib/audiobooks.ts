@@ -33,6 +33,8 @@ export interface Audiobook {
   progress: AudiobookProgress | null;
 }
 
+// Browsers can still cache the former permanent redirect for the bare /audiobooks URL.
+export const audiobookCatalogHref = "/audiobooks?view=catalog" as const;
 export const audiobookHref = (id: string) => `/audiobooks/${encodeURIComponent(id)}` as const;
 
 function searchWords(value: string): string[] {

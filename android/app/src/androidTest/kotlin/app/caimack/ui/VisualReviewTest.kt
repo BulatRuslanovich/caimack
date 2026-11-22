@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -63,6 +64,9 @@ import app.caimack.playback.toMediaItem
 import app.caimack.widget.NowPlayingWidget
 import app.caimack.session.SessionState
 import java.util.Locale
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.json.Json
@@ -103,6 +107,9 @@ class VisualReviewTest {
         Track("third", "На последнем поезде", "artist", "Электрические сны", durationSeconds = 247),
     )
     @Volatile private var tracks = original
+    @Volatile private var favoriteSummaryGate: CountDownLatch? = null
+    @Volatile private var favoriteSummaryTotal: Int? = null
+    private val favoriteSummaryRequests = AtomicInteger()
     private var screenshotTracks = original
     private val configuration = Configuration(context.resources.configuration).apply { setLocale(Locale.forLanguageTag("ru")) }
     private val localized = context.createConfigurationContext(configuration)
@@ -143,6 +150,11 @@ class VisualReviewTest {
                     path == "/api/playlists/review/tracks/order" -> {
                         tracks = original.filter { candidate -> tracks.any { it.id == candidate.id } }
                         MockResponse.Builder().code(204).build()
+                    }
+                    path == "/api/favorites" && request.url.queryParameter("pageSize") == "1" -> {
+                        favoriteSummaryRequests.incrementAndGet()
+                        favoriteSummaryGate?.await(20, TimeUnit.SECONDS)
+                        json(Json.encodeToString(Paged(tracks.take(1), favoriteSummaryTotal ?: tracks.size, 1, 1)))
                     }
                     path == "/api/favorites" || path == "/api/history/recent" || path == "/api/tracks" -> json(Json.encodeToString(Paged(tracks, tracks.size, 1, 50)))
                     path == "/api/genres" -> json("[]")
@@ -312,6 +324,47 @@ class VisualReviewTest {
         capture("search-artists", seedPlayback = false)
         compose.onNodeWithContentDescription(label(R.string.collection_clear_filter)).performClick()
         compose.onNodeWithContentDescription(label(R.string.search_placeholder)).assertIsDisplayed()
+    }
+
+    @Test fun favoriteCountKeepsLibraryRowsStableWhileRefreshing() {
+        container.appearance.setLanguage("ru")
+        compose.activityRule.scenario.recreate()
+        val folderTag = "library-entry:folder:review-folder"
+        val libraryTab = hasText(label(R.string.nav_library)) and hasClickAction()
+        fun countLabel(count: Int) = localized.resources.getQuantityString(R.plurals.count_tracks, count, count)
+        fun waitForCount(count: Int) = compose.waitUntil(10_000) {
+            compose.onAllNodesWithText(countLabel(count)).fetchSemanticsNodes().isNotEmpty()
+        }
+        fun folderTop() = compose.onNodeWithTag(folderTag).fetchSemanticsNode().boundsInRoot.top
+
+        val initial = CountDownLatch(1)
+        val refresh = CountDownLatch(1)
+        try {
+            favoriteSummaryTotal = 7
+            favoriteSummaryGate = initial
+            compose.onNode(libraryTab).performClick()
+            compose.waitUntil(10_000) { favoriteSummaryRequests.get() > 0 }
+            compose.waitUntil(10_000) { compose.onAllNodes(hasTestTag(folderTag)).fetchSemanticsNodes().isNotEmpty() }
+            val beforeCount = folderTop()
+            initial.countDown()
+            waitForCount(7)
+            assertEquals(beforeCount, folderTop(), 0.5f)
+
+            compose.onNode(hasText(label(R.string.nav_home)) and hasClickAction()).performClick()
+            val priorRequests = favoriteSummaryRequests.get()
+            favoriteSummaryTotal = 8
+            favoriteSummaryGate = refresh
+            compose.onNode(libraryTab).performClick()
+            compose.waitUntil(10_000) { favoriteSummaryRequests.get() > priorRequests }
+            compose.onNodeWithText(countLabel(7)).assertIsDisplayed()
+            assertEquals(beforeCount, folderTop(), 0.5f)
+            refresh.countDown()
+            waitForCount(8)
+            assertEquals(beforeCount, folderTop(), 0.5f)
+        } finally {
+            initial.countDown()
+            refresh.countDown()
+        }
     }
 
     @Test fun auditSearchBrowseAndKeyboard() {

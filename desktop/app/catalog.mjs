@@ -308,6 +308,26 @@ export class Catalog {
       if (artist) artist.albumCount = count;
     }
     for (const change of this.outbox()) this.apply(catalog, change);
+    for (const [id, members] of catalog.members) {
+      const playlist = catalog.playlists.get(id);
+      if (!playlist) continue;
+      const coverTracks = [];
+      const seen = new Set();
+      for (const trackId of members) {
+        const track = catalog.tracks.get(trackId);
+        if (!track?.hasCover) continue;
+        const { id, title, albumId, albumTitle, hasCover } = track;
+        const key = albumId ?? id;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        coverTracks.push({ id, title, albumId, albumTitle, hasCover });
+        if (coverTracks.length === 4) break;
+      }
+      catalog.playlists.set(id, { ...playlist, coverTracks });
+      const key = "playlist:" + id;
+      const saved = catalog.library.get(key);
+      if (saved) catalog.library.set(key, { ...saved, coverTracks });
+    }
     return catalog;
   }
 
@@ -702,14 +722,19 @@ export class Catalog {
         artists: array(block.artists).filter((artist) =>
           artists.has(artist.id),
         ),
-        playlists: array(block.playlists).filter(({ id }) => {
-          const members = view.members.get(id);
-          return members
-            ? members.some(ready)
-            : array(this.cached("/api/playlists/" + id)?.tracks).some((track) =>
-                ready(track.id),
-              );
-        }),
+        playlists: array(block.playlists)
+          .filter(({ id }) => {
+            const members = view.members.get(id);
+            return members
+              ? members.some(ready)
+              : array(this.cached("/api/playlists/" + id)?.tracks).some((track) =>
+                  ready(track.id),
+                );
+          })
+          .map((playlist) => {
+            const coverTracks = view.playlists.get(playlist.id)?.coverTracks;
+            return coverTracks ? { ...playlist, coverTracks } : playlist;
+          }),
       };
       return [songs, visible.albums, visible.artists, visible.playlists].some(
         (items) => items.length,

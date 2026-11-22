@@ -96,6 +96,7 @@ fun Card(
     list: Boolean = false,
     details: String? = null,
     menu: (@Composable () -> Unit)? = null,
+    reserveDetailsSpace: Boolean = false,
     cover: @Composable (Modifier) -> Unit,
 ) {
     val palette = LocalPalette.current
@@ -110,8 +111,8 @@ fun Card(
                 maxLines = 2, overflow = TextOverflow.Ellipsis,
                 textAlign = if (round && !list) TextAlign.Center else TextAlign.Start,
                 modifier = Modifier.fillMaxWidth())
-            if (!details.isNullOrBlank()) Text(details, style = Type.small, color = palette.muted,
-                maxLines = 2, overflow = TextOverflow.Ellipsis,
+            if (reserveDetailsSpace || !details.isNullOrBlank()) Text(details.orEmpty(), style = Type.small, color = palette.muted,
+                maxLines = if (reserveDetailsSpace) 1 else 2, overflow = TextOverflow.Ellipsis,
                 textAlign = if (round && !list) TextAlign.Center else TextAlign.Start,
                 modifier = Modifier.fillMaxWidth())
         }

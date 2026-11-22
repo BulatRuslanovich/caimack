@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   audiobookApi,
@@ -28,12 +29,15 @@ import { readStored, writeStored } from "./storage";
 
 export function useAudiobookCatalog(scope: string | null, online: boolean, enabled: boolean) {
   const client = useQueryClient();
+  const pathname = usePathname();
+  const lastPathname = useRef(pathname);
   const key = useMemo(() => ["audiobooks", scope], [scope]);
   const downloadKey = useMemo(() => ["audiobook-downloads", scope], [scope]);
   const journal = useRef<ProgressJournal>({});
   const confirmed = useRef(new Map<string, AudiobookProgress>());
   const inFlight = useRef(new Set<string>());
   const scopeRequest = useRef<AbortController | null>(null);
+  const lastOnline = useRef(online);
   const clockKey = `caimack-audiobook-clock:${scope}`;
   const clockOffset = useRef<number | null>(null);
 
@@ -82,10 +86,9 @@ export function useAudiobookCatalog(scope: string | null, online: boolean, enabl
   const result = useQuery({
     queryKey: key,
     enabled: enabled && scope !== null,
-    staleTime: 0,
-    refetchInterval: online ? 20_000 : false,
+    staleTime: 20_000,
     refetchOnWindowFocus: true,
-    refetchOnReconnect: "always",
+    refetchOnReconnect: false,
     networkMode: "always",
     meta: { handlesError: true },
     queryFn: async ({ signal }) => {
@@ -260,6 +263,28 @@ export function useAudiobookCatalog(scope: string | null, online: boolean, enabl
 
   const { refetch } = result;
   useEffect(() => {
+    if (lastPathname.current === pathname) return;
+    lastPathname.current = pathname;
+    if (!scope || !enabled) return;
+    if (
+      pathname === "/" ||
+      pathname === "/library" ||
+      pathname === "/search" ||
+      pathname === "/audiobooks" ||
+      pathname.startsWith("/audiobooks/")
+    ) {
+      void client.refetchQueries(
+        { queryKey: key, exact: true, stale: true },
+        { cancelRefetch: false },
+      );
+    }
+  }, [client, enabled, key, pathname, scope]);
+
+  useEffect(() => {
+    if (!enabled && scope) void client.cancelQueries({ queryKey: key, exact: true });
+  }, [client, enabled, key, scope]);
+
+  useEffect(() => {
     if (!enabled) return;
     const controller = new AbortController();
     scopeRequest.current = controller;
@@ -267,13 +292,10 @@ export function useAudiobookCatalog(scope: string | null, online: boolean, enabl
   }, [enabled, scope]);
 
   useEffect(() => {
+    const networkChanged = lastOnline.current !== online;
+    lastOnline.current = online;
     if (!enabled || !scope) return;
     let active = true;
-    const onlineAgain = () => {
-      void flush().finally(() => {
-        if (active) void refetch();
-      });
-    };
     const onStorage = (event: StorageEvent) => {
       if (!isJournalKey(scope, event.key)) return;
       for (const [id, { progress, settled }] of Object.entries(readJournal())) {
@@ -286,19 +308,17 @@ export function useAudiobookCatalog(scope: string | null, online: boolean, enabl
     };
 
     const timer = window.setInterval(() => void flush(), 5_000);
-    window.addEventListener("online", onlineAgain);
-    window.addEventListener("caimack:refetch", onlineAgain);
     window.addEventListener("storage", onStorage);
-    onlineAgain();
+    void flush().finally(() => {
+      if (active && networkChanged) void refetch();
+    });
 
     return () => {
       active = false;
       window.clearInterval(timer);
-      window.removeEventListener("online", onlineAgain);
-      window.removeEventListener("caimack:refetch", onlineAgain);
       window.removeEventListener("storage", onStorage);
     };
-  }, [enabled, scope, flush, refetch, readJournal, updateBook]);
+  }, [enabled, scope, online, flush, refetch, readJournal, updateBook]);
 
   const savedChange = async (book: Audiobook) => {
     const saved = !book.saved;

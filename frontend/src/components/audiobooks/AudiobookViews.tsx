@@ -42,7 +42,12 @@ import { useAudiobooks } from "@/contexts/AudiobookContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useT } from "@/contexts/I18nContext";
 import { downloadedArtwork } from "@/lib/audiobookDownloads";
-import { audiobookHref, elapsedBookMs, type Audiobook } from "@/lib/audiobooks";
+import {
+  audiobookCatalogHref,
+  audiobookHref,
+  elapsedBookMs,
+  type Audiobook,
+} from "@/lib/audiobooks";
 import { cn } from "@/lib/cn";
 import { useParams, useRouter } from "next/navigation";
 import { useFormat } from "@/lib/useFormat";
@@ -533,7 +538,7 @@ export function AudiobookDetailPage() {
       title={t("audiobooks.missing")}
       action={
         <Button variant="primary" asChild>
-          <PrefetchLink href="/audiobooks">{t("nav.audiobooks")}</PrefetchLink>
+          <PrefetchLink href={audiobookCatalogHref}>{t("nav.audiobooks")}</PrefetchLink>
         </Button>
       }
     />
@@ -578,7 +583,7 @@ function BookDetail({ book }: { book: Audiobook }) {
     mutationFn: deleteBook,
     onSuccess: () => {
       notify(t("audiobooks.deleted"), "success");
-      if (window.location.pathname === audiobookHref(book.id)) router.replace("/audiobooks");
+      if (window.location.pathname === audiobookHref(book.id)) router.replace(audiobookCatalogHref);
     },
     onError: (error) => notifyError(error, t("audiobooks.deleteFailed")),
   });

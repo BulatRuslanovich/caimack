@@ -3,6 +3,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
+use sqlx::types::Json;
 use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
@@ -11,6 +12,26 @@ use crate::catalog::tracks;
 use crate::ids::distinct;
 use crate::storage::Storage;
 use crate::{AppError, AppResult, json};
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaylistCoverTrack {
+    pub id: Uuid,
+    pub title: String,
+    pub album_id: Option<Uuid>,
+    pub album_title: Option<String>,
+    pub has_cover: bool,
+}
+
+pub(super) const COVER_TRACKS_SQL: &str = "
+    ARRAY(SELECT jsonb_build_object('id', cover.track_id, 'title', cover.title, 'albumId', cover.album_id,
+                 'albumTitle', cover.album_title, 'hasCover', true)
+          FROM (SELECT DISTINCT ON (a.id) pt.track_id, t.title, a.id AS album_id, a.title AS album_title,
+                       pt.position, pt.id AS entry_id
+                FROM playlist_tracks pt JOIN tracks t ON t.id = pt.track_id JOIN albums a ON a.id = t.album_id
+                WHERE pt.playlist_id = p.id AND a.cover_path IS NOT NULL
+                ORDER BY a.id, pt.position, pt.id) AS cover
+          ORDER BY cover.position, cover.entry_id LIMIT 4)";
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -25,8 +46,8 @@ pub struct PlaylistDto {
     pub track_count: i32,
     pub duration_seconds: i32,
     pub has_cover: bool,
-
     pub cover_track_id: Option<Uuid>,
+    pub cover_tracks: Vec<Json<PlaylistCoverTrack>>,
     #[serde(serialize_with = "json::time")]
     pub created_at: DateTime<Utc>,
     #[serde(serialize_with = "json::time")]
@@ -81,7 +102,7 @@ pub struct TrackIdsRequest {
 }
 
 pub fn select() -> QueryBuilder<Postgres> {
-    QueryBuilder::new(
+    QueryBuilder::new(format!(
         "SELECT p.id, p.name, p.description, p.is_public, p.user_id AS owner_id, u.username AS owner_name,
                 (SELECT count(*)::int FROM playlist_tracks pt WHERE pt.playlist_id = p.id) AS track_count,
                 (SELECT COALESCE(SUM(t.duration_seconds), 0)::int FROM playlist_tracks pt
@@ -90,10 +111,11 @@ pub fn select() -> QueryBuilder<Postgres> {
                 (SELECT pt.track_id FROM playlist_tracks pt
                    JOIN tracks t ON t.id = pt.track_id JOIN albums a ON a.id = t.album_id
                    WHERE pt.playlist_id = p.id AND a.cover_path IS NOT NULL
-                   ORDER BY pt.position LIMIT 1) AS cover_track_id,
+                   ORDER BY pt.position, pt.id LIMIT 1) AS cover_track_id,
+                {COVER_TRACKS_SQL} AS cover_tracks,
                 p.created_at, p.updated_at
          FROM playlists p JOIN users u ON u.id = p.user_id",
-    )
+    ))
 }
 
 pub async fn fetch<'e>(
@@ -135,7 +157,7 @@ pub async fn detail(db: &PgPool, user: Uuid, id: Uuid) -> AppResult<PlaylistDeta
 
     let mut query = tracks::select(user);
     query.push(" JOIN playlist_tracks pt ON pt.track_id = t.id WHERE pt.playlist_id = ").push_bind(id);
-    query.push(" ORDER BY pt.position");
+    query.push(" ORDER BY pt.position, pt.id");
     let tracks = tracks::fetch(db, query).await?;
 
     Ok(PlaylistDetailDto {
