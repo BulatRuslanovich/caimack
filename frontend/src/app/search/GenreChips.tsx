@@ -26,7 +26,7 @@ function GenreCategory({ genre }: { genre: Genre }) {
   return (
     <Link
       href={`/search?tab=genres&id=${genre.id}`}
-      className="flex min-h-23 min-w-0 items-center justify-between gap-1.5 rounded-md border border-border bg-card px-2.5 py-3 hover:bg-raised hover:no-underline focus-visible:outline-2 focus-visible:outline-ring sm:min-h-30 sm:items-end sm:gap-3 sm:p-4"
+      className="flex min-h-23 min-w-0 items-center justify-between gap-1.5 rounded-md border border-border bg-card px-2.5 py-3 hover:bg-raised hover:no-underline focus-visible:outline-2 focus-visible:outline-ring sm:min-h-30 sm:gap-3 sm:p-4"
     >
       <span className="flex min-w-0 flex-col gap-1">
         <span className="wrap-anywhere text-sm leading-tight font-semibold sm:text-base">

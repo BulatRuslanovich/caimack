@@ -177,7 +177,9 @@ function SearchView() {
                     data-beside={data.top && data.tracks.length > 0 ? "" : undefined}
                     className="grid min-w-0 gap-x-6 gap-y-4 lg:data-beside:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]"
                   >
-                    {data.top && <TopResult top={data.top} />}
+                    {data.top && (
+                      <TopResult top={data.top} compactTrack={data.tracks.length === 1} />
+                    )}
 
                     {data.tracks.length > 0 && (
                       <Section

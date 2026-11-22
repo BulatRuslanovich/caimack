@@ -24,7 +24,13 @@ import { Section } from "@/components/PageHeader";
 
 const artworkSizes = "(min-width: 64rem) 128px, 64px";
 
-export function TopResult({ top }: { top: SearchTopResult }) {
+export function TopResult({
+  top,
+  compactTrack = false,
+}: {
+  top: SearchTopResult;
+  compactTrack?: boolean;
+}) {
   const t = useT();
 
   const albumId = top.kind === "Album" ? top.album?.id : undefined;
@@ -40,9 +46,10 @@ export function TopResult({ top }: { top: SearchTopResult }) {
           kind={t("nav.tracks")}
           title={top.track.title}
           subtitle={formatArtists(top.track)}
-          art={<TrackCover track={top.track} sizes={artworkSizes} />}
+          art={<TrackCover track={top.track} sizes={compactTrack ? "64px" : artworkSizes} />}
           toneSrc={trackCoverUrl(top.track, "thumb")}
           action={<TrackPlayButton track={top.track} />}
+          compact={compactTrack}
         />
       ) : top.kind === "Album" && top.album ? (
         <Card
@@ -118,6 +125,7 @@ function Card<T extends string>({
   subtitle,
   art,
   toneSrc,
+  compact = false,
   round = false,
   action,
 }: {
@@ -127,6 +135,7 @@ function Card<T extends string>({
   subtitle: ReactNode;
   art: ReactNode;
   toneSrc: string | null;
+  compact?: boolean;
   round?: boolean;
   action?: ReactNode;
 }) {
@@ -135,21 +144,36 @@ function Card<T extends string>({
   return (
     <div
       {...tone}
-      className="listening-panel search-top-result grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded-lg p-3 lg:flex lg:flex-1 lg:flex-col lg:items-start lg:justify-between lg:gap-5 lg:p-6"
+      className={cn(
+        "listening-panel search-top-result grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded-lg p-3",
+        !compact &&
+          "lg:flex lg:flex-1 lg:flex-col lg:items-start lg:justify-between lg:gap-5 lg:p-6",
+      )}
     >
       <span
         className={cn(
-          "block size-16 shrink-0 overflow-hidden rounded-xs shadow-art lg:size-32",
+          "block size-16 shrink-0 overflow-hidden rounded-xs shadow-art",
+          !compact && "lg:size-32",
           round && "rounded-full",
         )}
       >
         {art}
       </span>
 
-      <div className="flex w-full min-w-0 items-end justify-between gap-3">
+      <div
+        className={cn(
+          "flex w-full min-w-0 justify-between gap-3",
+          compact ? "items-center" : "items-end",
+        )}
+      >
         <div className="flex min-w-0 flex-col gap-1">
           <Caption>{kind}</Caption>
-          <h3 className="wrap-anywhere text-lg leading-tight font-semibold lg:font-display lg:text-[clamp(1.75rem,2.4vw,2.5rem)]">
+          <h3
+            className={cn(
+              "wrap-anywhere text-lg leading-tight font-semibold",
+              !compact && "lg:font-display lg:text-[clamp(1.75rem,2.4vw,2.5rem)]",
+            )}
+          >
             {href ? <Link href={href}>{title}</Link> : title}
           </h3>
           <span className="wrap-anywhere text-sm text-muted-foreground">{subtitle}</span>
