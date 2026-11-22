@@ -1,14 +1,14 @@
+[Documentation](README.md#develop-and-release)
+
 # Android releases and in-app updates
 
-Pushing a version tag such as `v1.2.3` runs `.github/workflows/android-release.yml`.
-The workflow also builds the [desktop packages](desktop.md) and stages them
-with the APK before publishing the release. Manual runs can opt in to the
-desktop build with `include_desktop`.
-The tag must match `frontend/package.json`; the Android build reads that version.
-The workflow runs unit tests, builds and verifies a signed release APK, saves it
-as an Actions artifact for 30 days, attaches it to the matching GitHub Release,
-then sends the file to one configured Telegram group. Master pushes and pull
-requests do not publish releases or send messages.
+Follow the [release guide](releases.md) to create and push a version tag.
+The [Android release workflow](../.github/workflows/android-release.yml)
+checks the tag against `frontend/package.json`, runs unit tests, and builds
+and verifies a signed ARM64 APK. It keeps the APK as a workflow artifact for
+30 days, publishes the APK and [desktop packages](desktop.md#releases) to
+GitHub Releases, then sends the APK to the configured Telegram group.
+Manual runs can include desktop packages with `include_desktop`.
 
 ## GitHub Releases
 
@@ -124,6 +124,29 @@ PowerShell alternative:
 ```powershell
 [Convert]::ToBase64String([IO.File]::ReadAllBytes('C:\path\caimack-release.jks')) | Set-Clipboard
 ```
+
+## Sign a local build
+
+Use the original signing key when building an update for an installed APK.
+For a new signing identity, generate a key once and keep it private.
+
+```bash
+keytool -genkeypair -v -keystore ~/caimack-release.jks -alias caimack \
+  -keyalg RSA -keysize 4096 -validity 10000
+```
+
+Set the location and credentials in the Git-ignored
+`android/keystore.properties` file.
+
+```properties
+storeFile=/home/me/caimack-release.jks
+storePassword=...
+keyAlias=caimack
+keyPassword=...
+```
+
+Run `make apk` from the repository root to build the signed APK under
+`android/app/build/outputs/apk/release/`.
 
 ## Telegram group
 

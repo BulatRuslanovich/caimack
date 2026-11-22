@@ -1,9 +1,19 @@
+[Documentation](README.md#music-library)
+
 # Library map
 
-The API projects the current recommendation index into two dimensions. Only
-successful audio embeddings matching the current model, window strategy,
-dimension and audio hash enter that index. A smaller mapped count does not mean
-the frontend has hidden tracks.
+Tracks that sound alike appear close together on the map. Select an area to
+listen to its tracks, or choose a track to start radio from it. The map needs
+the [recommendations module](mert.md) and audio embeddings computed on the server.
+
+![Caimack library map showing clusters of tracks and the area selection control](screenshots/landing/map.webp)
+
+## Which tracks appear
+
+The API projects the current recommendation index into two dimensions. It
+includes successful embeddings that match the current model, window strategy,
+dimension, and audio hash. The mapped count can be lower than the library count
+while analysis is still running.
 
 ## Saved coordinates
 
@@ -36,8 +46,8 @@ concurrent API instances from building and writing the same cache simultaneously
 Invalid cache payloads are discarded and rebuilt.
 
 While a background update runs, the API serves the previous map with
-`updating: true`; the frontend checks again after 15 seconds. An incomplete map
-is checked every minute so newly analyzed tracks appear without a page reload.
+`updating: true`. The frontend checks every 15 seconds while the map is empty
+or updating, and every minute while a nonempty map is still missing tracks.
 The visible camera is preserved when coordinates update; the home button fits
 the new map.
 

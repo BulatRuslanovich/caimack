@@ -1,100 +1,88 @@
-# Database
+[Documentation](../docs/README.md#run-a-server)
 
-Caimack's schema is the ordered set of files in `db/migrations/`. Migrations are compiled into the `caimack` binary.
+# Database migrations
 
-Only `caimack migrate` changes the schema. The server never does: at startup it compares the
-migration recorded in the database with the one it was built with and refuses to start when they
-differ, saying what to do.
+Caimack's PostgreSQL schema lives in [numbered migrations](migrations/).
+The `caimack` binary embeds those files. Run `caimack migrate` before starting
+the corresponding API version. On startup, the API checks that the database
+schema matches its build and reports a mismatch without changing the schema.
 
-## Docker Compose
+## Apply migrations
 
-The one-shot `migrate` service runs before `backend` on every `docker compose up`. When it has
-nothing to apply it exits at once.
+The bundled Docker Compose configuration runs the one-shot `migrate` service
+before starting the backend. It exits once the database is up to date. Use
+the [server manager](../docs/server-manager.md) to update an existing
+deployment.
 
-## Without Docker
+For a native deployment, point `DATABASE_URL` at the target database and run
+the migration command with the new binary.
 
 ```bash
-DATABASE_URL=postgres://music:password@localhost:5432/music caimack migrate
+DATABASE_URL=postgres://music:password@127.0.0.1:5432/music caimack migrate
 ```
 
-In development `make migrate` (also part of `make backend`) applies the same file with sqlx-cli,
-so it works even when the backend's queries don't compile against the current database yet.
+For local development, `make migrate` runs the same migration files with
+`sqlx-cli` so the schema can be prepared before changed backend queries
+compile. `make backend` includes this step.
 
-## Changing the schema
+## Upgrade an older fork database
 
-Add a new numbered migration for each change. Never modify an already deployed migration or rewrite its checksum. Migration 0002 adds durable enrichment jobs and catalog invalidation without changing the baseline.
+Use `caimack migrate` for these upgrades. The migrator recognizes the exact
+historical checksums, adjusts the migration ledger atomically, then applies
+the migrations that are still missing. Existing data stays in place. An
+unknown or edited migration history is rejected.
 
-Migration 0003 preserves the upstream rich-lyrics schema. Fork features follow it
-with unique migration numbers; databases already using upstream migration 0003
-can upgrade without replacing that migration or its checksum.
+| Database history | What the migrator does |
+| --- | --- |
+| Local fork with saved collections and folders at `0008` and `0009` | Aligns those entries to `0009` and `0010`, preserving saved items, folders, and timestamps. |
+| Upstream library map cache at `0013` | Moves the matching map entry to `0017` and applies the audiobook migrations. Saved coordinates and vector fingerprints are retained. |
+| Fresh database or matching migration history | Applies missing migrations in order. |
 
-Migration 0004 adds filename metadata provenance and the durable `file_renames`
-journal for optional automatic music filenames. New queries use runtime SQL and
-are covered by `cargo test -p app --features integration-tests file_names` with
-the same local `DATABASE_URL` and `SQLX_OFFLINE=true` configuration below.
+For a legacy upgrade, use the application's migrator instead of running
+`cargo sqlx migrate run` directly. Use the matching API version after the
+upgrade.
 
-Migration 0005 adds the metadata export journal, export state and a stable HLS
-cache hash for tag-only audio changes. Its recovery, audio preservation and lyric
-companion behavior are covered by `cargo test -p app --features integration-tests
-metadata_export`.
+## Develop and test schema changes
 
-Run migrations before starting the corresponding backend version. Regenerate SQLx metadata with `make sqlx` when changing compile-time checked queries. New enrichment queries are checked by PostgreSQL integration tests:
+Add a new numbered migration for each schema change. Keep deployed migration
+files and their checksums intact. When a change affects a compile-time checked
+query, run `make sqlx` and include the updated metadata.
+
+```bash
+make test-db
+```
+
+To run focused tests, use disposable local PostgreSQL and a role that can
+create test databases. From the repository root, `make db` starts the local
+instance used below.
 
 ```bash
 cd backend
-SQLX_OFFLINE=true DATABASE_URL=postgres://music:password@localhost:5432/postgres cargo test -p app integrations::enrichment_jobs::tests -- --include-ignored
+export SQLX_OFFLINE=true
+export DATABASE_URL=postgres://music:dev@127.0.0.1:55433/postgres
+cargo test -p app --features integration-tests --test fork_upgrade
+cargo test -p app --features integration-tests --test saved_library --test library_folders
+cargo test -p app --lib --features integration-tests recommendations::map
 ```
 
-Use a disposable local PostgreSQL server and a role allowed to create databases. SQLx creates isolated test databases. Do not run these tests against production.
+Other targeted filters include `file_names` and `metadata_export`. Add
+`-- --include-ignored` to the filter `integrations::enrichment_jobs::tests`
+to exercise enrichment jobs against PostgreSQL. See the
+[development guide](../docs/development.md#run-checks) for the full checks.
 
-Migration 0006 keeps provider lookup progress across tag-only exports while
-restarting lookup after a real audio replacement or a title/artist edit.
+## Schema landmarks
 
-Migration 0009 adds account-scoped saved albums, artists and playlists with
-foreign-key cleanup. It backfills existing owned playlists; an insert trigger
-also saves playlists created by imports and offline synchronization. Saving an
-album or artist does not change track favourites. Run the updated backend's
-`caimack migrate` before starting it. Verify with
-`SQLX_OFFLINE=true cargo test -p app --features integration-tests --test saved_library`.
+| Migration | What it adds |
+| --- | --- |
+| `0002–0003` | Durable enrichment jobs and the upstream rich-lyrics schema. |
+| `0004–0006` | Filename provenance, journals for renames and metadata exports, and stable audio identity for tag-only changes. |
+| `0009–0010` | Saved albums, artists, and playlists, plus account-scoped folders. |
+| `0011` | Keeps rich lyrics and provider backoff across tag-only exports. Recording or metadata changes still invalidate matches. |
+| `0013` | Saved audiobooks and the latest listening checkpoint per account and book. |
+| `0017` | Shared [library map](../docs/library-map.md) cache keyed by layout version, audio model, and window strategy. |
 
-Authenticated collection routes: `GET /api/me/library` and
-`PUT` / `DELETE /api/me/library/{kind}/{id}`, where kind is `album`, `artist` or
-`playlist`. Writes are idempotent; saving again preserves the original save time.
-Private playlists are visible and saveable only by their owner. Unsave never
-deletes catalog content. The returned list is sorted by save time, newest first.
-
-Migration 0010 adds `library_folders` and nullable `library_items.folder_id`.
-Composite foreign keys restrict destinations to the same user. The folder API
-serializes tree edits per account to prevent cycles, including concurrent moves.
-Deleting a folder lifts its contents to its parent without unsaving or deleting
-music. Verify with `cargo test -p app --features integration-tests --test library_folders`.
-
-Migration 0011 reconciles rich-lyrics invalidation with the stable audio identity
-used by metadata export. Tag-only exports retain lyrics and provider backoff;
-changes to the recording, title, artist, album or duration invalidate matches and
-restart enrichment. Existing upstream migrations remain unchanged.
-
-Migration 0013 stores each account’s saved audiobooks and one progress checkpoint
-per book. Newer checkpoints win, including when a device uploads after listening
-offline. Checkpoints survive a temporary loss of the audiobook folder. Book and
-chapter identifiers derive from paths relative to that folder.
-
-The local fork previously shipped collections/folders as migrations 0008/0009.
-Use `caimack migrate` for its first upgrade: it recognizes the exact original
-checksums and atomically aligns those two ledger entries to 0009/0010 before
-applying upstream migrations. Saved items, folders, timestamps and checksums
-are preserved; unknown or edited histories are rejected. Fresh databases and
-databases already using upstream numbering follow the normal migration path.
-Do not use `cargo sqlx migrate run` directly for this legacy upgrade, or run the
-old binary against a database after upgrading it.
-
-Migration 0017 adds `library_map_cache`, a shared projection cache keyed by layout
-version, audio model and window strategy. Run `caimack migrate` before starting
-the updated backend. Existing fork databases keep their audiobook migration
-numbers. On an upstream database with the matching library map migration at
-0013, `caimack migrate` moves that record to 0017 and applies the audiobook
-migrations without rebuilding the map cache. Coordinates and vector fingerprints survive restarts;
-metadata and listening statistics do not invalidate the projection. Builders
-serialize through a transaction advisory lock and publish the saved map atomically.
-Verify with `SQLX_OFFLINE=true cargo test -p app --lib --features integration-tests
-recommendations::map` against the disposable local PostgreSQL server described above.
+Saved library writes use `PUT` or `DELETE /api/me/library/{kind}/{id}` and
+are idempotent. Saving again preserves the original save time. Private
+playlists remain visible to their owner. `GET /api/me/library` lists items
+newest first. Folder edits are serialized per account and checked for cycles.
+Deleting a folder moves its contents to its parent.

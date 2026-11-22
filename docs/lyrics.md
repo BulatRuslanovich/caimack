@@ -1,4 +1,14 @@
+[Documentation](README.md#music-library)
+
 # Lyrics lookup and synchronization
+
+Caimack follows the player clock and shows the timing available from a verified
+source. Word or syllable timing enables karaoke highlighting. Line timing
+highlights the current line, and lyrics without timing appear as plain text.
+
+![Full-screen Caimack player highlighting the current lyric](screenshots/landing/lyrics.webp)
+
+## Where lyrics come from
 
 The Rust enrichment worker searches LRCLIB, Unison, Better Lyrics TTML, Better
 Lyrics QQ, NetEase, QQ Music, Genius, Megalobiz, Kugou, and lyrics.ovh concurrently.
@@ -29,6 +39,8 @@ duration proximity. Real word/syllable intervals outrank line timing; line timin
 outranks plain text. To avoid replacing a whole song with one timed verse, a
 candidate must contain at least 70% of the longest verified text in the lookup.
 The same completeness guard applies when upgrading a saved result.
+
+## Storage and playback
 
 `track_lyrics.synced` remains a JSON array with backwards-compatible `at` and
 `text` fields. A rich line additionally has `end`, `words: [{at, end, text}]`, and
@@ -74,8 +86,8 @@ are persisted and displayed in both clients. Useful provider references:
 - [Better Lyrics endpoint and authentication](https://docs.betterlyrics.org/reference/get-lyrics)
 - [Unison response format and attribution](https://lyrics-api-docs.boidu.dev/unison)
 
-Apply the database migration before deploying the new API. The existing migration
-runner handles this normally. No reimport of audio files is required.
+Apply [database migrations](../db/README.md) before deploying the API. Caimack
+keeps the existing audio files and looks up improvements in the background.
 
 ## Verification
 

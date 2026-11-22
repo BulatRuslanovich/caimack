@@ -1,9 +1,22 @@
+[Documentation](README.md#listen-on-your-devices)
+
 # Caimack Desktop
 
-Caimack Desktop runs the same library, search, player and settings screens as
-the web client. Enter the origin of your Caimack server and sign in with your
-existing account. For an HTTP server on your own network, enable **Allow HTTP
-on the local network** on the connection screen.
+Caimack Desktop brings the web app's library, search, and player to Windows
+and Linux, with offline downloads and tray playback.
+
+## Install and connect
+
+Download a package for your platform from
+[GitHub Releases](https://github.com/BulatRuslanovich/caimack/releases).
+Enter the server address, including its scheme and port when needed, and sign
+in with your existing account. For an HTTP endpoint on your own network, turn
+on **Allow HTTP on the local network** on the connection screen.
+
+The portable Windows executable keeps its profile and individual downloads in
+`Caimack Data` beside the executable. Synchronized libraries stay in their
+selected folder. Windows may require you to sign in after you move the portable
+profile to another machine.
 
 ## Downloads
 
@@ -29,6 +42,8 @@ Disabling synchronization keeps the exported files on disk. The client retains
 offline actions until the server confirms them and the next catalog is accepted.
 Rejected changes appear in the synchronization settings. Pressing **Pause**
 leaves pending changes available for the next run.
+
+## Keep playback and downloads running
 
 Synchronization and downloads run with the window minimized. Enable **Keep
 Caimack running in the tray** to continue after closing the window. Use the tray
@@ -56,11 +71,6 @@ On Arch Linux, `make desktop-arch` also builds the native `.pkg.tar.zst` with
 `makepkg`. Find it under `desktop/release/arch` and install it with
 `sudo pacman -U ./caimack-desktop-VERSION-1-x86_64.pkg.tar.zst` from that directory.
 The AppImage supports `--appimage-extract-and-run` if FUSE is unavailable.
-
-The portable Windows executable keeps its profile
-and individual downloads in `Caimack Data` beside the executable. A music
-folder selected for synchronization remains a separate location. Windows may
-require a fresh sign-in after moving the portable profile to another machine.
 
 ## Releases
 

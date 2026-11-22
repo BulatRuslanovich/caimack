@@ -1,8 +1,17 @@
+[Documentation](README.md#run-a-server)
+
 # Backend logging
 
-Logs go to **stderr**. The default text format includes the date, milliseconds,
-timezone, severity, module and named fields. Colours are enabled only in an
-interactive terminal; `NO_COLOR` disables them.
+Use the server manager or Compose to follow logs for the API.
+
+```bash
+./caimack.sh logs backend -f
+docker compose logs -f backend
+```
+
+The backend writes to stderr. Text logs include the date, milliseconds, time
+zone, severity, module, and named fields. Colour is limited to interactive
+terminals. Set `NO_COLOR` to turn it off.
 
 ## Levels
 
@@ -10,12 +19,14 @@ interactive terminal; `NO_COLOR` disables them.
 | --- | --- |
 | `ERROR` | HTTP 5xx, failed background operations, task crashes and fatal startup/runtime failures. |
 | `WARN` | Missing or unreadable audio, unavailable MERT, retries, HTTP 403/429 and slow responses. |
-| `INFO` | Startup/readiness/shutdown, database connection, account events, uploads, job progress and summaries, index rebuilds. |
+| `INFO` | Startup/readiness/shutdown, database connection, account events, uploads, job progress and summaries, index rebuilds, and routine 4xx responses other than 401, 403, 404, and 429. |
 | `DEBUG` | Routine HTTP responses (including 401/404), individual analysis/enrichment/transcode results, renames and exports. |
 
 Symphonia, SQL and HTTP dependency chatter is filtered at `WARN` by default.
 MP3 bitrate estimates and Xing header messages are hidden; decoder warnings and
 errors remain visible.
+
+### Background jobs
 
 Scan, analysis and import progress appears about every 30 seconds **between
 items**. Enrichment reports interval counts, including normal not-found and
@@ -36,9 +47,9 @@ generic error. Failed health checks include the database error or timeout reason
 
 `elapsed_ms` measures preparation of response headers, including queue waits. It
 does not measure downloading a file or the lifetime of an SSE stream. Responses
-taking at least two seconds emit a warning, except healthy `/health` responses.
-HTTP failures retain their severity even when slow. Successful playback, polling
-and health checks stay at `DEBUG`.
+taking at least two seconds emit a warning outside `/health`. Slow 401 and 404
+responses also become warnings. Responses with status 5xx remain at `ERROR`.
+Routine playback, polling, and successful health checks are logged at `DEBUG`.
 
 The logged route is a template, such as `/api/auth/invitations/{token}`. Unknown
 routes use `<unmatched>`. Incoming request IDs, query strings, cookies,
@@ -78,6 +89,8 @@ filtering rules. Invalid `RUST_LOG` falls back to the default filter; invalid
 `LOG_FORMAT` falls back to text. A warning explains the fallback. Restart the
 backend after changing settings.
 
-For Docker, pass variables into the **backend container**; a Compose `.env` entry
-alone does not automatically enter the container environment. Follow logs with
-`./caimack.sh logs backend -f` or `docker compose logs -f backend`.
+The bundled [Compose file](../docker-compose.yml) passes `RUST_LOG` and
+`LOG_FORMAT` from the deployment `.env` to the backend and migration service.
+After changing them, apply the configuration with `./caimack.sh start` or
+`docker compose up -d` with your usual files. In a custom Compose deployment,
+check that both values are passed to the backend container.

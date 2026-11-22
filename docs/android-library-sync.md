@@ -1,9 +1,25 @@
+[Documentation](README.md#listen-on-your-devices)
+
 # Android library synchronization
 
-Turn on **Full library synchronization** under **Settings → Downloads** to
-start a foreground transfer. The notification offers **Pause**. Turn the
-switch off and on again to resume. Completed downloads stay available in
-**Library → Downloads**, where you can play or remove them.
+Full library sync copies your music collection to private Android app storage
+over your home network. For a few tracks or albums, use
+[individual downloads](android-downloads.md).
+
+## Start or pause synchronization
+
+1. Connect the phone and the server to the same local network.
+2. Open **Settings → Downloads** and turn on **Full library synchronization**.
+   The app starts a foreground transfer and shows its progress in a notification.
+3. Use **Pause** in the notification to stop the transfer. Turn the switch off
+   and on again to resume. Completed music stays in **Library → Downloads**.
+
+Automatic jobs persist across reboot and run on a 15-minute schedule, with
+additional attempts after joining a local network or recording an action.
+Charging is optional. Android may defer jobs in Doze or under manufacturer
+battery restrictions.
+
+## Connect to the local server
 
 The server must be reachable at a local address over Wi-Fi or Ethernet. The
 sync client binds its connections and DNS resolution to that network, rejects
@@ -24,22 +40,15 @@ a trusted certificate. The app can then keep its existing server address and
 account binding. All returned A/AAAA addresses must be local; a remaining public
 IPv6 answer also prevents synchronization.
 
-Alternatively, sign in using the local IP and the actual listening port. If that
-endpoint uses HTTP, enable **Allow HTTP on the local network** in connection
-settings. A different server URL has its own offline binding; the app currently
-has no separate LAN address just for synchronization.
+Alternatively, sign in using the local IP and the actual listening port. For an
+HTTP endpoint, follow [local HTTP setup](android-local-http.md). A different
+server URL creates its own offline binding. Sync uses the same server address
+as regular playback.
 
-The default Docker/Caddy deployment redirects HTTP to HTTPS and serves the
-configured public hostname. Opening `http://<LAN-IP>` can therefore redirect to
-`https://<LAN-IP>`, which does not match the domain certificate. Allowing local
-HTTP does not bypass that redirect or certificate verification. Use the domain
-with a local DNS override, or explicitly configure a separate local endpoint.
-
-Automatic jobs are persisted across reboot and scheduled every 15 minutes, with
-an additional attempt after joining a local network or recording an action.
-Charging is not required. Android can defer background jobs in Doze or under
-manufacturer battery restrictions; the interval is not a deadline. A manual
-foreground sync shows a notification with progress and a pause action.
+The default Docker/Caddy deployment serves the configured hostname over HTTPS.
+Full sync does not follow redirects. Use the final server address with a trusted
+certificate and local DNS, or explicitly configure a separate local HTTP
+endpoint and enter its full address.
 
 ## Files and playback
 
@@ -71,25 +80,10 @@ The old exports stay in the folder originally selected.
 
 ## Browsing individual downloads
 
-The main **Library** remains usable without the server. Saved catalog metadata
-is stored per server/account; known albums, artists, folders and playlists retain
-their structure after a restart. Only explicitly saved albums, artists and playlists appear in the main library;
-downloading audio never adds library shortcuts. Tracks without local
-audio remain visible in cached lists, are dimmed and cannot be tapped to play.
-Playing a collection offline queues its downloaded tracks only. A successful
-server check restores normal browsing and playback availability.
-
-**Library → Downloads** remains a flat list of individual transfers, with
-progress, playback and download removal. Browsing previously unseen server
-content requires a connection once so its metadata can be retained. Older
-individual downloads already contain album and artist metadata; open an older
-playlist online once to save its membership and order.
-
-Manual and automatic downloads retain album covers and images of all track
-artists, including collaborators. Missing artwork is retried on launch/resume
-and after reconnecting. Images are kept in private app storage independently of
-the evictable image cache and appear on open screens as soon as they are saved.
-Unavailable artwork does not prevent audio downloads.
+The main **Library** keeps your saved albums, artists, playlists, and folders.
+**Library → Downloads** lists available offline audio. The
+[individual downloads guide](android-downloads.md#browse-and-play-offline)
+describes how cached pages and offline playback work.
 
 Downloaded playlist/artist metadata and artwork are isolated by server and account.
 Legacy server-only metadata is not reused across accounts. On launch/resume,
@@ -102,20 +96,23 @@ and synchronization type as the online lyrics API.
 
 ## Recommendations and changes made offline
 
-The server prepares the daily, new and top mixes and a general radio station of
-up to 100 distinct eligible tracks. The latest daily mix replaces the previous
-one. With synchronization enabled, general radio uses this saved station. Its
-queue stops at the end and does not generate more recommendations on the phone.
+### Radio and mixes
+
+With recommendations enabled, the server prepares daily, new, and top mixes
+and a general radio station of up to 100 distinct eligible tracks. The latest
+daily mix replaces the previous one. Offline general radio uses this saved
+station and stops when its queue ends.
 Track-seeded radio and the library map are not part of this offline feature.
 Existing online device selection and playback transfer remain unchanged;
 joining Wi-Fi does not initiate a transfer.
 
-Listening, skips, likes, dislikes/taste rules, personal library saves/removals and ordinary playlist edits are
-saved durably before they are acknowledged locally. On return, the phone uploads
-them to the authenticated server/account. The server commits each effect and its
-receipt in the same transaction. Retrying after a lost response therefore cannot
-duplicate listening history or recreate a deleted playlist. Offline timestamps
-are preserved rather than replaced with the synchronization time.
+### Activity and playlist edits
+
+The app records listening, skips, likes, taste rules, library changes, and
+ordinary playlist edits before confirming them in the interface. On reconnect,
+it sends them to the same server and account. The server commits each change
+with its receipt so a retry does not duplicate history or recreate a playlist.
+The original timestamps are preserved.
 
 Playlist changes are merged as operations: adds/removals affect only those tracks;
 reordering retains concurrent additions and does not resurrect removed tracks;
@@ -125,6 +122,8 @@ The server rejects edits to deleted playlists. The client retains them in its
 local rejection journal and continues syncing valid actions.
 Confirmed actions remain visible locally until a subsequent server snapshot
 includes them, including across a crash between acknowledgement and refresh.
+
+### Saved library and folders
 
 The personal Library contains saved albums, artists and playlists. Its membership
 is included in `savedLibrary` in each snapshot. Album/artist saves are independent
@@ -149,12 +148,13 @@ the signed-in account's folders.
 
 ## Protocol and verification
 
-Apply migrations before starting the updated backend (`caimack migrate`). All
-sync routes require normal authentication:
+Apply [database migrations](../db/README.md) before starting the updated
+backend. All sync routes require authentication.
 
 | Route | Purpose |
 | --- | --- |
 | `GET /api/sync/snapshot` | MVCC catalog, file and asset manifests, lyrics, waveforms, server-prepared mixes/radio |
+| `GET /api/sync/identity` | Server and account identity for syncing individual-download activity without a full snapshot |
 | `GET /api/sync/vectors` | Embeddings and their model/strategy/source metadata |
 | `POST /api/sync/actions` | Up to 100 actions with stable UUIDs, account/server identity and per-action receipts |
 | `GET /api/sync/tracks/{id}/tags?version=…` | Version-checked ID3/FLAC metadata envelope |
@@ -173,6 +173,8 @@ binding, rejected actions, merged playlist changes and separate audio/tag
 versions. Android unit tests cover offline catalog contracts and network address
 restrictions.
 
+### Fixture-based device checks
+
 `SnapshotJsonDeviceTest` generates a catalog of 2,500 tracks with 400,000 timed
 lyric lines and 600,000 waveform peaks. It checks retained heap usage below
 96 MiB, unchanged JSON export, offline detail reads and restoration from the
@@ -189,15 +191,21 @@ cd android
   '-Pandroid.testInstrumentationRunnerArguments.class=app.caimack.sync.SnapshotJsonDeviceTest,app.caimack.sync.SyncStreamingDeviceTest,app.caimack.sync.LibrarySyncDeviceTest'
 ```
 
-`OfflineAccountDeviceTest` additionally uses the signed-in account and at least
-two downloaded radio tracks. It temporarily disables Wi-Fi and simulates battery
-power, exercises catalog browsing, public playlists, local radio playback through
-the app's playback service and the end of its queue, and creates/reorders/deletes
-a temporary playlist. It then reconnects and verifies that queued edits reached
-the real server. The test restores Wi-Fi, battery reporting and player settings
-in `finally`; its playback signals are ordinary listening events on that account.
+### Check against a real server
+
+`OfflineAccountDeviceTest` requires a signed-in account in the isolated test
+app, active sync, and at least two synchronized tracks with offline radio.
+Install the isolated app from `android/` with
+`./gradlew :app:installDebug -PcaimackIsolatedUiTests=true`, then sign in and
+prepare the library before running the test.
+
+The test turns off Wi-Fi and simulates battery power, browses the catalog,
+plays offline radio, and creates, reorders, then deletes a temporary playlist.
+After reconnecting, it verifies that queued edits reached the server. It
+restores Wi-Fi, battery reporting, and player settings. Playback appears as
+ordinary listening activity in the account, so use a test account.
 
 ```sh
-adb shell am instrument -w -e class app.caimack.sync.OfflineAccountDeviceTest \
-  app.caimack.test/androidx.test.runner.AndroidJUnitRunner
+./gradlew :app:connectedDebugAndroidTest -PcaimackIsolatedUiTests=true \
+  '-Pandroid.testInstrumentationRunnerArguments.class=app.caimack.sync.OfflineAccountDeviceTest'
 ```
