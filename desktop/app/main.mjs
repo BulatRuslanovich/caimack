@@ -217,7 +217,7 @@ if (!app.requestSingleInstanceLock()) {
         height: 850,
         minWidth: 800,
         minHeight: 540,
-        backgroundColor: "#171819",
+        backgroundColor: "#1d1916",
         icon: join(renderer, "icons", "icon-512.png"),
         show: !smokeProfile,
         webPreferences: {

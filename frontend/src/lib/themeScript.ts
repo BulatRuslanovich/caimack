@@ -24,15 +24,15 @@ export type Colorway = (typeof COLORWAYS)[number];
 
 export const DEFAULT_COLORWAY: Colorway = "coffee";
 
-const COFFEE_COLORS = { dark: "#171819", light: "#eeefec" };
+const COFFEE_COLORS = { dark: "#1d1916", light: "#f3e9dc" };
 
 export const THEME_COLORS: Record<Colorway, Record<Palette, string>> = {
   coffee: COFFEE_COLORS,
-  graphite: { dark: "#000000", light: "#f1f1ef" },
-  midnight: { dark: "#14171c", light: "#eff0f2" },
-  plum: { dark: "#19171b", light: "#f2eff0" },
-  studio: { dark: "#151a17", light: "#eff2ef" },
-  dodo: { dark: "#1d1713", light: "#fff8f1" },
+  graphite: { dark: "#000000", light: "#eeeeee" },
+  midnight: { dark: "#151e2c", light: "#e8eff8" },
+  plum: { dark: "#241a2f", light: "#f2e9f3" },
+  studio: { dark: "#172219", light: "#ebeee3" },
+  dodo: { dark: "#201813", light: "#fff0e2" },
   cover: COFFEE_COLORS,
 };
 
