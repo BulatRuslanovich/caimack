@@ -242,7 +242,7 @@ download_files() {
   local ref destination file
   ref=$(release_ref)
   STAGING=$(mktemp -d "$STATE/download.XXXXXX")
-  local assets=(.env.example docker-compose.yml docker-compose.images.yml "$MODULE" "$AMD_MODULE" deploy/Caddyfile caimack.sh setup.sh)
+  local assets=(.env.example docker-compose.yml docker-compose.images.yml "$MODULE" "$AMD_MODULE" deploy/Caddyfile caimack.sh)
   for file in "${assets[@]}"; do
     mkdir -p -- "$STAGING/$(dirname -- "$file")"
     fetch "https://raw.githubusercontent.com/$REPOSITORY/$ref/$file" "$STAGING/$file" || die "Could not download $file from $ref. Existing files were preserved."
@@ -253,7 +253,7 @@ download_files() {
     fetch "https://raw.githubusercontent.com/$REPOSITORY/$ref/$file" "$STAGING/$file" || die "Could not download $file from $ref. Existing files were preserved."
     assets+=("$file")
   fi
-  bash -n "$STAGING/caimack.sh"; bash -n "$STAGING/setup.sh"
+  bash -n "$STAGING/caimack.sh";
   if [[ -f $ENV_FILE ]]; then
     cp -- "$ENV_FILE" "$STAGING/.env"
     docker compose --env-file "$STAGING/.env" -f "$STAGING/docker-compose.yml" -f "$STAGING/docker-compose.images.yml" -f "$STAGING/$MODULE" config --quiet
@@ -264,7 +264,7 @@ download_files() {
     if [[ -f $file ]]; then mkdir -p -- "$destination/$(dirname -- "$file")"; cp -p -- "$file" "$destination/$file"; fi
     mkdir -p -- "$(dirname -- "$file")"; mv -f -- "$STAGING/$file" "$file"
   done
-  chmod 755 caimack.sh setup.sh
+  chmod 755 caimack.sh
   rm -f -- "$STAGING/.env"
   [[ ! -d $STAGING/deploy/monitoring ]] || rmdir "$STAGING/deploy/monitoring"
   rmdir "$STAGING/deploy" "$STAGING"; STAGING=''

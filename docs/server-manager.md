@@ -68,7 +68,6 @@ To update a manual image deployment, run `docker compose pull` and
 `docker compose up -d` with the same files and overrides. For a source build,
 omit the image override and use `docker compose up -d --build`. The manager
 offers the same source-build option through `./caimack.sh install --build`.
-`setup.sh` remains a compatibility entry point for the manager.
 
 ### Library scans
 

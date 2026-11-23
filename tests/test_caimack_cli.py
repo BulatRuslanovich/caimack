@@ -21,7 +21,6 @@ class ServerCliTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         for name in [
             "caimack.sh",
-            "setup.sh",
             ".env.example",
             "docker-compose.yml",
             "docker-compose.images.yml",
@@ -124,7 +123,6 @@ esac
             "deploy/Caddyfile",
             "deploy/monitoring/exporter.compose.yml",
             "caimack.sh",
-            "setup.sh",
         ]:
             target = release / name
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -457,7 +455,6 @@ fi
         self.assertIn("music $money \\' #", self.configuration())
 
     def test_legacy_entry_point_and_input_validation(self):
-        self.run_cli("--help", script="setup.sh")
         self.install()
         before = self.configuration()
         self.run_cli("owner", "--owner", "bad user", "--yes", success=False)
