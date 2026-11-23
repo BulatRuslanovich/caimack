@@ -91,6 +91,21 @@ uses checked-in SQL metadata and still allows database-backed tests to connect.
 The Deezer and LRCLIB live tests are opt-in.
 [Database migration and test procedures](../db/README.md)
 
+## Preview the project website
+
+Build the landing page and documentation with Python 3.14, then open the local
+preview on port 8000.
+
+```sh
+python -m pip install -r scripts/pages-requirements.txt
+python scripts/build_pages.py
+python -m http.server --directory out/pages 8000
+```
+
+The [GitHub Pages workflow](../.github/workflows/pages.yml) checks the build on
+pull requests and deploys website changes from `master`. The repository uses
+**Settings → Pages → Source → GitHub Actions** for publishing.
+
 ## Music integration modules
 
 Default builds include Yandex Music and VK Music. An administrator can enable

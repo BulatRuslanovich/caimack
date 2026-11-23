@@ -2,6 +2,8 @@
 
 Choose a guide based on what you want to do. New to Caimack? Start with the
 [README](../README.md#quick-start) to deploy the server and sign in.
+See the [Caimack website](https://bulatruslanovich.github.io/caimack/) for a tour
+of the app.
 
 ## Listen on your devices
 

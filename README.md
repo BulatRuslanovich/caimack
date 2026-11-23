@@ -7,6 +7,7 @@
 <p align="center"><strong>Stream your own music collection from your own server.</strong></p>
 
 <p align="center">
+  <a href="https://bulatruslanovich.github.io/caimack/">Website</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="docs/README.md">Documentation</a> ·
   <a href="https://github.com/BulatRuslanovich/caimack/releases">App downloads</a>
