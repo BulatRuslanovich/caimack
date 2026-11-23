@@ -3,7 +3,8 @@
 # Development
 
 Run these commands from the repository root unless a command changes
-directories. Use a Bash-compatible shell for Makefile commands.
+directories. Run `make` or `make help` to list the available targets. Use a
+Bash-compatible shell to run the development, check, and build targets.
 
 ## Requirements
 
