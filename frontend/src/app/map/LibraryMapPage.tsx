@@ -14,7 +14,6 @@ import { useToast } from "@/lib/useToast";
 import type { MapPoint, Track } from "@/lib/types";
 import { usePlayerActions, usePlayerState } from "@/contexts/PlayerContext";
 import { useT } from "@/contexts/I18nContext";
-import { PageHeader } from "@/components/PageHeader";
 import { Query } from "@/components/Query";
 import { Button } from "@/components/ui/button";
 import { MapLayersMenu } from "@/components/map/MapLayersMenu";
@@ -84,8 +83,8 @@ export function LibraryMapPage() {
   const map = useQuery(queries.libraryMap());
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-5">
-      <PageHeader title={t("map.title")} subtitle={t("map.description")} />
+    <div className="map-page flex min-h-0 flex-1 flex-col gap-3">
+      {!map.data?.points.length && <MapHeading />}
 
       <Query
         result={map}
@@ -96,6 +95,12 @@ export function LibraryMapPage() {
       </Query>
     </div>
   );
+}
+
+function MapHeading() {
+  const t = useT();
+
+  return <h1 className="map-heading">{t("map.title")}</h1>;
 }
 
 function MapExplorer({ points, totalTracks }: { points: MapPoint[]; totalTracks: number }) {
@@ -240,42 +245,110 @@ function MapExplorer({ points, totalTracks }: { points: MapPoint[]; totalTracks:
       data-expanded={expanded}
       className={cn(
         "map-explorer flex min-h-0 flex-1 flex-col",
-        expanded &&
-          "fixed inset-0 z-45 bg-background px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]",
+        expanded && "fixed inset-0 z-45 bg-background",
       )}
     >
-      <div className="map-toolbar">
-        <Select
-          value={genre ?? ALL_GENRES}
-          onValueChange={(value) => setGenre(value === ALL_GENRES ? null : value)}
-        >
-          <SelectTrigger aria-label={t("map.genre")} className="min-w-[11rem]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_GENRES}>{t("map.allGenres")}</SelectItem>
-            {genres.map((name) => (
-              <SelectItem key={name} value={name}>
-                {genreName(name)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <header className="map-toolbar">
+        <MapHeading />
+        <p className="sr-only">{t("map.description")}</p>
+        <div className="map-filters">
+          <Select
+            value={genre ?? ALL_GENRES}
+            onValueChange={(value) => setGenre(value === ALL_GENRES ? null : value)}
+          >
+            <SelectTrigger aria-label={t("map.genre")} className="map-genre-trigger">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_GENRES}>{t("map.allGenres")}</SelectItem>
+              {genres.map((name) => (
+                <SelectItem key={name} value={name}>
+                  {genreName(name)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-        <MapLayersMenu layers={layers} onToggle={toggleLayer} />
+          <MapLayersMenu layers={layers} onToggle={toggleLayer} />
 
-        <Button
-          variant={selecting ? "secondary" : "outline"}
-          size="sm"
-          className="map-selection-toggle"
-          aria-pressed={selecting}
-          aria-label={t("map.select")}
-          title={t("map.select")}
-          onClick={() => setSelecting((on) => !on)}
-        >
-          <LassoSelectIcon size={14} />
-          <span>{t("map.select")}</span>
-        </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="map-selection-toggle"
+            aria-pressed={selecting}
+            aria-label={t("map.select")}
+            title={t("map.select")}
+            onClick={() => setSelecting((on) => !on)}
+          >
+            <LassoSelectIcon size={14} />
+            <span>{t("map.select")}</span>
+          </Button>
+        </div>
+      </header>
+
+      <div className="map-workspace">
+        <div className="map-stage">
+          <LibraryMapCanvas
+            points={points}
+            labels={labels}
+            highlightGenre={genre}
+            nowPlayingId={currentTrack?.id ?? null}
+            playing={isPlaying}
+            route={route}
+            path={path}
+            layers={layers}
+            selecting={selecting}
+            selectedIds={selectedIds}
+            onSelect={(chosen) => {
+              setSelection(chosen.length > 0 ? chosen : null);
+              setSelecting(false);
+            }}
+            onPlay={(point) => void playOne(point)}
+            onRadio={(point) => void radioFrom(point)}
+            controllerRef={controller}
+          />
+
+          {selection && (
+            <div
+              className="map-selection absolute inset-x-3 bottom-3 z-10 mx-auto flex max-w-[34rem] flex-wrap items-center gap-2 rounded-lg bg-popover p-2 pl-4 text-popover-foreground shadow-pop"
+              aria-live="polite"
+            >
+              <span className="flex-1 text-sm font-medium">
+                {t("map.selected", { count: selection.length })}
+              </span>
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={busy}
+                onClick={() => void playSelection()}
+              >
+                <PlayIcon size={14} /> {t("action.play")}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                onClick={toggleShuffle}
+                aria-pressed={shuffle}
+                className={cn(
+                  shuffle &&
+                    "border-primary bg-primary text-primary-foreground hover:border-primary hover:bg-primary/90",
+                )}
+              >
+                <ShuffleIcon size={14} /> {t("action.shuffle")}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setSelection(null)}
+                aria-label={t("map.clearSelection")}
+                title={t("map.clearSelection")}
+              >
+                <XIcon size={14} />
+              </Button>
+            </div>
+          )}
+        </div>
 
         <div className="map-tools">
           {route && (
@@ -329,71 +402,6 @@ function MapExplorer({ points, totalTracks }: { points: MapPoint[]; totalTracks:
         </div>
       </div>
 
-      <div className="map-stage">
-        <LibraryMapCanvas
-          points={points}
-          labels={labels}
-          highlightGenre={genre}
-          nowPlayingId={currentTrack?.id ?? null}
-          playing={isPlaying}
-          route={route}
-          path={path}
-          layers={layers}
-          selecting={selecting}
-          selectedIds={selectedIds}
-          onSelect={(chosen) => {
-            setSelection(chosen.length > 0 ? chosen : null);
-            setSelecting(false);
-          }}
-          onPlay={(point) => void playOne(point)}
-          onRadio={(point) => void radioFrom(point)}
-          controllerRef={controller}
-        />
-
-        {selection && (
-          <div
-            className={cn(
-              "map-selection absolute inset-x-3 bottom-3 z-10 mx-auto flex max-w-[34rem] flex-wrap items-center gap-2 rounded-lg bg-popover p-2 pl-4 text-popover-foreground shadow-pop",
-            )}
-            aria-live="polite"
-          >
-            <span className="flex-1 text-sm font-medium">
-              {t("map.selected", { count: selection.length })}
-            </span>
-            <Button
-              variant="primary"
-              size="sm"
-              disabled={busy}
-              onClick={() => void playSelection()}
-            >
-              <PlayIcon size={14} /> {t("action.play")}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              onClick={toggleShuffle}
-              aria-pressed={shuffle}
-              className={cn(
-                shuffle &&
-                  "border-primary bg-primary text-primary-foreground hover:border-primary hover:bg-primary/90",
-              )}
-            >
-              <ShuffleIcon size={14} /> {t("action.shuffle")}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setSelection(null)}
-              aria-label={t("map.clearSelection")}
-              title={t("map.clearSelection")}
-            >
-              <XIcon size={14} />
-            </Button>
-          </div>
-        )}
-      </div>
-
       <div className="map-footer">
         <span>
           {points.length < totalTracks
@@ -410,9 +418,13 @@ function PlaysLegend() {
   const t = useT();
 
   return (
-    <div className="flex items-center gap-2 text-xs text-muted-foreground" aria-hidden="true">
+    <div className="map-plays-legend">
       <span>{t("map.legendFew")}</span>
-      <span className="h-2 w-28 rounded-full bg-[linear-gradient(to_right,color-mix(in_oklab,var(--faint-foreground)_45%,transparent),color-mix(in_oklab,var(--primary)_30%,transparent),var(--primary))]" />
+      <span className="map-plays-scale" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </span>
       <span>{t("map.legendMany")}</span>
     </div>
   );
