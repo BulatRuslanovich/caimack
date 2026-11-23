@@ -151,10 +151,9 @@ export const ru: Dictionary = {
   "error.forbidden": "Недостаточно прав для этого действия.",
   "error.requestFailed": "Запрос не удался ({status})",
   "error.unreachable": "Сервер сейчас недоступен. Пробуем ещё раз.",
-  "error.notFoundTitle": "Этот трек пропущен",
-  "error.notFoundDescription":
-    "По этому адресу ничего нет. Проверьте ссылку или вернитесь в библиотеку.",
-  "error.notFoundPlayAnyway": "Зато вот что играло",
+  "error.notFoundTitle": "Страница не найдена",
+  "error.notFoundDescription": "Проверьте адрес или вернитесь на главную.",
+  "error.notFoundPlayAnyway": "Случайный трек",
   "error.pageTitle": "Что-то пошло не так",
   "error.pageDescription":
     "Страница сбилась с ритма. Попробуйте ещё раз или вернитесь в библиотеку.",
@@ -525,8 +524,8 @@ export const ru: Dictionary = {
   "queue.saveAsPlaylist": "Сохранить очередь как плейлист",
   "queue.savedAsPlaylist": "Очередь сохранена как плейлист.",
 
-  "search.placeholder": "Музыка, исполнители, альбомы, жанры…",
-  "search.placeholderWithAudiobooks": "Музыка, исполнители, аудиокниги…",
+  "search.placeholder": "Трек, альбом, исполнитель",
+  "search.placeholderWithAudiobooks": "Музыка и аудиокниги",
   "search.audiobookPlaceholder": "Название, автор, чтец…",
   "search.browseGenres": "Жанры в фонотеке",
   "search.mostPlayedTracks": "Самые прослушиваемые треки",

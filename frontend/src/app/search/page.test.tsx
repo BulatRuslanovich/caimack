@@ -3,6 +3,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
+import { queries } from "@/lib/queries";
+import type { SearchResults, SearchTopResult, Track } from "@/lib/types";
 import SearchPage from "./page";
 
 const route = vi.hoisted(() => ({
@@ -54,6 +56,18 @@ vi.mock("@/integrations/registry", () => ({
       : [],
 }));
 vi.mock("./RecentSearches", () => ({ RecentSearches: () => <p>recent searches</p> }));
+vi.mock("./TopResult", () => ({
+  TopResult: ({ top }: { top: SearchTopResult }) => <p data-top-result>{top.track?.title}</p>,
+}));
+vi.mock("@/components/TrackList", () => ({
+  TrackList: ({ tracks }: { tracks: Track[] }) => (
+    <ul>
+      {tracks.map((track) => (
+        <li key={track.id}>{track.title}</li>
+      ))}
+    </ul>
+  ),
+}));
 vi.mock("@/app/tracks/TracksPage", () => ({
   TracksPage: ({ query }: { query: string }) => <p data-tracks-query={query} />,
 }));
@@ -64,11 +78,26 @@ vi.mock("@/app/genres/GenresPage", () => ({
   GenresPage: ({ selected }: { selected: string }) => <p data-selected-genre={selected} />,
 }));
 
-function render(search: string, { audiobooksEnabled = true, providerEnabled = false } = {}) {
+function render(
+  search: string,
+  {
+    audiobooksEnabled = true,
+    providerEnabled = false,
+    results,
+  }: {
+    audiobooksEnabled?: boolean;
+    providerEnabled?: boolean;
+    results?: SearchResults;
+  } = {},
+) {
   route.search = search;
   route.audiobooksEnabled = audiobooksEnabled;
   route.providerEnabled = providerEnabled;
   const client = new QueryClient();
+  if (results) {
+    const query = new URLSearchParams(search).get("q") ?? "";
+    client.setQueryData(queries.search(query).queryKey, results);
+  }
   return renderToStaticMarkup(
     <QueryClientProvider client={client}>
       <SearchPage />
@@ -116,4 +145,19 @@ it("finds audiobooks by title, author and narrator from the filter and All", () 
   expect(filtered).not.toContain("(Не)совершенная случайность");
   expect(render(`q=${query}`)).toContain("Квантовый кот вселенной");
   expect(render("tab=audiobooks&q=nonexistent")).toContain("search.nothingFound");
+});
+
+it("shows a sole matching track once when it is also the top result", () => {
+  const track = { id: "first", title: "First tone" } as Track;
+  const results: SearchResults = {
+    tracks: [track],
+    artists: [],
+    albums: [],
+    genres: [],
+    top: { kind: "Track", track },
+  };
+  const markup = render("q=first", { results });
+
+  expect(markup).not.toContain("data-top-result");
+  expect(markup).toContain("<li>First tone</li>");
 });

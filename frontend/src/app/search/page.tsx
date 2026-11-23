@@ -93,6 +93,12 @@ function SearchView() {
   });
 
   const previewTracks = useMemo(() => results.data?.tracks.slice(0, PREVIEW) ?? [], [results.data]);
+  const onlyTrack = previewTracks.length === 1 ? previewTracks[0] : undefined;
+  const topMatch = results.data?.top;
+  const topResult =
+    onlyTrack && topMatch?.kind === "Track" && topMatch.track?.id === onlyTrack.id
+      ? null
+      : topMatch;
   const bookMatches = libraryTab ? filterAudiobooks(books, query) : [];
   const searchPlaceholder = integration
     ? integration.search.placeholder
@@ -183,11 +189,11 @@ function SearchView() {
               {(data) => (
                 <>
                   <div
-                    data-beside={data.top && data.tracks.length > 0 ? "" : undefined}
+                    data-beside={topResult && data.tracks.length > 0 ? "" : undefined}
                     className="grid min-w-0 gap-x-6 gap-y-4 lg:data-beside:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]"
                   >
-                    {data.top && (
-                      <TopResult top={data.top} compactTrack={data.tracks.length === 1} />
+                    {topResult && (
+                      <TopResult top={topResult} compactTrack={data.tracks.length === 1} />
                     )}
 
                     {data.tracks.length > 0 && (
@@ -196,7 +202,7 @@ function SearchView() {
                         href={seeAll(query, "tracks", data.tracks.length)}
                         className="min-w-0 gap-2.5"
                       >
-                        <TrackList tracks={previewTracks} showAlbum={!data.top} />
+                        <TrackList tracks={previewTracks} showAlbum={!topResult} />
                       </Section>
                     )}
                   </div>

@@ -3,8 +3,10 @@
 "use client";
 
 import * as RadioGroup from "@radix-ui/react-radio-group";
-import { useId } from "react";
+import { useId, useSyncExternalStore } from "react";
 import { cn } from "@/lib/cn";
+
+const subscribeToHydration = () => () => {};
 
 export function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -28,6 +30,11 @@ export function Choice<T extends string>({
 }) {
   const previews = options.some((option) => option.preview);
   const legendId = useId();
+  const hydrated = useSyncExternalStore(
+    subscribeToHydration,
+    () => true,
+    () => false,
+  );
 
   return (
     <div className="settings-choice" data-preview={previews}>
@@ -39,6 +46,7 @@ export function Choice<T extends string>({
         data-preview={previews}
         className="settings-options gap-1"
         value={value}
+        disabled={!hydrated}
         onValueChange={(next) => onChange(next as T)}
       >
         {options.map((option) => (
@@ -48,7 +56,7 @@ export function Choice<T extends string>({
             className={cn(
               "settings-option flex cursor-pointer flex-col items-start gap-0.5 rounded-md border border-transparent text-left transition-colors outline-none",
               previews ? "p-3" : "px-4 py-2.5",
-              "hover:bg-raised focus-visible:ring-2 focus-visible:ring-ring/40",
+              "hover:bg-raised focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-wait disabled:opacity-70",
             )}
           >
             {option.preview}

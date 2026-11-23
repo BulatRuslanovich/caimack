@@ -38,7 +38,11 @@ export function SearchTabs({
   }, [tab]);
 
   return (
-    <ToggleGroup ref={listRef} aria-label={t("search.tabs")} className="max-sm:gap-x-4">
+    <ToggleGroup
+      ref={listRef}
+      aria-label={t("search.tabs")}
+      className="max-sm:flex-wrap max-sm:gap-x-4"
+    >
       <ToggleGroupButton
         active={tab === null}
         onClick={() => onSelect(null)}

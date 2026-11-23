@@ -151,10 +151,9 @@ export const en = {
   "error.forbidden": "You do not have permission to do this.",
   "error.requestFailed": "Request failed ({status})",
   "error.unreachable": "The server is unreachable right now. Retrying shortly.",
-  "error.notFoundTitle": "This track skipped",
-  "error.notFoundDescription":
-    "There's nothing at this address. Check the link or head back to your library.",
-  "error.notFoundPlayAnyway": "Play something anyway",
+  "error.notFoundTitle": "Page not found",
+  "error.notFoundDescription": "Check the address or go back to the home page.",
+  "error.notFoundPlayAnyway": "Play a random track",
   "error.pageTitle": "Something went wrong",
   "error.pageDescription": "This page hit a wrong note. Try again, or head back to your library.",
 
@@ -500,8 +499,8 @@ export const en = {
   "queue.saveAsPlaylist": "Save the queue as a playlist",
   "queue.savedAsPlaylist": "The queue was saved as a playlist.",
 
-  "search.placeholder": "Music, artists, albums, genres…",
-  "search.placeholderWithAudiobooks": "Music, artists, audiobooks…",
+  "search.placeholder": "Tracks, albums, artists",
+  "search.placeholderWithAudiobooks": "Music and audiobooks",
   "search.audiobookPlaceholder": "Title, author, narrator…",
   "search.browseGenres": "Browse by genre",
   "search.mostPlayedTracks": "Most played tracks",
