@@ -108,24 +108,24 @@ pull requests and deploys website changes from `master`. The repository uses
 
 ## Music integration modules
 
-Default builds include Yandex Music and VK Music. An administrator can enable
-an available provider in **Settings → Experimental** when both the web and
-server builds include it. VK requires the
-[browser extension](../extensions/vk-music/README.md).
+Each music source lives in its own Rust module under
+[`music/providers/`](../backend/crates/app/src/integrations/music/providers).
+To add a source, add a Rust file there, implement
+[`MusicProvider`](../backend/crates/app/src/integrations/music/providers.rs)
+and expose the module factory:
 
-The web build discovers manifests under `frontend/src/integrations`. Use
-`CAIMACK_INTEGRATIONS` to select comma-separated module IDs. An empty value
-excludes all modules. The API uses Cargo features `integration-yandex` and
-`integration-vk`.
-
-To build with VK only:
-
-```bash
-(cd frontend && CAIMACK_INTEGRATIONS=vk npm run build)
-(cd backend && SQLX_OFFLINE=true cargo build --locked -p api --no-default-features --features integration-vk)
+```rust
+pub(super) fn register(context: &ProviderContext) -> Arc<dyn MusicProvider> {
+    Arc::new(MyProvider::new(context.transport.clone()))
+}
 ```
 
-For a backend without integrations, use `--no-default-features` by itself.
+Return the provider ID, display name and capabilities from the trait. Implement
+the operations the provider supports. For a source with different connection
+requirements for search and audio, return separate statuses. Cargo discovers
+each provider file when it builds the app. Search and settings use the server
+catalog. The browser and token adapters still supply credentials when needed.
+Shared HTTP, extraction, and HTML parsing code lives under `music/transport/`.
 
 ## Build and test the clients
 

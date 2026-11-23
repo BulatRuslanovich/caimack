@@ -12,9 +12,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 use uuid::Uuid;
 
-use super::client::{YandexClient, YandexTrack};
+use super::client::{FileInfo, YandexClient, YandexTrack};
 use super::imports::{ImportJob, ImportKind};
 use crate::i18n::{self, Lang};
+use crate::integrations::music::audio::{Audio, Scratch};
 use crate::library::playlists::{self, PlaylistRequest};
 use crate::upload::{self, ProbeFile, ProbeVerdict, Uploads};
 use crate::{AppError, AppResult};
@@ -57,16 +58,6 @@ fn file_name(track: &YandexTrack, extension: &str) -> String {
     format!("{name}{extension}")
 }
 
-struct Scratch(PathBuf);
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        if let Err(error) = std::fs::remove_dir_all(&self.0) {
-            tracing::warn!("Could not clean up the import folder {}: {error}", self.0.display());
-        }
-    }
-}
-
 impl Importer {
     async fn import(
         &self,
@@ -91,65 +82,15 @@ impl Importer {
             return Ok(Outcome::Skipped(matched));
         }
 
-        let file = match self.yandex.file_info(token, &track.id, "lossless", &LOSSLESS_CODECS).await? {
-            Some(file) => file,
-            None => self
-                .yandex
-                .file_info(token, &track.id, "hq", &LOSSY_CODECS)
-                .await?
-                .ok_or_else(|| AppError::validation("Yandex Music did not give a download link for this track."))?,
-        };
-
-        let lossless = matches!(file.codec.as_str(), "flac-mp4" | "flac");
-
-        if verdict == ProbeVerdict::Upgrade && !lossless {
+        let info = resolve_file(&self.yandex, token, &track.id).await?;
+        if verdict == ProbeVerdict::Upgrade && !lossless(&info) {
             return Ok(Outcome::Skipped(matched));
         }
-        if !lossless && file.codec != "mp3" {
-            return Err(
-                AppError::validation("Yandex Music offered only {0}, which Caimack does not store.").arg(&file.codec)
-            );
-        }
-
-        let format = if lossless { formats::FLAC } else { formats::MP3 };
-        let scratch = Scratch(std::env::temp_dir().join("caimack-yandex").join(Uuid::now_v7().simple().to_string()));
-        tokio::fs::create_dir_all(&scratch.0).await.map_err(AppError::internal)?;
-        let downloaded = scratch.0.join("source");
-        let audio = scratch.0.join(format!("track{}", format.extension));
-
-        self.yandex.download(&file.url, &downloaded).await?;
-        if file.codec == "flac-mp4" {
-            if !media::ffmpeg::remux_flac(&downloaded, &audio).await? {
-                return Err(AppError::validation("The FLAC stream could not be unpacked."));
-            }
-        } else {
-            tokio::fs::rename(&downloaded, &audio).await.map_err(AppError::internal)?;
-        }
-
-        let album = track.album.as_ref();
-        let (cover, lyrics) = tokio::join!(
-            self.yandex.cover(album.and_then(|a| a.cover_uri.as_deref()).or(track.cover_uri.as_deref())),
-            self.yandex.lyrics(token, &track.id),
-        );
-        let tags = AudioTags {
-            title: track.title.clone(),
-            artists: track.artists.clone(),
-            album_artists: album
-                .map(|a| a.artists.clone())
-                .filter(|a| !a.is_empty())
-                .unwrap_or_else(|| track.artists.clone()),
-            album: album.map(|a| a.title.clone()),
-            genre: album.and_then(|a| a.genre.as_ref()).map(|code| genres.get(code).unwrap_or(code).clone()),
-            year: album.and_then(|a| a.year),
-            track_number: album.and_then(|a| a.track_number),
-            disc_number: album.and_then(|a| a.disc_number),
-            cover,
-            lyrics,
-        };
-        write_tags(audio.clone(), tags).await?;
-
-        let length = tokio::fs::metadata(&audio).await.map_err(AppError::internal)?.len();
-        let body = tokio::fs::File::open(&audio).await.map_err(AppError::internal)?;
+        let prepared = prepare_file(&self.yandex, token, track, genres, info).await?;
+        let format = prepared.format;
+        let audio = &prepared.path;
+        let length = tokio::fs::metadata(audio).await.map_err(AppError::internal)?.len();
+        let body = tokio::fs::File::open(audio).await.map_err(AppError::internal)?;
         let name = file_name(track, format.extension);
         let result = self.uploads.upload(Uuid::nil(), &name, i64::try_from(length).ok(), body, lang).await;
         if let Some(failure) = result.failed.into_iter().next() {
@@ -168,9 +109,86 @@ impl Importer {
 
         let id =
             result.uploaded.first().ok_or_else(|| AppError::internal(anyhow::anyhow!("Missing uploaded track")))?.id;
-        tracing::debug!(provider_track_id = track.id, codec = file.codec, "Yandex Music track imported");
+        tracing::debug!(provider_track_id = track.id, codec = format.codec(), "Yandex Music track imported");
         Ok(Outcome::Added(id))
     }
+}
+
+pub(crate) async fn prepare(
+    yandex: &YandexClient,
+    token: &str,
+    track: &YandexTrack,
+    genres: &HashMap<String, String>,
+) -> AppResult<Audio> {
+    let file = resolve_file(yandex, token, &track.id).await?;
+    prepare_file(yandex, token, track, genres, file).await
+}
+
+async fn resolve_file(yandex: &YandexClient, token: &str, id: &str) -> AppResult<FileInfo> {
+    Ok(match yandex.file_info(token, id, "lossless", &LOSSLESS_CODECS).await? {
+        Some(file) => file,
+        None => yandex
+            .file_info(token, id, "hq", &LOSSY_CODECS)
+            .await?
+            .ok_or_else(|| AppError::validation("Yandex Music did not give a download link for this track."))?,
+    })
+}
+
+fn lossless(file: &FileInfo) -> bool {
+    matches!(file.codec.as_str(), "flac-mp4" | "flac")
+}
+
+async fn prepare_file(
+    yandex: &YandexClient,
+    token: &str,
+    track: &YandexTrack,
+    genres: &HashMap<String, String>,
+    file: FileInfo,
+) -> AppResult<Audio> {
+    let lossless = lossless(&file);
+
+    if !lossless && file.codec != "mp3" {
+        return Err(
+            AppError::validation("Yandex Music offered only {0}, which Caimack does not store.").arg(&file.codec)
+        );
+    }
+
+    let format = if lossless { formats::FLAC } else { formats::MP3 };
+    let scratch = Scratch::new().await?;
+    let downloaded = scratch.file("source");
+    let audio = scratch.file(&format!("track{}", format.extension));
+
+    yandex.download(&file.url, &downloaded).await?;
+    if file.codec == "flac-mp4" {
+        if !media::ffmpeg::remux_flac(&downloaded, &audio).await? {
+            return Err(AppError::validation("The FLAC stream could not be unpacked."));
+        }
+    } else {
+        tokio::fs::rename(&downloaded, &audio).await.map_err(AppError::internal)?;
+    }
+
+    let album = track.album.as_ref();
+    let (cover, lyrics) = tokio::join!(
+        yandex.cover(album.and_then(|a| a.cover_uri.as_deref()).or(track.cover_uri.as_deref())),
+        yandex.lyrics(token, &track.id),
+    );
+    let tags = AudioTags {
+        title: track.title.clone(),
+        artists: track.artists.clone(),
+        album_artists: album
+            .map(|a| a.artists.clone())
+            .filter(|a| !a.is_empty())
+            .unwrap_or_else(|| track.artists.clone()),
+        album: album.map(|a| a.title.clone()),
+        genre: album.and_then(|a| a.genre.as_ref()).map(|code| genres.get(code).unwrap_or(code).clone()),
+        year: album.and_then(|a| a.year),
+        track_number: album.and_then(|a| a.track_number),
+        disc_number: album.and_then(|a| a.disc_number),
+        cover,
+        lyrics,
+    };
+    write_tags(audio.clone(), tags).await?;
+    Ok(Audio { path: audio, format, original_bitrate: None, album: None, cover: None, _scratch: scratch })
 }
 
 async fn write_tags(path: PathBuf, tags: AudioTags) -> AppResult<()> {
@@ -354,13 +372,13 @@ mod tests {
         assert_eq!(probe_file(&track(&[], "Song")).artist.as_deref(), Some("Unknown Artist"));
     }
 
-    #[test]
-    fn scratch_folder_is_removed_on_drop() -> std::io::Result<()> {
-        let path = std::env::temp_dir().join(format!("caimack-scratch-{}", Uuid::now_v7().simple()));
-        std::fs::create_dir_all(&path)?;
-        std::fs::write(path.join("file"), b"x")?;
-        drop(Scratch(path.clone()));
-        assert!(!path.exists());
+    #[tokio::test]
+    async fn scratch_folder_is_removed_on_drop() -> AppResult<()> {
+        let scratch = Scratch::new().await?;
+        let file = scratch.file("test.mp3");
+        tokio::fs::write(&file, b"audio").await.map_err(AppError::internal)?;
+        drop(scratch);
+        assert!(!file.exists());
         Ok(())
     }
 
@@ -416,14 +434,14 @@ mod tests {
             ("/genres", "200 OK", r#"{"result":[]}"#),
         ])
         .await;
-        let scratch = Scratch(std::env::temp_dir().join(format!("caimack-playlist-{}", Uuid::now_v7())));
+        let scratch = Scratch::new().await?;
         let (transcodes, _transcode_jobs) = TranscodeQueue::new();
         let (enrichment, _enrichment_jobs) = EnrichmentQueue::new();
         let importer = Importer {
             yandex,
             uploads: Uploads {
                 db: db.clone(),
-                storage: Storage::open(&scratch.0)?,
+                storage: Storage::open(&scratch.file("storage"))?,
                 transcodes,
                 hashes: Default::default(),
                 enrichment,

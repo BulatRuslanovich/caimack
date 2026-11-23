@@ -4,6 +4,7 @@
 
 import { cn } from "@/lib/cn";
 import type { Route } from "next";
+import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import { Activity, Suspense, useMemo, useState } from "react";
@@ -18,11 +19,19 @@ import { Query } from "@/components/Query";
 import { TrackList } from "@/components/TrackList";
 import { SearchIcon } from "lucide-react";
 import { hiddenScrollbar } from "@/components/Shelf";
-import { ToggleGroup, ToggleGroupButton } from "@/components/ui/toggle-group";
+import { useAuth } from "@/contexts/AuthContext";
+import { isMusicLink } from "@/integrations/music";
+import {
+  useExternalMusicSearch,
+  useMusicDefaults,
+  useMusicSources,
+  usePlaylistLinkImport,
+} from "@/integrations/useMusicSources";
+import { MusicSourceFilter } from "./MusicSourceFilter";
+import { MusicSearch } from "./MusicSearch";
 import { useT } from "@/contexts/I18nContext";
 import { useAudiobooks } from "@/contexts/AudiobookContext";
 import { filterAudiobooks, type Audiobook } from "@/lib/audiobooks";
-import { useEnabledIntegrations } from "@/integrations/registry";
 import { TracksPage } from "@/app/tracks/TracksPage";
 import { AlbumsPage } from "@/app/albums/(list)/AlbumsPage";
 import { ArtistsPage } from "@/app/artists/(list)/ArtistsPage";
@@ -59,15 +68,34 @@ function SearchView() {
   const client = useQueryClient();
 
   const { enabled: audiobooksEnabled, books, result: audiobookCatalog } = useAudiobooks();
-  const integrations = useEnabledIntegrations();
+  const { isAdmin } = useAuth();
+  const externalSearch = useExternalMusicSearch();
+  const linkImport = usePlaylistLinkImport();
+  const disabledSources = useMusicDefaults();
+  const [filters, setFilters] = useState<Record<string, boolean>>({});
 
   const query = (params.get("q") ?? "").trim();
+  const [draft, setDraft] = useState({ query, value: query });
+  if (draft.query !== query) setDraft({ query, value: query });
   const tabParam = params.get("tab");
-  const integration = integrations.find(({ id }) => id === tabParam);
-  const Workspace = integration?.search.Workspace;
-  const libraryTab = !integration;
   const tab =
     isCatalogTab(tabParam) && (tabParam !== "audiobooks" || audiobooksEnabled) ? tabParam : null;
+  const musicLink = isAdmin && isMusicLink(query);
+  const playlistLink = musicLink && linkImport === true;
+  const musicWorkspace =
+    isAdmin && (musicLink || tab === null || tab === "tracks" || tab === "albums");
+  const searchEnabled = musicWorkspace && externalSearch && !musicLink;
+  const unified = playlistLink || searchEnabled;
+  const { sources, catalog, vk } = useMusicSources(unified);
+  const searchable = sources.filter(({ capabilities }) =>
+    tab === "albums" && !playlistLink
+      ? capabilities.albums
+      : tab === "tracks" || playlistLink
+        ? capabilities.tracks
+        : capabilities.tracks || capabilities.albums,
+  );
+  const enabled = (id: string) => filters[id] ?? !disabledSources.includes(id);
+  const selected = searchable.filter(({ id, status }) => status === "ready" && enabled(id));
   const [visited, setVisited] = useState<CatalogTab[]>([]);
   if (tab && tab !== "audiobooks" && !visited.includes(tab)) setVisited([...visited, tab]);
 
@@ -89,7 +117,7 @@ function SearchView() {
 
   const results = useQuery({
     ...queries.search(query),
-    enabled: libraryTab && tab === null && query.length >= SEARCH_MIN_LENGTH,
+    enabled: tab === null && !musicLink && query.length >= SEARCH_MIN_LENGTH,
   });
 
   const previewTracks = useMemo(() => results.data?.tracks.slice(0, PREVIEW) ?? [], [results.data]);
@@ -99,51 +127,45 @@ function SearchView() {
     onlyTrack && topMatch?.kind === "Track" && topMatch.track?.id === onlyTrack.id
       ? null
       : topMatch;
-  const bookMatches = libraryTab ? filterAudiobooks(books, query) : [];
-  const searchPlaceholder = integration
-    ? integration.search.placeholder
-    : tab === "audiobooks"
+  const bookMatches = filterAudiobooks(books, query);
+  const searchPlaceholder =
+    tab === "audiobooks"
       ? "search.audiobookPlaceholder"
-      : audiobooksEnabled
-        ? "search.placeholderWithAudiobooks"
-        : "search.placeholder";
+      : musicWorkspace && linkImport === true
+        ? "music.placeholder"
+        : audiobooksEnabled
+          ? "search.placeholderWithAudiobooks"
+          : "search.placeholder";
 
   return (
     <div className="search-page flex min-w-0 flex-col gap-3">
       <div className="search-controls flex min-w-0 flex-col gap-3 [&>header]:items-center">
         <PageHeader title={t("nav.search")} />
 
-        {integrations.length > 0 && (
-          <ToggleGroup aria-label={t("search.source")}>
-            <ToggleGroupButton
-              active={libraryTab}
-              onClick={() => !libraryTab && navigate(query, null, true)}
-            >
-              {t("search.source.library")}
-            </ToggleGroupButton>
-            {integrations.map(({ id, search: { label } }) => (
-              <ToggleGroupButton
-                key={id}
-                active={tabParam === id}
-                onClick={() => tabParam !== id && navigate(query, id, true)}
-              >
-                {t(label)}
-              </ToggleGroupButton>
-            ))}
-          </ToggleGroup>
-        )}
-
-        {searchPlaceholder && (
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <SearchField
             value={query}
-            onChange={(next) => navigate(next, integration?.id ?? tab)}
+            onChange={(next) => navigate(next, tab)}
+            onDraftChange={(value) => setDraft({ query, value })}
             placeholder={t(searchPlaceholder)}
+            className="basis-64 grow"
             autoFocus
           />
-        )}
+          {unified && (
+            <MusicSourceFilter
+              sources={searchable}
+              vkStatus={vk}
+              enabled={enabled}
+              count={selected.length}
+              loading={catalog.isPending}
+              failed={catalog.isError}
+              onToggle={(id) => setFilters((current) => ({ ...current, [id]: !enabled(id) }))}
+            />
+          )}
+        </div>
       </div>
 
-      {libraryTab && (
+      {!musicLink && (
         <SearchTabs
           tab={tab}
           audiobooksEnabled={audiobooksEnabled}
@@ -154,6 +176,15 @@ function SearchView() {
         />
       )}
 
+      {musicLink && linkImport === false && (
+        <p role="status" className="text-sm text-muted-foreground">
+          {t("music.linkImportDisabled")}{" "}
+          <Link href="/settings?tab=music" className="font-medium text-primary hover:underline">
+            {t("music.sourceSettings")}
+          </Link>
+        </p>
+      )}
+
       <div
         className="contents"
         onClickCapture={(event) => {
@@ -162,14 +193,7 @@ function SearchView() {
           }
         }}
       >
-        {integration && Workspace && (
-          <Workspace
-            key={integration.id}
-            query={query}
-            onChange={(next) => navigate(next, integration.id)}
-          />
-        )}
-        {libraryTab &&
+        {!musicLink &&
           tab === null &&
           (query.length < SEARCH_MIN_LENGTH ? (
             <SearchStart />
@@ -184,71 +208,88 @@ function SearchView() {
                 data.tracks.length === 0 &&
                 data.genres.length === 0
               }
-              empty={{ icon: <SearchIcon size={24} />, title: t("search.nothingFound") }}
+              empty={
+                unified
+                  ? undefined
+                  : {
+                      icon: <SearchIcon size={24} />,
+                      title: t("search.nothingFound"),
+                    }
+              }
             >
-              {(data) => (
-                <>
-                  <div
-                    data-beside={topResult && data.tracks.length > 0 ? "" : undefined}
-                    className="grid min-w-0 gap-x-6 gap-y-4 lg:data-beside:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]"
-                  >
-                    {topResult && (
-                      <TopResult top={topResult} compactTrack={data.tracks.length === 1} />
-                    )}
+              {(data) =>
+                unified &&
+                !topResult &&
+                !data.tracks.length &&
+                !data.albums.length &&
+                !data.artists.length &&
+                !data.genres.length &&
+                !bookMatches.length ? (
+                  <p className="py-2 text-sm text-muted-foreground">{t("music.noLocalTracks")}</p>
+                ) : (
+                  <>
+                    <div
+                      data-beside={topResult && data.tracks.length > 0 ? "" : undefined}
+                      className="grid min-w-0 gap-x-6 gap-y-4 lg:data-beside:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]"
+                    >
+                      {topResult && (
+                        <TopResult top={topResult} compactTrack={data.tracks.length === 1} />
+                      )}
 
-                    {data.tracks.length > 0 && (
+                      {data.tracks.length > 0 && (
+                        <Section
+                          title={t("nav.tracks")}
+                          href={seeAll(query, "tracks", data.tracks.length)}
+                          className="min-w-0 gap-2.5"
+                        >
+                          <TrackList tracks={previewTracks} showAlbum={!topResult} />
+                        </Section>
+                      )}
+                    </div>
+
+                    {data.albums.length > 0 && (
                       <Section
-                        title={t("nav.tracks")}
-                        href={seeAll(query, "tracks", data.tracks.length)}
-                        className="min-w-0 gap-2.5"
+                        title={t("nav.albums")}
+                        href={seeAll(query, "albums", data.albums.length)}
+                        className="gap-2.5"
                       >
-                        <TrackList tracks={previewTracks} showAlbum={!topResult} />
+                        <div className={previewRow}>
+                          {data.albums.slice(0, PREVIEW).map((album) => (
+                            <AlbumCard key={album.id} album={album} />
+                          ))}
+                        </div>
                       </Section>
                     )}
-                  </div>
 
-                  {data.albums.length > 0 && (
-                    <Section
-                      title={t("nav.albums")}
-                      href={seeAll(query, "albums", data.albums.length)}
-                      className="gap-2.5"
-                    >
-                      <div className={previewRow}>
-                        {data.albums.slice(0, PREVIEW).map((album) => (
-                          <AlbumCard key={album.id} album={album} />
-                        ))}
-                      </div>
-                    </Section>
-                  )}
+                    {data.artists.length > 0 && (
+                      <Section
+                        title={t("nav.artists")}
+                        href={seeAll(query, "artists", data.artists.length)}
+                        className="gap-2.5"
+                      >
+                        <div className={previewRow}>
+                          {data.artists.slice(0, PREVIEW).map((artist) => (
+                            <ArtistCard key={artist.id} artist={artist} />
+                          ))}
+                        </div>
+                      </Section>
+                    )}
 
-                  {data.artists.length > 0 && (
-                    <Section
-                      title={t("nav.artists")}
-                      href={seeAll(query, "artists", data.artists.length)}
-                      className="gap-2.5"
-                    >
-                      <div className={previewRow}>
-                        {data.artists.slice(0, PREVIEW).map((artist) => (
-                          <ArtistCard key={artist.id} artist={artist} />
-                        ))}
-                      </div>
-                    </Section>
-                  )}
-
-                  {data.genres.length > 0 && (
-                    <Section
-                      title={t("nav.genres")}
-                      href={seeAll(query, "genres", data.genres.length)}
-                      className="gap-2.5"
-                    >
-                      <GenreChips genres={data.genres.slice(0, PREVIEW * 2)} />
-                    </Section>
-                  )}
-                </>
-              )}
+                    {data.genres.length > 0 && (
+                      <Section
+                        title={t("nav.genres")}
+                        href={seeAll(query, "genres", data.genres.length)}
+                        className="gap-2.5"
+                      >
+                        <GenreChips genres={data.genres.slice(0, PREVIEW * 2)} />
+                      </Section>
+                    )}
+                  </>
+                )
+              }
             </Query>
           ))}
-        {libraryTab &&
+        {!musicLink &&
           tab === null &&
           query.length >= SEARCH_MIN_LENGTH &&
           bookMatches.length > 0 && (
@@ -259,7 +300,7 @@ function SearchView() {
               <AudiobookMatches books={bookMatches.slice(0, PREVIEW)} />
             </Section>
           )}
-        {libraryTab &&
+        {!musicLink &&
           tab === "audiobooks" &&
           (bookMatches.length > 0 ? (
             <AudiobookMatches books={bookMatches} />
@@ -276,7 +317,7 @@ function SearchView() {
             </Query>
           ))}
         {visited.map((category) => (
-          <Activity key={category} mode={tab === category && libraryTab ? "visible" : "hidden"}>
+          <Activity key={category} mode={tab === category && !musicLink ? "visible" : "hidden"}>
             {category === "tracks" && <TracksPage query={query} />}
             {category === "albums" && <AlbumsPage query={query} />}
             {category === "artists" && <ArtistsPage query={query} />}
@@ -290,6 +331,19 @@ function SearchView() {
             )}
           </Activity>
         ))}
+        {musicWorkspace && (!musicLink || playlistLink) && (
+          <MusicSearch
+            query={query}
+            searchEnabled={searchEnabled}
+            linkImportEnabled={linkImport === true}
+            selection={selected.map(({ id }) => id)}
+            sources={sources}
+            kind={tab === "albums" ? "albums" : tab === "tracks" ? "tracks" : "all"}
+            link={playlistLink}
+            linkPending={playlistLink && draft.query === query && draft.value.trim() !== query}
+            onQuery={(next) => navigate(next, null)}
+          />
+        )}
       </div>
     </div>
   );

@@ -6,7 +6,6 @@ use app::audiobooks::Audiobooks;
 use app::auth::AuthService;
 use app::catalog::overview::StatsCache;
 use app::config::Config;
-#[cfg(feature = "integration-yandex")]
 use app::integrations::yandex::YandexMusic;
 use app::library_scan::LibraryScanner;
 use app::playback::registry::PlaybackRegistry;
@@ -32,7 +31,7 @@ pub struct AppState {
     pub library: LibraryScanner,
     pub audiobooks: Audiobooks,
     pub playback: PlaybackRegistry,
-    #[cfg(feature = "integration-yandex")]
     pub yandex: YandexMusic,
     pub recommendations: Recommendations,
+    pub music: app::integrations::music::Music,
 }

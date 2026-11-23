@@ -22,7 +22,7 @@ const IMAGE = /^\/api\/(albums|artists|playlists|tracks)\/[0-9a-f-]+\/(cover|ima
 const HLS = /^\/api\/tracks\/([0-9a-f-]+)\/hls\//i;
 
 const UNCACHEABLE_API =
-  /^\/api\/(auth|me|connect|audiobooks|experiments|tracks\/[^/]+\/stream|playback\/|library\/(scan|enrichment)|integrations\/[^/]+\/imports(?:\/|$))/i;
+  /^\/api\/(auth|me|connect|audiobooks|experiments|music(?:\/|$)|tracks\/[^/]+\/stream|playback\/|library\/(scan|enrichment)|integrations\/[^/]+\/imports(?:\/|$))/i;
 const DOWNLOADED_CHAPTER = /^\/__caimack\/audiobooks\/[^/]+\/[^/]+\/audio\/[^/]+$/;
 
 let maintenance = Promise.resolve();

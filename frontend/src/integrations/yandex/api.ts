@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { queryOptions } from "@tanstack/react-query";
-import { qs, request } from "@/lib/http";
-import { SEARCH_MIN_LENGTH } from "@/lib/queries";
-import type { YandexImport, YandexImportKind, YandexSearch } from "./types";
+import { request } from "@/lib/http";
+import type { YandexImport, YandexImportKind } from "./types";
 import { yandexMusicToken } from "./yandexMusic";
 
 function yandexHeaders(): Record<string, string> {
@@ -12,11 +11,6 @@ function yandexHeaders(): Record<string, string> {
 }
 
 export const yandexApi = {
-  yandexSearch: (q: string, signal?: AbortSignal) =>
-    request<YandexSearch>(`/integrations/yandex-music/search${qs({ q })}`, {
-      signal,
-      headers: yandexHeaders(),
-    }),
   yandexImports: () => request<YandexImport[]>("/integrations/yandex-music/imports"),
   startYandexImport: (kind: YandexImportKind, id?: string) =>
     request<YandexImport>("/integrations/yandex-music/imports", {
@@ -29,14 +23,6 @@ export const yandexApi = {
 };
 
 export const yandexQueries = {
-  yandexSearch: (q: string) =>
-    queryOptions({
-      queryKey: ["yandexSearch", q],
-      queryFn: ({ signal }) => yandexApi.yandexSearch(q, signal),
-      enabled: q.length >= SEARCH_MIN_LENGTH,
-      staleTime: 60_000,
-    }),
-
   yandexImports: (userId: string) =>
     queryOptions({
       queryKey: ["yandexImports", userId],

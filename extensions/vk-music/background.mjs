@@ -13,6 +13,10 @@ chrome.runtime.onMessageExternal.addListener((message, sender, reply) => {
   ) {
     return false;
   }
+  if (message.action === "status") {
+    checkVkConnection().then(reply, () => reply({ error: "vkChanged" }));
+    return true;
+  }
   const query = typeof message.query === "string" ? message.query.trim() : "";
   const isPlaylist =
     message.action === "playlist" || message.action === "playlistTrack";
@@ -42,19 +46,7 @@ chrome.runtime.onMessageExternal.addListener((message, sender, reply) => {
   void (async () => {
     let response;
     try {
-      const tabs = await chrome.tabs.query({ url: VK_SITES });
-      const path = playlist ? `/music/playlist/${playlist}` : null;
-      const tab =
-        tabs.find(
-          ({ url }) => url && new URL(url).pathname.replace(/\/$/, "") === path,
-        ) ??
-        tabs.find(
-          ({ url }) =>
-            url &&
-            /^\/(?:audio|audios-?\d+|music(?:\/playlist\/[^/]+)?)\/?$/.test(
-              new URL(url).pathname,
-            ),
-        );
+      const tab = await findVkTab(playlist);
       if (tab?.id === undefined) {
         response = { error: "openVk" };
       } else {
@@ -75,3 +67,24 @@ chrome.runtime.onMessageExternal.addListener((message, sender, reply) => {
   })();
   return true;
 });
+
+
+async function findVkTab(playlist) {
+  const tabs = await chrome.tabs.query({ url: VK_SITES });
+  const path = playlist ? `/music/playlist/${playlist}` : null;
+  return (
+    tabs.find(({ url }) => url && new URL(url).pathname.replace(/\/$/, "") === path) ??
+    tabs.find(({ url }) => url && /^\/(?:audio|audios-?\d+|music(?:\/playlist\/[^/]+)?)\/?$/.test(new URL(url).pathname))
+  );
+}
+
+async function checkVkConnection() {
+  const tab = await findVkTab();
+  if (tab?.id === undefined) return { error: "openVk" };
+  const [execution] = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    world: "MAIN",
+    func: () => /^[1-9][0-9]*$/.test(String(window.vk?.id ?? "")),
+  });
+  return execution?.result ? { ready: true } : { error: "signInVk" };
+}

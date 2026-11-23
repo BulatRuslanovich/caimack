@@ -3,7 +3,6 @@
 "use client";
 
 import { Switch } from "@/components/ui/switch";
-import { useAvailableIntegrations } from "@/integrations/registry";
 import { useT } from "@/contexts/I18nContext";
 import { Panel } from "./Panel";
 import { useSetAudiobookExperiment } from "@/lib/audiobookExperiment";
@@ -13,7 +12,6 @@ export function Experimental() {
   const t = useT();
   const { enabled, experimentReady, scope } = useAudiobooks();
   const change = useSetAudiobookExperiment(scope);
-  const integrations = useAvailableIntegrations();
   return (
     <Panel title={t("settings.experimental")}>
       <label className="flex cursor-pointer items-start gap-3">
@@ -31,9 +29,6 @@ export function Experimental() {
           </span>
         </span>
       </label>
-      {integrations.map(({ id, Settings }) => (
-        <Settings key={id} />
-      ))}
     </Panel>
   );
 }

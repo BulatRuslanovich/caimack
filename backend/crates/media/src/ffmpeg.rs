@@ -166,10 +166,9 @@ pub async fn remux_flac(source: &Path, target: &Path) -> anyhow::Result<bool> {
 pub async fn convert_uploaded_audio_to_mp3(source: &Path, target: &Path) -> anyhow::Result<bool> {
     const OUTPUT_LIMIT: u64 = 64 * 1024 * 1024;
     let output_size = OUTPUT_LIMIT.to_string();
-    // Read a single uploaded media body. Do not let a demuxer open a URL or another file.
-    let input = tokio::fs::File::open(source).await?.into_std().await;
+    // Use a seekable local input for formats whose index can be at the end.
+    // Restrict demuxers and disable network protocols for imported audio.
     let mut child = command()
-        .stdin(Stdio::from(input))
         .stderr(Stdio::null())
         .args([
             "-nostdin",
@@ -177,13 +176,15 @@ pub async fn convert_uploaded_audio_to_mp3(source: &Path, target: &Path) -> anyh
             "-max_alloc",
             "67108864",
             "-protocol_whitelist",
-            "pipe",
+            "file,pipe",
             "-format_whitelist",
-            "aac,mpegts,mov,mp3,flac",
+            "aac,mpegts,mov,mp3,flac,ogg,matroska,wav,aiff",
             "-threads",
             "1",
             "-i",
-            "pipe:0",
+        ])
+        .arg(source)
+        .args([
             "-map",
             "0:a:0",
             "-map_metadata",
@@ -218,9 +219,55 @@ pub async fn convert_uploaded_audio_to_mp3(source: &Path, target: &Path) -> anyh
     }
 }
 
+pub async fn verify_import_audio(path: &Path) -> anyhow::Result<bool> {
+    let mut verify = command();
+    verify
+        .stderr(Stdio::null())
+        .args([
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-xerror",
+            "-max_alloc",
+            "67108864",
+            "-protocol_whitelist",
+            "file,pipe",
+            "-format_whitelist",
+            "mp3,flac",
+            "-i",
+        ])
+        .arg(path)
+        .args(["-map", "0:a:0", "-vn", "-f", "null", "-"]);
+    match tokio::time::timeout(std::time::Duration::from_secs(55), verify.status()).await {
+        Ok(status) => Ok(status?.success()),
+        Err(_) => Ok(false),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn converts_aac_files_with_a_trailing_index() -> anyhow::Result<()> {
+        if !is_present().await {
+            return Ok(());
+        }
+        let directory = PartialHls(std::env::temp_dir().join(format!("caimack-ffmpeg-{}", uuid::Uuid::now_v7())));
+        tokio::fs::create_dir(&directory.0).await?;
+        let input = directory.0.join("indexed.m4a");
+        let output = directory.0.join("normalized.mp3");
+        let fixture = command()
+            .args(["-nostdin", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=220:duration=1", "-c:a", "aac"])
+            .arg(&input)
+            .output()
+            .await?;
+        anyhow::ensure!(fixture.status.success(), "could not generate AAC fixture");
+        assert!(convert_uploaded_audio_to_mp3(&input, &output).await?);
+        assert!(verify_import_audio(&output).await?);
+        Ok(())
+    }
 
     #[tokio::test]
     async fn converts_uploaded_transport_stream_to_mp3() -> anyhow::Result<()> {

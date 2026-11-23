@@ -5,9 +5,8 @@ pub mod enrichment;
 mod enrichment_jobs;
 pub mod lrclib;
 pub mod lyrics;
-#[cfg(feature = "integration-vk")]
+pub mod music;
 pub mod vk;
-#[cfg(feature = "integration-yandex")]
 pub mod yandex;
 
 use std::time::Duration;

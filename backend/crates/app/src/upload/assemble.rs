@@ -18,6 +18,12 @@ use crate::{AppError, AppResult};
 const SAME_RECORDING_TOLERANCE_SECONDS: i32 = 3;
 const MAX_ORIGINAL_NAME_LENGTH: usize = 260;
 
+pub(crate) enum UploadMode {
+    Default,
+    KeepExisting,
+    Replace { id: Uuid, hash: String },
+}
+
 pub(super) struct Saved {
     pub(super) id: Uuid,
     pub(super) codec: &'static str,
@@ -49,6 +55,7 @@ pub(super) async fn assemble(
     mut metadata: AudioMetadata,
     format: AudioFormat,
     cover: Option<&str>,
+    mode: UploadMode,
 ) -> AppResult<Saved> {
     let verified = metadata.title.as_deref().is_some_and(|s| !s.trim().is_empty())
         && metadata.artists.iter().chain(&metadata.album_artists).any(|s| !s.trim().is_empty());
@@ -87,6 +94,15 @@ pub(super) async fn assemble(
         .into_iter()
         .collect();
 
+    if matches!(mode, UploadMode::KeepExisting) {
+        // Two import workers can resolve the same recording concurrently, even
+        // when the file hashes differ because the copies came from different sources.
+        sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 613983))")
+            .bind(&title_key)
+            .execute(&mut *conn)
+            .await?;
+    }
+
     let same_recording = sqlx::query!(
         "SELECT t.id, t.codec, t.file_path, t.content_hash FROM tracks t
          WHERE t.normalized_title = $1 AND t.duration_seconds BETWEEN $2 AND $3
@@ -101,11 +117,33 @@ pub(super) async fn assemble(
     .await?;
 
     let lossless = formats::is_lossless(Some(codec));
-    if !lossless && same_recording.iter().any(|t| formats::is_lossless(t.codec.as_deref())) {
-        return Err(AppError::conflict("A lossless version of this track is already in the library."));
-    }
+    let lossy =
+        match mode {
+            UploadMode::Default => {
+                if !lossless && same_recording.iter().any(|track| formats::is_lossless(track.codec.as_deref())) {
+                    return Err(AppError::conflict("A lossless version of this track is already in the library."));
+                }
+                same_recording.iter().find(|track| !formats::is_lossless(track.codec.as_deref()))
+            }
+            UploadMode::KeepExisting => {
+                if !same_recording.is_empty() {
+                    return Err(AppError::conflict("This recording is already in the library."));
+                }
+                None
+            }
+            UploadMode::Replace { id, hash } => {
+                let existing = same_recording.iter().find(|track| track.id == id && track.content_hash == hash);
+                let locked = sqlx::query_scalar::<_, Uuid>(
+                "SELECT id FROM tracks WHERE id=$1 AND content_hash=$2 AND codec IS DISTINCT FROM 'flac' FOR UPDATE",
+            ).bind(id).bind(&hash).fetch_optional(&mut *conn).await?;
+                if !lossless || existing.is_none() || locked.is_none() {
+                    return Err(AppError::conflict("The library copy changed. Look for an upgrade again."));
+                }
+                existing
+            }
+        };
 
-    if lossless && let Some(lossy) = same_recording.iter().find(|t| !formats::is_lossless(t.codec.as_deref())) {
+    if lossless && let Some(lossy) = lossy {
         let old_cache: String =
             sqlx::query_scalar("SELECT COALESCE(media_cache_hash,content_hash) FROM tracks WHERE id=$1")
                 .bind(lossy.id)

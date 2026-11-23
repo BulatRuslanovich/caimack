@@ -20,6 +20,7 @@ use crate::streaming::HashCache;
 use crate::transcode::{self, TranscodeQueue};
 use crate::{AppError, AppResult};
 
+pub(crate) use self::assemble::UploadMode;
 use self::assemble::{Saved, assemble};
 use self::cover::PreparedCover;
 
@@ -65,7 +66,7 @@ impl Uploads {
         body: impl AsyncRead + Unpin,
         lang: Lang,
     ) -> UploadResult {
-        match self.upload_single(user, file_name, content_length, body).await {
+        match self.upload_single(user, file_name, content_length, body, UploadMode::Default).await {
             Ok(track) => UploadResult { uploaded: vec![track], failed: vec![] },
             Err(error) => {
                 let reason = match error.message() {
@@ -86,12 +87,13 @@ impl Uploads {
         }
     }
 
-    async fn upload_single(
+    pub(crate) async fn upload_single(
         &self,
         user: Uuid,
         file_name: &str,
         content_length: Option<i64>,
         body: impl AsyncRead + Unpin,
+        mode: UploadMode,
     ) -> AppResult<TrackDto> {
         let started = std::time::Instant::now();
         let format = formats::for_file_name(file_name)
@@ -101,7 +103,7 @@ impl Uploads {
         }
 
         let stored = self.storage.save_track(body, format.extension, MAX_AUDIO_BYTES).await?;
-        let saved = match self.import(file_name, &stored, format, None).await {
+        let saved = match self.import_with_mode(file_name, &stored, format, None, mode).await {
             Ok(saved) => saved,
             Err(error) => {
                 self.storage.delete(&stored.relative_path);
@@ -125,7 +127,18 @@ impl Uploads {
         format: AudioFormat,
         cover: Option<Vec<u8>>,
     ) -> AppResult<Imported> {
-        let saved = self.check_and_save(file_name, stored, format, cover).await?;
+        self.import_with_mode(file_name, stored, format, cover, UploadMode::Default).await
+    }
+
+    async fn import_with_mode(
+        &self,
+        file_name: &str,
+        stored: &StoredFile,
+        format: AudioFormat,
+        cover: Option<Vec<u8>>,
+        mode: UploadMode,
+    ) -> AppResult<Imported> {
+        let saved = self.check_and_save(file_name, stored, format, cover, mode).await?;
 
         if let Some((old_path, old_hash)) = &saved.replaced {
             self.storage.delete(old_path);
@@ -152,6 +165,7 @@ impl Uploads {
         stored: &StoredFile,
         format: AudioFormat,
         cover: Option<Vec<u8>>,
+        mode: UploadMode,
     ) -> AppResult<Saved> {
         if stored.size_bytes == 0 {
             return Err(AppError::validation("The file is empty."));
@@ -202,7 +216,8 @@ impl Uploads {
         let mut cover = PreparedCover::prepare(&self.storage, artwork).await?;
         let mut tx = self.db.begin().await?;
         let saved =
-            assemble(&mut tx, file_name, stored, metadata, format, cover.as_ref().map(PreparedCover::path)).await?;
+            assemble(&mut tx, file_name, stored, metadata, format, cover.as_ref().map(PreparedCover::path), mode)
+                .await?;
         tx.commit().await?;
         if saved.cover_attached
             && let Some(cover) = &mut cover

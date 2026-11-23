@@ -7,9 +7,6 @@ license.workspace = true
 publish.workspace = true
 
 [features]
-default = ["integration-yandex", "integration-vk"]
-integration-yandex = ["dep:hmac"]
-integration-vk = []
 integration-tests = []
 
 [dependencies]
@@ -20,7 +17,7 @@ chrono.workspace = true
 envy.workspace = true
 fs4.workspace = true
 futures-util.workspace = true
-hmac = { workspace = true, optional = true }
+hmac.workspace = true
 ipnet.workspace = true
 jsonwebtoken.workspace = true
 media.workspace = true
@@ -43,6 +40,8 @@ tracing.workspace = true
 uuid.workspace = true
 walkdir.workspace = true
 same-file.workspace = true
+des = "0.9.0"
+tokio-tungstenite = "0.30.0"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

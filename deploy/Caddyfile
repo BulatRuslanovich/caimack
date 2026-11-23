@@ -17,6 +17,14 @@
 		}
 	}
 
+	@music_search path /api/music/search
+	handle @music_search {
+		reverse_proxy backend:8080 {
+			flush_interval 25ms
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
 	handle /api/* {
 		reverse_proxy backend:8080 {
 			header_up X-Real-IP {remote_host}

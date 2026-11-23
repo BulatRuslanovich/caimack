@@ -25,7 +25,6 @@ use app::config::{Config, DatabaseConfig, ModelConfig};
 use app::integrations::deezer::Deezer;
 use app::integrations::enrichment::{self, Enrichment, EnrichmentQueue};
 use app::integrations::lrclib::Lrclib;
-#[cfg(feature = "integration-yandex")]
 use app::integrations::yandex::YandexMusic;
 use app::library_scan::LibraryScanner;
 use app::recommendations::Recommendations;
@@ -144,14 +143,20 @@ async fn run() -> anyhow::Result<()> {
         background.clone(),
     ));
 
-    #[cfg(feature = "integration-yandex")]
     let yandex = {
         let (yandex, worker) =
             YandexMusic::start_worker(config.yandex_music.clone(), uploads.clone(), background.clone());
         workers.push(worker);
         yandex
     };
+    let music = app::integrations::music::Music::new(
+        uploads.clone(),
+        config.music_sources.clone(),
+        yandex.clone(),
+    )?;
+    workers.push(music.clone().spawn(background.clone()));
     let state = AppState {
+        music,
         shutdown: background.clone(),
         config: Arc::clone(&config),
         db,
@@ -164,7 +169,6 @@ async fn run() -> anyhow::Result<()> {
         library,
         audiobooks,
         playback: Default::default(),
-        #[cfg(feature = "integration-yandex")]
         yandex,
         recommendations,
     };

@@ -37,13 +37,28 @@ of the app.
 
 ### Import from music services
 
-An administrator can enable a provider in **Settings → Experimental** and open
-its tab in **Search**. For Yandex Music, save your token in the provider settings
-before searching or importing a playlist. For VK Music, follow the
-[browser extension setup](../extensions/vk-music/README.md).
+Use **Settings → Music sources** to set up providers and independently enable
+external search and import from links on this device. Use **Sources** in Search
+to change the selection for the current search. Save a token to connect Yandex Music.
+For VK, follow the [browser extension setup](../extensions/vk-music/README.md)
+and keep a signed-in VK Music tab open.
 
-The provider must be present in both the web and API builds. See
-[integration build options](development.md#music-integration-modules).
+Administrators can search for a song or paste a VK Music, Yandex Music or
+public Spotify playlist link into the same search field. A song result groups
+available versions by recording. For a link, select **Read playlist** to see
+the preview, then **Add to library**. Caimack reuses matching library tracks
+and creates a private playlist in source order. For Spotify it obtains audio
+from the selected sources. Expand the status beside the track or playlist
+link to retry missing tracks or choose a match manually.
+
+The backend Docker image includes FFmpeg, the standalone yt-dlp executable
+for YouTube and SoundCloud, and headless Chromium for long Spotify playlists.
+A local backend looks for yt-dlp on PATH and next to the server executable.
+Use `MUSIC_EXTRACTOR` or `MUSIC_CHROMIUM` to set a custom executable path.
+SoundCloud search is available without yt-dlp. Its audio downloads need it.
+
+See [adding a music provider](development.md#music-integration-modules) for
+the source layout and registration contract.
 
 ## Develop and release
 

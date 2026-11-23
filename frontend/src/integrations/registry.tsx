@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useSyncExternalStore, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { isDesktop } from "@/desktop/runtime";
 import { integrations } from "./generated";
@@ -13,24 +13,6 @@ export function useAvailableIntegrations() {
   return integrations.filter(
     ({ id, webOnly }) => !(isDesktop && webOnly) && supportedIntegrations?.includes(id),
   );
-}
-
-function subscribe(listener: () => void) {
-  const unsubscribe = integrations.map(({ preference }) => preference.subscribe(listener));
-  return () => unsubscribe.forEach((remove) => remove());
-}
-
-function enabledSnapshot() {
-  return integrations
-    .filter(({ preference }) => preference.read())
-    .map(({ id }) => id)
-    .join(" ");
-}
-
-export function useEnabledIntegrations() {
-  const available = useAvailableIntegrations();
-  const enabled = useSyncExternalStore(subscribe, enabledSnapshot, () => "").split(" ");
-  return available.filter(({ id }) => enabled.includes(id));
 }
 
 export function IntegrationRuntime({ children }: { children: ReactNode }) {

@@ -18,6 +18,7 @@ export function SearchField({
   className,
   inputRef,
   onSubmit,
+  onDraftChange,
   onBlur,
   onEmptyEscape,
 }: {
@@ -27,6 +28,7 @@ export function SearchField({
   autoFocus?: boolean;
   className?: string;
   inputRef?: Ref<HTMLInputElement>;
+  onDraftChange?: (value: string) => void;
   onSubmit?: (value: string) => void;
   onBlur?: (value: string) => void;
   onEmptyEscape?: () => void;
@@ -66,6 +68,7 @@ export function SearchField({
 
   const clear = () => {
     setInput("");
+    onDraftChange?.("");
     commit("");
   };
 
@@ -92,7 +95,11 @@ export function SearchField({
         value={input}
         autoComplete="off"
         autoFocus={autoFocus}
-        onChange={(event) => setInput(event.target.value)}
+        onChange={(event) => {
+          const next = event.target.value;
+          setInput(next);
+          onDraftChange?.(next);
+        }}
         onKeyDown={(event) => {
           if (
             event.key === "Enter" &&

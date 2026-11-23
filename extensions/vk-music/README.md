@@ -14,20 +14,18 @@ VK side.
    `edge://extensions`), enable developer mode and use **Load unpacked** to select this
    `extensions/vk-music` directory.
 2. Sign in to VK in that browser profile and leave the [VK Music tab](https://vk.ru/audio) open.
-3. Open your Caimack server as an administrator and enable **VK Music** in
-   **Settings → Experimental**. The web client and API must both include the
-   [VK integration](../../docs/development.md#music-integration-modules).
+3. Open Caimack as an administrator. Check the connection in
+   **Settings → Music sources**. Reload the extension after updating its files.
 
 ## Import tracks or playlists
 
-Go to **Search → VK Music** and look up a track or artist. Search shows cover
-thumbnails when VK provides them. Use **Add to library** on a track. Caimack
-uses its normal upload flow to save the track, its album name, and available
-artwork. Artwork goes into the file tags and the album cover when applicable.
+Use the main **Search** field to look up a song or artist with VK Music
+selected under **Sources**. Choose **Add to library** to import a matching
+recording, or expand its available versions to pick the VK copy.
 
-To copy a whole playlist, use **Import playlist** in the VK Music search tab and paste its VK link.
-Caimack creates a private playlist, reuses matches from the library, and downloads the remaining
-available tracks in source order. The result shows tracks it could not add.
+To import a playlist, paste its VK link into the same field and read the
+preview. Caimack creates a private playlist in source order, reusing library
+matches and reporting unavailable tracks.
 
 ## Use another server address
 

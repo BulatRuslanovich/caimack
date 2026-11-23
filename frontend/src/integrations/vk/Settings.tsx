@@ -2,30 +2,20 @@
 
 "use client";
 
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { useQuery } from "@tanstack/react-query";
 import { useT } from "@/contexts/I18nContext";
-import { setVkMusicEnabled, useVkMusicExperiment } from "./useVkMusicExperiment";
-import { ProviderSettings } from "../ui";
+import { VK_CONNECTION_QUERY, vkMusicConnection } from "./vkMusic";
 
 export function VkMusicSettings() {
   const t = useT();
-  const enabled = useVkMusicExperiment();
+  const { data: status } = useQuery({
+    queryKey: VK_CONNECTION_QUERY,
+    queryFn: vkMusicConnection,
+    enabled: false,
+  });
   return (
-    <ProviderSettings
-      title={t("vkMusic.title")}
-      description={t("settings.help.vkMusic")}
-      enabled={enabled}
-      onChange={setVkMusicEnabled}
-    >
-      <div className="flex flex-wrap items-center gap-3">
-        <p className="min-w-0 basis-56 grow text-sm text-muted-foreground">
-          {t("vkMusic.startHint")}
-        </p>
-        <Button asChild size="sm">
-          <Link href="/search?tab=vk">{t("vkMusic.findMusic")}</Link>
-        </Button>
-      </div>
-    </ProviderSettings>
+    <p className="text-sm text-muted-foreground">
+      {status && status !== "ready" ? t(`music.vk.${status}`) : t("vkMusic.startHint")}
+    </p>
   );
 }

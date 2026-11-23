@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-mod client;
-mod importer;
+pub(crate) mod client;
+pub(crate) mod importer;
 mod imports;
-mod playlist;
+pub(crate) mod playlist;
 
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -67,6 +67,10 @@ pub struct YandexMusic {
 }
 
 impl YandexMusic {
+    pub(crate) fn client(&self) -> &YandexClient {
+        &self.client
+    }
+
     pub fn start_worker(
         config: YandexMusicConfig,
         uploads: Uploads,
@@ -160,7 +164,7 @@ impl YandexMusic {
     }
 }
 
-fn require_token(token: Option<&str>) -> AppResult<&str> {
+pub(crate) fn require_token(token: Option<&str>) -> AppResult<&str> {
     match token.map(str::trim).filter(|t| !t.is_empty()) {
         None => Err(AppError::validation("Add a Yandex Music token in the settings first.")),
         Some(token) if token.chars().count() > TOKEN_MAX_LENGTH => {

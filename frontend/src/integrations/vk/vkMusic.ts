@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { request } from "@/lib/http";
-import type { UploadResult } from "@/lib/types";
-
 const EXTENSION_ID = "nboiinigncmofgemflodijebiebgkcbo";
 const PROTOCOL = "caimack-vk-music-v1";
-const LIMIT = 24 * 1024 * 1024;
-const COVER_LIMIT = 2 * 1024 * 1024;
 const COVER_HOSTS = [
   "vkuserphoto.ru",
   "vkuseraudio.net",
@@ -52,6 +47,7 @@ export interface VkTrack {
 }
 
 type Message =
+  | { action: "status" }
   | { action: "search"; query: string }
   | { action: "import"; query: string; trackId: string }
   | { action: "playlist"; source: string }
@@ -76,7 +72,7 @@ function send(message: Message): Promise<Record<string, unknown>> {
 
     const timer = window.setTimeout(
       () => reject(new VkMusicError("vkChanged")),
-      "trackId" in message ? 65_000 : 16_000,
+      message.action === "status" ? 2_000 : "trackId" in message ? 65_000 : 16_000,
     );
     try {
       runtime.sendMessage(EXTENSION_ID, { protocol: PROTOCOL, ...message }, (response) => {
@@ -96,6 +92,23 @@ function send(message: Message): Promise<Record<string, unknown>> {
     }
   });
 }
+
+export async function vkMusicConnection() {
+  try {
+    const reply = await send({ action: "status" });
+    return reply.ready === true ? "ready" : "unavailable";
+  } catch (error) {
+    if (error instanceof VkMusicError) {
+      if (error.code === "invalidRequest") return "update";
+      if (error.code === "extensionMissing") return "extension";
+      if (error.code === "openVk") return "openVk";
+      if (error.code === "signInVk") return "signInVk";
+    }
+    return "unavailable";
+  }
+}
+export type VkMusicConnection = Awaited<ReturnType<typeof vkMusicConnection>>;
+export const VK_CONNECTION_QUERY = ["vk-music-connection"] as const;
 
 function isTrack(value: unknown): value is VkTrack {
   if (!value || typeof value !== "object") return false;
@@ -134,12 +147,12 @@ function vkCoverUrl(value: unknown): URL | undefined {
   }
 }
 
-export async function importVkMusic(
-  query: string,
-  trackId: string,
-  onUploading: () => void,
-): Promise<UploadResult> {
-  return uploadVkTrack(await send({ action: "import", query, trackId }), onUploading);
+export function fetchVkAudio(
+  input: { trackId: string } & ({ query: string } | { source: string }),
+) {
+  return "source" in input
+    ? send({ action: "playlistTrack", ...input })
+    : send({ action: "import", ...input });
 }
 
 export async function getVkPlaylist(source: string) {
@@ -161,50 +174,4 @@ export async function getVkPlaylist(source: string) {
     throw new VkMusicError("playlistUnavailable");
   }
   return { name, tracks, omitted };
-}
-
-export async function importVkPlaylistTrack(
-  source: string,
-  trackId: string,
-): Promise<UploadResult> {
-  return uploadVkTrack(await send({ action: "playlistTrack", source, trackId }));
-}
-
-function uploadVkTrack(
-  { artist, title, audio, format, album, cover }: Record<string, unknown>,
-  onUploading?: () => void,
-): Promise<UploadResult> {
-  const audioBytes = decodeFile(audio, LIMIT);
-  if (
-    typeof artist !== "string" ||
-    typeof title !== "string" ||
-    (format !== "mp3" && format !== "flac" && format !== "stream") ||
-    !audioBytes
-  ) {
-    throw new VkMusicError("unavailable");
-  }
-  const form = new FormData();
-  form.set("title", title);
-  form.set("artist", artist);
-  form.set("format", format);
-  form.set("audio", new Blob([audioBytes]), "audio");
-  if (typeof album === "string" && album.trim()) form.set("album", album);
-  const coverBytes = decodeFile(cover, COVER_LIMIT);
-  if (coverBytes) form.set("cover", new Blob([coverBytes]), "cover");
-  onUploading?.();
-  return request<UploadResult>("/integrations/vk-music/import", { method: "POST", body: form });
-}
-
-function decodeFile(encoded: unknown, limit: number) {
-  if (typeof encoded !== "string" || encoded.length > Math.ceil(limit / 3) * 4) return null;
-  let binary: string;
-  try {
-    binary = atob(encoded);
-  } catch {
-    return null;
-  }
-  if (!binary.length || binary.length > limit) return null;
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-  return bytes;
 }

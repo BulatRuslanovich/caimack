@@ -9,7 +9,6 @@ use base64::engine::general_purpose::STANDARD_NO_PAD;
 use hmac::{Hmac, KeyInit, Mac};
 use serde_json::Value;
 use sha2::Sha256;
-use tokio::io::AsyncWriteExt;
 
 use crate::config::YandexMusicConfig;
 use crate::integrations::{http_client, read_limited};
@@ -207,16 +206,11 @@ impl YandexClient {
     }
 
     pub async fn download(&self, url: &str, target: &Path) -> AppResult<()> {
-        let mut response = self.downloads.get(url).send().await.map_err(AppError::internal)?;
+        let response = self.downloads.get(url).send().await.map_err(AppError::internal)?;
         if !response.status().is_success() {
             return Err(AppError::validation("Yandex Music did not answer ({0}).").arg(response.status().as_u16()));
         }
-        let mut file = tokio::fs::File::create(target).await.map_err(AppError::internal)?;
-        while let Some(chunk) = response.chunk().await.map_err(AppError::internal)? {
-            file.write_all(&chunk).await.map_err(AppError::internal)?;
-        }
-        file.flush().await.map_err(AppError::internal)?;
-        Ok(())
+        super::super::music::audio::stream_to(response, target).await
     }
 
     pub async fn cover(&self, cover_uri: Option<&str>) -> Option<Vec<u8>> {
@@ -445,7 +439,7 @@ fn read_playlist_track(row: &Value) -> YandexTrack {
 #[cfg(test)]
 pub(super) mod tests {
     use serde_json::json;
-    use tokio::io::AsyncReadExt;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
 
     use super::*;
