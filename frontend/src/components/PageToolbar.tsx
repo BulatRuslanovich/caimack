@@ -61,7 +61,7 @@ export function ToolbarFilters({
         <Button
           size={compact ? "icon" : "icon-lg"}
           className={cn(
-            "shrink-0 rounded-lg md:hidden min-[24rem]:w-auto min-[24rem]:px-3",
+            "shrink-0 rounded-lg md:hidden min-[24rem]:w-auto min-[24rem]:px-3 min-[24rem]:pointer-coarse:w-auto",
             (filtersOpen || mobileFilters.active) && "border-primary bg-primary-soft text-primary",
           )}
           aria-expanded={filtersOpen}

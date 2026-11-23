@@ -64,75 +64,55 @@
             <p class="hero-proof">Подключи папку только для чтения. Caimack сам соберёт каталог.</p>
           </div>
           <div class="hero-tour" id="interface" tabindex="-1">
-            <div class="tour-controls" hidden>
-              <div class="tour-tabs" role="tablist" aria-label="Интерфейс Caimack">
-                <button
-                  type="button"
-                  role="tab"
-                  id="tour-player-tab"
-                  aria-controls="tour-player"
-                  aria-selected="true"
-                >
-                  Плеер
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  id="tour-map-tab"
-                  aria-controls="tour-map"
-                  aria-selected="false"
-                  tabindex="-1"
-                >
-                  Карта
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  id="tour-offline-tab"
-                  aria-controls="tour-offline"
-                  aria-selected="false"
-                  tabindex="-1"
-                >
-                  Офлайн
-                </button>
-              </div>
-              <div class="tour-signal" aria-hidden="true"></div>
+            <div class="tour-tabs" role="tablist" aria-label="Интерфейс Caimack" hidden>
+              <button
+                type="button"
+                role="tab"
+                id="tour-player-tab"
+                aria-controls="tour-player"
+                aria-selected="true"
+              >
+                Плеер
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="tour-map-tab"
+                aria-controls="tour-map"
+                aria-selected="false"
+                tabindex="-1"
+              >
+                Карта
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="tour-offline-tab"
+                aria-controls="tour-offline"
+                aria-selected="false"
+                tabindex="-1"
+              >
+                Офлайн
+              </button>
             </div>
             <div role="tabpanel" id="tour-player" aria-labelledby="tour-player-tab">
               <figure class="hero-player">
-                <div class="hero-player-mount">
-                  <a
-                    class="screenshot"
-                    href="../docs/screenshots/landing/player.webp"
-                    data-screenshot
-                    aria-label="Увеличить скриншот полноэкранного плеера"
-                  >
-                    <img
-                      src="../docs/screenshots/landing/player.webp"
-                      width="1600"
-                      height="1000"
-                      alt="Плеер Caimack с треком Time Moves Slow, обложкой альбома IV, винилом и звуковой волной"
-                      fetchpriority="high"
-                    />
-                    <span class="expand-icon" aria-hidden="true"></span>
-                  </a>
-                  <a
-                    class="hero-phone"
-                    href="#devices"
-                    aria-label="Посмотреть приложение Caimack для Android"
-                  >
-                    <img
-                      src="../docs/screenshots/landing/android-player.webp"
-                      width="1080"
-                      height="2400"
-                      alt=""
-                      decoding="async"
-                    />
-                  </a>
-                </div>
-                <figcaption data-lightbox-title="Полноэкранный плеер — Time Moves Slow">
-                  Полноэкранный плеер <span>BADBADNOTGOOD / Time Moves Slow</span>
-                </figcaption>
+                <a
+                  class="screenshot"
+                  href="../docs/screenshots/landing/player.webp"
+                  data-screenshot
+                  data-lightbox-title="Полноэкранный плеер"
+                  aria-label="Увеличить скриншот полноэкранного плеера"
+                >
+                  <img
+                    src="../docs/screenshots/landing/player.webp"
+                    width="1600"
+                    height="1000"
+                    alt="Плеер Caimack с треком Time Moves Slow, обложкой альбома IV, винилом и звуковой волной"
+                    fetchpriority="high"
+                  />
+                  <span class="expand-icon" aria-hidden="true"></span>
+                </a>
               </figure>
             </div>
             <div role="tabpanel" id="tour-map" aria-labelledby="tour-map-tab" hidden>
@@ -141,19 +121,19 @@
                   class="screenshot"
                   href="../docs/screenshots/landing/map.webp"
                   data-screenshot
+                  data-lightbox-title="Карта библиотеки"
                   aria-label="Увеличить карту библиотеки в туре"
                 >
                   <img
                     src="../docs/screenshots/landing/map.webp"
-                    width="1919"
-                    height="1079"
+                    width="1328"
+                    height="864"
                     alt="Группы похожих по звучанию треков на карте библиотеки Caimack"
                     loading="lazy"
                     decoding="async"
                   />
                   <span class="expand-icon" aria-hidden="true"></span>
                 </a>
-                <figcaption>На карте похожие по звучанию треки расположены рядом</figcaption>
               </figure>
             </div>
             <div role="tabpanel" id="tour-offline" aria-labelledby="tour-offline-tab" hidden>
@@ -163,6 +143,7 @@
                     class="screenshot"
                     href="../docs/screenshots/landing/android-player.webp"
                     data-screenshot
+                    data-lightbox-title="Плеер Caimack для Android"
                     aria-label="Увеличить скриншот плеера Android в туре"
                   >
                     <img
@@ -183,7 +164,6 @@
                     <a class="text-link" href="#offline">Как работает офлайн</a>
                   </div>
                 </div>
-                <figcaption>Нативный плеер Caimack для Android</figcaption>
               </figure>
             </div>
           </div>
@@ -328,8 +308,8 @@
               >
                 <img
                   src="../docs/screenshots/landing/map.webp"
-                  width="1919"
-                  height="1079"
+                  width="1328"
+                  height="864"
                   alt="Карта библиотеки Caimack с группами похожих треков, обложками и кнопкой выделения области"
                   loading="lazy"
                   decoding="async"
@@ -499,8 +479,8 @@
         <div class="wrap">
           <div class="offline-intro">
             <h2 id="offline-title" class="offline-headline">
-              <span>Вся музыка с тобой.</span>
-              <span>Даже без интернета.</span>
+              <span>Вся медиатека</span>
+              <span>офлайн на Android</span>
             </h2>
             <p>
               Когда файлы загружены, на Android можно открыть коллекцию и слушать её без интернета,

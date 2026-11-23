@@ -1,30 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 const heroTour = document.querySelector(".hero-tour");
-const tourControls = heroTour.querySelector(".tour-controls");
-const tourTabList = tourControls.querySelector(".tour-tabs");
+const tourTabList = heroTour.querySelector(".tour-tabs");
 const tourTabs = [...tourTabList.querySelectorAll('[role="tab"]')];
-const tourSignal = tourControls.querySelector(".tour-signal");
-const playerPanel = document.querySelector("#tour-player");
-const motionPreference = window.matchMedia("(prefers-reduced-motion: no-preference)");
-const signalProfiles = {
-  "tour-player": [1, 3, 2, 5, 3, 6, 9, 5, 4, 7, 10, 6, 8, 4, 5, 8, 10, 7, 5, 3, 7, 4, 2, 3, 1],
-  "tour-map": [2, 2, 4, 8, 5, 2, 3, 3, 6, 4, 2, 4, 7, 10, 6, 2, 3, 6, 8, 4, 3, 5, 2, 1, 2],
-  "tour-offline": [1, 2, 2, 3, 5, 5, 8, 9, 10, 8, 7, 5, 3, 2, 3, 4, 6, 7, 5, 4, 2, 1, 2, 1, 1],
-};
-
-function drawTourSignal(tab) {
-  const profile = signalProfiles[tab.getAttribute("aria-controls")];
-  tourSignal.replaceChildren(
-    ...profile.map((height, index) => {
-      const bar = document.createElement("span");
-      bar.className = "signal-bar";
-      bar.style.setProperty("--amplitude", height / 10);
-      bar.style.setProperty("--bar-index", index);
-      return bar;
-    }),
-  );
-}
 
 function selectTourTab(selectedTab) {
   if (selectedTab.getAttribute("aria-selected") === "true") return;
@@ -37,7 +15,6 @@ function selectTourTab(selectedTab) {
     panel.hidden = !isSelected;
     panel.classList.toggle("is-entering", isSelected);
   }
-  drawTourSignal(selectedTab);
 }
 
 for (const tab of tourTabs) {
@@ -61,28 +38,7 @@ tourTabList.addEventListener("keydown", (event) => {
   nextTab.focus();
 });
 
-drawTourSignal(tourTabs[0]);
-tourControls.hidden = false;
-
-let pointerFrame;
-heroTour.addEventListener("pointermove", (event) => {
-  if (event.pointerType !== "mouse" || playerPanel.hidden || !motionPreference.matches) return;
-
-  cancelAnimationFrame(pointerFrame);
-  pointerFrame = requestAnimationFrame(() => {
-    const rect = heroTour.getBoundingClientRect();
-    const x = (event.clientX - rect.left) / rect.width - 0.5;
-    const y = (event.clientY - rect.top) / rect.height - 0.5;
-    heroTour.style.setProperty("--art-x", `${x * 14}px`);
-    heroTour.style.setProperty("--art-y", `${y * 10}px`);
-  });
-});
-
-heroTour.addEventListener("pointerleave", () => {
-  cancelAnimationFrame(pointerFrame);
-  heroTour.style.removeProperty("--art-x");
-  heroTour.style.removeProperty("--art-y");
-});
+tourTabList.hidden = false;
 
 const lightbox = document.querySelector(".lightbox");
 const lightboxTitle = document.querySelector("#lightbox-title");
@@ -129,7 +85,8 @@ if (typeof lightbox.showModal === "function") {
       const preview = link.querySelector("img");
       screenshotLink = link;
       const caption = link.closest("figure").querySelector("figcaption");
-      lightboxTitle.textContent = caption.dataset.lightboxTitle || caption.textContent.trim();
+      lightboxTitle.textContent =
+        link.dataset.lightboxTitle || caption?.textContent.trim() || "Скриншот";
       lightboxImage.alt = preview.alt;
       lightboxImage.hidden = true;
       lightboxStatus.textContent = "Загрузка скриншота…";
