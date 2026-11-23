@@ -72,79 +72,116 @@
   container: account-settings / inline-size;
 }
 
-.account-layout {
-  display: grid;
-}
-
-.account-profile {
-  margin-bottom: 1.5rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--library-edge);
-}
-
 .account-panel {
   min-width: 0;
 }
 
 .account-panel + .account-panel {
   margin-top: 1.5rem;
-  padding-top: 1.5rem;
+  padding-top: 1rem;
   border-top: 1px solid var(--library-edge);
 }
 
-.account-panel-title {
+.account-section-header {
   display: flex;
-  min-height: 2rem;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.625rem;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+}
+
+.account-panel-title {
   font-family: var(--font-display);
   font-size: 1rem;
   font-weight: 500;
-  text-wrap: wrap;
 }
 
-.account-panel-title svg {
-  flex-shrink: 0;
-  color: var(--primary);
-}
-
-.account-sign-in-row {
+.account-session-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 3rem;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) 6rem;
+  align-items: center;
   gap: 0.25rem 0.75rem;
-  padding-block: 0.75rem;
+  padding-block: 0.5rem;
 }
 
-.account-sign-in-time {
-  grid-column: 2;
+.account-session-action {
+  justify-self: end;
 }
 
-@container account-settings (width >= 35rem) {
-  .account-sign-in-row {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+.account-sign-in-table {
+  width: 100%;
+  table-layout: fixed;
+  font-size: 0.875rem;
+}
+
+.account-sign-in-table th,
+.account-sign-in-table td {
+  padding: 0.75rem 0.75rem 0.75rem 0;
+  overflow-wrap: anywhere;
+  text-align: start;
+  vertical-align: top;
+}
+
+.account-sign-in-table th {
+  padding-block: 0.5rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.account-sign-in-table tbody tr {
+  border-top: 1px solid var(--library-edge);
+}
+
+@container account-settings (width < 36rem) {
+  .account-session-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .account-session-meta {
+    grid-column: 1 / -1;
+  }
+
+  .account-session-action {
+    grid-area: 1 / 2;
+  }
+
+  .account-sign-in-table,
+  .account-sign-in-table tbody {
+    display: block;
+  }
+
+  .account-sign-in-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .account-sign-in-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+    align-items: baseline;
+    gap: 0.25rem 0.75rem;
+    padding-block: 0.75rem;
+  }
+
+  .account-sign-in-table td {
+    padding: 0;
   }
 
   .account-sign-in-time {
-    grid-column: auto;
-    align-self: center;
-    text-align: right;
-  }
-}
-
-@container account-settings (width >= 44rem) {
-  .account-layout {
-    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
-    align-items: start;
-    column-gap: clamp(2rem, 5cqi, 3rem);
+    font-size: 0.75rem;
   }
 
-  .account-panel + .account-sessions {
-    margin-top: 0;
-    padding-top: 0;
-    border-top: 0;
+  .account-sign-in-result {
+    grid-area: 1 / 2;
   }
 
-  .account-sign-ins {
+  .account-sign-in-device {
     grid-column: 1 / -1;
   }
 }
