@@ -175,6 +175,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ env.SOURCE_REVISION }}
+          fetch-depth: 0
           persist-credentials: false
 
       - uses: actions/download-artifact@v7
@@ -188,52 +189,62 @@ jobs:
           pattern: caimack-desktop-*-${{ env.RELEASE_TAG }}
           path: dist/desktop
 
-      - name: Stage desktop packages before publishing the release
-        if: needs.desktop.result == 'success'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          mapfile -d '' assets < <(find dist/desktop -type f -print0 | sort -z)
-          if [[ ${#assets[@]} -ne 6 ]]; then
-            echo '::error::Expected two Windows and four Linux packages.'
-            exit 1
-          fi
-
-          if gh release view "$RELEASE_TAG" --json assets --jq '.assets[] | select(.size > 0) | .name' > existing-assets; then
-            for asset in "${assets[@]}"; do
-              if ! grep -Fxq -- "${asset##*/}" existing-assets; then
-                gh release upload "$RELEASE_TAG" "$asset" --clobber
-              fi
-            done
-          else
-            gh release create "$RELEASE_TAG" "${assets[@]}" --draft --verify-tag --generate-notes \
-              --title "Caimack ${RELEASE_TAG#v}"
-          fi
-          release_id=$(gh release view "$RELEASE_TAG" --json databaseId --jq .databaseId)
-          [[ "$release_id" =~ ^[1-9][0-9]*$ ]]
-          echo "RELEASE_ID=$release_id" >> "$GITHUB_ENV"
-
       - name: Check out release publishing tools
         uses: actions/checkout@v7
         with:
           ref: ${{ github.workflow_sha }}
           path: .release-tools
-          sparse-checkout: scripts/publish_android_release.py
+          sparse-checkout: |
+            scripts/publish_android_release.py
+            scripts/release_notes.py
           sparse-checkout-cone-mode: false
           persist-credentials: false
+
+      - name: Prepare GitHub release and stage desktop packages
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          INCLUDE_DESKTOP: ${{ needs.desktop.result == 'success' }}
+        run: |
+          assets=()
+          if [[ "$INCLUDE_DESKTOP" == true ]]; then
+            mapfile -d '' assets < <(find dist/desktop -type f -print0 | sort -z)
+            if [[ ${#assets[@]} -ne 6 ]]; then
+              echo '::error::Expected two Windows and four Linux packages.'
+              exit 1
+            fi
+          fi
+
+          existing_assets="$RUNNER_TEMP/existing-release-assets"
+          lookup_error="$RUNNER_TEMP/release-lookup-error"
+          if gh release view "$RELEASE_TAG" --json assets --jq '.assets[] | select(.size > 0) | .name' > "$existing_assets" 2> "$lookup_error"; then
+            for asset in "${assets[@]}"; do
+              if ! grep -Fxq -- "${asset##*/}" "$existing_assets"; then
+                gh release upload "$RELEASE_TAG" "$asset" --clobber
+              fi
+            done
+          elif grep -Fxq 'release not found' "$lookup_error"; then
+            notes="$RUNNER_TEMP/release-notes.md"
+            python3 .release-tools/scripts/release_notes.py "$RELEASE_TAG" --repository "$GH_REPO" > "$notes"
+            gh release create "$RELEASE_TAG" "${assets[@]}" --draft --verify-tag --notes-file "$notes" \
+              --title "Caimack ${RELEASE_TAG#v}"
+          else
+            cat "$lookup_error" >&2
+            exit 1
+          fi
+          release_id=$(gh release view "$RELEASE_TAG" --json databaseId --jq .databaseId)
+          [[ "$release_id" =~ ^[1-9][0-9]*$ ]]
+          echo "id=$release_id" >> "$GITHUB_OUTPUT"
 
       - name: Publish APK to GitHub Releases
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_REPOSITORY: ${{ github.repository }}
+          RELEASE_ID: ${{ steps.release.outputs.id }}
         run: |
-          args=()
-          if [[ -n "${RELEASE_ID:-}" ]]; then
-            args+=(--release-id "$RELEASE_ID")
-          fi
           python3 .release-tools/scripts/publish_android_release.py --apk "dist/$APK_NAME" \
-            --tag "$RELEASE_TAG" --repository "$SOURCE_REPOSITORY" "${args[@]}"
+            --tag "$RELEASE_TAG" --repository "$SOURCE_REPOSITORY" --release-id "$RELEASE_ID"
 
       - name: Send APK to the configured Telegram group
         env:

@@ -7,7 +7,9 @@ on:
       [
         "caimack.sh",
         "tests/test_caimack_cli.py",
+        "tests/test_release_notes.py",
         "tests/test_telegram_apk.py",
+        "scripts/release_notes.py",
         "scripts/send_telegram_apk.py",
         "scripts/image-plan*.mjs",
         "scripts/release*.mjs",
@@ -22,7 +24,9 @@ on:
       [
         "caimack.sh",
         "tests/test_caimack_cli.py",
+        "tests/test_release_notes.py",
         "tests/test_telegram_apk.py",
+        "scripts/release_notes.py",
         "scripts/send_telegram_apk.py",
         "scripts/image-plan*.mjs",
         "scripts/release*.mjs",

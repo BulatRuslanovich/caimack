@@ -44,6 +44,24 @@ a commit SHA tag. Prerelease tags do not update `latest`. Set
 `CAIMACK_VERSION=1.2.3` to pin an installation to that image release. Wait for
 the workflow to finish before deploying the tag.
 
+## Release notes
+
+GitHub release descriptions are generated from the commits since the highest
+earlier stable tag in the release's history. Use Conventional Commit subjects
+such as `feat(search): add genre filters` and `fix(android): restore playback`
+to put entries under **New features** and **Bug fixes**. The notes also group
+breaking changes (`!` or a `BREAKING CHANGE:` footer), performance, refactoring,
+documentation, maintenance and other changes. A comparison link opens the full
+changelog. Descriptions already saved in GitHub are kept on retry, including
+notes written in a draft.
+
+Preview the notes from a checkout with full history and tags. Pass `HEAD` for
+the upcoming release or an existing tag such as `v1.2.3`.
+
+```bash
+python scripts/release_notes.py HEAD --repository BulatRuslanovich/caimack
+```
+
 ## When images rebuild
 
 The [image planner](../scripts/image-plan.mjs) compares inputs with the previous

@@ -16,10 +16,10 @@ The workflow uses the built-in GitHub token with `contents: write`; no additiona
 release token is needed. The repository must be public for unauthenticated in-app
 update checks and downloads.
 
-If the tag has no release, the publisher creates a draft with generated release
-notes, uploads `caimack-vX.Y.Z-arm64.apk`, and publishes only after GitHub confirms
-the attachment. Existing release descriptions are preserved: you can prepare your
-own notes in a draft before pushing the tag. Rebuilding an existing release replaces
+If the tag has no release, the workflow creates a draft with [release notes from
+Git history](releases.md#release-notes), uploads `caimack-vX.Y.Z-arm64.apk`, and
+publishes only after GitHub confirms the attachment. You can prepare your own notes
+in a draft before pushing the tag. Rebuilding an existing release replaces
 its APK attachment when its content differs, uploading the replacement before
 removing the old file. Identical uploaded files are reused. If immutable releases
 are enabled for your repository, a published APK cannot be replaced; publish a
@@ -76,8 +76,8 @@ The workflow definition comes from the selected branch; application sources are
 checked out from `refs/tags/<release_tag>`. Version validation, artifact names,
 the APK source URL and the Telegram caption use the selected tag and its actual
 commit. The normal test, signing, artifact, GitHub Release and Telegram delivery
-steps still run. The publisher is checked out from the workflow's own commit so
-manual runs can also publish APKs for tags predating the updater.
+steps still run. The release tools are checked out from the workflow's own commit
+so manual runs can also publish APKs for tags predating the updater.
 The selected tag must already exist and match its own `frontend/package.json`.
 
 GitHub CLI equivalent:
