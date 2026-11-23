@@ -8,7 +8,8 @@ import { catalogRedirects } from "./src/lib/searchNavigation";
 generateIntegrations();
 
 const backendUrl = process.env.BACKEND_INTERNAL_URL ?? "http://127.0.0.1:5199";
-const proxyApiInDev = process.env.NEXT_DISABLE_API_PROXY !== "1";
+const proxyApiInDev =
+  process.env.NODE_ENV !== "production" && process.env.NEXT_DISABLE_API_PROXY !== "1";
 const sourceUrl = new URL(
   process.env.CAIMACK_SOURCE_URL || "https://github.com/BulatRuslanovich/caimack",
 );
@@ -50,24 +51,12 @@ const nextConfig: NextConfig = {
 
   typescript: { ignoreBuildErrors: true },
 
-  experimental: {
-    proxyClientMaxBodySize: "1gb",
-
-    inlineCss: true,
-
-    useTypeScriptCli: false,
-
-    optimizePackageImports: ["lucide-react", "@dnd-kit/core", "@dnd-kit/sortable"],
-
-    staleTimes: {
-      dynamic: 60,
-      static: 300,
-    },
-
-    requestInsights: true,
-
-    webVitalsAttribution: ["LCP", "INP", "CLS"],
-  },
+  experimental: proxyApiInDev
+    ? {
+        // The development API rewrite would otherwise truncate large track uploads.
+        proxyClientMaxBodySize: "1gb",
+      }
+    : {},
 
   async headers() {
     return [
@@ -90,7 +79,7 @@ const nextConfig: NextConfig = {
   },
 
   async rewrites() {
-    if (process.env.NODE_ENV === "production" || !proxyApiInDev) {
+    if (!proxyApiInDev) {
       return [];
     }
 
