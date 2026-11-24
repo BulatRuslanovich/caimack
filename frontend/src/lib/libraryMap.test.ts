@@ -99,6 +99,13 @@ describe("soundPath", () => {
 
     expect(soundPath(spots).map((spot) => spot.id)).toEqual(["a", "b", "d", "c"]);
   });
+
+  it("follows nearby stars in depth when screen axes are close", () => {
+    const start = { x: 0, y: 0, z: 0 };
+    const far = { x: 0.01, y: 0, z: 0.9 };
+    const near = { x: 0.1, y: 0, z: 0 };
+    expect(soundPath([far, start, near])).toEqual([start, near, far]);
+  });
 });
 
 describe("closestToCentre", () => {
@@ -110,6 +117,14 @@ describe("closestToCentre", () => {
         .map((spot) => spot.x)
         .sort(),
     ).toEqual([0.4, 0.5, 0.6]);
+  });
+
+  it("limits a large selection around its centre in all three dimensions", () => {
+    const spots = Array.from({ length: 401 }, (_, i) => ({ x: 0.5, y: 0.5, z: i / 400 }));
+    const kept = closestToCentre(spots, 300);
+    expect(kept).toHaveLength(300);
+    expect(kept[0]).toEqual({ x: 0.5, y: 0.5, z: 0.5 });
+    expect(kept.every(({ z }) => Math.abs(z - 0.5) <= 0.375)).toBe(true);
   });
 });
 

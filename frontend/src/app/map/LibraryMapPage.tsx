@@ -4,14 +4,24 @@
 
 import { genreName } from "@/lib/format";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ComponentType,
+} from "react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { MAX_SELECTION_PLAY, closestToCentre, median, soundPath } from "@/lib/libraryMap";
+import { defaultMapProjection } from "@/lib/mapProjection";
 import { queries } from "@/lib/queries";
 import { readStored, writeStored } from "@/lib/storage";
 import { useToast } from "@/lib/useToast";
-import type { MapPoint, Track } from "@/lib/types";
+import type { MapPoint, MapProjection, Track } from "@/lib/types";
 import { usePlayerActions, usePlayerState } from "@/contexts/PlayerContext";
 import { useT } from "@/contexts/I18nContext";
 import { Query } from "@/components/Query";
@@ -31,6 +41,7 @@ import {
   type MapLayer,
   type MapLabel,
   type MapRoute,
+  type MapSurfaceProps,
 } from "@/components/map/LibraryMapCanvas";
 import {
   CrosshairIcon,
@@ -51,6 +62,7 @@ const GENRE_CHOICES = 16;
 const ROUTE_AHEAD = 6;
 const ROUTE_BEHIND = 3;
 const LAYERS_KEY = "music-streaming.map-layers";
+type GalaxySurface = ComponentType<MapSurfaceProps & { onUnavailable: () => void }>;
 
 const layerListeners = new Set<() => void>();
 
@@ -78,20 +90,55 @@ function useMapLayers(): [ReadonlySet<MapLayer>, (layer: MapLayer) => void] {
   return [layers, toggle];
 }
 
-export function LibraryMapPage() {
+export function LibraryMapPage({ Galaxy }: { Galaxy?: GalaxySurface }) {
   const t = useT();
-  const map = useQuery(queries.libraryMap());
+  const [mode, setMode] = useState<{ projection: MapProjection; canUse3d: boolean } | null>(
+    Galaxy ? null : { projection: "2d", canUse3d: false },
+  );
+  useEffect(() => {
+    if (!Galaxy) return;
+    const frame = requestAnimationFrame(() => {
+      const projection = defaultMapProjection();
+      setMode({ projection, canUse3d: projection === "3d" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [Galaxy]);
+  const fallback = useCallback(() => setMode({ projection: "2d", canUse3d: false }), []);
+  const projection = mode?.projection ?? "2d";
+  const map = useQuery({ ...queries.libraryMap(projection), enabled: mode !== null });
 
   return (
     <div className="map-page flex min-h-0 flex-1 flex-col gap-3">
-      {!map.data?.points.length && <MapHeading />}
+      {(!mode || !map.data?.points.length) && <MapHeading />}
 
       <Query
         result={map}
         isEmpty={(data) => data.points.length === 0}
-        empty={{ icon: <MapIcon size={24} />, title: t("map.preparing") }}
+        empty={{
+          icon: <MapIcon size={24} />,
+          title: t(
+            map.data?.totalTracks === 0 && !map.data.updating ? "map.empty" : "map.preparing",
+          ),
+        }}
       >
-        {(data) => <MapExplorer points={data.points} totalTracks={data.totalTracks} />}
+        {(data) =>
+          mode && (
+            <MapExplorer
+              key={projection}
+              points={data.points}
+              totalTracks={data.totalTracks}
+              updating={data.updating ?? false}
+              projection={projection}
+              Galaxy={Galaxy}
+              onUnavailable={fallback}
+              onSwitchProjection={
+                mode.canUse3d
+                  ? () => setMode({ projection: projection === "3d" ? "2d" : "3d", canUse3d: true })
+                  : undefined
+              }
+            />
+          )
+        }
       </Query>
     </div>
   );
@@ -103,7 +150,23 @@ function MapHeading() {
   return <h1 className="map-heading">{t("map.title")}</h1>;
 }
 
-function MapExplorer({ points, totalTracks }: { points: MapPoint[]; totalTracks: number }) {
+function MapExplorer({
+  points,
+  totalTracks,
+  updating,
+  projection,
+  Galaxy,
+  onUnavailable,
+  onSwitchProjection,
+}: {
+  points: MapPoint[];
+  totalTracks: number;
+  updating: boolean;
+  projection: MapProjection;
+  Galaxy?: GalaxySurface;
+  onUnavailable: () => void;
+  onSwitchProjection?: () => void;
+}) {
   const t = useT();
   const { notifyError } = useToast();
   const { currentTrack, currentIndex, queue, nextTrack, shuffle, isPlaying } = usePlayerState();
@@ -112,7 +175,7 @@ function MapExplorer({ points, totalTracks }: { points: MapPoint[]; totalTracks:
 
   const [genre, setGenre] = useState<string | null>(null);
   const [selecting, setSelecting] = useState(false);
-  const [selection, setSelection] = useState<MapPoint[] | null>(null);
+  const [selectionIds, setSelectionIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [layers, toggleLayer] = useMapLayers();
   const [expanded, setExpanded] = useState(false);
@@ -169,22 +232,26 @@ function MapExplorer({ points, totalTracks }: { points: MapPoint[]; totalTracks:
         text: genreName(genre),
         x: median(members.map((point) => point.x)),
         y: median(members.map((point) => point.y)),
+        z: median(members.map((point) => point.z ?? 0.5)),
         strong: true,
       },
     ];
   }, [genre, points]);
 
+  const byId = useMemo(() => new Map(points.map((point) => [point.id, point])), [points]);
+  const selection = useMemo(
+    () => selectionIds.flatMap((id) => byId.get(id) ?? []),
+    [byId, selectionIds],
+  );
   const selectedIds = useMemo(
-    () => (selection ? new Set(selection.map((point) => point.id)) : null),
+    () => (selection.length ? new Set(selection.map((point) => point.id)) : null),
     [selection],
   );
 
   const path = useMemo(
-    () => (selection ? soundPath(closestToCentre(selection, MAX_SELECTION_PLAY)) : null),
+    () => (selection.length ? soundPath(closestToCentre(selection, MAX_SELECTION_PLAY)) : null),
     [selection],
   );
-
-  const byId = useMemo(() => new Map(points.map((point) => [point.id, point])), [points]);
 
   const route = useMemo<MapRoute | null>(() => {
     const at = currentTrack && byId.get(currentTrack.id);
@@ -237,8 +304,28 @@ function MapExplorer({ points, totalTracks }: { points: MapPoint[]; totalTracks:
       if (tracks.length === 0) return;
 
       playQueue(tracks, 0);
-      setSelection(null);
+      setSelectionIds([]);
     });
+
+  const surface: MapSurfaceProps = {
+    points,
+    labels,
+    highlightGenre: genre,
+    nowPlayingId: currentTrack?.id ?? null,
+    playing: isPlaying,
+    route,
+    path,
+    layers,
+    selecting,
+    selectedIds,
+    onSelect: (chosen) => {
+      setSelectionIds(chosen.map((point) => point.id));
+      setSelecting(false);
+    },
+    onPlay: (point) => void playOne(point),
+    onRadio: (point) => void radioFrom(point),
+    controllerRef: controller,
+  };
 
   return (
     <div
@@ -271,6 +358,18 @@ function MapExplorer({ points, totalTracks }: { points: MapPoint[]; totalTracks:
 
           <MapLayersMenu layers={layers} onToggle={toggleLayer} />
 
+          {onSwitchProjection && (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label={t(projection === "3d" ? "map.switch2d" : "map.switch3d")}
+              title={t(projection === "3d" ? "map.switch2d" : "map.switch3d")}
+              onClick={onSwitchProjection}
+            >
+              {projection.toUpperCase()}
+            </Button>
+          )}
+
           <Button
             variant="ghost"
             size="sm"
@@ -288,27 +387,15 @@ function MapExplorer({ points, totalTracks }: { points: MapPoint[]; totalTracks:
 
       <div className="map-workspace">
         <div className="map-stage">
-          <LibraryMapCanvas
-            points={points}
-            labels={labels}
-            highlightGenre={genre}
-            nowPlayingId={currentTrack?.id ?? null}
-            playing={isPlaying}
-            route={route}
-            path={path}
-            layers={layers}
-            selecting={selecting}
-            selectedIds={selectedIds}
-            onSelect={(chosen) => {
-              setSelection(chosen.length > 0 ? chosen : null);
-              setSelecting(false);
-            }}
-            onPlay={(point) => void playOne(point)}
-            onRadio={(point) => void radioFrom(point)}
-            controllerRef={controller}
-          />
+          {projection === "3d" && Galaxy ? (
+            <Suspense fallback={null}>
+              <Galaxy {...surface} onUnavailable={onUnavailable} />
+            </Suspense>
+          ) : (
+            <LibraryMapCanvas {...surface} />
+          )}
 
-          {selection && (
+          {selection.length > 0 && (
             <div
               className="map-selection absolute inset-x-3 bottom-3 z-10 mx-auto flex max-w-[34rem] flex-wrap items-center gap-2 rounded-lg bg-popover p-2 pl-4 text-popover-foreground shadow-pop"
               aria-live="polite"
@@ -340,7 +427,7 @@ function MapExplorer({ points, totalTracks }: { points: MapPoint[]; totalTracks:
               <Button
                 variant="ghost"
                 size="icon-sm"
-                onClick={() => setSelection(null)}
+                onClick={() => setSelectionIds([])}
                 aria-label={t("map.clearSelection")}
                 title={t("map.clearSelection")}
               >
@@ -356,6 +443,7 @@ function MapExplorer({ points, totalTracks }: { points: MapPoint[]; totalTracks:
               variant="ghost"
               size="icon"
               onClick={() => controller.current?.locate(route.at.id)}
+              disabled={projection === "3d" && selecting}
               aria-label={t("map.locate")}
               title={t("map.locate")}
             >
@@ -366,6 +454,7 @@ function MapExplorer({ points, totalTracks }: { points: MapPoint[]; totalTracks:
             variant="ghost"
             size="icon"
             onClick={() => controller.current?.zoomBy(1 / 1.5)}
+            disabled={projection === "3d" && selecting}
             aria-label={t("map.zoomOut")}
             title={t("map.zoomOut")}
           >
@@ -375,6 +464,7 @@ function MapExplorer({ points, totalTracks }: { points: MapPoint[]; totalTracks:
             variant="ghost"
             size="icon"
             onClick={() => controller.current?.zoomBy(1.5)}
+            disabled={projection === "3d" && selecting}
             aria-label={t("map.zoomIn")}
             title={t("map.zoomIn")}
           >
@@ -384,6 +474,7 @@ function MapExplorer({ points, totalTracks }: { points: MapPoint[]; totalTracks:
             variant="ghost"
             size="icon"
             onClick={() => controller.current?.reset()}
+            disabled={projection === "3d" && selecting}
             aria-label={t("map.resetView")}
             title={t("map.resetView")}
           >
@@ -407,6 +498,7 @@ function MapExplorer({ points, totalTracks }: { points: MapPoint[]; totalTracks:
           {points.length < totalTracks
             ? t("map.coverage", { count: points.length, total: totalTracks })
             : t("count.tracks", { count: points.length })}
+          {updating && <span role="status"> · {t("map.updating")}</span>}
         </span>
         <PlaysLegend />
       </div>

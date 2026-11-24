@@ -10,10 +10,12 @@ use sha2::{Digest, Sha256};
 use sqlx::{PgPool, types::Json};
 
 use super::super::{compute::ComputePool, index::Library};
+use super::MapProjection;
 use crate::{AppResult, text::hex_lower};
 
-// Bump this when projection semantics or the persisted representation change.
-const LAYOUT_VERSION: u32 = 1;
+// Bump the corresponding version when projection semantics or the saved representation change.
+const LAYOUT_VERSION_2D: u32 = 1;
+const LAYOUT_VERSION_3D: u32 = 1;
 
 #[derive(Serialize, Deserialize)]
 struct SavedMap {
@@ -22,13 +24,21 @@ struct SavedMap {
 }
 
 impl SavedMap {
-    fn valid(&self) -> bool {
+    fn valid(&self, projection: MapProjection) -> bool {
         let count = self.layout.len();
+        let expected_depths = match projection {
+            MapProjection::TwoD => 0,
+            MapProjection::ThreeD => count,
+        };
         count == self.layout.x.len()
             && count == self.layout.y.len()
+            && expected_depths == self.layout.z.len()
             && count == self.vectors.len()
             && self.layout.tracks.iter().collect::<HashSet<_>>().len() == count
-            && self.layout.x.iter().chain(&self.layout.y).all(|v| v.is_finite() && (0.0..=1.0).contains(v))
+            && [&self.layout.x, &self.layout.y, &self.layout.z]
+                .into_iter()
+                .flatten()
+                .all(|v| v.is_finite() && (0.0..=1.0).contains(v))
     }
 
     fn anchors(&self, snapshot: &Snapshot, vectors: &[String]) -> MapLayout {
@@ -39,6 +49,9 @@ impl SavedMap {
                 anchors.tracks.push(*id);
                 anchors.x.push(self.layout.x[row]);
                 anchors.y.push(self.layout.y[row]);
+                if let Some(&z) = self.layout.z.get(row) {
+                    anchors.z.push(z);
+                }
             }
         }
         anchors
@@ -57,7 +70,12 @@ fn fingerprints(snapshot: &Snapshot) -> Vec<String> {
         .collect()
 }
 
-pub(super) async fn build(db: &PgPool, pool: &ComputePool, library: Arc<Library>) -> AppResult<Arc<MapLayout>> {
+pub(super) async fn build(
+    db: &PgPool,
+    pool: &ComputePool,
+    library: Arc<Library>,
+    projection: MapProjection,
+) -> AppResult<Arc<MapLayout>> {
     let started = std::time::Instant::now();
     let (library, vectors) = pool
         .run(move || {
@@ -65,7 +83,11 @@ pub(super) async fn build(db: &PgPool, pool: &ComputePool, library: Arc<Library>
             (library, vectors)
         })
         .await?;
-    let key = format!("{LAYOUT_VERSION}:{}:{}", media::mert::MODEL_ID, media::mert::windows::STRATEGY);
+    let version = match projection {
+        MapProjection::TwoD => LAYOUT_VERSION_2D.to_string(),
+        MapProjection::ThreeD => format!("3d:{LAYOUT_VERSION_3D}"),
+    };
+    let key = format!("{version}:{}:{}", media::mert::MODEL_ID, media::mert::windows::STRATEGY);
     let mut tx = db.begin().await?;
     // Coordinate concurrent builders, including when the cache row does not exist yet.
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 13))").bind(&key).execute(&mut *tx).await?;
@@ -75,7 +97,7 @@ pub(super) async fn build(db: &PgPool, pool: &ComputePool, library: Arc<Library>
             .fetch_optional(&mut *tx)
             .await?;
     let saved = saved.and_then(|Json(value)| match serde_json::from_value::<SavedMap>(value) {
-        Ok(saved) if saved.valid() => Some(saved),
+        Ok(saved) if saved.valid(projection) => Some(saved),
         _ => {
             tracing::warn!("Ignoring invalid persisted music map; rebuilding layout");
             None
@@ -83,6 +105,10 @@ pub(super) async fn build(db: &PgPool, pool: &ComputePool, library: Arc<Library>
     });
     let (saved, changed) = pool
         .run(move || {
+            let project = match projection {
+                MapProjection::TwoD => map::layout,
+                MapProjection::ThreeD => map::layout_3d,
+            };
             if let Some(saved) = saved {
                 if saved.vectors == vectors
                     && saved.layout.tracks.iter().copied().eq(library.snapshot.metas().iter().map(|m| m.track_id))
@@ -90,10 +116,10 @@ pub(super) async fn build(db: &PgPool, pool: &ComputePool, library: Arc<Library>
                     return (saved, false);
                 }
                 let anchors = saved.anchors(&library.snapshot, &vectors);
-                let layout = map::layout(&library.snapshot, Some(&anchors));
+                let layout = project(&library.snapshot, Some(&anchors));
                 (SavedMap { layout, vectors }, true)
             } else {
-                let layout = map::layout(&library.snapshot, None);
+                let layout = project(&library.snapshot, None);
                 (SavedMap { layout, vectors }, true)
             }
         })
@@ -108,6 +134,7 @@ pub(super) async fn build(db: &PgPool, pool: &ComputePool, library: Arc<Library>
         .execute(&mut *tx)
         .await?;
         tracing::info!(
+            ?projection,
             tracks = saved.layout.len(),
             elapsed_ms = started.elapsed().as_millis() as u64,
             "Music map layout built and saved"

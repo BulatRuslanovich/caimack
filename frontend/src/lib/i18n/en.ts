@@ -1200,6 +1200,12 @@ export const en = {
   "map.title": "Library map",
   "map.description": "Explore tracks by sound. Pick a track or select an area.",
   "map.preparing": "Tracks are still being analysed",
+  "map.empty": "Your music library is empty",
+  "map.updating": "Updating map",
+  "map.switch2d": "Switch to the 2D map",
+  "map.switch3d": "Switch to the 3D galaxy",
+  "map.galaxyControls":
+    "Drag to rotate. Right-drag, Shift-drag or use two fingers to pan. Use W and S to fly forward and back, A and D to move sideways, and Q and E to move down and up. Use the wheel or pinch to zoom, or press 0 for the overview.",
   "map.coverage": "{count} of {total} tracks on the map",
   "map.genre": "Highlight a genre",
   "map.allGenres": "All genres",

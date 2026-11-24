@@ -149,11 +149,7 @@ async fn run() -> anyhow::Result<()> {
         workers.push(worker);
         yandex
     };
-    let music = app::integrations::music::Music::new(
-        uploads.clone(),
-        config.music_sources.clone(),
-        yandex.clone(),
-    )?;
+    let music = app::integrations::music::Music::new(uploads.clone(), config.music_sources.clone(), yandex.clone())?;
     workers.push(music.clone().spawn(background.clone()));
     let state = AppState {
         music,

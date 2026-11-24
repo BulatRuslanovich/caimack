@@ -2,12 +2,14 @@
 
 import { api, type SearchTab } from "@/lib/api";
 import { ApiError } from "@/lib/http";
+import { defaultMapProjection } from "@/lib/mapProjection";
 import { WAVEFORM_VERSION } from "@/lib/waveform";
 import { CARD_PAGE_SIZE, TRACK_PAGE_SIZE } from "@/lib/pageSizes";
 import { isCatalogTab, type CatalogTab } from "@/lib/searchNavigation";
 import type {
   ArtistDetail,
   HomeMixSlug,
+  MapProjection,
   PageParams,
   Paged,
   Track,
@@ -220,10 +222,10 @@ export const queries = {
   libraryOverview: () =>
     queryOptions({ queryKey: ["libraryOverview"], queryFn: () => api.libraryOverview() }),
 
-  libraryMap: () =>
+  libraryMap: (projection: MapProjection = "2d") =>
     queryOptions({
-      queryKey: ["libraryMap"],
-      queryFn: () => api.libraryMap(),
+      queryKey: projection === "3d" ? ["libraryMap", "3d"] : ["libraryMap"],
+      queryFn: ({ signal }) => api.libraryMap(projection, signal),
       staleTime: 300_000,
       refetchInterval: (query) => {
         const data = query.state.data;
@@ -301,7 +303,7 @@ export const navigationPrefetch: Record<string, (client: QueryClient) => Promise
     ]);
   },
   "/search": (client) => client.prefetchQuery(queries.genres()),
-  "/map": (client) => client.prefetchQuery(queries.libraryMap()),
+  "/map": (client) => client.prefetchQuery(queries.libraryMap(defaultMapProjection())),
   "/favorites": (client) =>
     client.prefetchQuery(queries.favorites({ page: 1, pageSize: TRACK_PAGE_SIZE })),
   "/recently-played": (client) =>

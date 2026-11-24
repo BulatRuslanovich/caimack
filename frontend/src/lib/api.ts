@@ -25,6 +25,7 @@ import type {
   HomeMix,
   HomeMixSlug,
   LibraryMap,
+  MapProjection,
   LibraryOverview,
   Lyrics,
   PageParams,
@@ -165,7 +166,10 @@ export const api = {
     request<HomeMix>(`/home/mixes/${kind}`, { signal }),
   libraryOverview: () =>
     request<LibraryOverview>(`/library/overview${qs({ sectionSize: SECTION_SIZE })}`),
-  libraryMap: () => request<LibraryMap>("/library/map"),
+  libraryMap: (projection: MapProjection = "2d", signal?: AbortSignal) =>
+    request<LibraryMap>(projection === "3d" ? "/library/map?projection=3d" : "/library/map", {
+      signal,
+    }),
   duplicates: () => request<DuplicateReport>("/library/duplicates"),
   libraryScan: () => request<LibraryScan>("/library/scan"),
   rescanLibrary: () => request<LibraryScan>("/library/scan", { method: "POST" }),

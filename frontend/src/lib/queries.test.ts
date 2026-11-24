@@ -113,6 +113,11 @@ describe("waveform analysis upgrades", () => {
 });
 
 describe("library map refresh", () => {
+  it("keeps the default map and 3D projection in separate caches", () => {
+    expect(queries.libraryMap().queryKey).toEqual(["libraryMap"]);
+    expect(queries.libraryMap("3d").queryKey).toEqual(["libraryMap", "3d"]);
+  });
+
   it.each([
     { count: 0, total: 40, updating: false, interval: 15_000 },
     { count: 36, total: 40, updating: true, interval: 15_000 },

@@ -29,7 +29,7 @@ import {
 } from "react";
 import { coverTile } from "./covers";
 import { landmarkAt, mapLandmarks, visibleLandmarks } from "./landmarks";
-import { CARD_WIDTH_PX, MapTrackCard, type MapCard } from "./MapTrackCard";
+import { CARD_WIDTH_PX, MapTrackCard, MapTrackPanel, type MapCard } from "./MapTrackCard";
 import { createMapPainter } from "./painter";
 import { buildStarfield } from "./starfield";
 import { useMapGestures } from "./useMapGestures";
@@ -38,6 +38,7 @@ export interface MapLabel {
   text: string;
   x: number;
   y: number;
+  z?: number;
   strong?: boolean;
 }
 
@@ -65,6 +66,23 @@ const REVEAL_MS = 900;
 const AMBIENT_FRAME_MS = 33;
 const NO_LINKS: [number, number][] = [];
 
+export interface MapSurfaceProps {
+  points: MapPoint[];
+  labels: MapLabel[];
+  highlightGenre: string | null;
+  nowPlayingId: string | null;
+  playing: boolean;
+  route: MapRoute | null;
+  path: MapPoint[] | null;
+  layers: ReadonlySet<MapLayer>;
+  selecting: boolean;
+  selectedIds: ReadonlySet<string> | null;
+  onSelect: (points: MapPoint[]) => void;
+  onPlay: (point: MapPoint) => void;
+  onRadio: (point: MapPoint) => void;
+  controllerRef?: Ref<MapController>;
+}
+
 type Placed = MapCard;
 
 export function LibraryMapCanvas({
@@ -82,22 +100,7 @@ export function LibraryMapCanvas({
   onPlay,
   onRadio,
   controllerRef,
-}: {
-  points: MapPoint[];
-  labels: MapLabel[];
-  highlightGenre: string | null;
-  nowPlayingId: string | null;
-  playing: boolean;
-  route: MapRoute | null;
-  path: MapPoint[] | null;
-  layers: ReadonlySet<MapLayer>;
-  selecting: boolean;
-  selectedIds: ReadonlySet<string> | null;
-  onSelect: (points: MapPoint[]) => void;
-  onPlay: (point: MapPoint) => void;
-  onRadio: (point: MapPoint) => void;
-  controllerRef?: Ref<MapController>;
-}) {
+}: MapSurfaceProps) {
   const t = useT();
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -118,7 +121,8 @@ export function LibraryMapCanvas({
   const coverHitsRef = useRef<{ point: MapPoint; spot: Spot; radius: number }[]>([]);
 
   const [hovered, setHovered] = useState<Placed | null>(null);
-  const [picked, setPicked] = useState<Placed | null>(null);
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  const picked = !selecting && pickedId ? points.find((point) => point.id === pickedId) : undefined;
 
   const place = (point: MapPoint, at: Spot): Placed => ({
     point,
@@ -184,7 +188,7 @@ export function LibraryMapCanvas({
 
   const painter = useRef<ReturnType<typeof createMapPainter> | null>(null);
 
-  const hoveredId = hovered?.point.id ?? picked?.point.id ?? null;
+  const hoveredId = selecting ? null : (picked?.id ?? hovered?.point.id ?? null);
   const hoveredRef = useRef<string | null>(null);
   useEffect(() => {
     hoveredRef.current = hoveredId;
@@ -258,7 +262,6 @@ export function LibraryMapCanvas({
     (next: MapView) => {
       tweenRef.current = null;
       viewRef.current = next;
-      setPicked(null);
       setHovered(null);
       redraw();
     },
@@ -274,7 +277,6 @@ export function LibraryMapCanvas({
       }
 
       tweenRef.current = { from: view, to: next, start: performance.now(), duration };
-      setPicked(null);
       setHovered(null);
       redraw();
     },
@@ -433,17 +435,16 @@ export function LibraryMapCanvas({
     points,
     bounds,
     selecting,
+    preview: !picked && !selecting,
     nearest,
     place,
     setHovered,
-    setPicked,
+    onPick: (point) => setPickedId(point?.id ?? null),
     setView,
     flyTo,
     redraw,
     onSelect,
   });
-
-  const card = picked ?? hovered;
 
   return (
     <div ref={wrapRef} className="library-map-surface absolute inset-0 overflow-hidden">
@@ -463,15 +464,20 @@ export function LibraryMapCanvas({
         onKeyDown={onKeyDown}
       />
 
-      {card && (
-        <MapTrackCard
-          card={card}
-          picked={Boolean(picked)}
+      {picked ? (
+        <MapTrackPanel
+          point={picked}
+          raised={Boolean(selectedIds)}
           onPlay={onPlay}
           onRadio={onRadio}
-          onClose={() => setPicked(null)}
+          onClose={() => {
+            setPickedId(null);
+            canvasRef.current?.focus({ preventScroll: true });
+          }}
         />
-      )}
+      ) : hovered && !selecting ? (
+        <MapTrackCard card={hovered} />
+      ) : null}
     </div>
   );
 }

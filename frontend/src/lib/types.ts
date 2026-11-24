@@ -66,6 +66,7 @@ export interface MapPoint {
   id: string;
   x: number;
   y: number;
+  z?: number;
   title: string;
   artist: string;
   albumId?: string | null;
@@ -73,6 +74,8 @@ export interface MapPoint {
   genre?: string | null;
   plays: number;
 }
+
+export type MapProjection = "2d" | "3d";
 
 export interface LibraryMap {
   points: MapPoint[];

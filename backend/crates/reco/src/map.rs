@@ -25,6 +25,8 @@ pub struct MapLayout {
     pub tracks: Vec<Uuid>,
     pub x: Vec<f32>,
     pub y: Vec<f32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub z: Vec<f32>,
 }
 
 impl MapLayout {
@@ -39,59 +41,76 @@ impl MapLayout {
 
 /// Previous coordinates must belong to unchanged audio vectors in the same model space.
 pub fn layout(snapshot: &Snapshot, previous: Option<&MapLayout>) -> MapLayout {
+    project::<2>(snapshot, previous)
+}
+
+/// Previous coordinates must belong to unchanged audio vectors in the same 3D model space.
+pub fn layout_3d(snapshot: &Snapshot, previous: Option<&MapLayout>) -> MapLayout {
+    project::<3>(snapshot, previous)
+}
+
+fn project<const D: usize>(snapshot: &Snapshot, previous: Option<&MapLayout>) -> MapLayout {
     let count = snapshot.len();
     let tracks: Vec<Uuid> = snapshot.metas().iter().map(|meta| meta.track_id).collect();
     if count == 0 {
         return MapLayout::default();
     }
-    let known: HashMap<_, _> = previous
-        .into_iter()
-        .flat_map(|p| p.tracks.iter().zip(p.x.iter().zip(&p.y)))
-        .map(|(&id, (&x, &y))| (id, (x, y)))
-        .collect();
+    let mut known = HashMap::new();
+    if let Some(previous) = previous {
+        for (row, (&id, (&x, &y))) in previous.tracks.iter().zip(previous.x.iter().zip(&previous.y)).enumerate() {
+            let xyz = [x, y, previous.z.get(row).copied().unwrap_or_default()];
+            if D == 2 || row < previous.z.len() {
+                known.insert(id, std::array::from_fn(|axis| xyz[axis]));
+            }
+        }
+    }
     let anchors: Vec<_> = tracks.iter().map(|id| known.get(id).copied()).collect();
     let reused = anchors.iter().filter(|point| point.is_some()).count();
-    if reused == count {
-        let (x, y) = anchors.into_iter().flatten().unzip();
-        return MapLayout { tracks, x, y };
-    }
-    if count < 4 {
+    let points: Vec<[f32; D]> = if reused == count {
+        anchors.into_iter().flatten().collect()
+    } else if D == 2 && count < 4 {
         #[expect(clippy::cast_precision_loss, reason = "fewer than four tracks")]
-        let x = (0..count).map(|row| (row + 1) as f32 / (count + 1) as f32).collect();
-        return MapLayout { tracks, x, y: vec![0.5; count] };
-    }
-
-    let neighbours = nearest_neighbours(snapshot, NEIGHBOURS.min(count - 1));
-    let edges = fuzzy_graph(&neighbours);
-
-    // Large changes start from the same PCA initialization as a fresh build.
-    let incremental = reused * 5 >= count * 4;
-    let (mut x, mut y) =
-        if incremental { from_previous(&anchors, &neighbours) } else { principal_components(snapshot) };
-    let fixed: Vec<_> = anchors.iter().map(|point| incremental && point.is_some()).collect();
-    let epochs = if incremental {
-        80
-    } else if count <= 10_000 {
-        400
+        (0..count)
+            .map(|row| std::array::from_fn(|axis| if axis == 0 { (row + 1) as f32 / (count + 1) as f32 } else { 0.5 }))
+            .collect()
+    } else if count < 4 {
+        let mut points = principal_components(snapshot);
+        normalize(&mut points);
+        points
     } else {
-        200
-    };
-    optimize(&mut x, &mut y, &edges, &fixed, epochs, if incremental { 0.3 } else { 1.0 });
-    if incremental {
-        for (row, anchor) in anchors.into_iter().enumerate() {
-            // Never normalize the whole map again: that would move every saved point.
-            let point = anchor.unwrap_or_else(|| {
-                (
-                    (x[row] / (2.0 * INITIAL_SPREAD) + 0.5).clamp(0.0, 1.0),
-                    (y[row] / (2.0 * INITIAL_SPREAD) + 0.5).clamp(0.0, 1.0),
-                )
-            });
-            (x[row], y[row]) = point;
+        let neighbours = nearest_neighbours(snapshot, NEIGHBOURS.min(count - 1));
+        let edges = fuzzy_graph(&neighbours);
+
+        // Large changes start from the same PCA initialization as a fresh build.
+        let incremental = reused * 5 >= count * 4;
+        let mut points =
+            if incremental { from_previous(&anchors, &neighbours) } else { principal_components(snapshot) };
+        let fixed: Vec<_> = anchors.iter().map(|point| incremental && point.is_some()).collect();
+        let epochs = if incremental {
+            80
+        } else if count <= 10_000 {
+            400
+        } else {
+            200
+        };
+        optimize(&mut points, &edges, &fixed, epochs, if incremental { 0.3 } else { 1.0 });
+        if incremental {
+            for (point, anchor) in points.iter_mut().zip(anchors) {
+                // Normalizing again would move every saved point.
+                *point = anchor.unwrap_or_else(|| point.map(|v| (v / (2.0 * INITIAL_SPREAD) + 0.5).clamp(0.0, 1.0)));
+            }
+        } else {
+            normalize(&mut points);
         }
-    } else {
-        normalize(&mut x, &mut y);
+        points
+    };
+
+    MapLayout {
+        tracks,
+        x: points.iter().map(|point| point[0]).collect(),
+        y: points.iter().map(|point| point[1]).collect(),
+        z: if D == 3 { points.iter().map(|point| point[2]).collect() } else { Vec::new() },
     }
-    MapLayout { tracks, x, y }
 }
 
 type Neighbourhood = Vec<(usize, f32)>;
@@ -169,7 +188,7 @@ fn fuzzy_graph(neighbours: &[Neighbourhood]) -> Vec<(usize, usize, f32)> {
     edges
 }
 
-fn principal_components(snapshot: &Snapshot) -> (Vec<f32>, Vec<f32>) {
+fn principal_components<const D: usize>(snapshot: &Snapshot) -> Vec<[f32; D]> {
     let (count, dimension) = (snapshot.len(), snapshot.dimension());
     let mut mean = vec![0.0; dimension];
     for row in 0..count {
@@ -178,29 +197,36 @@ fn principal_components(snapshot: &Snapshot) -> (Vec<f32>, Vec<f32>) {
     #[expect(clippy::cast_precision_loss, reason = "library sizes are far below 2^24")]
     mean.iter_mut().for_each(|value| *value /= count as f32);
 
-    let first = power_iteration(snapshot, &mean, None);
-    let second = power_iteration(snapshot, &mean, Some(&first));
-
-    let mut centred = vec![0.0; dimension];
-    let (mut x, mut y) = (Vec::with_capacity(count), Vec::with_capacity(count));
-    for row in 0..count {
-        centre(snapshot.vector(row), &mean, &mut centred);
-        x.push(dot(&centred, &first));
-        y.push(dot(&centred, &second));
+    let mut axes = Vec::with_capacity(D);
+    for _ in 0..D {
+        axes.push(power_iteration(snapshot, &mean, &axes, D == 3));
     }
-    rescale(&mut x, &mut y, INITIAL_SPREAD);
-    (x, y)
+    let mut centred = vec![0.0; dimension];
+    let mut points: Vec<[f32; D]> = (0..count)
+        .map(|row| {
+            centre(snapshot.vector(row), &mean, &mut centred);
+            std::array::from_fn(|axis| dot(&centred, &axes[axis]))
+        })
+        .collect();
+    let reach = points.iter().flatten().fold(0.0_f32, |reach, value| reach.max(value.abs()));
+    if reach >= 1e-9 {
+        points.iter_mut().flatten().for_each(|value| *value *= INITIAL_SPREAD / reach);
+    }
+    points
 }
 
 fn centre(source: &[f32], mean: &[f32], target: &mut [f32]) {
     target.iter_mut().zip(source.iter().zip(mean)).for_each(|(t, (s, m))| *t = s - m);
 }
 
-fn power_iteration(snapshot: &Snapshot, mean: &[f32], exclude: Option<&[f32]>) -> Vec<f32> {
+fn power_iteration(snapshot: &Snapshot, mean: &[f32], exclude: &[Vec<f32>], orthogonal_seed: bool) -> Vec<f32> {
     let dimension = snapshot.dimension();
-    let shift = if exclude.is_some() { 78.233 } else { 0.0 };
+    let shift = [0.0, 78.233, 156.466][exclude.len()];
     #[expect(clippy::cast_precision_loss, reason = "dimensions are small")]
     let mut vector: Vec<f32> = (0..dimension).map(|i| (i as f32 * 12.9898 + shift).sin()).collect();
+    if orthogonal_seed {
+        deflate(&mut vector, exclude);
+    }
     vector::normalize(&mut vector);
 
     let mut centred = vec![0.0; dimension];
@@ -210,11 +236,11 @@ fn power_iteration(snapshot: &Snapshot, mean: &[f32], exclude: Option<&[f32]>) -
             centre(snapshot.vector(row), mean, &mut centred);
             vector::add_scaled(&mut next, &centred, dot(&centred, &vector));
         }
-        if let Some(exclude) = exclude {
-            let projection = dot(&next, exclude);
-            vector::add_scaled(&mut next, exclude, -projection);
-        }
+        deflate(&mut next, exclude);
         if vector::norm(&next) < 1e-12 {
+            if orthogonal_seed {
+                return vec![0.0; dimension];
+            }
             break;
         }
         vector::normalize(&mut next);
@@ -228,44 +254,46 @@ fn power_iteration(snapshot: &Snapshot, mean: &[f32], exclude: Option<&[f32]>) -
     vector
 }
 
-fn from_previous(anchors: &[Option<(f32, f32)>], neighbours: &[Neighbourhood]) -> (Vec<f32>, Vec<f32>) {
-    let count = anchors.len();
-    let (mut x, mut y) = (vec![0.0; count], vec![0.0; count]);
-
-    for (row, anchor) in anchors.iter().enumerate() {
-        if let Some((px, py)) = anchor {
-            x[row] = (px - 0.5) * 2.0 * INITIAL_SPREAD;
-            y[row] = (py - 0.5) * 2.0 * INITIAL_SPREAD;
-        }
+fn deflate(candidate: &mut [f32], exclude: &[Vec<f32>]) {
+    for axis in exclude {
+        let projection = dot(candidate, axis);
+        vector::add_scaled(candidate, axis, -projection);
     }
+}
 
+fn from_previous<const D: usize>(anchors: &[Option<[f32; D]>], neighbours: &[Neighbourhood]) -> Vec<[f32; D]> {
+    let mut points: Vec<_> = anchors
+        .iter()
+        .map(|anchor| anchor.map_or([0.0; D], |point| point.map(|v| (v - 0.5) * 2.0 * INITIAL_SPREAD)))
+        .collect();
     let mut rng = Rng::new(SEED);
     let jitter = INITIAL_SPREAD * 0.02;
-    for row in 0..count {
+    for row in 0..anchors.len() {
         if anchors[row].is_some() {
             continue;
         }
-        let around: Vec<usize> =
+        let around: Vec<_> =
             neighbours[row].iter().map(|&(other, _)| other).filter(|&other| anchors[other].is_some()).collect();
         #[expect(clippy::cast_precision_loss, reason = "k is small")]
-        let (cx, cy) = if around.is_empty() {
-            (0.0, 0.0)
-        } else {
-            let n = around.len() as f32;
-            (around.iter().map(|&o| x[o]).sum::<f32>() / n, around.iter().map(|&o| y[o]).sum::<f32>() / n)
-        };
+        let divisor = around.len().max(1) as f32;
         #[expect(clippy::cast_possible_truncation, reason = "jitter is a small fraction")]
-        {
-            x[row] = cx + (rng.next_f64() - 0.5) as f32 * jitter;
-            y[row] = cy + (rng.next_f64() - 0.5) as f32 * jitter;
-        }
+        let position = std::array::from_fn(|axis| {
+            let centre = around.iter().map(|&other| points[other][axis]).sum::<f32>() / divisor;
+            centre + (rng.next_f64() - 0.5) as f32 * jitter
+        });
+        points[row] = position;
     }
-    (x, y)
+    points
 }
 
-fn optimize(
-    x: &mut [f32],
-    y: &mut [f32],
+fn delta<const D: usize>(from: [f32; D], to: [f32; D]) -> ([f32; D], f32) {
+    let difference: [f32; D] = std::array::from_fn(|axis| from[axis] - to[axis]);
+    let squared = difference.iter().map(|d| d * d).sum();
+    (difference, squared)
+}
+
+fn optimize<const D: usize>(
+    points: &mut [[f32; D]],
     edges: &[(usize, usize, f32)],
     fixed: &[bool],
     epochs: usize,
@@ -274,7 +302,7 @@ fn optimize(
     if edges.is_empty() {
         return;
     }
-    let count = x.len();
+    let count = points.len();
     let mut rng = Rng::new(SEED);
     let heaviest = edges.iter().map(|&(_, _, weight)| weight).fold(0.0_f32, f32::max);
 
@@ -292,19 +320,20 @@ fn optimize(
                 continue;
             }
 
-            let (dx, dy) = (x[from] - x[to], y[from] - y[to]);
-            let squared = dx * dx + dy * dy;
+            let (difference, squared) = delta(points[from], points[to]);
             if squared > 0.0 {
                 let power = squared.powf(CURVE_B);
                 let attract = -2.0 * CURVE_A * CURVE_B * power / squared / (CURVE_A * power + 1.0);
-                let (gx, gy) = (clip(attract * dx) * alpha, clip(attract * dy) * alpha);
+                let gradient = difference.map(|d| clip(attract * d) * alpha);
                 if !fixed[from] {
-                    x[from] += gx;
-                    y[from] += gy;
+                    for (coordinate, change) in points[from].iter_mut().zip(gradient) {
+                        *coordinate += change;
+                    }
                 }
                 if !fixed[to] {
-                    x[to] -= gx;
-                    y[to] -= gy;
+                    for (coordinate, change) in points[to].iter_mut().zip(gradient) {
+                        *coordinate -= change;
+                    }
                 }
             }
             next_at[e] += every[e];
@@ -317,14 +346,14 @@ fn optimize(
                 if other == from {
                     continue;
                 }
-                let (dx, dy) = (x[from] - x[other], y[from] - y[other]);
-                let squared = dx * dx + dy * dy;
+                let (difference, squared) = delta(points[from], points[other]);
                 if squared > 0.0 {
                     let repel = 2.0 * CURVE_B / ((0.001 + squared) * (CURVE_A * squared.powf(CURVE_B) + 1.0));
-                    x[from] += clip(repel * dx) * alpha;
-                    y[from] += clip(repel * dy) * alpha;
+                    for (coordinate, d) in points[from].iter_mut().zip(difference) {
+                        *coordinate += clip(repel * d) * alpha;
+                    }
                 } else {
-                    x[from] += GRADIENT_CLIP * alpha * 0.01;
+                    points[from][0] += GRADIENT_CLIP * alpha * 0.01;
                 }
             }
             #[expect(clippy::cast_precision_loss, reason = "a small count")]
@@ -339,29 +368,22 @@ fn clip(value: f32) -> f32 {
     value.clamp(-GRADIENT_CLIP, GRADIENT_CLIP)
 }
 
-fn rescale(x: &mut [f32], y: &mut [f32], spread: f32) {
-    let reach = x.iter().chain(y.iter()).fold(0.0_f32, |reach, value| reach.max(value.abs()));
-    if reach >= 1e-9 {
-        x.iter_mut().chain(y.iter_mut()).for_each(|value| *value *= spread / reach);
-    }
-}
-
-fn normalize(x: &mut [f32], y: &mut [f32]) {
+fn normalize<const D: usize>(points: &mut [[f32; D]]) {
     const MARGIN: f32 = 0.04;
-    let ((min_x, max_x), (min_y, max_y)) = (bounds(x), bounds(y));
-    let span = (max_x - min_x).max(max_y - min_y).max(1e-6);
+    let bounds: [(f32, f32); D] = std::array::from_fn(|axis| {
+        let mut sorted: Vec<_> = points.iter().map(|point| point[axis]).collect();
+        sorted.sort_by(f32::total_cmp);
+        let length = sorted.len();
+        (sorted[length * 5 / 1000], sorted[(length * 995 / 1000).min(length - 1)])
+    });
+    let span = bounds.iter().map(|(min, max)| max - min).fold(1e-6_f32, f32::max);
     let scale = (1.0 - 2.0 * MARGIN) / span;
-    let offset_x = MARGIN + ((1.0 - 2.0 * MARGIN) - (max_x - min_x) * scale) / 2.0;
-    let offset_y = MARGIN + ((1.0 - 2.0 * MARGIN) - (max_y - min_y) * scale) / 2.0;
-    x.iter_mut().for_each(|value| *value = (offset_x + (*value - min_x) * scale).clamp(0.0, 1.0));
-    y.iter_mut().for_each(|value| *value = (offset_y + (*value - min_y) * scale).clamp(0.0, 1.0));
-}
-
-fn bounds(values: &[f32]) -> (f32, f32) {
-    let mut sorted = values.to_vec();
-    sorted.sort_by(f32::total_cmp);
-    let length = sorted.len();
-    (sorted[length * 5 / 1000], sorted[(length * 995 / 1000).min(length - 1)])
+    for (axis, (min, max)) in bounds.into_iter().enumerate() {
+        let offset = MARGIN + ((1.0 - 2.0 * MARGIN) - (max - min) * scale) / 2.0;
+        for point in &mut *points {
+            point[axis] = (offset + (point[axis] - min) * scale).clamp(0.0, 1.0);
+        }
+    }
 }
 
 pub fn densest_spot(spots: &[(f32, f32, f32)]) -> Option<(f32, f32)> {
@@ -416,6 +438,36 @@ mod tests {
             across += distance(a, 20 + a);
         }
         assert!(inside * 2.0 < across, "inside {inside}, across {across}");
+    }
+
+    #[test]
+    fn audio_clusters_have_depth_and_stay_close_in_3d() {
+        let snapshot = clusters();
+        let map = layout_3d(&snapshot, None);
+        let distance =
+            |a: usize, b: usize| delta([map.x[a], map.y[a], map.z[a]], [map.x[b], map.y[b], map.z[b]]).1.sqrt();
+        let inside: f32 = (0..20).map(|a| distance(a, (a + 1) % 20)).sum();
+        let across: f32 = (0..20).map(|a| distance(a, 20 + a)).sum();
+        assert!(inside * 2.0 < across, "inside {inside}, across {across}");
+        assert!(map.z.iter().any(|&z| (z - map.z[0]).abs() > 0.05));
+        assert!(map.x.iter().chain(&map.y).chain(&map.z).all(|v| (0.0..=1.0).contains(v)));
+    }
+
+    #[test]
+    fn tiny_3d_maps_have_finite_audio_positions() {
+        let snapshot = clusters();
+        for count in 0..=3 {
+            let rows = (0..count).map(|row| (snapshot.meta(row).clone(), snapshot.vector(row).to_vec())).collect();
+            let map = layout_3d(&Snapshot::new(4, rows), None);
+            assert_eq!(map.len(), count);
+            assert_eq!(map.z.len(), count);
+            assert!(map.x.iter().chain(&map.y).chain(&map.z).all(|v| (0.0..=1.0).contains(v)));
+            if count == 1 {
+                assert_eq!([map.x[0], map.y[0], map.z[0]], [0.5; 3]);
+            } else if count > 1 {
+                assert!((map.x[0] - map.x[1]).abs() > 0.01);
+            }
+        }
     }
 
     #[test]

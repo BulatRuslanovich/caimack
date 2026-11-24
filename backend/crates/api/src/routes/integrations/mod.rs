@@ -10,10 +10,7 @@ use crate::state::AppState;
 
 type IntegrationRoute = (&'static str, fn() -> Router<AppState>);
 
-const INTEGRATIONS: &[IntegrationRoute] = &[
-    ("yandex", yandex::router),
-    ("vk", vk::router),
-];
+const INTEGRATIONS: &[IntegrationRoute] = &[("yandex", yandex::router), ("vk", vk::router)];
 
 pub fn supported() -> Vec<&'static str> {
     INTEGRATIONS.iter().map(|(id, _)| *id).collect()

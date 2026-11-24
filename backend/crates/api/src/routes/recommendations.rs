@@ -2,6 +2,7 @@
 
 use app::recommendations::duplicates::{DismissDuplicatesRequest, MergeDuplicatesRequest};
 use app::recommendations::home::MixKind;
+use app::recommendations::map::MapProjection;
 use app::recommendations::radio::RadioRequestDto;
 use app::recommendations::rules::CreateRuleRequest;
 use axum::Router;
@@ -116,8 +117,18 @@ async fn recap(State(state): State<AppState>, CurrentUser(user): CurrentUser) ->
     })
 }
 
-async fn map(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> ApiResult<impl IntoResponse> {
-    Ok(Json(state.recommendations.map(user.user_id).await?))
+#[derive(Deserialize)]
+struct MapQuery {
+    #[serde(default)]
+    projection: MapProjection,
+}
+
+async fn map(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Query(query): Query<MapQuery>,
+) -> ApiResult<impl IntoResponse> {
+    Ok(Json(state.recommendations.map(user.user_id, query.projection).await?))
 }
 
 async fn duplicates(State(state): State<AppState>, Admin(user): Admin) -> ApiResult<impl IntoResponse> {
