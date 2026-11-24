@@ -274,7 +274,7 @@ class QueuePlaybackDeviceTest {
                 check(player.getMediaItemAt(index).mediaId == id)
                 queue.jumpTo(index)
             }) { it }
-            session = MediaLibrarySession.Builder(context, player, tree).build()
+            session = MediaLibrarySession.Builder(context, player, tree).setId("queue-test").build()
             pending = MediaController.Builder(context, session.token).buildAsync()
         }
         try {

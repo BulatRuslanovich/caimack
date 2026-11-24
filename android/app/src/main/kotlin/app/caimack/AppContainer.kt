@@ -36,6 +36,7 @@ import app.caimack.playback.ConnectPlayback
 import app.caimack.playback.RadioSession
 import app.caimack.playback.Signals
 import app.caimack.playback.SleepTimer
+import app.caimack.playback.StreamCache
 import app.caimack.session.PersistentCookieJar
 import app.caimack.ui.Appearance
 import app.caimack.ui.RecentSearches
@@ -230,6 +231,8 @@ class AppContainer(context: Context) {
     val downloads by lazy {
         Downloads(context.applicationContext, http, server, json, { syncStore.downloadOwner }) { !syncStore.active }
     }
+
+    internal val streamCache by lazy { StreamCache(context.applicationContext, http, ::playbackOwner) }
 
     fun synchronizedTracks(): List<Track> = syncStore.tracks(
         downloads.libraryEntries().filter { it.done }.mapNotNullTo(hashSetOf()) { it.track?.id }
