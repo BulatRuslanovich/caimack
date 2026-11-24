@@ -5,7 +5,7 @@
 import { useT } from "@/contexts/I18nContext";
 import { api } from "@/lib/api";
 import { AdaptivePlayback, warmUpHls } from "@/lib/playback/adaptivePlayback";
-import { bufferedAhead, silence, sourceKeyOf } from "@/lib/playback/audioSource";
+import { silence, sourceKeyOf } from "@/lib/playback/audioSource";
 import { Crossfade } from "@/lib/playback/crossfade";
 import { endVinylScratch, resetVinylScratch } from "@/lib/playback/equalizer";
 import { normalizationGain } from "@/lib/playback/loudness";
@@ -83,6 +83,11 @@ export function usePlaybackEngine({
     const audio = spareAudio();
     if (audio) silence(audio, standby.playback);
   }, [spareAudio]);
+
+  const suspendStandby = useCallback(() => {
+    const standby = standbyRef.current;
+    if (standby && !standby.playback.suspendPreload()) dropStandby();
+  }, [dropStandby]);
 
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -302,20 +307,32 @@ export function usePlaybackEngine({
     return () => window.removeEventListener("retry-stream-quality", retryQuality);
   }, [recovery]);
 
+  const reportLoadFailure = useCallback(
+    (playback: AdaptivePlayback) => {
+      if (adaptiveRef.current !== playback) return;
+      const wantsPlay = resumeAfterScrub.current.isPlaying;
+      if (failSource(wantsPlay)) notify(t("player.offlineWaiting"), "info");
+      setWaiting(true);
+      if (navigator.onLine && wantsPlay && retryTimerRef.current === null) {
+        retryTimerRef.current = window.setTimeout(() => {
+          retryTimerRef.current = null;
+          setSourceRevision((revision) => revision + 1);
+        }, 10_000);
+      }
+    },
+    [failSource, notify, t],
+  );
+
   const prepareNext = useCallback(
     (track: Track, startAt: number) => {
       if (crossfader.active) return;
-      const playing = audioRef.current;
-      if (playing && !playing.paused) {
-        const ahead = bufferedAhead(playing);
-        const remaining = playing.duration - playing.currentTime;
-        // Prioritize the song being heard over speculative downloads on a weak link.
-        if (ahead < 8 && (!Number.isFinite(remaining) || ahead < remaining - 0.5)) return;
-      }
 
       const forceAdaptive = recovery.forceAdaptive(quality, track.id);
       const sourceKey = sourceKeyOf(track.id, quality, forceAdaptive, sourceRevision);
-      if (standbyRef.current?.sourceKey === sourceKey) return;
+      if (standbyRef.current?.sourceKey === sourceKey) {
+        standbyRef.current.playback.resumePreload();
+        return;
+      }
 
       dropStandby();
       const audio = spareAudio();
@@ -324,6 +341,7 @@ export function usePlaybackEngine({
       const playback = new AdaptivePlayback(audio, {
         onFatalError: () => {
           if (standbyRef.current === standby) dropStandby();
+          else reportLoadFailure(playback);
         },
         onPlayBlocked: () => reportPlayBlocked(playback),
       });
@@ -359,6 +377,7 @@ export function usePlaybackEngine({
       dropStandby,
       spareAudio,
       reportPlayBlocked,
+      reportLoadFailure,
     ],
   );
 
@@ -403,6 +422,7 @@ export function usePlaybackEngine({
       standbyRef.current = null;
       audioRef.current = incoming;
       adaptiveRef.current = standby.playback;
+      standby.playback.resumePreload();
 
       recordedRef.current = null;
       tracker.finish("trackSkipped");
@@ -452,23 +472,9 @@ export function usePlaybackEngine({
     positionRef.current = startAt;
     setDuration(currentTrack.durationSeconds || 0);
 
-    const reportLoadFailure = () => {
-      if (adaptiveRef.current !== playback) return;
-      const offline = typeof navigator !== "undefined" && !navigator.onLine;
-      const wantsPlay = resumeAfterScrub.current.isPlaying;
-      if (failSource(wantsPlay)) notify(t("player.offlineWaiting"), "info");
-      setWaiting(true);
-      if (!offline && wantsPlay && retryTimerRef.current === null) {
-        retryTimerRef.current = window.setTimeout(() => {
-          retryTimerRef.current = null;
-          setSourceRevision((revision) => revision + 1);
-        }, 10_000);
-      }
-    };
-
     adaptiveRef.current?.destroy();
     const playback = new AdaptivePlayback(audio, {
-      onFatalError: () => reportLoadFailure(),
+      onFatalError: () => reportLoadFailure(playback),
       onPlayBlocked: () => reportPlayBlocked(playback),
     });
     adaptiveRef.current = playback;
@@ -485,18 +491,16 @@ export function usePlaybackEngine({
         if (adaptiveRef.current === playback) recovery.loaded(currentTrack.id);
       })
       .catch(() => {
-        if (adaptiveRef.current === playback) reportLoadFailure();
+        reportLoadFailure(playback);
       });
   }, [
     currentTrack,
     quality,
     sourceRevision,
     isPlaying,
-    notify,
-    t,
     tracker,
     recovery,
-    failSource,
+    reportLoadFailure,
     reportPlayBlocked,
     crossfader,
     dropStandby,
@@ -579,6 +583,7 @@ export function usePlaybackEngine({
     crossfader,
     scrubRef,
     prepareNext,
+    suspendStandby,
     switchTimerRef,
     standbyRef,
     spareAudio,
@@ -626,7 +631,8 @@ export function usePlaybackEngine({
 
     const ranges = audio.buffered;
     setBuffered(ranges.length > 0 ? ranges.end(ranges.length - 1) : 0);
-  }, []);
+    checkTransitionRef.current();
+  }, [checkTransitionRef]);
 
   const handleEnded = useCallback(() => {
     if (switchPendingRef.current?.from === audioRef.current) return;

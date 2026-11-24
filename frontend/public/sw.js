@@ -142,7 +142,7 @@ async function playlist(event, request, trackId) {
   const revalidate = fetch(request)
     .then(async (response) => {
       if (response.ok && response.status !== 202) {
-        await store(cache, request, response.clone(), trackId);
+        await store(cache, request, response.clone(), trackId).catch(() => {});
       }
       return response;
     })
@@ -169,22 +169,32 @@ async function segment(event, request, trackId) {
   }
 
   const response = await fetch(request);
-  if (response.status === (range ? 206 : 200)) {
-    const copy = response.clone();
-    event.waitUntil(
-      copy
-        .arrayBuffer()
-        .then((body) =>
-          store(
-            cache,
-            new Request(key.href),
-            new Response(body, { headers: copy.headers }),
-            trackId,
-          ),
-        ),
-    );
-  }
-  return response;
+  if (!response.body || response.status !== (range ? 206 : 200)) return response;
+
+  // Keep one reader so aborting a standby request also stops its cache fill.
+  const chunks = [];
+  const headers = response.headers;
+  const expected = headers.has("Content-Encoding") ? 0 : Number(headers.get("Content-Length"));
+  let received = 0;
+  const stream = new TransformStream({
+    transform(chunk, controller) {
+      chunks.push(chunk);
+      received += chunk.byteLength;
+      controller.enqueue(chunk);
+    },
+    flush() {
+      if (expected > 0 && received !== expected) throw new Error("Incomplete HLS segment");
+    },
+  });
+  event.waitUntil(
+    response.body
+      .pipeTo(stream.writable)
+      .then(() =>
+        store(cache, new Request(key.href), new Response(new Blob(chunks), { headers }), trackId),
+      )
+      .catch(() => {}),
+  );
+  return new Response(stream.readable, { status: response.status, headers });
 }
 
 async function store(cache, request, response, trackId) {

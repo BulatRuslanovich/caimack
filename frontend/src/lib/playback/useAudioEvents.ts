@@ -57,7 +57,11 @@ export function useAudioEvents({
   const audioProps: ComponentPropsWithoutRef<"audio"> = {
     preload: "auto",
     onTimeUpdate: (event) => fromActive(event) && handleTimeUpdate(),
-    onSeeking: (event) => fromActive(event) && tracker.reposition(event.currentTarget.currentTime),
+    onSeeking: (event) => {
+      if (!fromActive(event)) return;
+      tracker.reposition(event.currentTarget.currentTime);
+      handleProgress();
+    },
     onProgress: (event) => fromActive(event) && handleProgress(),
     onLoadedMetadata: (event) =>
       fromActive(event) && setDuration(event.currentTarget.duration || 0),
@@ -87,6 +91,7 @@ export function useAudioEvents({
     onWaiting: (event) => {
       if (!fromActive(event)) return;
       setWaiting(true);
+      handleProgress();
       handleWaiting();
     },
     onStalled: (event) => fromActive(event) && handleWaiting(),

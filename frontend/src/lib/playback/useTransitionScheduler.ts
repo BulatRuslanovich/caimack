@@ -4,6 +4,7 @@
 
 import type { Track } from "@/lib/types";
 import { useCallback, useEffect, useRef, type RefObject } from "react";
+import { bufferedAhead } from "./audioSource";
 import type { Crossfade } from "./crossfade";
 import type { PendingSwitch, Standby } from "./playbackEngineTypes";
 import type { ListeningTracker } from "./playbackTelemetry";
@@ -21,6 +22,7 @@ interface TransitionInput {
   crossfader: Crossfade;
   scrubRef: RefObject<number | null>;
   prepareNext: (track: Track, startAt: number) => void;
+  suspendStandby: () => void;
   switchTimerRef: RefObject<number | null>;
   standbyRef: RefObject<Standby | null>;
   spareAudio: () => HTMLAudioElement | null;
@@ -29,6 +31,8 @@ interface TransitionInput {
   onTrackEnded: () => void;
 }
 const SWITCH_TIMER_WINDOW_SECONDS = 0.6;
+const PRELOAD_SUSPEND_SECONDS = 4;
+const PRELOAD_RESUME_SECONDS = 8;
 let scriptableVolume: boolean | null = null;
 
 export function useTransitionScheduler({
@@ -42,6 +46,7 @@ export function useTransitionScheduler({
   crossfader,
   scrubRef,
   prepareNext,
+  suspendStandby,
   switchTimerRef,
   standbyRef,
   spareAudio,
@@ -57,10 +62,18 @@ export function useTransitionScheduler({
     if (!audio || !track || !nextTrack || switchPendingRef.current || crossfader.active) return;
     if (scrubRef.current !== null) return;
 
+    const at = audio.currentTime;
+    const ahead = bufferedAhead(audio);
+    const remaining = audio.duration - at;
+    const fullyBuffered = Number.isFinite(remaining) && ahead >= remaining - 0.5;
+    const loading = audio.dataset.sourceLoading === "true";
+    const competing = !audio.paused && !fullyBuffered;
+    if (loading || (competing && ahead < PRELOAD_SUSPEND_SECONDS)) suspendStandby();
+    if (loading || audio.seeking) return;
+
     scriptableVolume ??=
       Object.assign(document.createElement("audio"), { volume: 0.5 }).volume === 0.5;
 
-    const at = audio.currentTime;
     const plan = planTransition({
       crossfade,
       smart: smartTransitions,
@@ -74,7 +87,9 @@ export function useTransitionScheduler({
     const stage = transitionStage(at, plan);
     if (!plan || stage === "wait") return;
 
-    prepareNext(nextTrack, plan.nextStartAt);
+    if (!competing || ahead >= PRELOAD_RESUME_SECONDS) {
+      prepareNext(nextTrack, plan.nextStartAt);
+    }
 
     if (stage === "preload") {
       const until = (plan.at - at) / (audio.playbackRate || 1);
@@ -91,6 +106,7 @@ export function useTransitionScheduler({
     const incoming = spareAudio();
     if (
       audio.paused ||
+      standbyRef.current?.trackId !== nextTrack.id ||
       !standbyRef.current?.ready ||
       !incoming ||
       incoming.readyState < HTMLMediaElement.HAVE_FUTURE_DATA
@@ -122,6 +138,7 @@ export function useTransitionScheduler({
     tracker,
     crossfader,
     prepareNext,
+    suspendStandby,
     spareAudio,
     clearSwitchTimer,
     onTrackEnded,
