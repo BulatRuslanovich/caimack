@@ -117,19 +117,46 @@ class PlayerConnection(
         it.play()
     }
 
+    fun startPlaylistRadio(playlistId: String, sessionId: String, seed: Track?, batch: RadioBatch) {
+        val tracks = listOfNotNull(seed) + batch.tracks.map { it.track }.filter { it.id != seed?.id }
+        if (tracks.isEmpty()) return
+        val metadata = app.caimack.api.ConnectRadio(
+            seedTrackId = seed?.id,
+            reasons = batch.tracks.mapNotNull { item -> item.reason?.let { item.track.id to it } }.toMap(),
+            playlistId = playlistId,
+            sessionId = sessionId,
+        )
+        withController(ConnectCommand.Play(
+            tracks.map { it.id }, 0, 0.0, true, state.value.shuffle, repeatOf(state.value.repeat),
+            source = PlaySources.radio(playlist = true), order = tracks.indices.toList(), radio = metadata,
+        )) {
+            radio.start(seed?.id, batch, playlistId, sessionId)
+            load(it, tracks, 0, preserveOrder = true)
+        }
+    }
+
     fun enqueue(track: Track, next: Boolean) = withController(ConnectCommand.Enqueue(track.id, next)) {
-        known[track.id] = track
-        PlaySources.tag(listOf(track.id), "queue")
-        signals.choice("trackAddedToQueue", track.id, track.durationSeconds)
-        val item = track.toMediaItem(media)
+        enqueue(it, listOf(track), next)
+    }
+
+    fun enqueueAll(tracks: List<Track>) = withController { enqueue(it, tracks, next = false) }
+
+    private fun enqueue(player: MediaController, tracks: List<Track>, next: Boolean) {
+        if (tracks.isEmpty()) return
+        PlaySources.tag(tracks.map { it.id }, "queue")
+        tracks.forEach { track ->
+            known[track.id] = track
+            signals.choice("trackAddedToQueue", track.id, track.durationSeconds)
+        }
+        val items = tracks.map { it.toMediaItem(media) }
         when {
-            it.mediaItemCount == 0 -> {
-                it.setMediaItem(item)
-                it.prepare()
-                it.play()
+            player.mediaItemCount == 0 -> {
+                player.setMediaItems(preserveQueue(items))
+                player.prepare()
+                player.play()
             }
-            next -> it.addMediaItem(it.currentMediaItemIndex + 1, item)
-            else -> it.addMediaItem(item)
+            next -> player.addMediaItems(player.currentMediaItemIndex + 1, items)
+            else -> player.addMediaItems(items)
         }
     }
 
@@ -256,9 +283,10 @@ class PlayerConnection(
         it.clearMediaItems()
     }
 
-    private fun load(player: MediaController, tracks: List<Track>, index: Int) {
+    private fun load(player: MediaController, tracks: List<Track>, index: Int, preserveOrder: Boolean = false) {
         tracks.forEach { track -> known[track.id] = track }
-        player.setMediaItems(tracks.map { track -> track.toMediaItem(media) }, index, 0)
+        val items = tracks.map { it.toMediaItem(media) }
+        player.setMediaItems(if (preserveOrder) preserveQueue(items) else items, index, 0)
         player.prepare()
         player.play()
     }

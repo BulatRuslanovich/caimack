@@ -12,59 +12,24 @@ use crate::storage::{CoverSize, Storage};
 use crate::transcode::{self, TranscodeQueue, TranscodeRequest};
 use crate::{AppError, AppResult};
 
-const MAX_DOWNLOAD_NAME_LENGTH: usize = 120;
-
 pub struct TrackFile {
     pub path: PathBuf,
     pub content_type: String,
-    pub download_name: String,
     pub etag: String,
 }
 
 pub async fn open_track(db: &PgPool, storage: &Storage, id: Uuid) -> AppResult<TrackFile> {
-    let track = sqlx::query!(
-        "SELECT t.file_path, t.mime_type, t.original_file_name, t.content_hash, t.title, ar.name AS artist_name
-         FROM tracks t JOIN artists ar ON ar.id = t.artist_id WHERE t.id = $1",
-        id
-    )
-    .fetch_optional(db)
-    .await?
-    .ok_or_else(|| AppError::not_found("Track not found."))?;
+    let track = sqlx::query!("SELECT file_path, mime_type, content_hash FROM tracks WHERE id = $1", id)
+        .fetch_optional(db)
+        .await?
+        .ok_or_else(|| AppError::not_found("Track not found."))?;
 
     let Some(path) = storage.existing(&track.file_path) else {
         tracing::error!("Track {id} is registered at {} but the file is missing from storage", track.file_path);
         return Err(AppError::not_found("The audio file for this track is missing from storage."));
     };
 
-    let extension = std::path::Path::new(&track.original_file_name)
-        .extension()
-        .and_then(|e| e.to_str())
-        .filter(|e| !e.is_empty())
-        .map_or_else(|| ".mp3".to_owned(), |e| format!(".{e}"));
-
-    Ok(TrackFile {
-        path,
-        content_type: track.mime_type,
-        download_name: format!("{}{extension}", download_stem(&track.artist_name, &track.title)),
-        etag: format!("\"{}\"", track.content_hash),
-    })
-}
-
-fn download_stem(artist: &str, title: &str) -> String {
-    let basis = if artist.trim().is_empty() { title.to_owned() } else { format!("{artist} - {title}") };
-    let mut name = String::with_capacity(basis.len());
-    for character in basis.chars() {
-        let safe = if "\\/:*?\"<>|".contains(character) || character.is_control() { ' ' } else { character };
-        if safe != ' ' || name.chars().last().is_some_and(|last| last != ' ') {
-            name.push(safe);
-        }
-    }
-
-    let mut cleaned: String = name.trim_matches([' ', '.']).to_owned();
-    if cleaned.chars().count() > MAX_DOWNLOAD_NAME_LENGTH {
-        cleaned = cleaned.chars().take(MAX_DOWNLOAD_NAME_LENGTH).collect::<String>().trim_end().to_owned();
-    }
-    if cleaned.is_empty() { "track".to_owned() } else { cleaned }
+    Ok(TrackFile { path, content_type: track.mime_type, etag: format!("\"{}\"", track.content_hash) })
 }
 
 pub struct HlsMaster {
@@ -272,19 +237,4 @@ fn open_variant(storage: &Storage, base: &str, size: CoverSize) -> AppResult<Ima
         _ => "image/webp",
     };
     Ok(ImageFile { path, content_type, etag: format!("\"{stamp:x}-{:x}\"", metadata.len()) })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn download_name_drops_forbidden_characters_and_double_spaces() {
-        assert_eq!(download_stem("AC/DC", "  Back:In  Black?. "), "AC DC - Back In Black");
-    }
-
-    #[test]
-    fn download_name_without_artist_is_the_title() {
-        assert_eq!(download_stem(" ", "Lantern"), "Lantern");
-    }
 }

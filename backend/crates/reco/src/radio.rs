@@ -24,6 +24,7 @@ const RECENT_ARTIST_PENALTY: f64 = 0.5;
 
 const WARM_TRACKS: usize = 10;
 const POOL: usize = 150;
+const PLAYLIST_SEEDS: usize = 5;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Focus {
@@ -112,6 +113,42 @@ impl Candidate {
 }
 
 pub fn next(snapshot: &Snapshot, listener: &Listener, taste: &Taste, request: &RadioRequest<'_>) -> RadioBatch {
+    rank(snapshot, listener, taste, request, &[], &[])
+}
+
+pub fn for_playlist(
+    snapshot: &Snapshot,
+    listener: &Listener,
+    taste: &Taste,
+    request: &RadioRequest<'_>,
+    members: &[Uuid],
+) -> (RadioBatch, usize) {
+    let mut seen = HashSet::new();
+    let mut rows = Vec::new();
+    for row in members.iter().filter_map(|&id| snapshot.row_of(id)) {
+        if !seen.contains(&row) {
+            seen.extend(snapshot.clones(row));
+            rows.push(row);
+        }
+    }
+    let count = rows.len().min(PLAYLIST_SEEDS);
+    if count == 0 {
+        return (RadioBatch::default(), 0);
+    }
+    let seeds: Vec<_> =
+        if count == 1 { rows } else { (0..count).map(|idx| rows[idx * (rows.len() - 1) / (count - 1)]).collect() };
+    let seeded = RadioRequest { seed: Some(snapshot.meta(seeds[0]).track_id), ..*request };
+    (rank(snapshot, listener, taste, &seeded, members, &seeds), count)
+}
+
+fn rank(
+    snapshot: &Snapshot,
+    listener: &Listener,
+    taste: &Taste,
+    request: &RadioRequest<'_>,
+    members: &[Uuid],
+    playlist_seeds: &[usize],
+) -> RadioBatch {
     if snapshot.is_empty() {
         return RadioBatch::default();
     }
@@ -122,7 +159,7 @@ pub fn next(snapshot: &Snapshot, listener: &Listener, taste: &Taste, request: &R
 
     let mut excluded: HashSet<usize> = HashSet::new();
     let rejected = listener.tracks.iter().filter(|(_, signal)| signal.rejected()).map(|(id, _)| *id);
-    for track in request.queue.iter().chain(request.recent).copied().chain(rejected) {
+    for track in request.queue.iter().chain(request.recent).chain(members).copied().chain(rejected) {
         if let Some(row) = snapshot.row_of(track) {
             excluded.extend(snapshot.clones(row));
         }
@@ -137,9 +174,10 @@ pub fn next(snapshot: &Snapshot, listener: &Listener, taste: &Taste, request: &R
         heard.iter().filter(|&&id| Some(id) != request.seed).filter_map(|&id| snapshot.row_of(id)).collect();
     let tail = &tail[tail.len().saturating_sub(RECENT_ARTIST_WINDOW)..];
 
-    let seed = if session.skip_streak >= 2 { session.last_good } else { request.seed };
+    let seed = if session.skip_streak >= 2 && playlist_seeds.len() <= 1 { session.last_good } else { request.seed };
     let seed = seed.and_then(|seed| snapshot.row_of(seed));
     let (anchor, moved) = match seed {
+        Some(seeded) if playlist_seeds.len() > 1 => (Some(seeded), false),
         Some(seeded) => match stuck(snapshot, seeded, tail) {
             Some(seed_artists) if !taste.is_empty() => {
                 let other = other_mode(taste, snapshot.vector(seeded), &mut rng);
@@ -166,7 +204,18 @@ pub fn next(snapshot: &Snapshot, listener: &Listener, taste: &Taste, request: &R
     let Some(anchor) = anchor else { return RadioBatch::default() };
     excluded.extend(snapshot.clones(anchor));
 
-    let anchor_similarity = snapshot.similarities(snapshot.vector(anchor));
+    let anchor_similarity = if playlist_seeds.len() > 1 {
+        let mut centre = vec![0.0; snapshot.dimension()];
+        for &seed in playlist_seeds {
+            for (sum, value) in centre.iter_mut().zip(snapshot.vector(seed)) {
+                *sum += value;
+            }
+        }
+        crate::vector::normalize(&mut centre);
+        snapshot.similarities(&centre)
+    } else {
+        snapshot.similarities(snapshot.vector(anchor))
+    };
     let similarity_ranks = {
         // Seed copies, blocked songs and rejected tracks are not competitors.
         let candidates: Vec<f32> = anchor_similarity
@@ -610,6 +659,41 @@ mod tests {
         assert!(!rows.contains(&0) && !rows.contains(&3));
         let close = batch.picks.iter().filter(|p| p.row % 3 == 0).count();
         assert!(close >= 5, "{batch:?}");
+    }
+
+    #[test]
+    fn playlist_radio_uses_the_shared_sound_and_excludes_members_and_blocked_tracks() {
+        let snapshot = Snapshot::new(
+            2,
+            vec![
+                (meta(0, 10, "left"), vec![1.0, 0.0]),
+                (meta(1, 11, "right"), vec![0.0, 1.0]),
+                (meta(2, 12, "balanced"), vec![1.0, 1.0]),
+                (meta(3, 13, "near left"), vec![1.0, 0.05]),
+                (meta(4, 14, "near right"), vec![0.05, 1.0]),
+            ],
+        );
+        let mut listener = listener(&[]);
+        let profile = taste(&snapshot, &listener);
+        let members = [Uuid::from_u128(0), Uuid::from_u128(1)];
+        let (multiple, count) =
+            for_playlist(&snapshot, &listener, &profile, &request(None, &[], 1, Focus::Closer), &members);
+        assert_eq!(count, 2);
+        assert_eq!(multiple.picks[0].row, 2);
+        let (single, count) =
+            for_playlist(&snapshot, &listener, &profile, &request(None, &[], 1, Focus::Closer), &members[..1]);
+        assert_eq!(count, 1);
+        assert_eq!(single, next(&snapshot, &listener, &profile, &request(Some(0), &[], 1, Focus::Closer)));
+        let (missing, count) =
+            for_playlist(&snapshot, &listener, &profile, &request(None, &[], 1, Focus::Closer), &[Uuid::from_u128(42)]);
+        assert_eq!(count, 0);
+        assert!(missing.picks.is_empty());
+        listener.rules = Rules::new([Uuid::from_u128(2)], []);
+        let profile = taste(&snapshot, &listener);
+        let (filtered, _) =
+            for_playlist(&snapshot, &listener, &profile, &request(None, &[], 6, Focus::Closer), &members);
+        assert!(!filtered.picks.is_empty());
+        assert!(filtered.picks.iter().all(|pick| pick.row > 2));
     }
 
     #[test]

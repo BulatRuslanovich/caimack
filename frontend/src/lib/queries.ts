@@ -250,6 +250,18 @@ export const queries = {
   playlist: (id: string) =>
     queryOptions({ queryKey: ["playlist", id], queryFn: () => api.playlist(id) }),
 
+  playlistMemberships: (trackId: string) =>
+    queryOptions({
+      queryKey: ["playlistMemberships", trackId],
+      queryFn: ({ signal }) => api.playlistMemberships(trackId, signal),
+    }),
+
+  playlistSuggestions: (id: string) =>
+    queryOptions({
+      queryKey: ["playlistSuggestions", id],
+      queryFn: ({ signal }) => api.playlistSuggestions(id, signal),
+    }),
+
   recentlyPlayed: (params: PageParams) =>
     queryOptions({
       queryKey: ["history", "recent", params],
@@ -348,7 +360,14 @@ export const invalidates = {
     ["libraryMap"],
     ["duplicates"],
   ],
-  playlists: [["savedLibrary"], ["playlists"], ["playlist"], ["homeFeed"]],
+  playlists: [
+    ["savedLibrary"],
+    ["playlists"],
+    ["playlist"],
+    ["playlistMemberships"],
+    ["playlistSuggestions"],
+    ["homeFeed"],
+  ],
   favorites: [
     ["favorites"],
     ["tracks"],

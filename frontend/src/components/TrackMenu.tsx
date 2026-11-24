@@ -6,10 +6,12 @@ import { useT } from "@/contexts/I18nContext";
 import type { Track } from "@/lib/types";
 import { Slot } from "@radix-ui/react-slot";
 import { EllipsisVerticalIcon } from "lucide-react";
-import { type ReactElement, useState, useSyncExternalStore } from "react";
+import { type ReactElement, useRef, useState, useSyncExternalStore } from "react";
 import { Button } from "./ui/button";
 import { DropdownMenu, DropdownMenuTrigger } from "./ui/dropdown-menu";
 
+import { PlaylistMembershipDialog } from "./PlaylistMembershipDialog";
+import type { ReturnFocus } from "./PlaylistActionDialog";
 import { TrackMenuBody } from "./track-menu/TrackMenuBody";
 
 export interface TrackMenuProps {
@@ -22,6 +24,7 @@ export interface TrackMenuProps {
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
   onNavigate?: () => void;
+  onOpenMembership?: (track: Track, returnFocus: ReturnFocus) => void;
   trigger?: ReactElement;
 }
 
@@ -35,10 +38,31 @@ function subscribeCompact(onChange: () => void) {
 
 import { SheetMenu } from "./track-menu/MenuPrimitives";
 
-export function TrackMenu({ open, onOpenChange, trigger, ...rest }: TrackMenuProps) {
+export function TrackMenu({
+  open,
+  onOpenChange,
+  trigger,
+  onOpenMembership,
+  ...rest
+}: TrackMenuProps) {
   const t = useT();
   const [everOpened, setEverOpened] = useState(open);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [membershipTrack, setMembershipTrack] = useState<Track | null>(null);
+  const triggerRef = useRef<HTMLElement>(null);
+  const returnFocus = () => triggerRef.current;
+  const openMembership = () => {
+    if (onOpenMembership) onOpenMembership(rest.track, returnFocus);
+    else setMembershipTrack(rest.track);
+  };
+  const membership = membershipTrack && (
+    <PlaylistMembershipDialog
+      key={membershipTrack.id}
+      track={membershipTrack}
+      onClose={() => setMembershipTrack(null)}
+      returnFocus={returnFocus}
+    />
+  );
   const compact = useSyncExternalStore(
     subscribeCompact,
     () => window.matchMedia(COMPACT).matches,
@@ -47,14 +71,18 @@ export function TrackMenu({ open, onOpenChange, trigger, ...rest }: TrackMenuPro
 
   if (open && !everOpened) setEverOpened(true);
 
-  const button = trigger ?? (
-    <Button
-      variant="ghost"
-      size="icon"
-      aria-label={t("tracks.moreActions", { title: rest.track.title })}
-    >
-      <EllipsisVerticalIcon size={16} />
-    </Button>
+  const button = (
+    <Slot ref={triggerRef}>
+      {trigger ?? (
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={t("tracks.moreActions", { title: rest.track.title })}
+        >
+          <EllipsisVerticalIcon size={16} />
+        </Button>
+      )}
+    </Slot>
   );
 
   if (!compact && !everOpened && !open) {
@@ -82,20 +110,33 @@ export function TrackMenu({ open, onOpenChange, trigger, ...rest }: TrackMenuPro
 
   if (compact) {
     return (
-      <SheetMenu.Provider value={{ open, onOpenChange }}>
-        <Slot onClick={() => onOpenChange(true)}>{button}</Slot>
-        {everOpened && <TrackMenuBody {...rest} onOpenChange={onOpenChange} />}
-      </SheetMenu.Provider>
+      <>
+        <SheetMenu.Provider value={{ open, onOpenChange }}>
+          <Slot onClick={() => onOpenChange(true)}>{button}</Slot>
+          {everOpened && (
+            <TrackMenuBody {...rest} onOpenChange={onOpenChange} openMembership={openMembership} />
+          )}
+        </SheetMenu.Provider>
+        {membership}
+      </>
     );
   }
 
   return (
-    <DropdownMenu open={open} onOpenChange={onOpenChange}>
-      <DropdownMenuTrigger asChild>{button}</DropdownMenuTrigger>
+    <>
+      <DropdownMenu open={open} onOpenChange={onOpenChange}>
+        <DropdownMenuTrigger asChild>{button}</DropdownMenuTrigger>
 
-      {everOpened && (
-        <TrackMenuBody {...rest} onOpenChange={onOpenChange} initialKeyboardFocus={keyboardOpen} />
-      )}
-    </DropdownMenu>
+        {everOpened && (
+          <TrackMenuBody
+            {...rest}
+            onOpenChange={onOpenChange}
+            initialKeyboardFocus={keyboardOpen}
+            openMembership={openMembership}
+          />
+        )}
+      </DropdownMenu>
+      {membership}
+    </>
   );
 }

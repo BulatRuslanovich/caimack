@@ -35,7 +35,7 @@ import {
   playbackRowClass,
   playbackTitleClass,
 } from "./PlaybackListRows";
-import { TrackMenu } from "./TrackMenu";
+import { TrackMenu, type TrackMenuProps } from "./TrackMenu";
 import { DragHandle, VerticalSortable } from "./VerticalSortable";
 import { VirtualList, type VirtualListHandle } from "./VirtualList";
 import { Button } from "./ui/button";
@@ -59,6 +59,8 @@ interface TrackListProps {
   playedAt?: Record<string, string>;
   onChanged?: () => void;
   playlistId?: string;
+  savedPlaylistTracks?: Track[];
+  onOpenMembership?: TrackMenuProps["onOpenMembership"];
   onReorder?: (trackIds: string[]) => void;
   emptyMessage?: string;
   selection?: TrackSelection;
@@ -107,6 +109,8 @@ export function TrackList({
   playedAt,
   onChanged,
   playlistId,
+  savedPlaylistTracks = tracks,
+  onOpenMembership,
   onReorder,
   emptyMessage,
   selection,
@@ -221,17 +225,22 @@ export function TrackList({
       return;
     }
 
+    if (event.key === " " && selection) {
+      event.preventDefault();
+      selection.onToggle(tracks[from].id, from, event.shiftKey);
+    }
+
     if (event.key === "Enter") {
       event.preventDefault();
       play(from);
     }
   };
 
-  const sortable = Boolean(playlistId && onReorder);
+  const sortable = Boolean(playlistId && onReorder && !selection);
 
   const playlistTrackIds = useMemo(
-    () => (playlistId ? tracks.map((item) => item.id) : undefined),
-    [playlistId, tracks],
+    () => (playlistId ? savedPlaylistTracks.map((item) => item.id) : undefined),
+    [playlistId, savedPlaylistTracks],
   );
 
   const selectable = selection !== undefined;
@@ -290,6 +299,7 @@ export function TrackList({
       showPlayedAt={visibleDate}
       playlistId={playlistId}
       playlistTrackIds={playlistTrackIds}
+      onOpenMembership={onOpenMembership}
       isCurrent={currentTrackId === track.id}
       isPlaying={currentTrackId === track.id && isPlaying}
       isFavorite={isFavorite(track)}
@@ -425,6 +435,7 @@ interface TrackRowProps {
   showPlayedAt: boolean;
   playlistId?: string;
   playlistTrackIds?: string[];
+  onOpenMembership?: TrackMenuProps["onOpenMembership"];
   focused: boolean;
   isCurrent: boolean;
   isPlaying: boolean;
@@ -463,6 +474,7 @@ const TrackRowContent = memo(function TrackRowContent({
   showPlayedAt,
   playlistId,
   playlistTrackIds,
+  onOpenMembership,
   focused,
   isCurrent,
   isPlaying,
@@ -633,6 +645,7 @@ const TrackRowContent = memo(function TrackRowContent({
           onOpenChange={(open) => onMenuOpenChange(track.id, open)}
           playlistId={playlistId}
           playlistTrackIds={playlistTrackIds}
+          onOpenMembership={onOpenMembership}
           onChanged={onChanged}
           isFavorite={isFavorite}
           onToggleFavorite={() => onToggleFavorite(track, isFavorite)}

@@ -84,4 +84,15 @@ class PlaylistTrackActionsTest {
         actions.restore("playlist", "b", listOf("a", "b", "c"))
         assertEquals(2, web.requestCount)
     }
+
+    @Test
+    fun `date added places old entries last in manual order without changing the playlist`() {
+        val original = tracks("old-first", "earlier", "old-last", "latest")
+        val playlist = PlaylistDetail(
+            "playlist", "Playlist", tracks = original,
+            trackAddedAt = mapOf("earlier" to "2026-01-01T13:00:00+01:00", "latest" to "2026-01-01T12:00:00.001Z"),
+        )
+        assertEquals(listOf("latest", "earlier", "old-first", "old-last"), PlaylistSort.DateAdded.tracks(playlist).map(Track::id))
+        assertEquals(original, PlaylistSort.Manual.tracks(playlist))
+    }
 }

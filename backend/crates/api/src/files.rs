@@ -16,8 +16,6 @@ pub struct FileReply {
     pub content_type: String,
     pub etag: String,
     pub cache_control: &'static str,
-
-    pub download_name: Option<String>,
     pub ranges: bool,
 }
 
@@ -44,9 +42,6 @@ impl FileReply {
         insert(&mut headers, header::CONTENT_TYPE, &self.content_type);
         if self.ranges {
             insert(&mut headers, header::ACCEPT_RANGES, "bytes");
-        }
-        if let Some(name) = &self.download_name {
-            insert(&mut headers, header::CONTENT_DISPOSITION, &attachment(name));
         }
 
         let range = if self.ranges { requested_range(request, length) } else { None };
@@ -124,22 +119,6 @@ fn requested_range(request: &HeaderMap, length: u64) -> Option<Range> {
     Some(range)
 }
 
-fn attachment(name: &str) -> String {
-    let ascii: String = name
-        .chars()
-        .map(|c| if c.is_ascii() && !c.is_ascii_control() && c != '"' && c != '\\' { c } else { '_' })
-        .collect();
-    let mut encoded = String::new();
-    for byte in name.bytes() {
-        if byte.is_ascii_alphanumeric() || b"!#$&+-.^_`|~".contains(&byte) {
-            encoded.push(char::from(byte));
-        } else {
-            encoded.push_str(&format!("%{byte:02X}"));
-        }
-    }
-    format!("attachment; filename=\"{ascii}\"; filename*=UTF-8''{encoded}")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -166,19 +145,6 @@ mod tests {
                 None,
             ]
         );
-    }
-
-    #[test]
-    fn attachment_names_match_aspnet() {
-        assert_eq!(
-            attachment("Northbound Static - Crossing.mp3"),
-            "attachment; filename=\"Northbound Static - Crossing.mp3\"; filename*=UTF-8''Northbound%20Static%20-%20Crossing.mp3"
-        );
-    }
-
-    #[test]
-    fn non_ascii_names_are_kept_in_the_utf8_form() {
-        assert_eq!(attachment("Ёж.mp3"), "attachment; filename=\"__.mp3\"; filename*=UTF-8''%D0%81%D0%B6.mp3");
     }
 
     #[test]

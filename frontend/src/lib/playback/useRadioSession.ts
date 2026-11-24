@@ -9,7 +9,9 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { RefObject } from "react";
 import { api } from "@/lib/api";
 import {
+  loadPlaylistRadio,
   mergeRadioBatch,
+  playlistRadioContext,
   queueSignals,
   recommendationReasons,
   radioReaction,
@@ -44,6 +46,10 @@ interface RadioSession {
   radio: RadioState;
 
   start: (seedTrack?: Track | null, signal?: AbortSignal) => Promise<Track[] | null>;
+  startPlaylist: (
+    id: string,
+    tracks: Track[],
+  ) => Promise<Awaited<ReturnType<typeof loadPlaylistRadio>> | { status: "unavailable" }>;
 
   stop: () => void;
   setFocus: (focus: RadioFocus) => void;
@@ -130,6 +136,7 @@ export function useRadioSession({
 
       generationRef.current += 1;
       radioRef.current = { inFlight: false, seed: null };
+      setStarting(false);
       setSession({ ...session, focus });
 
       setRevision((value) => value + 1);
@@ -156,7 +163,18 @@ export function useRadioSession({
     if (radioFrom !== undefined) radioFromRef.current = radioFrom;
 
     generationRef.current += 1;
+    radioRef.current = { inFlight: false, seed: null };
+    setStarting(false);
     pinned.current = new Set(restored?.manualTrackIds ?? []);
+    if (restored?.playlistId) {
+      const ids = Object.keys(restored.reasons);
+      if (restored.seedTrackId) ids.push(restored.seedTrackId);
+      tagSource(
+        ids.filter((id) => !pinned.current.has(id)),
+        radioSource(false, true),
+        restored.sessionId ?? undefined,
+      );
+    }
     setSession(restored);
   }, []);
 
@@ -206,10 +224,29 @@ export function useRadioSession({
           notifyError(error, t("radio.failed"));
         return null;
       } finally {
-        setStarting(false);
+        if (generation === generationRef.current) setStarting(false);
       }
     },
     [notify, notifyError, t, recommendations, offline, offlineQueue],
+  );
+
+  const startPlaylist = useCallback(
+    async (id: string, tracks: Track[]) => {
+      if (!recommendations || offline || offlineQueue) return { status: "unavailable" } as const;
+      const generation = ++generationRef.current;
+      radioRef.current = { inFlight: false, seed: null };
+      setStarting(true);
+      try {
+        const result = await loadPlaylistRadio(id, tracks);
+        return generation === generationRef.current ? result : ({ status: "unavailable" } as const);
+      } catch (error) {
+        if (generation === generationRef.current) throw error;
+        return { status: "unavailable" } as const;
+      } finally {
+        if (generation === generationRef.current) setStarting(false);
+      }
+    },
+    [recommendations, offline, offlineQueue],
   );
 
   useEffect(() => {
@@ -253,6 +290,7 @@ export function useRadioSession({
     void api
       .radio({
         seedTrackId: seed,
+        ...playlistRadioContext(session),
         exclude: excluded,
         focus: session?.focus,
       })
@@ -292,7 +330,8 @@ export function useRadioSession({
 
         tagSource(
           merged.tracks.map((track) => track.id),
-          session ? radioSource() : "radio:autoplay",
+          session ? radioSource(false, Boolean(session.playlistId)) : "radio:autoplay",
+          session?.sessionId ?? undefined,
         );
 
         const next = appendTracks(current, plan.order, merged.tracks);
@@ -303,7 +342,9 @@ export function useRadioSession({
           active
             ? {
                 ...active,
-                seedTrackId: batch.seedTrackId ?? active.seedTrackId,
+                seedTrackId: active.playlistId
+                  ? active.seedTrackId
+                  : (batch.seedTrackId ?? active.seedTrackId),
                 reasons: merged.reasons,
                 signals: merged.signals,
               }
@@ -339,6 +380,7 @@ export function useRadioSession({
     session,
     radio,
     start,
+    startPlaylist,
     stop,
     setFocus,
     pin,

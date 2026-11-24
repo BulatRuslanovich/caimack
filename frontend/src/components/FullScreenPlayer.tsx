@@ -26,6 +26,7 @@ import {
   EllipsisVerticalIcon,
   HeartIcon,
   ImageIcon,
+  ListPlusIcon,
   ListVideoIcon,
   MicVocalIcon,
   SofaIcon,
@@ -37,6 +38,7 @@ import { PlayerBackdrop } from "./ArtBackdrop";
 import { ArtworkScene } from "./ArtworkScene";
 import { ArtistLinks } from "./ArtistLinks";
 import { PlayerEffectsBackdrop } from "./PlayerEffectsBackdrop";
+import { PlaylistMembershipDialog } from "./PlaylistMembershipDialog";
 import { PlayerTransport } from "./PlayerTransport";
 import { PlayerPanelTransport } from "./PlayerPanelTransport";
 import { PlayerOptionsMenu } from "./PlayerOptionsMenu";
@@ -165,10 +167,12 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
   const [panel, setPanel] = useState<"art" | "queue" | "lyrics">("art");
   const [menuOpen, setMenuOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [membershipTrack, setMembershipTrack] = useState<Track | null>(null);
+  const membershipButton = useRef<HTMLButtonElement>(null);
   const track = player.currentTrack;
   const trackId = track?.id;
   const trackDuration = track?.durationSeconds;
-  const idle = useIdle(IDLE_MS, panel === "art" && !menuOpen && !optionsOpen);
+  const idle = useIdle(IDLE_MS, panel === "art" && !menuOpen && !optionsOpen && !membershipTrack);
   const stage = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -297,6 +301,13 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
         </>
       }
     >
+      {membershipTrack && (
+        <PlaylistMembershipDialog
+          track={membershipTrack}
+          onClose={() => setMembershipTrack(null)}
+          returnFocus={() => membershipButton.current}
+        />
+      )}
       <div
         ref={stage}
         data-panel={panel}
@@ -364,6 +375,17 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
                 </p>
                 {reason && <p className="text-sm text-faint">{reasonLabel(reason, t)}</p>}
               </div>
+              <Button
+                ref={membershipButton}
+                variant="ghost"
+                size="icon-lg"
+                className="library-save-control shrink-0"
+                onClick={() => setMembershipTrack(track)}
+                aria-label={t("playlists.memberships")}
+                title={t("playlists.memberships")}
+              >
+                <ListPlusIcon />
+              </Button>
               <Button
                 variant="ghost"
                 size="icon-lg"

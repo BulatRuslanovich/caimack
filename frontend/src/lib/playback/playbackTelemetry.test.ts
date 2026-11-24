@@ -240,3 +240,16 @@ describe("source", () => {
     expect(lastOf("trackStarted").source).toBeUndefined();
   });
 });
+
+it("sends playlist radio events with the session active when the track started", () => {
+  tagSource([song.id], "radio:playlist", "playlist-session");
+  tracker.begin(song);
+  try {
+    tagSource([song.id], "queue");
+    tracker.finish("trackCompleted");
+    expect(lastOf("trackStarted")).toMatchObject({ source: "radio:playlist", sessionId: "playlist-session" });
+    expect(lastOf("trackCompleted")).toMatchObject({ source: "radio:playlist", sessionId: "playlist-session" });
+  } finally {
+    tagSource([song.id], "queue");
+  }
+});

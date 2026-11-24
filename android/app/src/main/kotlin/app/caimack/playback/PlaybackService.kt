@@ -48,7 +48,6 @@ import app.caimack.api.RadioRequest
 import app.caimack.api.Track
 import app.caimack.api.ConnectCommand
 import app.caimack.api.ConnectState
-import app.caimack.api.ConnectRadio
 import app.caimack.api.ConnectSleep
 import app.caimack.ui.Appearance
 import app.caimack.ui.withNetworkRetries
@@ -202,7 +201,7 @@ class PlaybackService : MediaLibraryService() {
                 if (player.playWhenReady) report(container, player)
 
                 val fallback = reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED &&
-                    mediaItem?.mediaId == listening
+                    mediaItem != null && mediaItem.mediaId == listening && signals.hasSameSession(mediaItem.mediaId)
                 if (fallback) return
 
                 val natural = reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT
@@ -598,7 +597,8 @@ class PlaybackService : MediaLibraryService() {
         } else queued.indices.toSet()
         val excluded = RadioPolicy.exclusions(order, player.currentMediaItemIndex, retained).map { queued[it] }
         radioRequest = container.scope.launch(Dispatchers.Main) {
-            val batch = runCatching { withNetworkRetries { container.radio(RadioRequest(seed, excluded, focus = state.focus)) } }.getOrNull()
+            val request = RadioRequest(seed, excluded, sessionId = state.sessionId, focus = state.focus, playlistId = state.playlistId)
+            val batch = runCatching { withNetworkRetries { container.radio(request) } }.getOrNull()
                 ?: run { radioSeed = null; return@launch }
             val fresh = batch.tracks.map { it.track }.filter { it.id !in excluded }
             if (fresh.isEmpty()) return@launch
@@ -754,7 +754,7 @@ class PlaybackService : MediaLibraryService() {
             isPlaying = player.playWhenReady, buffering = player.playbackState == Player.STATE_BUFFERING,
             volume = container.player.localVolume.toDouble(), muted = container.player.localMuted,
             shuffle = player.shuffleModeEnabled, repeat = repeatOf(player.repeatMode),
-            radio = if (radio.active) ConnectRadio(radio.seedTrackId, radio.focus, radio.notes.mapValues { it.value.reason }) else null,
+            radio = if (radio.active) radio.connectRadio() else null,
             smartTransitions = container.playbackPrefs.smartTransitions.value,
             normalizeVolume = container.playbackPrefs.normalizeVolume.value, autoplay = container.radio.autoplay.value,
             sleepTimer = sleep,
@@ -786,17 +786,19 @@ class PlaybackService : MediaLibraryService() {
             is ConnectCommand.Play -> {
                 val tracks = container.connect.lookup(command.trackIds)
                 container.radio.reset()
-                PlaySources.tag(command.trackIds, command.source)
+                PlaySources.tag(command.trackIds, command.source, command.radio?.sessionId)
                 player.shuffleModeEnabled = command.shuffle
                 player.repeatMode = repeatModeOf(command.repeat)
                 val (items, index) = if (command.order != null) orderedQueue(tracks.map(::item), command.index, command.order)
                     else tracks.map(::item) to command.index
-                player.setMediaItems(items, index, (command.positionSeconds * 1000).toLong())
                 command.radio?.let { radio ->
                     container.radio.restore(RadioState(seedTrackId = radio.seedTrackId,
-                        notes = radio.reasons.mapValues { RadioNote(it.value, false) }, active = true, focus = radio.focus))
-                    PlaySources.tag(radio.reasons.keys.toList(), PlaySources.radio(seeded = radio.seedTrackId != null))
+                        notes = radio.reasons.mapValues { RadioNote(it.value, false) }, active = true, focus = radio.focus,
+                        playlistId = radio.playlistId, sessionId = radio.sessionId))
+                    val ids = if (radio.playlistId == null) radio.reasons.keys else radio.reasons.keys + listOfNotNull(radio.seedTrackId)
+                    PlaySources.tag(ids, PlaySources.radio(seeded = radio.seedTrackId != null, playlist = radio.playlistId != null), radio.sessionId)
                 }
+                player.setMediaItems(items, index, (command.positionSeconds * 1000).toLong())
                 player.prepare()
                 playbackLease = true
                 exclusive.hold()

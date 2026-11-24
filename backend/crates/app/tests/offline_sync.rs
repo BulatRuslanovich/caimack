@@ -2,6 +2,7 @@
 
 #![cfg(feature = "integration-tests")]
 
+use app::library::playlists::{self, MembershipChange, PlaylistRequest};
 use app::sync::actions::{self, Action, Batch};
 use chrono::{Duration, Utc};
 use serde_json::{Value, json};
@@ -173,6 +174,84 @@ async fn playlist_edits_merge_members_and_independent_fields_and_do_not_resurrec
             .fetch_all(&db)
             .await?;
     assert_eq!(members, vec![tracks[1], tracks[2]]);
+    std::fs::remove_dir_all(directory)?;
+    Ok(())
+}
+
+#[sqlx::test(migrations = "../../../db/migrations")]
+async fn playlist_memberships_copy_and_offline_edits_preserve_independent_changes(db: PgPool) -> anyhow::Result<()> {
+    let (user, server, tracks) = fixture(&db).await?;
+    let directory = std::env::temp_dir().join(format!("caimack-playlists-{}", Uuid::now_v7()));
+    let storage = app::storage::Storage::open(&directory)?;
+    let request = || PlaylistRequest { name: "Playlist".into(), description: None, is_public: false };
+    let key = Uuid::now_v7();
+    let initial = [tracks[1], tracks[0]];
+    let (first, retry) = tokio::join!(
+        playlists::create_with_tracks_once(&db, user, request(), &initial, Some(key)),
+        playlists::create_with_tracks_once(&db, user, request(), &initial, Some(key)),
+    );
+    let source = first?.id;
+    assert_eq!(source, retry?.id);
+    assert_eq!(source, key);
+    let replay =
+        [action("playlistCreate", Some(source), json!({"name":"Playlist","requestId":key,"trackIds":initial}))];
+    let receipt = actions::exchange(&db, &storage, user, batch(user, server, &replay)?).await?;
+    assert_eq!(receipt["results"][0]["status"], "applied");
+    let destination = Uuid::now_v7();
+    let create = [action(
+        "playlistCreate",
+        Some(destination),
+        json!({"name":"Offline","requestId":destination,"trackIds":[tracks[0]]}),
+    )];
+    actions::exchange(&db, &storage, user, batch(user, server, &create)?).await?;
+    assert_eq!(
+        playlists::create_with_tracks_once(&db, user, request(), &[tracks[0]], Some(destination)).await?.id,
+        destination,
+    );
+    let legacy = playlists::create_with_tracks(&db, user, request(), &[tracks[0]]).await?.id;
+    sqlx::query("UPDATE playlist_tracks SET added_at = NULL WHERE playlist_id = $1").bind(legacy).execute(&db).await?;
+    assert!(playlists::detail(&db, user, legacy).await?.track_added_at.is_empty());
+
+    let membership = playlists::memberships(&db, user, tracks[1]).await?;
+    assert_eq!(membership.len(), 3);
+    assert_eq!(
+        membership.iter().filter(|item| item.contains_track).map(|item| item.playlist.id).collect::<Vec<_>>(),
+        vec![source]
+    );
+    let copied = playlists::copy_tracks(&db, user, source, destination).await?;
+    assert_eq!((copied.changed, copied.unchanged), (1, 1));
+    assert_eq!(playlists::track_ids(&db, user, destination).await?, vec![tracks[0], tracks[1]]);
+    let duplicate = playlists::copy_tracks(&db, user, source, destination).await?;
+    assert_eq!((duplicate.changed, duplicate.unchanged), (0, 2));
+
+    let edits = [action("playlistRemove", Some(destination), json!({"trackIds":[tracks[0]]}))];
+    let (phone, web) = tokio::join!(
+        actions::exchange(&db, &storage, user, batch(user, server, &edits)?),
+        playlists::add_tracks(&db, user, destination, &tracks[2..]),
+    );
+    assert_eq!(phone?["results"][0]["status"], "applied");
+    web?;
+    actions::exchange(&db, &storage, user, batch(user, server, &edits)?).await?;
+    let remove_again = MembershipChange { track_ids: vec![tracks[0]], present: false };
+    assert_eq!(playlists::change_membership(&db, user, destination, remove_again).await?.changed, 0);
+    let detail = playlists::detail(&db, user, destination).await?;
+    assert_eq!(detail.tracks.iter().map(|track| track.id).collect::<Vec<_>>(), vec![tracks[1], tracks[2]]);
+    assert_eq!(detail.track_added_at.len(), 2);
+
+    let other = Uuid::now_v7();
+    sqlx::query("INSERT INTO users(id,username,password_hash,created_at) VALUES ($1,'other','unused',now())")
+        .bind(other)
+        .execute(&db)
+        .await?;
+    assert!(playlists::memberships(&db, other, tracks[1]).await?.is_empty());
+    assert!(playlists::track_ids(&db, other, source).await.is_err());
+    let change = MembershipChange { track_ids: vec![tracks[1]], present: false };
+    assert!(playlists::change_membership(&db, other, destination, change).await.is_err());
+    playlists::delete(&db, &storage, user, source).await?;
+    assert!(playlists::create_with_tracks_once(&db, user, request(), &tracks, Some(key)).await.is_err());
+    let replay = [action("playlistCreate", Some(source), json!({"name":"Playlist","requestId":key}))];
+    let receipt = actions::exchange(&db, &storage, user, batch(user, server, &replay)?).await?;
+    assert_eq!(receipt["results"][0]["status"], "rejected");
     std::fs::remove_dir_all(directory)?;
     Ok(())
 }

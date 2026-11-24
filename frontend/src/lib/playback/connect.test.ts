@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { positionAt, remoteActions, remoteState } from "./connect";
 import type { ConnectPlayback } from "./connect";
 import type { Track } from "@/lib/types";
+import { api } from "@/lib/api";
 
 const tracks = ["first", "second", "third"].map(
   (id) => ({ id, title: id, durationSeconds: 120 }) as Track,
@@ -111,7 +112,12 @@ describe("the existing player controlling a remote renderer", () => {
 
   it("keeps radio and actual playback order when restoring a remote queue", () => {
     const send = vi.fn().mockResolvedValue(undefined);
-    const radio = { seedTrackId: "first", reasons: {} };
+    const radio = {
+      seedTrackId: "first",
+      playlistId: "playlist",
+      sessionId: "radio-session",
+      reasons: {},
+    };
     const actions = remoteActions(
       remoteState({ ...active, radio }, tracks),
       { position: 15, duration: 120, buffered: 0, getPosition: () => 15 },
@@ -122,5 +128,33 @@ describe("the existing player controlling a remote renderer", () => {
     );
     actions.restoreQueue(actions.snapshotQueue());
     expect(send.mock.calls[0][0]).toMatchObject({ type: "play", order: [0, 2, 1], radio });
+  });
+
+  it("discards playlist radio prepared for an outdated device selection", async () => {
+    const batch = Promise.withResolvers<Awaited<ReturnType<typeof api.radio>>>();
+    const request = vi.spyOn(api, "radio").mockReturnValueOnce(batch.promise);
+    const send = vi.fn();
+    let isCurrent = true;
+    const actions = remoteActions(
+      remoteState(active, tracks),
+      { position: 15, duration: 120, buffered: 0, getPosition: () => 15 },
+      12,
+      send,
+      vi.fn(),
+      vi.fn(),
+      () => () => isCurrent,
+    );
+    try {
+      const start = actions.startPlaylistRadio("playlist", tracks);
+      isCurrent = false;
+      batch.resolve({
+        playlistSeedCount: 2,
+        tracks: [{ track: tracks[0], reason: { kind: "soundsLikePlaylist" } }],
+      });
+      expect(await start).toBe("unavailable");
+      expect(send).not.toHaveBeenCalled();
+    } finally {
+      request.mockRestore();
+    }
   });
 });

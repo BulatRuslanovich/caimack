@@ -40,7 +40,6 @@ async fn image_reply(image: AppResult<ImageFile>, headers: &HeaderMap) -> Respon
                 content_type: image.content_type.to_owned(),
                 etag: image.etag,
                 cache_control: IMAGE_CACHE,
-                download_name: None,
                 ranges: false,
             };
             reply.send(headers).await

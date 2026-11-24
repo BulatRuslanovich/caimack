@@ -39,7 +39,7 @@
   }
 }
 
-#content:has(.art-backdrop[data-mode="header"]) .ambient-glow {
+#content:has([data-detail-backdrop]) .ambient-glow {
   display: none;
 }
 

@@ -25,7 +25,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -41,8 +40,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import app.caimack.R
-import app.caimack.api.AddTracksRequest
-import app.caimack.api.Playlist
 import app.caimack.api.RadioRequest
 import app.caimack.api.TasteRuleRequest
 import app.caimack.api.Track
@@ -69,7 +66,6 @@ fun TrackSheet(track: Track, onRemoveFromPlaylist: (() -> Unit)? = null, positio
     val context = LocalContext.current
     val resources = LocalResources.current
     var choosingPlaylist by remember { mutableStateOf(false) }
-    var creating by remember { mutableStateOf(false) }
     var showingInfo by androidx.compose.runtime.saveable.rememberSaveable(track.id) { mutableStateOf(false) }
     var sharing by remember { mutableStateOf(false) }
     container.favorites.state.collectAsState().value
@@ -100,6 +96,11 @@ fun TrackSheet(track: Track, onRemoveFromPlaylist: (() -> Unit)? = null, positio
             sharing = false
             onDismiss()
         }
+        return
+    }
+
+    if (choosingPlaylist) {
+        PlaylistMembershipSheet(track, onDismiss = onDismiss)
         return
     }
 
@@ -134,46 +135,6 @@ fun TrackSheet(track: Track, onRemoveFromPlaylist: (() -> Unit)? = null, positio
                 }
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp), color = palette.border)
-
-            if (choosingPlaylist) {
-                val me = currentUserId()
-                val playlists by produceState<List<Playlist>?>(null) {
-                    value = runCatching { container.api.playlists() }.getOrDefault(emptyList()).filter { me == null || it.ownerId == null || it.ownerId == me }
-                }
-                if (creating) {
-                    PlaylistDialog(
-                        title = stringResource(R.string.playlist_new),
-                        onDismiss = { creating = false },
-                    ) { changes ->
-                        val created = container.api.createPlaylist(changes)
-                        container.api.addToPlaylist(created.id, AddTracksRequest(listOf(track.id)))
-                        withContext(Dispatchers.Main) {
-                            say(resources.getString(R.string.menu_added_to_playlist, created.name))
-                            onDismiss()
-                        }
-                    }
-                }
-                SheetRow(stringResource(R.string.playlist_new), Lucide.Plus) { creating = true }
-                when {
-                    playlists == null -> RecordLoading(28.dp)
-                    playlists!!.isEmpty() -> Unit
-                    else -> playlists!!.forEach { playlist ->
-                        SheetRow(playlist.name, Lucide.ListMusic) {
-                            onDismiss()
-                            container.scope.launch {
-                                val added = runCatching { container.api.addToPlaylist(playlist.id, AddTracksRequest(listOf(track.id))) }.isSuccess
-                                withContext(Dispatchers.Main) {
-                                    say(
-                                        if (added) resources.getString(R.string.menu_added_to_playlist, playlist.name)
-                                        else resources.getString(R.string.error_load),
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                return@Column
-            }
 
             SheetRow(stringResource(R.string.menu_play_next), Lucide.CornerDownRight) {
                 container.player.enqueue(track, next = true)
@@ -212,7 +173,7 @@ fun TrackSheet(track: Track, onRemoveFromPlaylist: (() -> Unit)? = null, positio
             if (recommendationsEnabled()) SheetRow(stringResource(R.string.rules_block_artist, track.artistName), Lucide.EyeOff) {
                 neverSuggest("artist", track.artistId)
             }
-            SheetRow(stringResource(R.string.menu_add_to_playlist), Lucide.Plus) { choosingPlaylist = true }
+            SheetRow(stringResource(R.string.playlist_memberships), Lucide.Plus) { choosingPlaylist = true }
             SheetRow(stringResource(R.string.track_info_title), Lucide.Info) { showingInfo = true }
             SheetRow(stringResource(R.string.share_card), Lucide.Share2) { sharing = true }
             onRemoveFromPlaylist?.let { remove ->

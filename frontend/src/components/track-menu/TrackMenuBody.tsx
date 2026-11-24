@@ -2,21 +2,16 @@
 
 "use client";
 
-import { api } from "@/lib/api";
-import { recordEvent } from "@/lib/events";
 import {
   CornerDownRightIcon,
   Disc3Icon,
-  DownloadIcon,
   HeartIcon,
   ImageIcon,
   InfoIcon,
-  ListMusicIcon,
   ListPlusIcon,
   ListVideoIcon,
   ListXIcon,
   PencilIcon,
-  PlusIcon,
   RadioIcon,
   Share2Icon,
   SlidersHorizontalIcon,
@@ -25,7 +20,6 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { Loading } from "../Loading";
 import { isDesktop } from "@/desktop/api";
 import { DesktopTrackDownload } from "@/desktop/offline";
 
@@ -38,7 +32,6 @@ const EditArtistDialog = dynamic(() =>
 const EditTrackDialog = dynamic(() => import("../EditTrackDialog").then((m) => m.EditTrackDialog));
 const TrackInfoDialog = dynamic(() => import("../TrackInfoDialog").then((m) => m.TrackInfoDialog));
 const ShareCardDialog = dynamic(() => import("../ShareCardDialog").then((m) => m.ShareCardDialog));
-const PlaylistDialog = dynamic(() => import("../PlaylistDialog").then((m) => m.PlaylistDialog));
 
 export function TrackMenuBody({
   track,
@@ -50,7 +43,11 @@ export function TrackMenuBody({
   onToggleFavorite,
   onNavigate,
   initialKeyboardFocus,
-}: Omit<TrackMenuProps, "open" | "trigger"> & { initialKeyboardFocus?: boolean }) {
+  openMembership,
+}: Omit<TrackMenuProps, "open" | "trigger" | "onOpenMembership"> & {
+  initialKeyboardFocus?: boolean;
+  openMembership: () => void;
+}) {
   const {
     notify,
     isAdmin,
@@ -61,25 +58,19 @@ export function TrackMenuBody({
     setShowingInfo,
     sharingCard,
     setSharingCard,
-    creatingPlaylist,
-    setCreatingPlaylist,
     editingArtist,
     setEditingArtist,
     confirm,
     confirmDialog,
     player,
-    invalidate,
-    playlists,
     addRule,
     credits,
     changed,
     stayOpen,
-    addTo,
     share,
     recommendations,
     radio,
     editArtist,
-    download,
     removeFromPlaylist,
     deleteTrack,
   } = useTrackMenuActions({ track, onOpenChange, playlistTrackIds, onChanged });
@@ -170,36 +161,13 @@ export function TrackMenuBody({
           </MenuSub>
         )}
 
-        <MenuSub
-          label={
-            <>
-              <ListPlusIcon size={16} /> {t("menu.addToPlaylist")}
-            </>
-          }
-        >
-          <MenuItem onSelect={() => setCreatingPlaylist(true)}>
-            <PlusIcon size={16} /> {t("playlists.new")}
-          </MenuItem>
-
-          {(playlists.isPending || (playlists.data?.length ?? 0) > 0) && <MenuSeparator />}
-          {playlists.isPending && <Loading size="s" />}
-          {playlists.data?.map((playlist) => (
-            <MenuItem key={playlist.id} onSelect={stayOpen(() => addTo.mutate(playlist))}>
-              <ListMusicIcon size={16} /> {playlist.name}
-            </MenuItem>
-          ))}
-        </MenuSub>
+        <MenuItem onSelect={openMembership}>
+          <ListPlusIcon size={16} /> {t("playlists.memberships")}
+        </MenuItem>
 
         {playlistId && (
           <MenuItem onSelect={() => removeFromPlaylist.mutate(playlistId)}>
             <ListXIcon size={16} /> {t("menu.removeFromPlaylist")}
-          </MenuItem>
-        )}
-
-        {!isDesktop && (
-          <MenuItem disabled={download.isPending} onSelect={stayOpen(() => download.mutate())}>
-            <DownloadIcon size={16} />{" "}
-            {download.isPending ? t("menu.downloading") : t("menu.download")}
           </MenuItem>
         )}
 
@@ -293,17 +261,6 @@ export function TrackMenuBody({
       {showingInfo && <TrackInfoDialog track={track} onClose={() => setShowingInfo(false)} />}
 
       {sharingCard && <ShareCardDialog track={track} onClose={() => setSharingCard(false)} />}
-
-      {creatingPlaylist && (
-        <PlaylistDialog
-          onClose={() => setCreatingPlaylist(false)}
-          onSaved={() => invalidate("playlists")}
-          afterCreate={async (id) => {
-            await api.addToPlaylist(id, [track.id]);
-            recordEvent({ type: "trackAddedToPlaylist", trackId: track.id, entityId: id });
-          }}
-        />
-      )}
 
       {editingArtist && (
         <EditArtistDialog

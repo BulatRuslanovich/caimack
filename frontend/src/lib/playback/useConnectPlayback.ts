@@ -123,6 +123,12 @@ export function useConnectPlayback(
     null,
   );
   const selectionEpoch = useRef(0);
+  const playlistRadioRequest = useRef(0);
+  const beginPlaylistRadio = useCallback(() => {
+    const epoch = selectionEpoch.current;
+    const request = ++playlistRadioRequest.current;
+    return () => epoch === selectionEpoch.current && request === playlistRadioRequest.current;
+  }, []);
   const fallenBackFrom = useRef<number | null>(null);
   const hydrated = useRef(0);
   useLayoutEffect(() => {
@@ -501,6 +507,7 @@ export function useConnectPlayback(
     available,
     local,
     localActions,
+    beginPlaylistRadio,
     localProgress,
     send,
     continueHere,

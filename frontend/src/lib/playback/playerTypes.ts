@@ -9,12 +9,16 @@ export type RadioState = "idle" | "loading" | "empty" | "failed";
 
 export interface RadioSessionState {
   seedTrackId?: string | null;
+  playlistId?: string | null;
+  sessionId?: string | null;
   focus?: RadioFocus | null;
   reasons: Record<string, RecommendationReason>;
 
   signals?: Record<string, QueueSignals>;
   manualTrackIds?: string[];
 }
+
+export type PlaylistRadioStatus = "started" | "noAudio" | "empty" | "unavailable";
 
 export interface QueueSnapshot {
   queue: Track[];
@@ -87,6 +91,7 @@ export interface PlayerActions {
   snapshotQueue: () => QueueSnapshot;
   restoreQueue: (snapshot: QueueSnapshot) => void;
   startRadio: (seedTrack?: Track | null, signal?: AbortSignal) => Promise<boolean>;
+  startPlaylistRadio: (playlistId: string, members: Track[]) => Promise<PlaylistRadioStatus>;
   setRadioFocus: (focus: RadioFocus) => void;
   continueHere: () => Promise<boolean>;
 }

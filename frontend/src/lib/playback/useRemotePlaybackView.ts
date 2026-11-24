@@ -83,6 +83,7 @@ export function useRemotePlaybackView({
   localActions,
   localProgress,
   send,
+  beginPlaylistRadio,
   continueHere,
   patchTrack,
 }: {
@@ -93,6 +94,7 @@ export function useRemotePlaybackView({
   localActions: PlayerActions;
   localProgress: PlayerProgress;
   send: SendCommand;
+  beginPlaylistRadio: () => () => boolean;
   continueHere: () => Promise<boolean>;
   patchTrack: PlayerActions["patchTrack"];
 }) {
@@ -155,6 +157,7 @@ export function useRemotePlaybackView({
             send,
             continueHere,
             patchTrack,
+            beginPlaylistRadio,
           )
         : localActions,
     [
@@ -164,6 +167,7 @@ export function useRemotePlaybackView({
       getPosition,
       revision,
       send,
+      beginPlaylistRadio,
       continueHere,
       patchTrack,
       localActions,

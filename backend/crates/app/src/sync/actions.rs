@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
+use crate::ids::distinct;
 use crate::library::{
     history,
     playlists::{self, DeletedPlaylist},
@@ -202,6 +203,15 @@ async fn apply(db: &mut PgConnection, user: Uuid, action: &Action) -> AppResult<
             let name = p["name"].as_str().ok_or_else(invalid)?.trim();
             let description = p["description"].as_str();
             validate_playlist(name, description)?;
+            if let Some(request_id) = p.get("requestId") {
+                if uuid(request_id)? != playlist {
+                    return Err(invalid());
+                }
+                if !playlists::claim_creation(db, user, playlist).await? {
+                    owned(db, user, playlist).await?;
+                    return Ok(None);
+                }
+            }
             let created = sqlx::query(
                 "INSERT INTO playlists (id,user_id,name,description,is_public,created_at,updated_at)
                 VALUES ($1,$2,$3,$4,$5,$6,now()) ON CONFLICT(id) DO NOTHING",
@@ -216,6 +226,11 @@ async fn apply(db: &mut PgConnection, user: Uuid, action: &Action) -> AppResult<
             .await?;
             if created.rows_affected() == 0 {
                 return Err(AppError::conflict("Playlist identifier already exists."));
+            }
+            if let Some(values) = p.get("trackIds") {
+                let values = values.as_array().filter(|a| a.len() <= 10_000).ok_or_else(invalid)?;
+                let ids = distinct(values.iter().map(uuid).collect::<AppResult<Vec<_>>>()?);
+                playlists::add_tracks_to_row(db, playlist, &ids, time(action), true).await?;
             }
         }
         "playlistUpdate" => {
@@ -266,32 +281,15 @@ async fn apply(db: &mut PgConnection, user: Uuid, action: &Action) -> AppResult<
             let playlist = id(action)?;
             owned(db, user, playlist).await?;
             let values = p["trackIds"].as_array().filter(|a| a.len() <= 10_000).ok_or_else(invalid)?;
-            let ids = crate::ids::distinct(values.iter().map(uuid).collect::<AppResult<Vec<_>>>()?);
+            let ids = distinct(values.iter().map(uuid).collect::<AppResult<Vec<_>>>()?);
             match action.kind.as_str() {
                 "playlistAdd" => {
-                    sqlx::query("INSERT INTO playlist_tracks (id,playlist_id,track_id,position)
-                        SELECT gen_random_uuid(),$1,t.id,COALESCE((SELECT max(position)+1 FROM playlist_tracks WHERE playlist_id=$1),0)
-                            + (wanted.ordinality-1)::int
-                        FROM unnest($2::uuid[]) WITH ORDINALITY wanted(id,ordinality) JOIN tracks t ON t.id=wanted.id
-                        ON CONFLICT(playlist_id,track_id) DO NOTHING")
-                        .bind(playlist).bind(&ids).execute(&mut *db).await?;
+                    playlists::add_tracks_to_row(db, playlist, &ids, time(action), false).await?;
                 }
                 "playlistRemove" => {
-                    sqlx::query("DELETE FROM playlist_tracks WHERE playlist_id=$1 AND track_id=ANY($2)")
-                        .bind(playlist)
-                        .bind(&ids)
-                        .execute(&mut *db)
-                        .await?;
+                    playlists::remove_tracks_from_row(db, playlist, &ids).await?;
                 }
-                _ => {
-                    // Order the intersection, preserving concurrent additions.
-                    // Tracks removed on the server are never reinserted by reorder.
-                    sqlx::query("UPDATE playlist_tracks pt SET position=o.position FROM (
-                        SELECT pt.id,(row_number() OVER (ORDER BY COALESCE(w.ordinality,2147483647),pt.position,pt.id)-1)::int AS position
-                        FROM playlist_tracks pt LEFT JOIN unnest($2::uuid[]) WITH ORDINALITY w(id,ordinality) ON w.id=pt.track_id
-                        WHERE pt.playlist_id=$1) o WHERE pt.id=o.id")
-                        .bind(playlist).bind(&ids).execute(&mut *db).await?;
-                }
+                _ => playlists::reorder_rows(db, playlist, &ids).await?,
             }
             touch(db, playlist).await?;
         }

@@ -16,6 +16,8 @@ data class ConnectRadio(
     val seedTrackId: String? = null,
     val focus: String? = null,
     @EncodeDefault val reasons: Map<String, RecommendationReason> = emptyMap(),
+    val playlistId: String? = null,
+    val sessionId: String? = null,
 )
 
 @Serializable

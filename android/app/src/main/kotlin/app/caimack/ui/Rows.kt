@@ -19,7 +19,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -41,6 +43,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -64,6 +67,7 @@ fun reasonText(reason: RecommendationReason, strings: Resources): String? {
         "trending" -> strings.getString(R.string.reason_trending)
         "freshInLibrary" -> strings.getString(R.string.reason_fresh)
         "soundsLike" -> strings.getString(R.string.reason_sounds_like, subject)
+        "soundsLikePlaylist" -> strings.getString(R.string.playlist_reason_similar)
         "matchesYourTaste" -> strings.getString(R.string.reason_matches_your_taste)
         "discovery" -> strings.getString(R.string.reason_discovery)
         else -> null
@@ -143,6 +147,9 @@ fun TrackRow(
     index: Int? = null,
     inset: Dp = 16.dp,
     onRemoveFromPlaylist: (() -> Unit)? = null,
+    checked: Boolean? = null,
+    selectionEnabled: Boolean = true,
+    selectionNote: String? = null,
 ) {
     val palette = LocalPalette.current
     val density = LocalLibraryDensity.current
@@ -156,7 +163,7 @@ fun TrackRow(
     val playing = current && playback.playing
     var actions by remember { mutableStateOf(false) }
 
-    if (actions) TrackSheet(track, onRemoveFromPlaylist) { actions = false }
+    if (actions && checked == null) TrackSheet(track, onRemoveFromPlaylist) { actions = false }
 
     val tone = LocalNowPlayingTone.current
     val accent = palette.primary
@@ -177,8 +184,12 @@ fun TrackRow(
                     )
                 },
             )
-            .alpha(if (available) 1f else 0.38f)
-            .combinedClickable(enabled = available, onLongClick = { actions = true }, onClick = onClick)
+            .then(if (checked == null) {
+                Modifier.alpha(if (available) 1f else 0.38f)
+                    .combinedClickable(enabled = available, onLongClick = { actions = true }, onClick = onClick)
+            } else {
+                Modifier.toggleable(checked, enabled = selectionEnabled, role = Role.Checkbox) { onClick() }
+            })
             .heightIn(min = 48.dp)
             .padding(start = inset, top = density.rowPadding, bottom = density.rowPadding, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -207,9 +218,12 @@ fun TrackRow(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(artistsOf(track), style = Type.small, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            selectionNote?.let { Text(it, style = Type.tiny, color = palette.muted) }
         }
         Text(durationOf(track.durationSeconds), style = Type.tiny, color = palette.faint)
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        if (checked != null) {
+            Checkbox(checked, onCheckedChange = null, enabled = selectionEnabled, modifier = Modifier.padding(horizontal = 12.dp))
+        } else Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(14.dp), contentAlignment = Alignment.Center) {
                 if (showDownloadBadge) {
                     Icon(Lucide.CircleArrowDown, stringResource(R.string.downloads_available), tint = palette.primary, modifier = Modifier.fillMaxSize())

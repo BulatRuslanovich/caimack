@@ -11,7 +11,8 @@ import { isTypingTarget } from "@/lib/shortcuts";
 import { signConsole } from "@/lib/signature";
 import { useRecommendations } from "@/lib/useRecommendations";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { HeaderBackdropHost } from "./ArtBackdrop";
 import { LeanBack } from "./LeanBack";
 import { Loading } from "./Loading";
 import { LibraryChips, MobileHeader, MobileNav } from "./MobileNav";
@@ -31,6 +32,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { queueOpen, queueDocked, setQueueOpen } = usePlayerUi();
   const { player: audiobook } = useAudiobooks();
+  const [backdropHost, setBackdropHost] = useState<HTMLDivElement | null>(null);
 
   const isLoginPage = pathname === "/login";
   const isPublicPage = isLoginPage || pathname.startsWith("/invite/");
@@ -84,17 +86,27 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Sidebar />
       <MobileHeader />
 
+      <div
+        ref={setBackdropHost}
+        aria-hidden="true"
+        className="detail-backdrop-host pointer-events-none relative isolate min-h-0 overflow-hidden [grid-area:content]"
+      />
       <main
         id="content"
         tabIndex={-1}
+        onScroll={(event) => {
+          backdropHost?.style.setProperty("--detail-scroll-top", event.currentTarget.scrollTop + "px");
+        }}
         className="relative isolate overflow-y-auto overscroll-contain outline-none [grid-area:content] [scrollbar-gutter:stable]"
       >
         <div aria-hidden="true" className="ambient-glow" />
         <div className="app-content mx-auto flex min-h-full max-w-[90rem] flex-col gap-11 px-10 pt-8 pb-12 max-lg:px-6 max-md:gap-8 max-md:px-4 max-md:pt-5 max-md:pb-8">
           <LibraryChips />
-          {((!["/map", "/recap"].includes(pathname) && !pathname.startsWith("/mixes/")) ||
-            recommendations) &&
-            children}
+          <HeaderBackdropHost.Provider value={backdropHost}>
+            {((!["/map", "/recap"].includes(pathname) && !pathname.startsWith("/mixes/")) ||
+              recommendations) &&
+              children}
+          </HeaderBackdropHost.Provider>
         </div>
       </main>
 

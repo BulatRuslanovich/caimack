@@ -211,8 +211,10 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
             visit(value)
         }
 
-        fun cacheable(path: String): Boolean = path in setOf("home/feed", "home/mixes/daily", "home/mixes/new", "home/mixes/top", "me/library", "me/library/folders", "me/library/order", "favorites", "history/recent", "genres") ||
-            collectionPath.matches(path) || path.startsWith("search")
+        fun cacheable(path: String): Boolean = path != "playlists/memberships" && (
+            path in setOf("home/feed", "home/mixes/daily", "home/mixes/new", "home/mixes/top", "me/library", "me/library/folders", "me/library/order", "favorites", "history/recent", "genres") ||
+                collectionPath.matches(path) || path.startsWith("search")
+            )
 
         private val collectionPath = Regex("(tracks|albums|artists|playlists)(/[^/]+)?(/top-tracks)?|genres/[^/]+/tracks")
 
@@ -228,6 +230,7 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
             val artists = linkedMapOf<String, JsonObject>()
             val playlists = linkedMapOf<String, JsonObject>()
             val membership = (local["playlistTracks"] as? JsonObject).orEmpty().toMutableMap()
+            val memberDates = (local["playlistTrackAddedAt"] as? JsonObject).orEmpty().toMutableMap()
             var libraryOrder: JsonElement = local["libraryOrder"] ?: buildJsonObject {}
             var saved: JsonElement? = null
             var folders = local["libraryFolders"] ?: JsonArray(emptyList())
@@ -260,6 +263,7 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
                     path.startsWith("playlists/") && obj != null -> {
                         add(playlists, listOf(obj)); add(tracks, rows(obj["tracks"]))
                         membership[id(obj)] = JsonArray(rows(obj["tracks"]).map { JsonPrimitive(id(it)) })
+                        memberDates[id(obj)] = obj["trackAddedAt"] ?: buildJsonObject {}
                     }
                     path == "search" && obj != null -> {
                         add(tracks, rows(obj["tracks"])); add(albums, rows(obj["albums"])); add(artists, rows(obj["artists"]))
@@ -296,6 +300,7 @@ class LibraryCache(private val directory: File, private val identity: () -> Stri
                 "tracks" to JsonArray(tracks.values.toList()), "albums" to JsonArray(albums.values.toList()),
                 "artists" to JsonArray(artists.values.toList()), "playlists" to JsonArray(playlists.values.toList()),
                 "playlistTracks" to JsonObject(membership), "savedLibrary" to JsonArray(mergedSaved),
+                "playlistTrackAddedAt" to JsonObject(memberDates),
                 "feed" to feed, "mixes" to JsonObject(mixes),
                 "libraryFolders" to folders, "libraryOrder" to libraryOrder, "recent" to recent,
             )), edits)

@@ -376,6 +376,23 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
         send(target, command, revision, command.musicHandoff())
     }
 
+    suspend fun enqueueTracks(tracks: List<Track>) {
+        val target = current.value.selectedId
+        if (target == null) {
+            container.player.enqueueAll(tracks)
+        } else {
+            val selected = selection
+            for (track in tracks) {
+                send(target, ConnectCommand.Enqueue(track.id, next = false), expectedSelection = selected)
+            }
+        }
+    }
+
+    internal fun captureSelection(): () -> Boolean {
+        val expected = selection
+        return { selection == expected }
+    }
+
     internal suspend fun pauseForAudiobook() {
         val device = current.value
         val target = device.selectedId

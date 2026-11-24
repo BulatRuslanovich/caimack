@@ -129,6 +129,7 @@ private fun FullPlayerContent(state: PlayerState, savedColor: Color, onClose: ()
     var actions by remember { mutableStateOf(false) }
     var sleeping by remember { mutableStateOf(false) }
     var options by remember { mutableStateOf(false) }
+    var playlistsFor by remember { mutableStateOf<Track?>(null) }
     val sleepTimer = displayedSleepTimer()
     container.favorites.state.collectAsState().value
     val liked = container.favorites.isFavorite(track)
@@ -162,6 +163,7 @@ private fun FullPlayerContent(state: PlayerState, savedColor: Color, onClose: ()
     }
 
     if (actions) TrackSheet(track, positionMs = player.position) { actions = false }
+    playlistsFor?.let { PlaylistMembershipSheet(it) { playlistsFor = null } }
     if (sleeping) SleepSheet { sleeping = false }
     var scrub by remember { mutableStateOf<Long?>(null) }
     val live = rememberPosition(state)
@@ -211,6 +213,7 @@ private fun FullPlayerContent(state: PlayerState, savedColor: Color, onClose: ()
                     stringResource(if (liked) R.string.menu_unlike else R.string.menu_like),
                     tint = if (liked) savedColor else palette.muted,
                 ) { haptic(PlayerHaptic.Favorite); container.favorites.toggle(track) }
+                IconAction(Lucide.Plus, stringResource(R.string.playlist_memberships)) { playlistsFor = track }
             }
             if (panel != Panel.Queue) {
                 Seekbar(position, duration, peaks) { player.seekTo(it) }

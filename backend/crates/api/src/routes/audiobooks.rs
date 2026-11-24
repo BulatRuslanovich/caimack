@@ -228,7 +228,6 @@ async fn stream(
         content_type: file.content_type.to_owned(),
         etag: file.etag,
         cache_control: MEDIA_CACHE,
-        download_name: None,
         ranges: true,
     };
     Ok(reply.send(&headers).await)

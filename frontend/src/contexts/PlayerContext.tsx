@@ -22,8 +22,15 @@ import type {
   PlayerProgress,
   PlayerState,
   QueueSnapshot,
+  RadioSessionState,
 } from "@/lib/playback/playerTypes";
-import { radioSource, sourceOf, tagSource, usePlaySource } from "@/lib/playback/playSource";
+import {
+  playSessionOf,
+  radioSource,
+  sourceOf,
+  tagSource,
+  usePlaySource,
+} from "@/lib/playback/playSource";
 import { ConnectContext, useConnectPlayback } from "@/lib/playback/useConnectPlayback";
 import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
 import { usePlaybackPreferences } from "@/lib/playback/usePlaybackPreferences";
@@ -131,6 +138,7 @@ function PlayerSessionProvider({
     session: radioSession,
     radio,
     start: startRadioSession,
+    startPlaylist: preparePlaylistRadio,
     stop: stopRadioSession,
     setFocus: setRadioFocus,
     pin: pinRadioTrack,
@@ -221,13 +229,19 @@ function PlayerSessionProvider({
   }, [primaryAudioRef, secondaryAudioRef]);
 
   const replaceQueue = useCallback(
-    (tracks: Track[], startIndex = 0, shuffled = live.current.shuffle) => {
+    (
+      tracks: Track[],
+      startIndex = 0,
+      shuffled = live.current.shuffle,
+      session?: RadioSessionState,
+    ) => {
       if (tracks.length === 0) return;
 
       const safeIndex = Math.min(Math.max(startIndex, 0), tracks.length - 1);
 
-      startQueue();
       resetRadio();
+      if (session) restoreRadioSession(session);
+      startQueue(tracks[safeIndex]);
 
       originalQueueRef.current = queueEntries(tracks);
       const next = startPlaybackQueue(originalQueueRef.current, safeIndex, shuffled);
@@ -236,7 +250,15 @@ function PlayerSessionProvider({
       setCurrentIndex(next.index);
       setIsPlaying(true);
     },
-    [applyQueue, originalQueueRef, resetRadio, setCurrentIndex, setShuffle, startQueue],
+    [
+      applyQueue,
+      originalQueueRef,
+      resetRadio,
+      restoreRadioSession,
+      setCurrentIndex,
+      setShuffle,
+      startQueue,
+    ],
   );
 
   const playQueue = useCallback(
@@ -349,6 +371,16 @@ function PlayerSessionProvider({
     [replaceQueue, startRadioSession],
   );
 
+  const startPlaylistRadio = useCallback<PlayerActions["startPlaylistRadio"]>(
+    async (id, members) => {
+      const result = await preparePlaylistRadio(id, members);
+      if (result.status !== "ready") return result.status;
+      replaceQueue(result.tracks, 0, undefined, result.session);
+      return "started";
+    },
+    [preparePlaylistRadio, replaceQueue],
+  );
+
   const next = useCallback(() => advance(1), [advance]);
   const previous = useCallback(() => {
     const position = getPosition();
@@ -361,6 +393,7 @@ function PlayerSessionProvider({
           trackId: track.id,
           durationSeconds: track.durationSeconds,
           source: sourceOf(track.id),
+          sessionId: playSessionOf(track.id),
         });
       }
     };
@@ -481,16 +514,20 @@ function PlayerSessionProvider({
   );
 
   const takeOver = useCallback(
-    (handoff: PlaybackHandoff, playing = true, original: Track[] = handoff.tracks) => {
+    (
+      handoff: PlaybackHandoff,
+      playing = true,
+      original: Track[] = handoff.tracks,
+      session?: RadioSessionState,
+    ) => {
       const { tracks, index, positionSeconds } = handoff;
       const target = tracks[index];
       if (!target) return;
 
-      const sameTrack = queueRef.current[live.current.currentIndex]?.id === target.id;
-
       stopRadioSession();
-      startQueue();
       resetRadio();
+      if (session) restoreRadioSession(session);
+      startQueue(target, positionSeconds);
 
       originalQueueRef.current = original;
       applyQueue(
@@ -501,18 +538,13 @@ function PlayerSessionProvider({
       setRepeat(handoff.repeat);
       setCurrentIndex(index);
 
-      if (sameTrack) seek(positionSeconds);
-      else resumeAt(target.id, positionSeconds);
-
       setIsPlaying(playing);
     },
     [
       applyQueue,
       originalQueueRef,
-      queueRef,
       resetRadio,
-      resumeAt,
-      seek,
+      restoreRadioSession,
       setCurrentIndex,
       setRepeat,
       setShuffle,
@@ -608,6 +640,7 @@ function PlayerSessionProvider({
       snapshotQueue,
       restoreQueue,
       startRadio,
+      startPlaylistRadio,
       setRadioFocus,
       continueHere,
     }),
@@ -644,6 +677,7 @@ function PlayerSessionProvider({
       snapshotQueue,
       restoreQueue,
       startRadio,
+      startPlaylistRadio,
       setRadioFocus,
       continueHere,
     ],
@@ -674,6 +708,12 @@ function PlayerSessionProvider({
       const next = command.order
         ? materializeQueue(original, command.order, command.index)
         : startPlaybackQueue(original, command.index, command.shuffle);
+      if (command.radio && !command.radio.playlistId) {
+        tagSource(
+          Object.keys(command.radio.reasons),
+          radioSource(Boolean(command.radio.seedTrackId)),
+        );
+      }
       takeOver(
         {
           deviceId: deviceId(),
@@ -686,16 +726,10 @@ function PlayerSessionProvider({
         },
         command.playing,
         original,
+        command.radio ?? undefined,
       );
-      if (command.radio) {
-        restoreRadioSession(command.radio);
-        tagSource(
-          Object.keys(command.radio.reasons),
-          radioSource(Boolean(command.radio.seedTrackId)),
-        );
-      }
     },
-    [takeOver, restoreRadioSession],
+    [takeOver],
   );
   const connected = useConnectPlayback(
     userId,

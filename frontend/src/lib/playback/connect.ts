@@ -9,7 +9,8 @@ import type {
 } from "./playerTypes";
 import type { SleepTimer } from "./useSleepTimer";
 import type { RadioFocus, Track } from "@/lib/types";
-import { sourceOf } from "./playSource";
+import { radioSource, sourceOf } from "./playSource";
+import { loadPlaylistRadio } from "./radioSession";
 
 export interface ConnectDevice {
   id: string;
@@ -138,6 +139,7 @@ export function remoteActions(
   send: SendCommand,
   continueHere: () => Promise<boolean>,
   patchTrack: PlayerActions["patchTrack"],
+  beginPlaylistRadio: () => () => boolean = () => () => true,
 ): PlayerActions {
   const sendNow = (command: ConnectCommand, revision?: number) => {
     void send(command, revision).catch(() => {});
@@ -243,6 +245,28 @@ export function remoteActions(
       } catch {
         return false;
       }
+    },
+    startPlaylistRadio: async (playlistId, members) => {
+      const isCurrent = beginPlaylistRadio();
+      const result = await loadPlaylistRadio(playlistId, members).catch((error: unknown) => {
+        if (isCurrent()) throw error;
+        return { status: "unavailable" } as const;
+      });
+      if (!isCurrent()) return "unavailable";
+      if (result.status !== "ready") return result.status;
+
+      await send({
+        type: "play",
+        trackIds: result.tracks.map((track) => track.id),
+        index: 0,
+        positionSeconds: 0,
+        playing: true,
+        shuffle: state.shuffle,
+        repeat: state.repeat,
+        source: radioSource(false, true),
+        radio: result.session,
+      });
+      return "started";
     },
     setRadioFocus: (focus) => sendNow({ type: "setRadioFocus", focus }),
     continueHere,

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { recordEvent } from "@/lib/events";
-import { sourceOf } from "@/lib/playback/playSource";
+import { playSessionOf, sourceOf } from "@/lib/playback/playSource";
 import type { Track } from "@/lib/types";
 
 export interface ListeningTracker {
@@ -17,6 +17,7 @@ export interface ListeningTracker {
 interface Played {
   trackId: string;
   source?: string;
+  sessionId?: string;
   seconds: number;
   position: number;
   duration: number;
@@ -47,6 +48,7 @@ export function createListeningTracker(record = recordEvent): ListeningTracker {
       listenedSeconds: Math.floor(played.seconds),
       durationSeconds: played.duration,
       source: played.source,
+      sessionId: played.sessionId,
     });
 
   return {
@@ -63,9 +65,11 @@ export function createListeningTracker(record = recordEvent): ListeningTracker {
     },
     begin(track) {
       const source = sourceOf(track.id);
+      const sessionId = playSessionOf(track.id);
       played = {
         trackId: track.id,
         source,
+        sessionId,
         seconds: 0,
         position: 0,
         duration: track.durationSeconds,
@@ -77,6 +81,7 @@ export function createListeningTracker(record = recordEvent): ListeningTracker {
         trackId: track.id,
         durationSeconds: track.durationSeconds,
         source,
+        sessionId,
       });
 
       // An automatic radio return is not a deliberate request to replay it.

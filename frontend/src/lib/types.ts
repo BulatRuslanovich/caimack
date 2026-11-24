@@ -135,7 +135,20 @@ export interface Playlist {
   updatedAt: string;
 }
 
-export type PlaylistDetail = Omit<Playlist, "trackCount" | "coverTracks"> & { tracks: Track[] };
+export type PlaylistDetail = Omit<Playlist, "trackCount" | "coverTracks"> & {
+  tracks: Track[];
+  trackAddedAt?: Record<string, string>;
+};
+
+export interface PlaylistMembership {
+  playlist: Playlist;
+  containsTrack: boolean;
+}
+
+export interface PlaylistTrackChanges {
+  changed: number;
+  unchanged: number;
+}
 
 export interface SearchTopResult {
   kind: "Artist" | "Album" | "Track" | "Genre";
@@ -412,6 +425,7 @@ export interface TasteRule {
 export interface RadioBatch {
   tracks: RecommendedTrack[];
   seedTrackId?: string | null;
+  playlistSeedCount?: number | null;
 }
 
 export interface PlayingElsewhere {

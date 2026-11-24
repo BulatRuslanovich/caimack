@@ -461,19 +461,24 @@ class AppContainer(context: Context) {
     }
 
     suspend fun radio(request: RadioRequest): RadioBatch {
-        if (libraryCache.offline.value && request.seedTrackId == null) return localRadio(request)
-        if(syncStore.active && request.seedTrackId==null && syncStore.snapshot?.containsKey("radio")==true) return offlineRadio(request)
-        if(syncStore.active && !sync.network.available()) return offlineRadio(request)
+        val playlist = request.playlistId != null
+        if (!playlist) {
+            if (libraryCache.offline.value && request.seedTrackId == null) return localRadio(request)
+            if (syncStore.active && request.seedTrackId == null && syncStore.snapshot?.containsKey("radio") == true) return offlineRadio(request)
+            if (syncStore.active && !sync.network.available()) return offlineRadio(request)
+        }
         return try {
             kotlinx.coroutines.withTimeout(8_000) {
-                refreshCapabilities()
-                check(recommendationsEnabled.value) { "Recommendations module is disabled" }
+                if (!playlist) {
+                    refreshCapabilities()
+                    check(recommendationsEnabled.value) { "Recommendations module is disabled" }
+                }
                 flushSignals()
-                api.radio(request.copy(sessionId = listeningSession)).also { syncStore.offlineQueue=false }
+                api.radio(request.copy(sessionId = request.sessionId ?: listeningSession)).also { syncStore.offlineQueue=false }
             }
-        } catch(error: IOException) { if(syncStore.active) offlineRadio(request) else throw error }
-          catch(error: kotlinx.coroutines.TimeoutCancellationException) { if(syncStore.active) offlineRadio(request) else throw error }
-          catch(error: retrofit2.HttpException) { if(syncStore.active && (error.code()>=500 || error.code()==401)) offlineRadio(request) else throw error }
+        } catch(error: IOException) { if(!playlist && syncStore.active) offlineRadio(request) else throw error }
+          catch(error: kotlinx.coroutines.TimeoutCancellationException) { if(!playlist && syncStore.active) offlineRadio(request) else throw error }
+          catch(error: retrofit2.HttpException) { if(!playlist && syncStore.active && (error.code()>=500 || error.code()==401)) offlineRadio(request) else throw error }
     }
 
     private fun localRadio(request: RadioRequest): RadioBatch {

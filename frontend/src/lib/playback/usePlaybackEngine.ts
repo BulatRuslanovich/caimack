@@ -258,13 +258,23 @@ export function usePlaybackEngine({
     if (isPlaying) adaptiveRef.current?.setPlaying(true);
   }, [seek]);
 
-  const startQueue = useCallback(() => {
-    tracker.finish("trackSkipped");
-    switchPendingRef.current = null;
-
-    setPosition(0);
-    pendingSeekRef.current = null;
-  }, [tracker]);
+  const startQueue = useCallback(
+    (track: Track, position = 0) => {
+      tracker.finish("trackSkipped");
+      switchPendingRef.current = null;
+      pendingSeekRef.current = null;
+      if (audioRef.current?.dataset.trackId === track.id) {
+        recordedRef.current = null;
+        tracker.begin(track);
+        seek(position);
+      } else {
+        pendingSeekRef.current = position;
+        positionRef.current = position;
+        setPosition(position);
+      }
+    },
+    [seek, tracker],
+  );
 
   const resetProgress = useCallback(() => setPosition(0), []);
 

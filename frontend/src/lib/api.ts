@@ -2,7 +2,7 @@
 
 import { deviceId, flushEvents } from "@/lib/events";
 import { isDesktop } from "@/desktop/runtime";
-import { fileForm, qs, request, requestFile } from "@/lib/http";
+import { fileForm, qs, request } from "@/lib/http";
 import { markImageChanged } from "@/lib/media";
 import { WAVEFORM_VERSION } from "@/lib/waveform";
 import type {
@@ -35,6 +35,8 @@ import type {
   PlayingElsewhere,
   Playlist,
   PlaylistDetail,
+  PlaylistMembership,
+  PlaylistTrackChanges,
   RadioBatch,
   RecommendationStats,
   Recap,
@@ -231,8 +233,6 @@ export const api = {
   deleteTrack: (id: string) => request<void>(`/tracks/${id}`, { method: "DELETE" }),
   deleteTracks: (ids: string[]) =>
     request<BulkDeleteResult>("/tracks/bulk-delete", { method: "POST", body: { ids } }),
-  downloadTrack: (id: string, fallbackName: string) =>
-    requestFile(`/tracks/${id}/download`, fallbackName),
   checkUpload: (files: UploadProbeFile[]) =>
     request<UploadProbeResult>("/tracks/upload/check", { method: "POST", body: { files } }),
   updateArtist: (id: string, name: string) =>
@@ -266,8 +266,27 @@ export const api = {
   playlist: (id: string) => request<PlaylistDetail>(`/playlists/${id}`),
   createPlaylist: (name: string, description?: string, isPublic = false) =>
     request<Playlist>("/playlists", { method: "POST", body: { name, description, isPublic } }),
-  createPlaylistWithTracks: (name: string, trackIds: string[]) =>
-    request<Playlist>("/playlists/with-tracks", { method: "POST", body: { name, trackIds } }),
+  createPlaylistWithTracks: (body: {
+    name: string;
+    description?: string;
+    isPublic?: boolean;
+    trackIds: string[];
+    requestId?: string;
+  }) => request<Playlist>("/playlists/with-tracks", { method: "POST", body }),
+  playlistMemberships: (trackId: string, signal?: AbortSignal) =>
+    request<PlaylistMembership[]>(`/playlists/memberships${qs({ trackId })}`, { signal }),
+  changePlaylistMembership: (id: string, trackIds: string[], present: boolean) =>
+    request<PlaylistTrackChanges>(`/playlists/${id}/tracks/membership`, {
+      method: "PUT",
+      body: { trackIds, present },
+    }),
+  copyPlaylistTracks: (id: string, destinationId: string) =>
+    request<PlaylistTrackChanges>(`/playlists/${id}/copy-tracks`, {
+      method: "POST",
+      body: { destinationId },
+    }),
+  playlistSuggestions: (id: string, signal?: AbortSignal) =>
+    request<RadioBatch>(`/playlists/${id}/suggestions`, { signal }),
   updatePlaylist: (id: string, name: string, description?: string | null, isPublic = false) =>
     request<Playlist>(`/playlists/${id}`, {
       method: "PUT",
@@ -306,6 +325,8 @@ export const api = {
   radio: async (
     body: {
       seedTrackId: string | null;
+      playlistId?: string;
+      sessionId?: string;
       exclude: string[];
       limit?: number;
       focus?: RadioFocus | null;
@@ -315,7 +336,7 @@ export const api = {
     await flushEvents(EVENTS_FLUSH_WAIT_MS);
     return request<RadioBatch>("/recommendations/radio", {
       method: "POST",
-      body: { ...body, sessionId: deviceId() },
+      body: { ...body, sessionId: body.sessionId ?? deviceId() },
       signal,
     });
   },

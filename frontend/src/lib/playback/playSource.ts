@@ -5,16 +5,20 @@
 import { usePathname } from "next/navigation";
 import { createContext, createElement, useContext, type ReactNode } from "react";
 
-const sources = new Map<string, string>();
+const sources = new Map<string, { source: string; sessionId?: string }>();
 
 const MAX_TAGGED = 2000;
 
-export function tagSource(trackIds: Iterable<string>, source: string | null | undefined): void {
+export function tagSource(
+  trackIds: Iterable<string>,
+  source: string | null | undefined,
+  sessionId?: string,
+): void {
   if (!source) return;
 
   for (const id of trackIds) {
     sources.delete(id);
-    sources.set(id, source);
+    sources.set(id, { source, sessionId });
   }
 
   while (sources.size > MAX_TAGGED) {
@@ -25,10 +29,15 @@ export function tagSource(trackIds: Iterable<string>, source: string | null | un
 }
 
 export function sourceOf(trackId: string): string | undefined {
-  return sources.get(trackId);
+  return sources.get(trackId)?.source;
 }
 
-export function radioSource(seeded = false): string {
+export function playSessionOf(trackId: string): string | undefined {
+  return sources.get(trackId)?.sessionId;
+}
+
+export function radioSource(seeded = false, playlist = false): string {
+  if (playlist) return "radio:playlist";
   return seeded ? "radio:track" : "radio";
 }
 

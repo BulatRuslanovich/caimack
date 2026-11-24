@@ -38,7 +38,10 @@ export function DetailHeader({
   );
 
   return (
-    <header className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-end gap-8 pt-2 [--art:clamp(15rem,20vw,18rem)] max-md:grid-cols-1 max-md:gap-4 max-md:[--art:12rem]">
+    <header
+      data-detail-backdrop={backdrop ? "" : undefined}
+      className="detail-header grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-end gap-8 pt-2 max-md:grid-cols-1 max-md:gap-4"
+    >
       <ArtBackdrop src={backdrop} mode="header" />
 
       <div

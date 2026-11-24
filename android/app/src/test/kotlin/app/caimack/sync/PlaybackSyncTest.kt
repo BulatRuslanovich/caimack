@@ -5,6 +5,8 @@ import app.caimack.api.CaimackApi
 import app.caimack.api.HistoryEntryRequest
 import app.caimack.api.TasteRuleRequest
 import app.caimack.playback.LibraryCache
+import app.caimack.playback.ListeningTracker
+import app.caimack.playback.PlaySources
 import app.caimack.playback.Signals
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
@@ -27,6 +29,27 @@ class PlaybackSyncTest {
         Retrofit.Builder().baseUrl(server.url("/")).client(client)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build().create(CaimackApi::class.java)
+
+    @Test fun playingSignalsKeepTheirPlaylistSessionAfterTheTrackIsRetagged() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val events = mutableListOf<JsonObject>()
+            val signals = Signals(api(server), this, "device-session") { _, payload, _ -> events.add(payload) }
+            val track = "playlist-seed"
+            PlaySources.tag(listOf(track), "radio:playlist", "playlist-session")
+            try {
+                signals.begin(track, 60)
+                PlaySources.tag(listOf(track), "queue")
+                assertFalse(signals.hasSameSession(track))
+                signals.tracker.finish(ListeningTracker.COMPLETED)
+                signals.begin(track, 60)
+                assertEquals(listOf("playlist-session", "playlist-session", "device-session", "device-session"),
+                    events.map { it.string("sessionId") })
+            } finally {
+                PlaySources.tag(listOf(track), "queue")
+            }
+        }
+    }
 
     @Test fun offlineActivitySurvivesRestartAndRetriesWithTheSameReceipts() = runBlocking {
         MockWebServer().use { server ->

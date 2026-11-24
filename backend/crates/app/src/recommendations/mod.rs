@@ -85,6 +85,7 @@ pub mod reasons {
     pub const BECAUSE_YOU_LISTENED: &str = "becauseYouListened";
     pub const FRESH_IN_LIBRARY: &str = "freshInLibrary";
     pub const SOUNDS_LIKE: &str = "soundsLike";
+    pub const SOUNDS_LIKE_PLAYLIST: &str = "soundsLikePlaylist";
     pub const MATCHES_YOUR_TASTE: &str = "matchesYourTaste";
     pub const DISCOVERY: &str = "discovery";
 }

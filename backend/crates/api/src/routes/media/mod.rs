@@ -13,14 +13,13 @@ use self::images::{
     album_cover, artist_image, playlist_cover, remove_album_cover, remove_artist_image, remove_playlist_cover,
     set_album_cover, set_artist_image, set_playlist_cover, track_cover,
 };
-use self::stream::{download, hls_asset, hls_master, stream, waveform};
+use self::stream::{hls_asset, hls_master, stream, waveform};
 use self::upload::{library_scan, rescan_library, upload, upload_check};
 use crate::state::AppState;
 
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/tracks/{id}/stream", get(stream))
-        .route("/api/tracks/{id}/download", get(download))
         .route("/api/tracks/{id}/waveform", get(waveform))
         .route("/api/tracks/{id}/cover", get(track_cover))
         .route("/api/tracks/{id}/hls/master.m3u8", get(hls_master))
