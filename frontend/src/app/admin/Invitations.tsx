@@ -70,7 +70,7 @@ export function Invitations() {
         </h2>
         <div className="mt-4 flex flex-col items-start gap-1.5">
           <Button
-            variant="outline"
+            variant="secondary"
             className="h-auto min-h-10 max-w-full py-2 text-left whitespace-normal pointer-coarse:min-h-11"
             disabled={create.isPending}
             onClick={() => create.mutate(false)}
@@ -114,7 +114,7 @@ export function Invitations() {
             className="w-full min-w-0 rounded-md border border-border bg-background px-2 py-2 font-mono text-sm"
           />
           <div>
-            <Button variant="outline" size="sm" onClick={() => void copy()}>
+            <Button variant="secondary" size="sm" onClick={() => void copy()}>
               <CopyIcon size={14} aria-hidden="true" /> {t("invitations.copy")}
             </Button>
           </div>

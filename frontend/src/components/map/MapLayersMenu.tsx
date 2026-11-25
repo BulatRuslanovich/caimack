@@ -66,7 +66,7 @@ export function MapLayersMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="group">
+        <Button size="sm" className="group">
           <LayersIcon size={14} />
           {t("map.layersCount", { count })}
           <ChevronDownIcon

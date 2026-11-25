@@ -69,7 +69,7 @@ export function FormDialog<TInput extends FieldValues, TOutput extends FieldValu
                 ? (pendingLabel ?? t("action.saving"))
                 : (submitLabel ?? t("action.saveChanges"))}
             </Button>
-            <Button variant="outline" onClick={onClose} disabled={saving}>
+            <Button variant="secondary" onClick={onClose} disabled={saving}>
               {t("action.cancel")}
             </Button>
           </>

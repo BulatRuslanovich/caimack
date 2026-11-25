@@ -111,7 +111,7 @@ export function MapTrackPanel({
           {t("action.play")}
         </Button>
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           onClick={() => onRadio(point)}
           aria-label={t("map.radioFrom")}

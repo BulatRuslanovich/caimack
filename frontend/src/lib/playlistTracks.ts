@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { PlaylistDetail, PlaylistMembership } from "./types";
+import type { PlaylistDetail, PlaylistMembership, SortDirection } from "./types";
 
 export const playlistSortOptions = {
   manual: "playlists.sort.manual",
-  title: "playlists.sort.title",
-  artist: "playlists.sort.artist",
-  added: "playlists.sort.added",
-  duration: "playlists.sort.duration",
+  title: "sort.title",
+  artist: "sort.artist",
+  album: "sort.album",
+  added: "sort.dateAdded",
+  year: "sort.year",
+  duration: "sort.duration",
 } as const;
 
 export type PlaylistSort = keyof typeof playlistSortOptions;
@@ -16,28 +18,45 @@ export function sortPlaylistTracks(
   playlist: Pick<PlaylistDetail, "tracks" | "trackAddedAt">,
   sort: PlaylistSort,
   locale: string,
+  direction: SortDirection = sort === "added" ? "desc" : "asc",
 ) {
   const { tracks, trackAddedAt } = playlist;
+  if (sort === "manual") return tracks;
+
+  const sign = direction === "asc" ? 1 : -1;
+  const { compare } = new Intl.Collator(locale, { numeric: true, sensitivity: "base" });
+
+  // Keep absent metadata at the end in both directions, and keep playlist order for ties.
+  function compareValues<T>(
+    a: T | null | undefined,
+    b: T | null | undefined,
+    compare: (a: T, b: T) => number,
+  ) {
+    if (a == null) return b == null ? 0 : 1;
+    if (b == null) return -1;
+    return sign * compare(a, b);
+  }
+
+  const numeric = (a: number, b: number) => a - b;
   switch (sort) {
-    case "manual":
-      return tracks;
     case "title":
-    case "artist": {
-      const { compare } = new Intl.Collator(locale);
-      const field = sort === "title" ? "title" : "artistName";
-      return tracks.toSorted((a, b) => compare(a[field], b[field]));
-    }
+      return tracks.toSorted((a, b) => sign * compare(a.title, b.title));
+    case "artist":
+      return tracks.toSorted((a, b) => sign * compare(a.artistName, b.artistName));
+    case "album":
+      return tracks.toSorted((a, b) => compareValues(a.albumTitle, b.albumTitle, compare));
     case "added": {
       const dates = new Map<string, number>();
       for (const [id, date] of Object.entries(trackAddedAt ?? {})) {
         const time = Date.parse(date);
         if (Number.isFinite(time)) dates.set(id, time);
       }
-      const dateOf = (id: string) => dates.get(id) ?? -Infinity;
-      return tracks.toSorted((a, b) => dateOf(b.id) - dateOf(a.id));
+      return tracks.toSorted((a, b) => compareValues(dates.get(a.id), dates.get(b.id), numeric));
     }
+    case "year":
+      return tracks.toSorted((a, b) => compareValues(a.year, b.year, numeric));
     case "duration":
-      return tracks.toSorted((a, b) => a.durationSeconds - b.durationSeconds);
+      return tracks.toSorted((a, b) => sign * numeric(a.durationSeconds, b.durationSeconds));
   }
 }
 

@@ -87,7 +87,7 @@ function AccountProfile() {
         )}
         <Button
           ref={trigger}
-          variant="outline"
+          variant="secondary"
           size="sm"
           className="pointer-coarse:h-11"
           aria-expanded={editing}

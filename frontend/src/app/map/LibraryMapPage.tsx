@@ -343,7 +343,11 @@ function MapExplorer({
             value={genre ?? ALL_GENRES}
             onValueChange={(value) => setGenre(value === ALL_GENRES ? null : value)}
           >
-            <SelectTrigger aria-label={t("map.genre")} className="map-genre-trigger">
+            <SelectTrigger
+              aria-label={t("map.genre")}
+              className="map-genre-trigger"
+              data-active={genre !== null}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -360,7 +364,6 @@ function MapExplorer({
 
           {onSwitchProjection && (
             <Button
-              variant="ghost"
               size="sm"
               aria-label={t(projection === "3d" ? "map.switch2d" : "map.switch3d")}
               title={t(projection === "3d" ? "map.switch2d" : "map.switch3d")}
@@ -371,7 +374,6 @@ function MapExplorer({
           )}
 
           <Button
-            variant="ghost"
             size="sm"
             className="map-selection-toggle"
             aria-pressed={selecting}
@@ -411,17 +413,7 @@ function MapExplorer({
               >
                 <PlayIcon size={14} /> {t("action.play")}
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={busy}
-                onClick={toggleShuffle}
-                aria-pressed={shuffle}
-                className={cn(
-                  shuffle &&
-                    "border-primary bg-primary text-primary-foreground hover:border-primary hover:bg-primary/90",
-                )}
-              >
+              <Button size="sm" disabled={busy} onClick={toggleShuffle} aria-pressed={shuffle}>
                 <ShuffleIcon size={14} /> {t("action.shuffle")}
               </Button>
               <Button

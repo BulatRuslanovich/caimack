@@ -30,11 +30,13 @@ export function PlaybackDevices({
   onlyRemote = false,
   transferBook,
   className,
+  variant = "ghost",
 }: {
   compact?: boolean;
   onlyRemote?: boolean;
   transferBook?: (id: string | null) => Promise<void>;
   className?: string;
+  variant?: "ghost" | "secondary";
 }) {
   const connect = useConnect();
   const t = useT();
@@ -70,7 +72,7 @@ export function PlaybackDevices({
   return (
     <>
       <Button
-        variant="ghost"
+        variant={variant}
         size={compact ? "icon" : "auto"}
         className={cn(
           "min-h-10 gap-2",

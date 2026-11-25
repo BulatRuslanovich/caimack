@@ -4,7 +4,7 @@
 
 use app::AppResult;
 use app::catalog::search;
-use app::catalog::tracks::{self, TrackFilter, TrackSort};
+use app::catalog::tracks::{self, SortDirection, TrackFilter, TrackSort};
 use app::paging::PageRequest;
 use media::key::MusicalKey;
 use sqlx::PgPool;
@@ -133,12 +133,58 @@ async fn shuffle_applies_the_same_search_tempo_and_key_filters_as_the_track_list
     }
     let filter =
         TrackFilter { bpm_min: Some(70.0), bpm_max: Some(90.0), keys: vec![MusicalKey { index: 0, confidence: 1.0 }] };
-    let listed = tracks::list(&db, user, PageRequest::default(), TrackSort::Title, Some("slow"), &filter).await?;
+    let listed = tracks::list(&db, user, PageRequest::default(), TrackSort::Title, None, Some("slow"), &filter).await?;
     let shuffled = tracks::shuffle(&db, user, None, Some("slow"), &filter).await?;
     assert_eq!(listed.total, 1);
     assert_eq!(
         shuffled.iter().map(|t| t.id).collect::<Vec<_>>(),
         listed.items.iter().map(|t| t.id).collect::<Vec<_>>()
     );
+    Ok(())
+}
+
+#[sqlx::test(migrations = "../../../db/migrations")]
+async fn track_order_applies_before_pagination_and_keeps_missing_values_last(db: PgPool) -> AppResult<()> {
+    let user = Uuid::now_v7();
+    let artist = Uuid::now_v7();
+    sqlx::query("INSERT INTO artists(id,name,normalized_name,created_at) VALUES ($1,'Artist','artist',now())")
+        .bind(artist)
+        .execute(&db)
+        .await?;
+    for (title, duration, year) in [("Alpha", 300, Some(2020)), ("Beta", 60, None), ("Gamma", 120, Some(2022))] {
+        sqlx::query(
+            "INSERT INTO tracks(id,title,normalized_title,artist_id,duration_seconds,year,file_path,
+             original_file_name,mime_type,file_size,content_hash,created_at)
+             VALUES ($1,$2,lower($2),$3,$4,$5,$2,$2,'audio/mpeg',1,$2,now())",
+        )
+        .bind(Uuid::now_v7())
+        .bind(title)
+        .bind(artist)
+        .bind(duration)
+        .bind(year)
+        .execute(&db)
+        .await?;
+    }
+    for (sort, direction, expected) in [
+        (TrackSort::Duration, SortDirection::Asc, ["Beta", "Gamma", "Alpha"]),
+        (TrackSort::Duration, SortDirection::Desc, ["Alpha", "Gamma", "Beta"]),
+        (TrackSort::Year, SortDirection::Asc, ["Alpha", "Gamma", "Beta"]),
+        (TrackSort::Year, SortDirection::Desc, ["Gamma", "Alpha", "Beta"]),
+    ] {
+        for (index, title) in (1..).zip(expected) {
+            let result = tracks::list(
+                &db,
+                user,
+                PageRequest::new(Some(index), Some(1)),
+                sort,
+                Some(direction),
+                None,
+                &TrackFilter::default(),
+            )
+            .await?;
+            assert_eq!(result.total, 3);
+            assert_eq!(result.items.iter().map(|track| track.title.as_str()).collect::<Vec<_>>(), [title]);
+        }
+    }
     Ok(())
 }

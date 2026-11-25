@@ -68,3 +68,27 @@ it("uses locale collation, ascending duration and newest known date without chan
   expect(sorted("manual")).toEqual(["one", "two", "three", "four"]);
   expect(sortPlaylistTracks({ tracks }, "added", "ru")).toEqual(tracks);
 });
+
+it("reverses known values while keeping ties stable and incomplete metadata last", () => {
+  const tracks = [
+    { id: "a", albumTitle: "Album 10", year: 2020, durationSeconds: 20 },
+    { id: "b", albumTitle: "Album 2", year: 2021, durationSeconds: 30 },
+    { id: "c", albumTitle: "Album 2", year: 2021, durationSeconds: 30 },
+    { id: "d", durationSeconds: 10 },
+  ] as Track[];
+  const playlist = {
+    tracks,
+    trackAddedAt: { a: "2026-01-02T00:00:00Z", c: "2026-01-01T00:00:00Z" },
+  };
+  const sorted = (
+    mode: Parameters<typeof sortPlaylistTracks>[1],
+    direction: Parameters<typeof sortPlaylistTracks>[3],
+  ) => sortPlaylistTracks(playlist, mode, "en", direction).map(({ id }) => id);
+
+  expect(sorted("album", "asc")).toEqual(["b", "c", "a", "d"]);
+  expect(sorted("album", "desc")).toEqual(["a", "b", "c", "d"]);
+  expect(sorted("year", "desc")).toEqual(["b", "c", "a", "d"]);
+  expect(sorted("added", "asc")).toEqual(["c", "a", "b", "d"]);
+  expect(sorted("duration", "desc")).toEqual(["b", "c", "a", "d"]);
+  expect(sortPlaylistTracks(playlist, "manual", "en", "desc")).toBe(tracks);
+});

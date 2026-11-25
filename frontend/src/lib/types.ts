@@ -202,7 +202,13 @@ export interface Paged<T> {
 
 export type PageParams = { page?: number; pageSize?: number };
 
-export type TrackSort = "Title" | "Recent" | "Artist" | "Album" | "Bpm" | "Key" | "Loudness";
+export type TrackSort =
+  "Title" | "Recent" | "Artist" | "Album" | "Bpm" | "Key" | "Loudness" | "Duration" | "Year";
+
+export type SortDirection = "asc" | "desc";
+
+export type TrackListParams = PageParams &
+  TrackFilter & { sort?: TrackSort; direction?: SortDirection; q?: string };
 
 export type TrackFilter = {
   bpmMin?: number;

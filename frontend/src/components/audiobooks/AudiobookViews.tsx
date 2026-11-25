@@ -208,7 +208,7 @@ function PlayBookButton({ book, hero }: { book: Audiobook; hero?: boolean }) {
   const playing = active && player.playing;
   return (
     <Button
-      variant={hero || playing ? "play" : "outline"}
+      variant={hero || playing ? "play" : "secondary"}
       size={hero ? "play" : "icon"}
       className="shrink-0"
       onClick={() => player.play(book)}
@@ -463,7 +463,7 @@ export function AudiobooksPage() {
                   <Button
                     key={option}
                     size="sm"
-                    variant={filter === option ? "primary" : "outline"}
+                    variant={filter === option ? "primary" : "secondary"}
                     aria-pressed={filter === option}
                     onClick={() => setFilter(option)}
                   >

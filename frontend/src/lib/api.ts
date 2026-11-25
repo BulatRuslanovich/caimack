@@ -53,7 +53,7 @@ import type {
   TasteRuleAction,
   TasteRuleTarget,
   TrackFilter,
-  TrackSort,
+  TrackListParams,
   UploadProbeFile,
   UploadProbeResult,
   User,
@@ -182,10 +182,8 @@ export const api = {
   lookupTracks: (ids: string[], signal?: AbortSignal) =>
     request<Track[]>("/tracks/lookup", { method: "POST", body: { ids }, signal }),
 
-  tracks: (
-    params: PageParams & TrackFilter & { sort?: TrackSort; q?: string },
-    signal?: AbortSignal,
-  ) => request<Paged<Track>>(`/tracks${qs(params)}`, { signal }),
+  tracks: (params: TrackListParams, signal?: AbortSignal) =>
+    request<Paged<Track>>(`/tracks${qs(params)}`, { signal }),
   shuffleTracks: (params: TrackFilter & { limit?: number; q?: string } = {}) =>
     request<Track[]>(`/tracks/shuffle${qs(params)}`),
   artists: (params: PageParams & { q?: string }, signal?: AbortSignal) =>

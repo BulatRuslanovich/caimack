@@ -55,7 +55,10 @@ export function Playback() {
     <Panel title={t("settings.playback")}>
       <div className="settings-choice">
         <span className="font-medium">{t("connect.title")}</span>
-        <PlaybackDevices className="settings-device-trigger min-h-11 min-w-0 justify-self-start rounded-md bg-card px-4 text-sm text-foreground hover:bg-raised [&_svg]:text-primary" />
+        <PlaybackDevices
+          variant="secondary"
+          className="settings-device-trigger min-h-11 min-w-0 justify-self-start px-4 text-sm"
+        />
       </div>
       <Choice
         legend={

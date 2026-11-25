@@ -37,7 +37,7 @@ export function YandexImportActivity() {
         description={t("yandex.activityHint")}
         className="w-[min(38rem,100%)]"
         footer={
-          <Button asChild variant="outline">
+          <Button asChild variant="secondary">
             <Link href="/search?tab=tracks" onClick={() => setOpen(false)}>
               {t("action.browseTracks")}
             </Link>

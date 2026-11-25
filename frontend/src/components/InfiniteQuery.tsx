@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { EmptyState } from "./EmptyState";
 import { Loading } from "./Loading";
 import { LoadError, RefreshError } from "./Query";
+import { Button } from "./ui/button";
 
 export function InfiniteQuery<T>({
   result,
@@ -98,14 +99,9 @@ function LoadMore({ busy, onReach }: { busy: boolean; onReach: () => void }) {
 
   return (
     <div ref={sentinel} className="flex justify-center pt-2 pb-6">
-      <button
-        type="button"
-        onClick={onReach}
-        disabled={busy}
-        className="rounded-full px-4 py-2 text-sm font-medium text-muted-foreground transition-colors duration-150 ease-brand hover:text-foreground disabled:opacity-60"
-      >
+      <Button onClick={onReach} disabled={busy}>
         {busy ? <Loading size="s" /> : t("pagination.loadMore")}
-      </button>
+      </Button>
     </div>
   );
 }

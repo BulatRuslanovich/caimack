@@ -50,7 +50,7 @@ export function PlaylistDestinationDialog({
       returnFocus={returnFocus}
       busy={save.isPending}
       footer={
-        <Button variant="outline" onClick={onClose} disabled={save.isPending}>
+        <Button variant="secondary" onClick={onClose} disabled={save.isPending}>
           {t("action.cancel")}
         </Button>
       }

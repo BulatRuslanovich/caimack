@@ -25,6 +25,7 @@
 @import "./styles/transport.css";
 @import "./styles/library.css";
 @import "./styles/library-save.css";
+@import "./styles/controls.css";
 @import "./styles/workspaces.css";
 @import "./styles/recommendations.css";
 @import "./styles/overlays.css";

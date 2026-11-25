@@ -13,8 +13,7 @@ import type {
   PageParams,
   Paged,
   Track,
-  TrackFilter,
-  TrackSort,
+  TrackListParams,
 } from "@/lib/types";
 import {
   infiniteQueryOptions,
@@ -131,7 +130,7 @@ export const queries = {
       queryFn: ({ signal }) => api.homeMix(kind, signal),
     }),
 
-  tracks: (params: PageParams & TrackFilter & { sort?: TrackSort; q?: string }) =>
+  tracks: (params: TrackListParams) =>
     queryOptions({
       queryKey: ["tracks", params],
       queryFn: ({ signal }) => api.tracks(params, signal),
@@ -291,7 +290,7 @@ export function prefetchSearchCategory(client: QueryClient, tab: CatalogTab, q?:
       return Promise.resolve();
     case "tracks":
       return client.prefetchQuery(
-        queries.tracks({ page: 1, pageSize: TRACK_PAGE_SIZE, sort: "Title", q }),
+        queries.tracks({ page: 1, pageSize: TRACK_PAGE_SIZE, sort: "Title", direction: "asc", q }),
       );
     case "albums":
       return client.prefetchInfiniteQuery(queries.albumsFeed({ q }));

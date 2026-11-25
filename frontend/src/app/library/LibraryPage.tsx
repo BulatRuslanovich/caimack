@@ -442,8 +442,8 @@ export default function LibraryPage() {
               }}
             />
             <Button
-              variant="ghost"
               size="icon"
+              className="size-10 pointer-coarse:size-11"
               aria-label={t(grid ? "collection.list" : "collection.grid")}
               onClick={() => setGrid(!grid)}
             >

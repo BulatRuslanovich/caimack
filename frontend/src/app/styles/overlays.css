@@ -101,64 +101,6 @@
     background: var(--border);
   }
 
-  .select-trigger,
-  .quality-trigger {
-    display: inline-flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--library-surface);
-    color: var(--foreground);
-    font-weight: 500;
-    white-space: nowrap;
-    outline: none;
-    transition:
-      background-color 150ms var(--ease),
-      border-color 150ms var(--ease),
-      box-shadow 150ms var(--ease);
-  }
-
-  .select-trigger {
-    min-height: 40px;
-    max-width: 100%;
-    padding: 8px 12px;
-    font-size: 0.875rem;
-  }
-
-  .select-trigger > [data-slot="select-value"] {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .select-trigger:hover,
-  .quality-trigger:hover,
-  .select-trigger[data-state="open"],
-  .quality-trigger[data-state="open"] {
-    border-color: var(--border-strong);
-    background: var(--card);
-  }
-
-  .select-trigger:focus-visible,
-  .quality-trigger:focus-visible {
-    border-color: var(--ring);
-    box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 15%, transparent);
-  }
-
-  .select-trigger[data-state="open"] > svg,
-  .select-trigger[data-state="open"] [data-slot="select-chevron"] {
-    rotate: 180deg;
-  }
-
-  .quality-trigger {
-    min-height: 30px;
-    padding: 4px 9px;
-    font-size: 0.6875rem;
-    font-variant-numeric: tabular-nums;
-  }
-
   .overlay-scrim {
     background: rgb(0 0 0 / 50%);
     backdrop-filter: blur(4px);
@@ -283,8 +225,7 @@
   }
 
   @media (pointer: coarse) {
-    .floating-item,
-    .select-trigger {
+    .floating-item {
       min-height: 44px;
     }
   }
@@ -340,9 +281,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .floating-item,
-    .select-trigger,
-    .quality-trigger {
+    .floating-item {
       transition: none;
     }
   }

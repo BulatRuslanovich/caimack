@@ -141,7 +141,7 @@ function DuplicateCard({ group }: { group: DuplicateGroup }) {
 
               <div className="flex shrink-0 justify-end">
                 <Button
-                  variant={index === 0 ? "primary" : "outline"}
+                  variant={index === 0 ? "primary" : "secondary"}
                   size="sm"
                   disabled={busy}
                   onClick={() => askToKeep(track)}

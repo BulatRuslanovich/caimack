@@ -117,7 +117,7 @@ export function PlaylistAddTracksDialog({
               ? t("action.saving")
               : t("playlists.addSelected", { count: newIds.length })}
           </Button>
-          <Button variant="outline" onClick={onClose} disabled={save.isPending}>
+          <Button variant="secondary" onClick={onClose} disabled={save.isPending}>
             {t("action.cancel")}
           </Button>
         </>

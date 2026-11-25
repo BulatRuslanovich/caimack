@@ -39,7 +39,7 @@ export function MusicSourceFilter({
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="min-h-11 rounded-lg">
+        <Button className="min-h-11">
           <SlidersHorizontalIcon size={16} aria-hidden />
           {t("music.sourceFilter")}
           <span className="text-xs tabular-nums text-muted-foreground">{count}</span>

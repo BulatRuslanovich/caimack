@@ -84,7 +84,7 @@ export function PlaylistMembershipDialog({ track, onClose, returnFocus }: Member
                   ? t("action.tryAgain")
                   : t("playlists.done")}
             </Button>
-            <Button variant="outline" onClick={onClose} disabled={saving}>
+            <Button variant="secondary" onClick={onClose} disabled={saving}>
               {t("action.cancel")}
             </Button>
           </>
@@ -95,7 +95,7 @@ export function PlaylistMembershipDialog({ track, onClose, returnFocus }: Member
         {rows && (
           <Button
             ref={createButton}
-            variant="outline"
+            variant="secondary"
             onClick={() => setCreating(true)}
             disabled={saving}
           >

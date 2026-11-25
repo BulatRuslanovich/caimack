@@ -142,7 +142,7 @@ export default function UploadPage() {
                     <Button variant="primary" onClick={choose}>
                       {t("upload.chooseFiles")}
                     </Button>
-                    <Button variant="outline" onClick={chooseFolder} className="max-md:hidden">
+                    <Button variant="secondary" onClick={chooseFolder} className="max-md:hidden">
                       {t("upload.chooseFolder")}
                     </Button>
                   </div>
