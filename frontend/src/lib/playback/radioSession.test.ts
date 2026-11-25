@@ -119,10 +119,13 @@ describe("adaptive continuation", () => {
   });
 });
 
-
 describe("playlist radio", () => {
   it("uses a unique session and keeps it through serialization and refill requests", async () => {
-    vi.mocked(api.radio).mockResolvedValue({ playlistSeedCount: 1, seedTrackId: "seed", tracks: [recommended("seed"), recommended("picked")] });
+    vi.mocked(api.radio).mockResolvedValue({
+      playlistSeedCount: 1,
+      seedTrackId: "seed",
+      tracks: [recommended("seed"), recommended("picked")],
+    });
 
     const result = await loadPlaylistRadio("playlist", [track("seed")]);
     expect(result.status).toBe("ready");
@@ -130,30 +133,58 @@ describe("playlist radio", () => {
     expect(result.tracks.map(({ id }) => id)).toEqual(["seed", "picked"]);
     expect(result.session.seedTrackId).toBe("seed");
     expect(api.radio).toHaveBeenLastCalledWith(
-      { playlistId: "playlist", sessionId: result.session.sessionId, seedTrackId: null, exclude: [], limit: 6 },
+      {
+        playlistId: "playlist",
+        sessionId: result.session.sessionId,
+        seedTrackId: null,
+        exclude: [],
+        limit: 6,
+      },
       undefined,
     );
     const restored = JSON.parse(JSON.stringify(result.session));
     expect(validRadioSession(restored)).toBe(true);
     expect(validRadioSession({ ...restored, sessionId: undefined })).toBe(false);
-    expect(playlistRadioContext(restored)).toEqual({ playlistId: "playlist", sessionId: result.session.sessionId });
+    expect(playlistRadioContext(restored)).toEqual({
+      playlistId: "playlist",
+      sessionId: result.session.sessionId,
+    });
     const other = await loadPlaylistRadio("playlist", [track("seed")]);
     expect(other.status === "ready" && other.session.sessionId).not.toBe(result.session.sessionId);
   });
 
   it("handles zero analyzed seeds, looks up an absent single seed, and skips multi-track anchors", async () => {
-    vi.mocked(api.radio).mockResolvedValueOnce({ playlistSeedCount: 0, tracks: [recommended("picked")] });
+    vi.mocked(api.radio).mockResolvedValueOnce({
+      playlistSeedCount: 0,
+      tracks: [recommended("picked")],
+    });
     expect(await loadPlaylistRadio("playlist", [])).toEqual({ status: "noAudio" });
     vi.mocked(api.lookupTracks).mockResolvedValueOnce([track("seed")]);
-    vi.mocked(api.radio).mockResolvedValueOnce({ playlistSeedCount: 1, seedTrackId: "seed", tracks: [] });
-    expect(await loadPlaylistRadio("playlist", [])).toMatchObject({
-      status: "ready", tracks: [track("seed")], session: { seedTrackId: "seed" },
+    vi.mocked(api.radio).mockResolvedValueOnce({
+      playlistSeedCount: 1,
+      seedTrackId: "seed",
+      tracks: [],
     });
-    vi.mocked(api.radio).mockResolvedValueOnce({ playlistSeedCount: 3, seedTrackId: "seed", tracks: [] });
+    expect(await loadPlaylistRadio("playlist", [])).toMatchObject({
+      status: "ready",
+      tracks: [track("seed")],
+      session: { seedTrackId: "seed" },
+    });
+    vi.mocked(api.radio).mockResolvedValueOnce({
+      playlistSeedCount: 3,
+      seedTrackId: "seed",
+      tracks: [],
+    });
     expect(await loadPlaylistRadio("playlist", [track("seed")])).toEqual({ status: "empty" });
-    vi.mocked(api.radio).mockResolvedValueOnce({ playlistSeedCount: 3, seedTrackId: "seed", tracks: [recommended("picked")] });
+    vi.mocked(api.radio).mockResolvedValueOnce({
+      playlistSeedCount: 3,
+      seedTrackId: "seed",
+      tracks: [recommended("picked")],
+    });
     expect(await loadPlaylistRadio("playlist", [track("seed")])).toMatchObject({
-      status: "ready", tracks: [track("picked")], session: { seedTrackId: null },
+      status: "ready",
+      tracks: [track("picked")],
+      session: { seedTrackId: null },
     });
   });
 });

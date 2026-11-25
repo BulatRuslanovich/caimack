@@ -10,7 +10,11 @@ import { useTrackMenuActions } from "./useTrackMenuActions";
 const mocks = vi.hoisted(() => ({
   changePlaylistMembership: vi.fn().mockResolvedValue(undefined),
   removeFromPlaylist: vi.fn().mockResolvedValue(undefined),
-  playlist: vi.fn().mockResolvedValue({ tracks: [{ id: "previous" }, { id: "new" }, { id: "next" }, { id: "track" }] }),
+  playlist: vi
+    .fn()
+    .mockResolvedValue({
+      tracks: [{ id: "previous" }, { id: "new" }, { id: "next" }, { id: "track" }],
+    }),
   reorderPlaylist: vi.fn().mockResolvedValue(undefined),
   invalidate: vi.fn(),
   notify: vi.fn(),
@@ -47,7 +51,12 @@ it("undoes a menu removal using the saved order and preserves newly added tracks
 
   await vi.waitFor(() => {
     expect(mocks.changePlaylistMembership).toHaveBeenCalledWith("playlist", ["track"], true);
-    expect(mocks.reorderPlaylist).toHaveBeenCalledWith("playlist", ["previous", "track", "new", "next"]);
+    expect(mocks.reorderPlaylist).toHaveBeenCalledWith("playlist", [
+      "previous",
+      "track",
+      "new",
+      "next",
+    ]);
     expect(mocks.invalidate).toHaveBeenCalledTimes(2);
     expect(mocks.invalidate).toHaveBeenLastCalledWith("library", "playlists");
   });

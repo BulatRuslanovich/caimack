@@ -247,8 +247,14 @@ it("sends playlist radio events with the session active when the track started",
   try {
     tagSource([song.id], "queue");
     tracker.finish("trackCompleted");
-    expect(lastOf("trackStarted")).toMatchObject({ source: "radio:playlist", sessionId: "playlist-session" });
-    expect(lastOf("trackCompleted")).toMatchObject({ source: "radio:playlist", sessionId: "playlist-session" });
+    expect(lastOf("trackStarted")).toMatchObject({
+      source: "radio:playlist",
+      sessionId: "playlist-session",
+    });
+    expect(lastOf("trackCompleted")).toMatchObject({
+      source: "radio:playlist",
+      sessionId: "playlist-session",
+    });
   } finally {
     tagSource([song.id], "queue");
   }
