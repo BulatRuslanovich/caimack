@@ -46,7 +46,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,10 +66,6 @@ import app.caimack.audiobooks.Audiobook
 import app.caimack.audiobooks.AudiobookCatalog
 import app.caimack.audiobooks.AudiobookPlaybackState
 import kotlin.math.roundToInt
-
-private const val RECENT = "recent"
-private const val DURATION = "duration"
-private const val DOWNLOADED = "downloaded"
 
 @Composable
 internal fun audiobookCover(book: Audiobook?): String? {
@@ -95,15 +90,10 @@ internal fun browsingAudiobooks(): AudiobookCatalog {
 @Composable
 fun AudiobookBrowse(downloadedOnly: Boolean, homeFilters: @Composable () -> Unit) {
     val catalog = browsingAudiobooks()
-    var sort by rememberSaveable { mutableStateOf(RECENT) }
-    val filter = if (downloadedOnly) DOWNLOADED else sort
-    val saved = catalog.books.filter { it.saved }
     val books = catalog.books
-    val sorted = when (filter) {
-        DURATION -> books.sortedBy { it.durationMs }
-        DOWNLOADED -> books.filter { it.id in catalog.downloaded }
-        else -> books.filterNot { it.progress?.completed == false }.sortedByDescending { it.progress?.updatedAtMs ?: 0L }
-    }
+    val recent = books.sortedByDescending { it.progress?.updatedAtMs ?: 0L }
+    val shown = if (downloadedOnly) recent.filter { it.id in catalog.downloaded }
+    else recent.filterNot { it.progress?.completed == false }
     val inProgress = books.inProgress()
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -111,30 +101,21 @@ fun AudiobookBrowse(downloadedOnly: Boolean, homeFilters: @Composable () -> Unit
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         item("home-filters") { homeFilters() }
-        if (filter == RECENT) inProgress.firstOrNull()?.let { book ->
+        if (!downloadedOnly) inProgress.firstOrNull()?.let { book ->
             item("continue") {
                 BookHeader(R.string.audiobook_continue)
                 BookHero(book, catalog)
             }
         }
-        if (!downloadedOnly) item("filters") {
-            CategoryFilterRow(filter, false, {}) {
-                item(RECENT) { CategoryFilter(R.string.audiobook_recent, filter == RECENT) { sort = RECENT } }
-                item(DURATION) { CategoryFilter(R.string.audiobook_by_duration, filter == DURATION) { sort = DURATION } }
-            }
-        }
         if (!catalog.ready && books.isEmpty()) item("loading") { BookLoading() }
-        if (filter == RECENT) {
+        if (!downloadedOnly) {
             bookSection("progress", R.string.audiobook_in_progress, inProgress, catalog)
-            bookSection("saved", R.string.audiobook_saved_section, saved, catalog)
+            bookSection("saved", R.string.audiobook_saved_section, recent.filter { it.saved }, catalog)
         }
-        if (sorted.isNotEmpty()) {
-            val heading = when {
-                filter == DOWNLOADED -> R.string.collection_downloaded
-                else -> R.string.audiobook_all
-            }
-            bookSection("catalog", heading, sorted, catalog)
-        } else if (catalog.ready && (filter != RECENT || inProgress.isEmpty())) {
+        if (shown.isNotEmpty()) {
+            val heading = if (downloadedOnly) R.string.collection_downloaded else R.string.audiobook_all
+            bookSection("catalog", heading, shown, catalog)
+        } else if (catalog.ready && (downloadedOnly || inProgress.isEmpty())) {
             item("empty") { Empty(stringResource(if (downloadedOnly || !catalog.online) R.string.audiobook_empty_downloads else R.string.audiobook_empty)) }
         }
     }

@@ -5,8 +5,6 @@
     <string name="home_filter_music">Музыка</string>
     <string name="audiobook_continue">Продолжить</string>
     <string name="audiobook_continue_home">Продолжить аудиокнигу</string>
-    <string name="audiobook_recent">Недавние</string>
-    <string name="audiobook_by_duration">По длительности</string>
     <string name="audiobook_all">Все аудиокниги</string>
     <string name="audiobook_in_progress">Прослушиваемые аудиокниги</string>
     <string name="audiobook_saved_section">В медиатеке</string>

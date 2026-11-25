@@ -68,8 +68,6 @@ export const ru: Dictionary = {
   "audiobooks.catalog": "Все аудиокниги",
   "audiobooks.continue": "Продолжить",
   "audiobooks.continueAtHome": "Продолжить аудиокнигу",
-  "audiobooks.recent": "Недавние",
-  "audiobooks.duration": "По длительности",
   "audiobooks.disabled": "Аудиокниги выключены на этом сервере.",
   "audiobooks.narrator": "Читает {name}",
   "audiobooks.remaining": "Осталось {time} · {percent}%",
