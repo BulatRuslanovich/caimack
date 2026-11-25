@@ -10,11 +10,9 @@ import { useTrackMenuActions } from "./useTrackMenuActions";
 const mocks = vi.hoisted(() => ({
   changePlaylistMembership: vi.fn().mockResolvedValue(undefined),
   removeFromPlaylist: vi.fn().mockResolvedValue(undefined),
-  playlist: vi
-    .fn()
-    .mockResolvedValue({
-      tracks: [{ id: "previous" }, { id: "new" }, { id: "next" }, { id: "track" }],
-    }),
+  playlist: vi.fn().mockResolvedValue({
+    tracks: [{ id: "previous" }, { id: "new" }, { id: "next" }, { id: "track" }],
+  }),
   reorderPlaylist: vi.fn().mockResolvedValue(undefined),
   invalidate: vi.fn(),
   notify: vi.fn(),
