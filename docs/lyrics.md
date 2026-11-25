@@ -5,7 +5,7 @@
 Caimack follows the player clock and shows the timing available from a verified
 source. Word or syllable timing enables karaoke highlighting. Line timing
 highlights the current line, and lyrics without timing appear as plain text.
-In the web and desktop players, scrolling through timed lyrics pauses
+In the web, desktop, and Android players, scrolling through timed lyrics pauses
 automatic scrolling. Choose **Back to current line** to follow playback again.
 
 ![Full-screen Caimack player highlighting the current lyric](screenshots/landing/lyrics.webp)

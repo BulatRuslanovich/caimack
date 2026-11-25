@@ -61,6 +61,7 @@ Open Caimack in a browser to use the mobile web app, or install the native Andro
 app for background playback, Android Auto, and offline music.
 In the mobile web app, a playlist's name and back button stay available as you
 scroll through its tracks.
+In the Android full player, tap the source album or playlist name to open it.
 
 - [Download tracks, albums, and playlists](docs/android-downloads.md).
 - [Synchronize your entire music library over your home network](docs/android-library-sync.md).

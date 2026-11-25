@@ -10,6 +10,8 @@
     <string name="action_pause">Pause</string>
     <string name="queue_title">Queue</string>
     <string name="player_now_playing">Now playing</string>
+    <string name="player_from_album">From album · %1$s</string>
+    <string name="player_from_playlist">From playlist · %1$s</string>
     <string name="queue_edit">Edit queue</string>
     <string name="queue_move_up">Move up</string>
     <string name="queue_move_down">Move down</string>
@@ -18,6 +20,7 @@
     <string name="queue_current_paused">Current track, paused</string>
     <string name="queue_empty">The queue is empty.</string>
     <string name="lyrics_title">Lyrics</string>
+    <string name="lyrics_follow">Back to current line</string>
     <string name="lyrics_none">No lyrics for this track.</string>
     <string name="player_playing_elsewhere">Paused — playback moved to another device.</string>
     <string name="player_playing_on">Paused — now playing on %1$s.</string>

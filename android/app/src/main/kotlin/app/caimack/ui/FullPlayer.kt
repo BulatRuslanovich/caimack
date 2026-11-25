@@ -50,6 +50,8 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
@@ -58,6 +60,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -80,12 +83,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.setProgress
@@ -97,7 +104,10 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import app.caimack.R
+import app.caimack.api.AlbumDetail
 import app.caimack.api.Lyrics
+import app.caimack.api.PlaybackCollection
+import app.caimack.api.PlaylistDetail
 import app.caimack.api.Track
 import app.caimack.playback.PlayerState
 import app.caimack.playback.QueueSnapshot
@@ -278,7 +288,7 @@ private fun FullPlayerContent(state: PlayerState, savedColor: Color, onClose: ()
         panelOpen = panel != Panel.None,
         onBack = { if (panel != Panel.None) panel = Panel.None else onClose() },
         header = {
-            PlayerHeader(stringResource(R.string.player_now_playing), onClose) {
+            MusicPlayerHeader(state.collection, track, onClose) {
                 Box {
                     IconAction(Lucide.EllipsisVertical, stringResource(R.string.menu_more)) { options = true }
                     DropdownMenu(options, onDismissRequest = { options = false }) {
@@ -301,12 +311,73 @@ private fun FullPlayerContent(state: PlayerState, savedColor: Color, onClose: ()
 }
 
 @Composable
-internal fun PlayerHeader(title: String, onClose: () -> Unit, options: @Composable () -> Unit) {
+private fun MusicPlayerHeader(
+    collection: PlaybackCollection?,
+    track: Track,
+    onClose: () -> Unit,
+    options: @Composable () -> Unit,
+) {
+    val api = catalogApi()
+    val navigate = LocalNavigate.current
+    val offline = LocalOfflineLibrary.current
+    val fallback = track.albumTitle?.takeIf { collection?.kind == "album" && collection.id == track.albumId }
+    val name by key(collection, offline) {
+        val cached = when {
+            offline -> null
+            collection?.kind == "album" -> (Remote.cache["album:${collection.id}"] as? AlbumDetail)?.title
+            collection?.kind == "playlist" -> (Remote.cache["playlist:${collection.id}"] as? PlaylistDetail)?.name
+            else -> null
+        }
+        produceState(cached, api) {
+            try {
+                value = when (collection?.kind) {
+                    "album" -> api.album(collection.id).title
+                    "playlist" -> api.playlist(collection.id).name
+                    else -> null
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                // The collection may be unavailable locally or removed on the server.
+            }
+        }
+    }
+    val title = (name ?: fallback)?.takeIf { it.isNotBlank() }
+    val route = when (collection?.kind) {
+        "album" -> AlbumRoute(collection.id)
+        "playlist" -> PlaylistRoute(collection.id)
+        else -> null
+    }
+    PlayerHeader(
+        title = if (route != null && title != null) {
+            stringResource(if (route is AlbumRoute) R.string.player_from_album else R.string.player_from_playlist, title)
+        } else stringResource(R.string.player_now_playing),
+        onClose = onClose,
+        onTitleClick = if (route != null && title != null) ({ navigate(route) }) else null,
+        options = options,
+    )
+}
+
+@Composable
+internal fun PlayerHeader(
+    title: String,
+    onClose: () -> Unit,
+    onTitleClick: (() -> Unit)? = null,
+    options: @Composable () -> Unit,
+) {
     val palette = LocalPalette.current
     Row(Modifier.fillMaxWidth().testTag("full-player-header"), verticalAlignment = Alignment.CenterVertically) {
         IconAction(Lucide.ChevronDown, stringResource(R.string.player_close_full), onClick = onClose)
-        Text(title, style = Type.small, color = palette.muted, modifier = Modifier.weight(1f).testTag("full-player-context"),
-            textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        val action = if (onTitleClick != null) {
+            Modifier.clip(Radius.panel).clickable(role = Role.Button, onClick = onTitleClick)
+        } else Modifier
+        Box(
+            Modifier.weight(1f).height(48.dp).testTag("full-player-context").then(action).padding(horizontal = 6.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(title, style = Type.small, color = if (onTitleClick != null) palette.foreground else palette.muted,
+                textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
         options()
     }
 }
@@ -659,39 +730,78 @@ internal fun LyricsPanel(track: Track, positionMs: Long, playing: Boolean) {
         val active by remember(lyrics.lines, framePosition, positionMs, playing) {
             androidx.compose.runtime.derivedStateOf { lyrics.lines.indexOfLast { it.at <= if (playing) framePosition.value else positionMs } }
         }
-        val list = rememberLazyListState()
-        LaunchedEffect(active) {
-            if (active >= 0) {
-                val target = (active - 2).coerceAtLeast(0)
-                if (motion) list.animateScrollToItem(target) else list.scrollToItem(target)
+        key(track.id) {
+            TimedLyrics(
+                lyrics = lyrics,
+                active = active,
+                position = { if (playing) framePosition.value else positionMs },
+                onSeek = container.player::seekTo,
+            )
+        }
+    }
+}
+
+@Composable
+internal fun TimedLyrics(lyrics: Lyrics, active: Int, position: () -> Long, onSeek: (Long) -> Unit) {
+    val palette = LocalPalette.current
+    val motion = playerMotionEnabled()
+    val list = rememberLazyListState()
+    var following by remember { mutableStateOf(true) }
+    val scrolling = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (source == NestedScrollSource.UserInput && available.y != 0f) following = false
+                return Offset.Zero
             }
         }
+    }
+    LaunchedEffect(active, following) {
+        if (!following) return@LaunchedEffect
+        val target = (active - 2).coerceAtLeast(0)
+        if (motion) list.animateScrollToItem(target) else list.scrollToItem(target)
+    }
 
-        LazyColumn(Modifier.fillMaxSize().fadeEdges(24.dp), state = list, contentPadding = PaddingValues(vertical = 40.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(
+            Modifier.fillMaxSize().fadeEdges(24.dp).nestedScroll(scrolling).testTag("timed-lyrics"),
+            state = list,
+            contentPadding = PaddingValues(top = 32.dp, bottom = 64.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
             itemsIndexed(lyrics.lines) { index, line ->
+                val current = index == active
                 TimedLyricText(
                     line = line,
                     positionMs = {
                         when {
                             index < active -> Long.MAX_VALUE
                             index > active -> Long.MIN_VALUE
-                            playing -> framePosition.value
-                            else -> positionMs
+                            else -> position()
                         }
                     },
                     style = Type.section.copy(fontSize = Type.section.fontSize * 1.15f),
                     foreground = Color.White,
                     upcoming = when {
-                        index == active && line.words.isEmpty() -> Color.White
-                        index == active -> Color.White.copy(alpha = 0.72f)
+                        current && line.words.isEmpty() -> Color.White
+                        current -> Color.White.copy(alpha = 0.72f)
                         index < active -> Color.White.copy(alpha = 0.55f)
                         else -> Color.White.copy(alpha = 0.65f)
                     },
-                    modifier = Modifier.testTag("lyrics-line-$index").semantics { selected = index == active }
-                        .clickable { container.player.seekTo(line.at) },
+                    modifier = Modifier.fillMaxWidth().clip(Radius.panel)
+                        .background(if (current) Color.White.copy(alpha = 0.08f) else Color.Transparent)
+                        .testTag("lyrics-line-$index").semantics { selected = current }
+                        .clickable { onSeek(line.at) }
+                        .padding(horizontal = 12.dp, vertical = 7.dp),
                 )
             }
             item { LyricsCredit(lyrics) }
+        }
+        if (!following) {
+            TextButton(
+                onClick = { following = true },
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp).heightIn(min = 48.dp),
+                colors = ButtonDefaults.textButtonColors(containerColor = palette.popover, contentColor = palette.foreground),
+            ) { Text(stringResource(R.string.lyrics_follow), style = Type.small) }
         }
     }
 }
