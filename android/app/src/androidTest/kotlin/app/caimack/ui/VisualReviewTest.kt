@@ -22,6 +22,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
@@ -44,6 +45,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollToNode
 import androidx.test.platform.app.InstrumentationRegistry
 import app.caimack.CaimackApp
@@ -51,10 +53,12 @@ import app.caimack.MainActivity
 import app.caimack.R
 import app.caimack.api.Paged
 import app.caimack.api.Album
+import app.caimack.api.AlbumDetail
 import app.caimack.api.HomeBlock
 import app.caimack.api.HomeFeed
 import app.caimack.api.Playlist
 import app.caimack.api.PlaylistDetail
+import app.caimack.api.SearchResults
 import app.caimack.api.Track
 import app.caimack.api.RadioBatch
 import app.caimack.api.RecommendedTrack
@@ -81,6 +85,8 @@ import org.junit.Test
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import androidx.core.graphics.drawable.toBitmap
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.compose.ui.graphics.toArgb
 import okio.Buffer
 import java.nio.ByteBuffer
@@ -137,6 +143,7 @@ class VisualReviewTest {
                     path == "/api/me/library/folders" -> json("""[{"id":"review-folder","name":"На вечер","parentId":null,"createdAt":"2026-11-15T09:00:00Z"}]""")
                     path == "/api/me/library/order" -> json("{}")
                     path == "/api/home/feed" -> json("{\"blocks\":[]}")
+                    path == "/api/search/popular" -> json(Json.encodeToString(SearchResults()))
                     path == "/api/playlists" || path == "/api/playlists/public" -> json(Json.encodeToString(listOf(Playlist("review", "Вечерний маршрут", ownerId = user.id, ownerName = user.username, trackCount = tracks.size))))
                     path == "/api/playlists/review" -> json(Json.encodeToString(PlaylistDetail("review", "Вечерний маршрут", description = "Музыка, чтобы выдохнуть после длинного дня", ownerId = user.id, ownerName = user.username, tracks = tracks)))
                     path.startsWith("/api/playlists/review/tracks/") && request.method == "DELETE" -> {
@@ -211,6 +218,26 @@ class VisualReviewTest {
         bitmap.recycle()
     }
 
+    private fun reviewCover(colour: Int, index: Int): ByteArray {
+        val bitmap = Bitmap.createBitmap(320, 320, Bitmap.Config.ARGB_8888)
+        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(colour)
+        paint.color = 0xFFE2CB9E.toInt()
+        canvas.drawCircle(230f - index * 42f, 125f + index * 30f, 104f, paint)
+        paint.color = 0xFF202B32.toInt()
+        paint.strokeWidth = 12f
+        repeat(8) { line -> canvas.drawLine(-20f, 210f + line * 18, 340f, 80f + line * 18, paint) }
+        paint.color = 0xFFF6EBDD.toInt()
+        paint.textSize = 22f
+        canvas.drawText("CAIMACK / 0${index + 1}", 20f, 294f, paint)
+        return java.io.ByteArrayOutputStream().use { output ->
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+            bitmap.recycle()
+            output.toByteArray()
+        }
+    }
+
     private fun review(dark: Boolean, fontScale: Float, prefix: String) {
         container.appearance.setLanguage("ru")
         container.appearance.setTheme(if (dark) Appearance.DARK else Appearance.LIGHT)
@@ -239,7 +266,9 @@ class VisualReviewTest {
         capture("$prefix-settings-search")
         compose.onNodeWithContentDescription(label(R.string.settings_close)).performClick()
         compose.onNodeWithText(label(R.string.nav_home)).performClick()
-        compose.onNodeWithText(label(R.string.home_empty_title)).assertIsDisplayed()
+        val emptyHome = label(R.string.home_empty_title)
+        compose.waitUntil(10_000) { compose.onAllNodesWithText(emptyHome).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(emptyHome).assertIsDisplayed()
     }
 
     @Test
@@ -405,12 +434,92 @@ class VisualReviewTest {
         checkCategory(R.string.nav_playlists, "Вечерний маршрут")
         checkCategory(R.string.nav_genres, label(R.string.genre_electronic))
 
-        compose.onNodeWithContentDescription(label(R.string.search_placeholder)).performTextInput("ночной")
+        val searchInput = compose.onNodeWithContentDescription(label(R.string.search_placeholder))
+        searchInput.performTouchInput { click() }
+        searchInput.performTextInput("ночной")
         compose.waitUntil(10_000) { compose.onAllNodesWithText(original.first().title).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(5_000) {
+            var keyboardVisible = false
+            compose.activityRule.scenario.onActivity { activity ->
+                keyboardVisible = ViewCompat.getRootWindowInsets(activity.window.decorView)
+                    ?.isVisible(WindowInsetsCompat.Type.ime()) == true
+            }
+            keyboardVisible
+        }
         compose.onNode(hasText(label(R.string.nav_tracks)) and !hasClickAction()).assertIsDisplayed()
+        compose.onNode(hasText(label(R.string.nav_search)) and !hasClickAction()).assertDoesNotExist()
         capture("search-keyboard", seedPlayback = false)
+        searchInput.performImeAction()
+        compose.onNode(hasText(label(R.string.nav_search)) and !hasClickAction()).assertIsDisplayed()
         compose.onNodeWithContentDescription(label(R.string.search_clear)).performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText(label(R.string.genre_electronic)).fetchSemanticsNodes().isNotEmpty() }
+    }
+
+    @Test fun collectionCoversAndScrolledTitle() {
+        val artist = "Полуночный сигнал"
+        val albumTitle = "Электрические сны"
+        val playlistTitle = "Вечерний маршрут"
+        val songs = listOf(
+            "Ночной город", "Последний трамвай", "Окна напротив", "Радиоволны", "Полоса света", "До рассвета",
+            "Линии на карте", "Тихий район", "Пустой проспект", "Вниз по течению", "Точка на горизонте", "Утро",
+        ).mapIndexed { index, title ->
+            Track("review-$index", title, "artist", artist, albumId = "album-0", albumTitle = albumTitle,
+                durationSeconds = 185 + index * 7, hasCover = true)
+        }
+        val album = Album("album-0", albumTitle, "artist", artist, year = 2025, trackCount = songs.size, hasCover = true)
+        val playlistCover = reviewCover(0xFF385A68.toInt(), 0)
+        val albumCover = reviewCover(0xFF9B593F.toInt(), 1)
+        val previous = web.dispatcher
+        web.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val path = request.url.encodedPath
+                val artwork = when (path) {
+                    "/api/playlists/review/cover" -> playlistCover
+                    "/api/albums/album-0/cover" -> albumCover
+                    else -> null
+                }
+                if (artwork != null) return MockResponse.Builder().code(200)
+                    .addHeader("Content-Type", "image/png").body(Buffer().write(artwork)).build()
+                val body = when (path) {
+                    "/api/playlists/review" -> Json.encodeToString(PlaylistDetail("review", playlistTitle,
+                        description = "Музыка, чтобы выдохнуть после длинного дня", ownerId = user.id,
+                        ownerName = "Редакция Caimack", hasCover = true, tracks = songs))
+                    "/api/albums" -> Json.encodeToString(Paged(listOf(album), 1, 1, 60))
+                    "/api/albums/album-0" -> Json.encodeToString(AlbumDetail(album.id, album.title, album.artistId,
+                        album.artistName, album.year, hasCover = true, tracks = songs))
+                    else -> return previous.dispatch(request)
+                }
+                return MockResponse.Builder().code(200).addHeader("Content-Type", "application/json").body(body).build()
+            }
+        }
+        container.appearance.setLanguage("ru")
+        container.appearance.setTheme(Appearance.DARK)
+        compose.activityRule.scenario.recreate()
+        compose.onNode(hasText(label(R.string.nav_library)) and hasClickAction()).performClick()
+        compose.onNodeWithText(label(R.string.nav_playlists)).performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText(playlistTitle).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(playlistTitle).performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText(songs.first().title).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(songs.first().title).assertIsDisplayed()
+        compose.onNodeWithContentDescription(label(R.string.action_play)).assertIsDisplayed()
+        val heroTitle = compose.onNode(hasText(playlistTitle) and SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
+        heroTitle.assertIsDisplayed()
+        capture("playlist", seedPlayback = false)
+
+        val trackList = hasScrollToIndexAction() and SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange)
+        compose.onNode(trackList).performScrollToIndex(6)
+        compose.onNodeWithText(playlistTitle).assertIsDisplayed()
+        heroTitle.assertIsNotDisplayed()
+        capture("playlist-scrolled", seedPlayback = false)
+
+        compose.onNodeWithContentDescription(label(R.string.nav_back)).performClick()
+        compose.onNode(hasText(label(R.string.nav_search)) and hasClickAction()).performClick()
+        compose.onNode(hasText(label(R.string.nav_albums)) and hasClickAction()).performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText(albumTitle).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(albumTitle).performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText(songs.first().title).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(songs.first().title).assertIsDisplayed()
+        capture("album", seedPlayback = false)
     }
 
     @Test fun auditLandscapePlayer() {
@@ -434,25 +543,8 @@ class VisualReviewTest {
         val previous = web.dispatcher
         screenshotTracks = original.mapIndexed { index, track -> track.copy(albumId = "album-$index", hasCover = true) }
         val albums = original.mapIndexed { index, track -> Album("album-$index", track.title, track.artistId, track.artistName, trackCount = 1, hasCover = true) }
-        val covers = listOf(0xFF385A68.toInt(), 0xFF9B593F.toInt(), 0xFF595B84.toInt()).mapIndexed { index, colour ->
-            val bitmap = Bitmap.createBitmap(320, 320, Bitmap.Config.ARGB_8888)
-            val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-            val canvas = Canvas(bitmap)
-            canvas.drawColor(colour)
-            paint.color = 0xFFE2CB9E.toInt()
-            canvas.drawCircle(230f - index * 42f, 125f + index * 30f, 104f, paint)
-            paint.color = 0xFF202B32.toInt()
-            paint.strokeWidth = 12f
-            repeat(8) { line -> canvas.drawLine(-20f, 210f + line * 18, 340f, 80f + line * 18, paint) }
-            paint.color = 0xFFF6EBDD.toInt()
-            paint.textSize = 22f
-            canvas.drawText("CAIMACK / 0${index + 1}", 20f, 294f, paint)
-            java.io.ByteArrayOutputStream().use { output ->
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
-                bitmap.recycle()
-                output.toByteArray()
-            }
-        }
+        val covers = listOf(0xFF385A68.toInt(), 0xFF9B593F.toInt(), 0xFF595B84.toInt())
+            .mapIndexed { index, colour -> reviewCover(colour, index) }
         val samples = 8000 * 30
         val audio = ByteBuffer.allocate(44 + samples * 2).order(ByteOrder.LITTLE_ENDIAN).apply {
             put("RIFF".toByteArray()); putInt(36 + samples * 2); put("WAVEfmt ".toByteArray())

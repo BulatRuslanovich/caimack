@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -59,6 +60,8 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -82,23 +85,23 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 @Composable
-fun PlaylistScreen(id: String, play: (List<Track>, Int) -> Unit, onDeleted: () -> Unit) {
+internal fun PlaylistScreen(id: String, play: (List<Track>, Int) -> Unit, onBack: () -> Unit, account: @Composable () -> Unit) {
     val container = LocalContainer.current
     val api = catalogApi()
     val local = LocalOfflineLibrary.current
-    Load("playlist:$id", {
+    LoadCollection("playlist:$id", {
         api.playlist(id).also { playlist ->
             if (!local) kotlinx.coroutines.withContext(Dispatchers.IO) { container.downloadedCatalog.remember(playlist) }
         }
-    }) { loaded ->
-        PlaylistContent(loaded, play, onDeleted)
+    }, onBack, account) { loaded ->
+        PlaylistContent(loaded, play, onBack, account)
     }
 }
 
 private enum class Editing { None, Manage, Details, Delete, Order, Sort, Catalog, CopySelected, CopyAll }
 
 @Composable
-private fun PlaylistContent(loaded: PlaylistDetail, play: (List<Track>, Int) -> Unit, onDeleted: () -> Unit) {
+private fun PlaylistContent(loaded: PlaylistDetail, play: (List<Track>, Int) -> Unit, onBack: () -> Unit, account: @Composable () -> Unit) {
     val container = LocalContainer.current
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -335,7 +338,7 @@ private fun PlaylistContent(loaded: PlaylistDetail, play: (List<Track>, Int) -> 
             editing = Editing.None
             background {
                 container.api.deletePlaylist(playlist.id)
-                withContext(Dispatchers.Main) { onDeleted() }
+                withContext(Dispatchers.Main) { onBack() }
             }
         }
         else -> Unit
@@ -369,85 +372,94 @@ private fun PlaylistContent(loaded: PlaylistDetail, play: (List<Track>, Int) -> 
     val backdrop = if (playlist.hasCover) container.media.playlistCover(playlist.id, true, null, small = true)
     else coverTracks?.firstOrNull()?.let { container.media.cover(it.albumId, it.id, it.hasCover, small = true) }
 
-    Column(Modifier.fillMaxSize()) {
-        if (selection != null) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    SelectionCount(selected.size, Modifier.weight(1f))
-                    TextButton(enabled = !busy, onClick = { selection = null }) { Text(stringResource(R.string.action_cancel)) }
-                }
-                FlowRow {
-                    TextButton(enabled = selected.isNotEmpty() && !busy, onClick = { editing = Editing.CopySelected }) {
-                        Text(stringResource(R.string.playlist_copy_selected))
+    CollectionPage(
+        kind = stringResource(if (playlist.isPublic) R.string.playlist_kind_public else R.string.playlists_kind),
+        title = playlist.name,
+        description = playlist.description,
+        facts = listOf(
+            stringResource(R.string.playlists_by, playlist.ownerName),
+            pluralStringResource(R.plurals.count_tracks, playlist.tracks.size, playlist.tracks.size),
+        ),
+        backdrop = backdrop,
+        onBack = onBack,
+        account = account,
+        selectionBar = {
+            if (selection != null) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        SelectionCount(selected.size, Modifier.weight(1f))
+                        TextButton(enabled = !busy, onClick = { selection = null }) { Text(stringResource(R.string.action_cancel)) }
                     }
-                    TextButton(
-                        enabled = selected.isNotEmpty() && !busy && (!local || selected.all { it.id in available }),
-                        onClick = { actOnSelection { container.connect.enqueueTracks(selected) } },
-                    ) { Text(stringResource(R.string.playlist_queue_selected)) }
-                    if (canEditTracks) TextButton(enabled = selected.isNotEmpty() && !busy, onClick = {
-                        actOnSelection { changeTracks(selected, present = false) }
-                    }) { Text(stringResource(R.string.playlist_remove_selected)) }
+                    FlowRow {
+                        TextButton(enabled = selected.isNotEmpty() && !busy, onClick = { editing = Editing.CopySelected }) {
+                            Text(stringResource(R.string.playlist_copy_selected))
+                        }
+                        TextButton(
+                            enabled = selected.isNotEmpty() && !busy && (!local || selected.all { it.id in available }),
+                            onClick = { actOnSelection { container.connect.enqueueTracks(selected) } },
+                        ) { Text(stringResource(R.string.playlist_queue_selected)) }
+                        if (canEditTracks) TextButton(enabled = selected.isNotEmpty() && !busy, onClick = {
+                            actOnSelection { changeTracks(selected, present = false) }
+                        }) { Text(stringResource(R.string.playlist_remove_selected)) }
+                    }
                 }
             }
-        }
-        LazyColumn(Modifier.weight(1f), contentPadding = playerContentPadding(bottom = 24.dp)) {
+        },
+        cover = { PlaylistArtwork(cover, coverTracks, playlist.name, it) },
+        actions = {
+            Actions(
+                displayed, play,
+                onMore = if (!busy && (canManage || displayed.isNotEmpty() || canRecommend && !radioLoading)) {
+                    { editing = Editing.Manage }
+                } else null,
+                libraryAction = { LibrarySaveButton("playlist", playlist.id) },
+                prominentPlay = true,
+                beforeDownload = {
+                    container.downloadedCatalog.remember(playlist)
+                    if (playlist.hasCover) container.downloadedCatalog.cacheArtwork(
+                        listOf("api/playlists/${playlist.id}/cover"), container.http,
+                    )
+                },
+            )
+        },
+    ) {
+        if (canEditTracks || displayed.isNotEmpty()) {
             item {
-                DetailHeader(
-                    kind = stringResource(if (playlist.isPublic) R.string.playlist_kind_public else R.string.playlists_kind),
-                    title = playlist.name,
-                    description = playlist.description,
-                    facts = listOf(
-                        stringResource(R.string.playlists_by, playlist.ownerName),
-                        pluralStringResource(R.plurals.count_tracks, playlist.tracks.size, playlist.tracks.size),
-                    ),
-                    backdrop = backdrop,
-                ) { PlaylistArtwork(cover, coverTracks, playlist.name, it) }
-            }
-            item {
-                Actions(
-                    displayed, play,
-                    onMore = if (!busy && (canManage || displayed.isNotEmpty() || canRecommend && !radioLoading)) {
-                        { editing = Editing.Manage }
-                    } else null,
-                    libraryAction = { LibrarySaveButton("playlist", playlist.id) },
-                    beforeDownload = {
-                        container.downloadedCatalog.remember(playlist)
-                        if (playlist.hasCover) container.downloadedCatalog.cacheArtwork(
-                            listOf("api/playlists/${playlist.id}/cover"), container.http,
-                        )
-                    },
-                )
-            }
-            item {
-                FlowRow(Modifier.padding(horizontal = 16.dp)) {
-                    if (canEditTracks) TextButton(enabled = !busy, onClick = { editing = Editing.Catalog }) {
-                        Icon(Lucide.Plus, null, modifier = Modifier.padding(end = 6.dp).size(16.dp))
-                        Text(stringResource(R.string.playlist_add_tracks))
+                val palette = LocalPalette.current
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) {
+                        if (canEditTracks) TextButton(enabled = !busy, onClick = { editing = Editing.Catalog }) {
+                            Icon(Lucide.Plus, null, modifier = Modifier.padding(end = 6.dp).size(16.dp))
+                            Text(stringResource(R.string.playlist_add_tracks))
+                        }
                     }
                     if (displayed.isNotEmpty()) {
-                        TextButton(enabled = !busy, onClick = { editing = Editing.Sort }) { Text(stringResource(sort.label)) }
-                        if (selection == null) TextButton(enabled = !busy, onClick = { selection = emptySet() }) {
-                            Text(stringResource(R.string.playlist_select_tracks))
+                        val sortOrder = stringResource(sort.label)
+                        IconButton(enabled = !busy, onClick = { editing = Editing.Sort }, modifier = Modifier.semantics { stateDescription = sortOrder }) {
+                            Icon(Lucide.ListFilter, stringResource(R.string.playlist_sort), tint = palette.muted)
+                        }
+                        if (selection == null) IconButton(enabled = !busy, onClick = { selection = emptySet() }) {
+                            Icon(Lucide.ListChecks, stringResource(R.string.playlist_select_tracks), tint = palette.muted)
                         }
                     }
                 }
             }
-            if (displayed.isEmpty()) {
-                item { Empty(stringResource(R.string.playlists_empty_playlist_title)) }
-            } else {
-                itemsIndexed(displayed, key = { _, track -> track.id }) { index, track ->
-                    TrackRow(
-                        track,
-                        {
-                            val current = selection
-                            if (current == null) play(displayed, index)
-                            else selection = if (track.id in current) current - track.id else current + track.id
-                        },
-                        onRemoveFromPlaylist = if (canManage) ({ removeTrack(track) }) else null,
-                        checked = selection?.let { track.id in it },
-                        selectionEnabled = !busy,
-                    )
-                }
+        }
+        if (displayed.isEmpty()) {
+            item { Empty(stringResource(R.string.playlists_empty_playlist_title)) }
+        } else {
+            itemsIndexed(displayed, key = { _, track -> track.id }) { index, track ->
+                TrackRow(
+                    track,
+                    {
+                        val current = selection
+                        if (current == null) play(displayed, index)
+                        else selection = if (track.id in current) current - track.id else current + track.id
+                    },
+                    onRemoveFromPlaylist = if (canManage) ({ removeTrack(track) }) else null,
+                    checked = selection?.let { track.id in it },
+                    selectionEnabled = !busy,
+                )
             }
         }
     }

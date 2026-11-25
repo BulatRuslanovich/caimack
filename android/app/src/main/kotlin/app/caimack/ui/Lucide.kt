@@ -20,6 +20,8 @@ object Lucide {
     val ChartLine by lazy { icon(false, "M3 3v16a2 2 0 0 0 2 2h16", "m19 9-5 5-4-4-3 3") }
     val LayoutGrid by lazy { icon(false, "M3 3h7v7H3z", "M14 3h7v7h-7z", "M3 14h7v7H3z", "M14 14h7v7h-7z") }
     val List by lazy { icon(false, "M8 6h13", "M8 12h13", "M8 18h13", "M3 6h.01", "M3 12h.01", "M3 18h.01") }
+    val ListFilter by lazy { icon(false, "M4 6h16", "M7 12h10", "M10 18h4") }
+    val ListChecks by lazy { icon(false, "m3 6 2 2 4-4", "m3 16 2 2 4-4", "M12 7h9", "M12 17h9") }
     val CircleArrowDown by lazy { icon(false, "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0", "M12 8v8", "m8 12 4 4 4-4") }
     val CirclePlus by lazy { icon(false, "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0", "M12 8v8", "M8 12h8") }
     val ListMusic by lazy { icon(false, "M16 5H3", "M11 12H3", "M11 19H3", "M21 16V5", "M15 16a3 3 0 1 0 6 0a3 3 0 1 0 -6 0") }

@@ -444,27 +444,38 @@ internal fun CollectionTransportButton(
 
 @Composable
 fun PlayActions(modifier: Modifier = Modifier, enabled: Boolean = true, trackIds: List<String> = emptyList(), onPlay: () -> Unit) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        CollectionPlayButton(trackIds, enabled = enabled, onPlay = onPlay)
+        CollectionShuffleButton(enabled)
+    }
+}
+
+@Composable
+internal fun CollectionShuffleButton(enabled: Boolean, compact: Boolean = false) {
     val palette = LocalPalette.current
     val player = LocalContainer.current.player
     val state by player.state.collectAsStateWithLifecycle()
+    val label = stringResource(R.string.action_shuffle)
+    val toggle = Modifier.clip(CircleShape)
+        .toggleable(value = state.shuffle, enabled = enabled, role = Role.Checkbox, onValueChange = player::setShuffle)
+    if (compact) {
+        Box(Modifier.size(48.dp).then(toggle), contentAlignment = Alignment.Center) {
+            Icon(Lucide.Shuffle, label, tint = if (state.shuffle) palette.primary else palette.muted)
+        }
+        return
+    }
+
     val background by animateColorAsState(if (state.shuffle) palette.primary else palette.background, label = "shuffle background")
     val foreground by animateColorAsState(if (state.shuffle) palette.onPrimary else palette.foreground, label = "shuffle foreground")
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        CollectionPlayButton(trackIds, enabled = enabled, onPlay = onPlay)
-        Row(
-            Modifier
-                .heightIn(min = 48.dp)
-                .clip(CircleShape)
-                .background(background)
-                .border(1.dp, if (state.shuffle) palette.primary else palette.controlBorder, CircleShape)
-                .toggleable(value = state.shuffle, enabled = enabled, role = Role.Checkbox, onValueChange = player::setShuffle)
-                .padding(horizontal = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Icon(Lucide.Shuffle, null, tint = foreground, modifier = Modifier.size(16.dp))
-            Text(stringResource(R.string.action_shuffle), color = foreground, style = Type.small.copy(fontWeight = FontWeight.Medium))
-        }
+    Row(
+        Modifier.heightIn(min = 48.dp).clip(CircleShape).background(background)
+            .border(1.dp, if (state.shuffle) palette.primary else palette.controlBorder, CircleShape)
+            .then(toggle).padding(horizontal = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(Lucide.Shuffle, null, tint = foreground, modifier = Modifier.size(16.dp))
+        Text(label, color = foreground, style = Type.small.copy(fontWeight = FontWeight.Medium))
     }
 }
 
