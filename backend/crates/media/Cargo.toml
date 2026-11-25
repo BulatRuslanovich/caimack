@@ -13,7 +13,6 @@ ebur128.workspace = true
 image.workspace = true
 lofty.workspace = true
 realfft.workspace = true
-rubato.workspace = true
 rusty-chromaprint.workspace = true
 symphonia.workspace = true
 thiserror.workspace = true
