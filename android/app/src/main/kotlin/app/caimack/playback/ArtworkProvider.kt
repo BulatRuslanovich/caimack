@@ -56,9 +56,13 @@ class ArtworkProvider : ContentProvider() {
             container.http.newCall(Request.Builder().url(url).build()).execute().use { response ->
                 if (!response.isSuccessful) throw FileNotFoundException(path)
                 folder.mkdirs()
-                val partial = File(file.path + ".part")
-                partial.outputStream().use { response.body.byteStream().copyTo(it) }
-                partial.renameTo(file)
+                val partial = File.createTempFile("cover-", ".part", folder)
+                try {
+                    partial.outputStream().use { response.body.byteStream().copyTo(it) }
+                    if (!partial.renameTo(file) && !file.isFile) throw FileNotFoundException(path)
+                } finally {
+                    partial.delete()
+                }
             }
         }
 

@@ -54,6 +54,7 @@ import java.net.HttpURLConnection.HTTP_ACCEPTED
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
@@ -72,6 +73,7 @@ data class SavedQueue(
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaLibraryService() {
     private var session: MediaLibrarySession? = null
+    private var queueRestore: Job? = null
     private val fellBack = mutableSetOf<String>()
     private val ticks = Handler(Looper.getMainLooper())
     private var radioSeed: String? = null
@@ -181,6 +183,8 @@ class PlaybackService : MediaLibraryService() {
         }
 
         player.addListener(object : Player.Listener {
+            private var audiobookHandoff: (() -> Unit)? = null
+
             override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) = showButtons(container)
 
             override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
@@ -195,6 +199,7 @@ class PlaybackService : MediaLibraryService() {
             override fun onRepeatModeChanged(repeatMode: Int) = showButtons(container)
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                if (mediaItem != null) queueRestore?.cancel()
                 networkRecovery?.cancel()
                 bufferingRecovery?.cancel()
                 networkAttempts = 0
@@ -211,7 +216,7 @@ class PlaybackService : MediaLibraryService() {
                 signals.tracker.finish(if (natural) ListeningTracker.COMPLETED else ListeningTracker.SKIPPED)
                 listening = null
                 if (player.playWhenReady) listen(player)
-                continueWithRadio(container, player)
+                if (player.playWhenReady) continueWithRadio(container, player)
                 showButtons(container)
             }
 
@@ -223,10 +228,15 @@ class PlaybackService : MediaLibraryService() {
             }
 
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                if (!playWhenReady) {
+                if (playWhenReady) {
+                    // A book selected while this track buffers is a newer playback request.
+                    audiobookHandoff = container.audiobookPlayback.prepareMusicHandoff()
+                    if (player.playerError != null) player.prepare()
+                } else {
+                    audiobookHandoff = null
                     networkRecovery?.cancel()
                     bufferingRecovery?.cancel()
-                } else if (player.playerError != null) player.prepare()
+                }
                 if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) container.sleepTimer.cancel()
             }
 
@@ -279,10 +289,12 @@ class PlaybackService : MediaLibraryService() {
                 musicHaptics?.update(player.audioSessionId, container.haptics.musicEnabled.value, isPlaying)
                 ticks.removeCallbacks(tick)
                 if (isPlaying) {
-                    container.audiobookPlayback.pauseForMusic()
+                    audiobookHandoff?.invoke()
+                    audiobookHandoff = null
                     playbackLease = true
                     failures = 0
                     listen(player)
+                    continueWithRadio(container, player)
                     ticks.post(tick)
                     exclusive.hold()
                 } else {
@@ -296,6 +308,8 @@ class PlaybackService : MediaLibraryService() {
 
             override fun onPlayerError(error: PlaybackException) {
                 val item = player.currentMediaItem ?: return
+                // A failed background preparation must leave the saved track and position intact.
+                if (!player.playWhenReady) return
                 val offline = error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
                     error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ||
                     error.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED
@@ -349,15 +363,6 @@ class PlaybackService : MediaLibraryService() {
             check(index in 0 until player.mediaItemCount && player.getMediaItemAt(index).mediaId == id) { "Playback queue changed" }
             queuePlayback.jumpTo(index)
         }) { resolve(container, it) }
-        container.scope.launch {
-            val saved = runCatching { tree.resumption() }.getOrNull() ?: return@launch
-            withContext(Dispatchers.Main) {
-                if (session != null && player.mediaItemCount == 0) {
-                    player.setMediaItems(saved.mediaItems, saved.startIndex, saved.startPositionMs)
-                }
-            }
-        }
-
         session = MediaLibrarySession.Builder(this, player, tree)
             .setBitmapLoader(
                 CacheBitmapLoader(
@@ -373,6 +378,19 @@ class PlaybackService : MediaLibraryService() {
                 ),
             )
             .build()
+
+        queueRestore = container.scope.launch(Dispatchers.Main) {
+            val saved = withContext(Dispatchers.IO) { runCatching { tree.savedQueue() }.getOrNull() }
+                ?: return@launch
+            ensureActive()
+            queueRestore = null
+            if (player.mediaItemCount == 0) {
+                player.pause()
+                player.setMediaItems(saved.mediaItems, saved.startIndex, saved.startPositionMs)
+                // Media3 reports IDLE as STATE_NONE to the legacy car controller.
+                player.prepare()
+            }
+        }
 
         heart = container.scope.launch(Dispatchers.Main) {
             container.connect.attach(
@@ -431,6 +449,7 @@ class PlaybackService : MediaLibraryService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
 
     override fun onDestroy() {
+        queueRestore?.cancel()
         (application as CaimackApp).container.connect.detach()
         connectSession?.cancel()
         connectPlayer?.release()
@@ -458,7 +477,7 @@ class PlaybackService : MediaLibraryService() {
         signals.tracker.discard()
         signals.flush()
         outputPlayer?.let { player ->
-            save((application as CaimackApp).container, player)
+            if (player.mediaItemCount > 0) save((application as CaimackApp).container, player)
             if (!(application as CaimackApp).container.connect.isRemote) {
                 NowPlayingWidget.show(this@PlaybackService, player.currentMediaItem?.mediaId?.let { (application as CaimackApp).container.tracks[it] }, false)
             }

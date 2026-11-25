@@ -4,6 +4,7 @@ package app.caimack.playback
 
 import android.content.Context
 import android.os.Bundle
+import android.util.LruCache
 import androidx.annotation.OptIn
 import androidx.core.util.readText
 import androidx.media3.common.MediaItem
@@ -30,7 +31,11 @@ import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
+import java.io.FileNotFoundException
+import java.net.HttpURLConnection.HTTP_UNAUTHORIZED
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -38,6 +43,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import retrofit2.HttpException
 
 @OptIn(UnstableApi::class)
 class LibraryTree(
@@ -48,6 +54,14 @@ class LibraryTree(
 ) : MediaLibrarySession.Callback {
     private val strings = Appearance.localized(context)
     private val lists = ConcurrentHashMap<String, List<Track>>()
+    private val searches = LruCache<String, SearchResult>(SEARCH_CACHE_SIZE)
+
+    private data class SearchResult(
+        val browser: MediaSession.ControllerInfo,
+        val query: String,
+        val account: String,
+        val tracks: List<Track>,
+    )
 
     override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult =
         MediaSession.ConnectionResult.accept(
@@ -115,7 +129,11 @@ class LibraryTree(
         params: LibraryParams?,
     ): ListenableFuture<LibraryResult<MediaItem>> {
         container.scope.launch { if (signedIn()) runCatching { container.settings.value = container.api.settings() } }
-        return Futures.immediateFuture(LibraryResult.ofItem(folder(ROOT, strings.getString(R.string.app_name)), params))
+        val limit = params?.extras?.getInt(MediaConstants.EXTRAS_KEY_ROOT_CHILDREN_LIMIT, ROOT_TAB_COUNT)
+            ?: ROOT_TAB_COUNT
+        // Legacy child requests need not repeat the connection hints.
+        val root = "$ROOT_PREFIX${limit.coerceIn(0, ROOT_TAB_COUNT)}"
+        return Futures.immediateFuture(LibraryResult.ofItem(folder(root, strings.getString(R.string.app_name)), params))
     }
 
     override fun onGetChildren(
@@ -128,30 +146,30 @@ class LibraryTree(
     ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = future {
         if (!signedIn()) return@future LibraryResult.ofError(SessionError.ERROR_SESSION_AUTHENTICATION_EXPIRED)
 
-        val items = runCatching {
-            when (parentId) {
-                ROOT -> listOf(
-                    radio(),
-                    folder(FOR_YOU, strings.getString(R.string.rec_for_you), grid = true),
-                    folder(FAVORITES, strings.getString(R.string.nav_favorites)),
-                    folder(LIBRARY, strings.getString(R.string.nav_library)),
-                    folder(DOWNLOADS, strings.getString(R.string.downloads_title)),
-                )
-                LIBRARY -> listOf(
+        val items = try {
+            when {
+                parentId.startsWith(ROOT_PREFIX) ->
+                    tabLimit(parentId).let { rootTabs(it).take(it) }
+                parentId.startsWith(FOR_YOU_PREFIX) -> {
+                    val limit = tabLimit(parentId)
+                    listOf(radio()) + rootTabs(limit).drop(limit.coerceAtLeast(1)) + recommendations()
+                }
+                parentId == LIBRARY -> listOf(
                     folder(PLAYLISTS, strings.getString(R.string.nav_playlists)),
                     folder(ALBUMS, strings.getString(R.string.nav_albums)),
                     folder(RECENT, strings.getString(R.string.nav_recently_played)),
                 )
-                FOR_YOU -> recommendations()
-                PLAYLISTS -> container.api.playlists().map {
+                parentId == PLAYLISTS -> container.api.playlists().map {
                     folder(PLAYLIST + it.id, it.name, it.ownerName, container.media.playlistCover(it.id, it.hasCover, it.coverTrackId, small = true))
                 }
-                ALBUMS -> container.api.albums(1, LIMIT).items.map {
+                parentId == ALBUMS -> container.api.albums(1, LIMIT).items.map {
                     folder(ALBUM + it.id, it.title, it.artistName, container.media.albumCover(it, small = true))
                 }
                 else -> (lists[parentId]?.takeIf { page > 0 } ?: tracksOf(parentId)).map { playable(parentId, it) }
             }
-        }.getOrElse { return@future LibraryResult.ofError(SessionError.ERROR_IO) }
+        } catch (failure: Exception) {
+            return@future LibraryResult.ofError(libraryError(failure))
+        }
 
         val from = (page.toLong() * pageSize).coerceAtMost(items.size.toLong()).toInt()
         LibraryResult.ofItemList(items.drop(from).take(pageSize), params)
@@ -163,7 +181,7 @@ class LibraryTree(
         mediaId: String,
     ): ListenableFuture<LibraryResult<MediaItem>> {
         val (parent, id) = mediaId.split(SEPARATOR, limit = 2).let { it.first() to it.getOrNull(1) }
-        val track = id?.let { container.tracks[it] }
+        val track = id?.let { browsedTrack(parent, it) }
             ?: return Futures.immediateFuture(LibraryResult.ofError(SessionError.ERROR_BAD_VALUE))
         return Futures.immediateFuture(LibraryResult.ofItem(playable(parent, track), null))
     }
@@ -174,9 +192,17 @@ class LibraryTree(
         query: String,
         params: LibraryParams?,
     ): ListenableFuture<LibraryResult<Void>> = future {
-        val found = runCatching { search(query) }.getOrDefault(emptyList())
-        lists[SEARCH] = found
-        withContext(Dispatchers.Main) { session.notifySearchResultChanged(browser, query, found.size, params) }
+        val account = if (signedIn()) container.accountKey else null
+        val found = try {
+            checkNotNull(account)
+            search(query).also { check(account == container.accountKey) }
+        } catch (failure: Exception) {
+            val error = libraryError(failure)
+            // The legacy bridge completes its pending search only after this notification.
+            publishSearch(session, browser, query, params, account, emptyList())
+            return@future LibraryResult.ofError(error)
+        }
+        publishSearch(session, browser, query, params, account, found)
         LibraryResult.ofVoid()
     }
 
@@ -188,7 +214,12 @@ class LibraryTree(
         pageSize: Int,
         params: LibraryParams?,
     ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
-        val found = lists[SEARCH].orEmpty().map { playable(SEARCH, it) }
+        val account = container.accountKey
+            ?: return Futures.immediateFuture(LibraryResult.ofError(SessionError.ERROR_SESSION_AUTHENTICATION_EXPIRED))
+        val match = searches.snapshot().entries.lastOrNull { (_, result) ->
+            result.browser == browser && result.query == query && result.account == account
+        }
+        val found = match?.let { (id, result) -> result.tracks.map { playable(id, it) } }.orEmpty()
         val from = (page.toLong() * pageSize).coerceAtMost(found.size.toLong()).toInt()
         return Futures.immediateFuture(LibraryResult.ofItemList(found.drop(from).take(pageSize), params))
     }
@@ -199,8 +230,15 @@ class LibraryTree(
         mediaItems: MutableList<MediaItem>,
     ): ListenableFuture<MutableList<MediaItem>> {
         val query = mediaItems.singleOrNull()?.requestMetadata?.searchQuery
-            ?: return Futures.immediateFuture(mediaItems.map { resolve(hydrate(it)) }.toMutableList())
-        return future { runCatching { search(query) }.getOrDefault(emptyList()).map { resolve(it.toMediaItem(container.media)) }.toMutableList() }
+            ?: return try {
+                Futures.immediateFuture(mediaItems.map { resolve(hydrate(it)) }.toMutableList())
+            } catch (failure: IllegalArgumentException) {
+                Futures.immediateFailedFuture(failure)
+            }
+        return future {
+            check(signedIn()) { "Signed out" }
+            search(query).map { resolve(it.toMediaItem(container.media)) }.toMutableList()
+        }
     }
 
     override fun onSetMediaItems(
@@ -223,19 +261,28 @@ class LibraryTree(
         }
 
         return future {
-            container.radio.reset()
-            val tracks = runCatching {
-                when {
-                    radio -> container.radio(RadioRequest(null, emptyList()))
-                        .also { container.radio.extend(it) }
-                        .tracks.map { it.track }
-                        .onEach { container.tracks[it.id] = it }
-                    picked != null -> lists[picked] ?: tracksOf(picked)
-                    query != null -> search(query)
-                    else -> lists[browsed!![0]] ?: tracksOf(browsed[0])
+            check(signedIn()) { "Signed out" }
+            val batch = if (radio) container.radio(RadioRequest(null, emptyList())) else null
+            val tracks = when {
+                batch != null -> batch.tracks.map { it.track }
+                picked != null -> lists[picked] ?: tracksOf(picked)
+                query != null -> search(query)
+                else -> {
+                    val (parent, id) = checkNotNull(browsed)
+                    if (parent.startsWith(SEARCH)) {
+                        searchTracks(parent).orEmpty()
+                    } else {
+                        val current = lists[parent] ?: tracksOf(parent)
+                        // A refresh may remove a previously visible item before the user taps it.
+                        if (current.any { it.id == id }) current else listOfNotNull(container.tracks[id])
+                    }
                 }
-            }.getOrDefault(emptyList())
-            val start = browsed?.let { (_, id) -> tracks.indexOfFirst { it.id == id }.coerceAtLeast(0) } ?: 0
+            }
+            require(tracks.isNotEmpty()) { "No matching tracks" }
+            val start = browsed?.let { (_, id) -> tracks.indexOfFirst { it.id == id } } ?: 0
+            require(start >= 0) { "Selected track is unavailable" }
+            if (batch == null) container.radio.reset() else container.radio.start(null, batch)
+            tracks.forEach { container.tracks[it.id] = it }
             MediaSession.MediaItemsWithStartPosition(
                 tracks.map { resolve(it.toMediaItem(container.media)) },
                 start,
@@ -248,17 +295,58 @@ class LibraryTree(
         mediaSession: MediaSession,
         controller: MediaSession.ControllerInfo,
         isForPlayback: Boolean,
-    ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> = future { resumption() }
-
-    suspend fun resumption(): MediaSession.MediaItemsWithStartPosition {
+    ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> = future {
         check(signedIn()) { "Signed out" }
-        val saved = container.json.decodeFromString(SavedQueue.serializer(), container.queue.readText())
+        savedQueue() ?: if (isForPlayback &&
+            (mediaSession.isAutomotiveController(controller) || mediaSession.isAutoCompanionController(controller))) {
+            val tracks = search("")
+            check(tracks.isNotEmpty()) { "No default tracks" }
+            MediaSession.MediaItemsWithStartPosition(tracks.map { resolve(it.toMediaItem(container.media)) }, 0, 0)
+        } else {
+            throw NoSuchElementException("No saved queue")
+        }
+    }
+
+    suspend fun savedQueue(): MediaSession.MediaItemsWithStartPosition? {
+        if (!signedIn()) return null
+        val saved = try {
+            container.json.decodeFromString(SavedQueue.serializer(), container.queue.readText())
+        } catch (_: FileNotFoundException) {
+            return null
+        }
+        if (saved.tracks.isEmpty()) return null
         saved.tracks.forEach { container.tracks[it.id] = it }
         return MediaSession.MediaItemsWithStartPosition(
             preserveQueue(saved.tracks.map { resolve(it.toMediaItem(container.media).withPlaybackCollection(saved.collection)) }),
-            saved.index,
-            saved.positionMs,
+            saved.index.coerceIn(saved.tracks.indices),
+            saved.positionMs.coerceAtLeast(0),
         )
+    }
+
+    private suspend fun publishSearch(
+        session: MediaLibrarySession,
+        browser: MediaSession.ControllerInfo,
+        query: String,
+        params: LibraryParams?,
+        account: String?,
+        tracks: List<Track>,
+    ) = withContext(Dispatchers.Main) {
+        if (account != null && account == container.accountKey) {
+            searches.put(SEARCH + UUID.randomUUID(), SearchResult(browser, query, account, tracks))
+        }
+        session.notifySearchResultChanged(browser, query, tracks.size, params)
+    }
+
+    private fun searchTracks(id: String): List<Track>? = searches.snapshot()[id]
+        ?.takeIf { it.account == container.accountKey }?.tracks
+
+    private fun libraryError(failure: Exception): Int {
+        if (failure is CancellationException) throw failure
+        return if (container.accountKey == null || (failure as? HttpException)?.code() == HTTP_UNAUTHORIZED) {
+            SessionError.ERROR_SESSION_AUTHENTICATION_EXPIRED
+        } else {
+            SessionError.ERROR_IO
+        }
     }
 
     private suspend fun search(query: String): List<Track> {
@@ -269,13 +357,12 @@ class LibraryTree(
 
     private suspend fun tracksOf(parentId: String): List<Track> {
         val tracks = when {
-            parentId == MIX -> container.api.homeMix(DAILY).tracks
             parentId.startsWith(PICK_MIX) -> container.api.homeMix(parentId.removePrefix(PICK_MIX)).tracks
             parentId.startsWith(PICK_SHELF) -> container.api.homeFeed().blocks
                 .firstOrNull { it.key == parentId.removePrefix(PICK_SHELF) }?.tracks.orEmpty()
             parentId == FAVORITES -> container.api.favorites(1, LIMIT).items
             parentId == RECENT -> container.api.recentlyPlayed(1, LIMIT).items
-            parentId == DOWNLOADS -> (container.synchronizedTracks()+container.downloads.tracks()).distinctBy { it.id }
+            parentId == DOWNLOADS -> (container.synchronizedTracks() + container.downloads.tracks()).distinctBy { it.id }
             parentId.startsWith(PLAYLIST) -> container.api.playlist(parentId.removePrefix(PLAYLIST)).tracks
             parentId.startsWith(ALBUM) -> container.api.album(parentId.removePrefix(ALBUM)).tracks
             else -> emptyList()
@@ -288,10 +375,28 @@ class LibraryTree(
     private fun hydrate(item: MediaItem): MediaItem {
         val id = item.mediaId.substringAfter(SEPARATOR)
         if (id == item.mediaId && item.mediaMetadata.title != null) return item
-        return container.tracks[id]?.toMediaItem(container.media) ?: item.buildUpon().setMediaId(id).build()
+        val parent = item.mediaId.substringBefore(SEPARATOR)
+        val track = browsedTrack(parent, id)
+        if (parent.startsWith(SEARCH)) requireNotNull(track) { "Search result is unavailable" }
+        return track?.toMediaItem(container.media) ?: item.buildUpon().setMediaId(id).build()
     }
 
+    private fun browsedTrack(parent: String, id: String): Track? =
+        if (parent.startsWith(SEARCH)) searchTracks(parent)?.firstOrNull { it.id == id } else container.tracks[id]
+
     private suspend fun signedIn() = container.session.state.first { it !is SessionState.Restoring } is SessionState.SignedIn
+
+    private fun tabLimit(id: String) = id.substringAfter(':').toIntOrNull()?.coerceIn(0, ROOT_TAB_COUNT)
+        ?: ROOT_TAB_COUNT
+
+    // All root entries support the host's browsable-only flag. If fewer tabs fit,
+    // the overflow folders remain reachable inside For You.
+    private fun rootTabs(limit: Int) = listOf(
+        folder("$FOR_YOU_PREFIX$limit", strings.getString(R.string.rec_for_you), grid = true),
+        folder(FAVORITES, strings.getString(R.string.nav_favorites)),
+        folder(LIBRARY, strings.getString(R.string.nav_library)),
+        folder(DOWNLOADS, strings.getString(R.string.downloads_title)),
+    )
 
     private fun folder(id: String, title: String, subtitle: String? = null, artwork: String? = null, grid: Boolean = false) = MediaItem.Builder()
         .setMediaId(id)
@@ -375,7 +480,10 @@ class LibraryTree(
             .setMediaId(parentId + SEPARATOR + track.id)
             .setMediaMetadata(
                 item.mediaMetadata.buildUpon()
-                    .setArtworkUri(ArtworkProvider.uriFor(container.media.cover(track.albumId, track.id, track.hasCover, small = true)))
+                    .setArtworkUri(ArtworkProvider.uriFor(
+                        container.media.cover(track.albumId, track.id, track.hasCover, small = true),
+                        track.albumTitle ?: track.title,
+                    ))
                     .setIsBrowsable(false)
                     .setIsPlayable(true)
                     .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
@@ -403,10 +511,10 @@ class LibraryTree(
         const val QUEUE_JUMP = "app.caimack.QUEUE_JUMP"
 
         private const val SEPARATOR = "|"
-        private const val ROOT = "root"
+        private const val ROOT_PREFIX = "root:"
+        private const val ROOT_TAB_COUNT = 4
         private const val RADIO = "radio"
-        private const val MIX = "mix"
-        private const val FOR_YOU = "for-you"
+        private const val FOR_YOU_PREFIX = "for-you:"
         private const val PICK = "pick:"
         private const val PICK_MIX = "pick:mix:"
         private const val PICK_SHELF = "pick:shelf:"
@@ -419,7 +527,8 @@ class LibraryTree(
         private const val PLAYLISTS = "playlists"
         private const val ALBUMS = "albums"
         private const val RECENT = "recent"
-        private const val SEARCH = "search"
+        private const val SEARCH = "search:"
+        private const val SEARCH_CACHE_SIZE = 32
         private const val PLAYLIST = "playlist:"
         private const val ALBUM = "album:"
         private const val DAILY = "daily"
