@@ -10,6 +10,7 @@ import { cn } from "@/lib/cn";
 import { queries } from "@/lib/queries";
 import type { Album, Artist, LibraryItem, Playlist, Track } from "@/lib/types";
 import { usePlayback } from "@/lib/playback/usePlayback";
+import type { PlaybackCollection } from "@/lib/playback/playerTypes";
 import { useNowPlaying } from "@/contexts/PlayerContext";
 import { useFormat } from "@/lib/useFormat";
 import { artistImageUrl, coverUrl, playlistCoverUrl } from "@/lib/media";
@@ -65,28 +66,13 @@ export function Card<T extends string>({
         className={cn(
           "line-clamp-2 text-body font-medium wrap-anywhere",
           current && "text-primary",
-          !list && menu && "pr-10",
         )}
       >
         {title}
       </span>
-      <span
-        className={cn(
-          "library-secondary line-clamp-2 text-sm leading-snug",
-          !list && menu && "pr-10",
-        )}
-      >
-        {subtitle}
-      </span>
+      <span className="library-secondary line-clamp-2 text-sm leading-snug">{subtitle}</span>
       {details && (
-        <span
-          className={cn(
-            "library-tertiary line-clamp-2 text-xs leading-snug",
-            !list && menu && "pr-10",
-          )}
-        >
-          {details}
-        </span>
+        <span className="library-tertiary line-clamp-2 text-xs leading-snug">{details}</span>
       )}
     </>
   );
@@ -131,6 +117,7 @@ export function Card<T extends string>({
     <div
       {...tone}
       data-round={round}
+      data-layout={layout}
       className={cn(
         "media-card group relative flex min-w-0",
         list ? "items-center gap-2 rounded-md p-2 hover:bg-raised" : "flex-col",
@@ -157,7 +144,7 @@ export function Card<T extends string>({
         </button>
       )}
 
-      {menu && <div className={list ? "shrink-0" : "absolute right-0 bottom-0"}>{menu}</div>}
+      {menu && <div className={list ? "shrink-0" : "card-cover-menu"}>{menu}</div>}
       {action && !list && (
         <div className="card-art-overlay pointer-events-none absolute inset-x-0 top-0 aspect-square">
           {action}
@@ -254,6 +241,7 @@ export const AlbumCard = memo(function AlbumCard({ album }: { album: Album }) {
         <>
           <CardPlayButton
             name={album.title}
+            sourceCollection={{ kind: "album", id: album.id }}
             tracks={detail.data?.tracks}
             load={async () => (await client.fetchQuery(queries.album(album.id))).tracks}
           />
@@ -329,6 +317,7 @@ export const PlaylistCard = memo(function PlaylistCard({
         <>
           <CardPlayButton
             name={playlist.name}
+            sourceCollection={{ kind: "playlist", id: playlist.id }}
             tracks={detail.data?.tracks}
             load={async () => (await client.fetchQuery(queries.playlist(playlist.id))).tracks}
           />
@@ -343,16 +332,18 @@ export function CardPlayButton({
   tracks,
   load,
   size,
+  sourceCollection,
   className = "right-2.5 bottom-2.5",
 }: {
   name: string;
   tracks?: Track[];
   load: () => Promise<Track[]>;
   size?: 8 | 9;
+  sourceCollection?: PlaybackCollection;
   className?: string;
 }) {
   const t = useT();
-  const { playSet, setIsOnAir, isPlaying } = usePlayback();
+  const { playSet, setIsOnAir, isPlaying } = usePlayback(sourceCollection);
   const play = useMutation({ mutationFn: load, onSuccess: (tracks) => playSet(tracks) });
   const collection = tracks ?? play.data;
   const active = collection !== undefined && setIsOnAir(collection);

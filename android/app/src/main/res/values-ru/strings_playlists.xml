@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="playlist_memberships">В плейлисты</string>
+    <string name="playlist_membership_saved">Сохранено</string>
+    <string name="playlist_membership_failed">Не удалось сохранить</string>
+    <string name="playlist_membership_partial">Часть изменений не сохранилась. Повторите оставшиеся изменения.</string>
+    <string name="playlist_pending_sync">Ожидает синхронизации</string>
+    <string name="playlist_select_tracks">Выбрать треки</string>
+    <string name="playlist_copy_selected">В другой плейлист</string>
+    <string name="playlist_queue_selected">В очередь</string>
+    <string name="playlist_remove_selected">Удалить из плейлиста</string>
+    <plurals name="playlist_selected_count">
+        <item quantity="one">Выбран %d трек</item>
+        <item quantity="few">Выбрано %d трека</item>
+        <item quantity="many">Выбрано %d треков</item>
+        <item quantity="other">Выбрано %d трека</item>
+    </plurals>
+    <string name="playlist_sort">Сортировка плейлиста</string>
+    <string name="playlist_sort_manual">Порядок плейлиста</string>
+    <string name="playlist_sort_title">По названию</string>
+    <string name="playlist_sort_artist">По исполнителю</string>
+    <string name="playlist_sort_added">По дате добавления</string>
+    <string name="playlist_sort_duration">По длительности</string>
+    <string name="playlist_add_tracks">Добавить треки</string>
+    <string name="playlist_search_tracks">Поиск треков</string>
+    <string name="playlist_already_in">Уже в плейлисте</string>
+    <string name="playlist_more_tracks">Ещё треки</string>
+    <string name="playlist_no_destination">Нет других редактируемых плейлистов</string>
+    <string name="playlist_copy_all">Добавить все треки в другой плейлист</string>
+    <string name="playlist_copy_result">Добавлено %1$d · Уже в плейлисте %2$d</string>
+    <string name="playlist_copy_pending">Ожидает синхронизации · К добавлению %1$d · Уже в плейлисте %2$d</string>
+    <string name="playlist_suggestions">Подходящие треки</string>
+    <string name="playlist_suggestions_empty">Подборка недоступна. Треки можно найти через поиск.</string>
+    <string name="playlist_radio">Радио по плейлисту</string>
+    <string name="playlist_radio_no_audio">Для радио нужен хотя бы один трек с результатами анализа аудио.</string>
+    <string name="playlist_radio_empty">Для радио по этому плейлисту не нашлось подходящих треков.</string>
+    <string name="playlist_reason_similar">Похоже по звучанию на этот плейлист</string>
+</resources>

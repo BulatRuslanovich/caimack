@@ -51,9 +51,13 @@ services:
         set -e
         mkdir -p /storage/music /storage/covers
         chown ${PUID:-1000}:${PGID:-1000} /storage /storage/music /storage/covers
+        if [ "$$(stat -c '%u' /storage/audiobooks)" = 0 ]; then
+          chown ${PUID:-1000}:${PGID:-1000} /storage/audiobooks
+        fi
         echo "storage ready at $$(stat -c '%u:%g' /storage)"
     volumes:
       - ${MUSIC_STORAGE_PATH:-./storage}:/storage
+      - ${AUDIOBOOKS_PATH:-./audiobooks}:/storage/audiobooks
     networks: [internal]
 
   mert-init:
@@ -171,7 +175,7 @@ services:
     volumes:
       - ${MUSIC_STORAGE_PATH:-./storage}:/storage
       - ${MUSIC_LIBRARY_PATH:-./library}:/storage/library:${MUSIC_LIBRARY_ACCESS:-ro}
-      - ${AUDIOBOOKS_PATH:-./audiobooks}:/storage/audiobooks:ro
+      - ${AUDIOBOOKS_PATH:-./audiobooks}:/storage/audiobooks
     deploy:
       resources:
         limits:

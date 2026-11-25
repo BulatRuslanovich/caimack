@@ -6,16 +6,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useT } from "@/contexts/I18nContext";
 import { usePlayerActions } from "@/contexts/PlayerContext";
 import { api } from "@/lib/api";
-import { saveFile } from "@/lib/download";
 import { recordEvent } from "@/lib/events";
 import { creditsOf, formatArtists } from "@/lib/format";
-import { extensionOf } from "@/lib/playback/audioFormats";
-import { queries } from "@/lib/queries";
-import type { ArtistRef, Playlist } from "@/lib/types";
+import { restoredPlaylistOrder } from "@/lib/playlistTracks";
+import type { ArtistRef } from "@/lib/types";
 import { useInvalidate } from "@/lib/useInvalidate";
 import { useRecommendations } from "@/lib/useRecommendations";
 import { useToast } from "@/lib/useToast";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import type { EditableArtist } from "../EditArtistDialog";
 import { useConfirm } from "../ui/alert-dialog";
@@ -34,12 +32,10 @@ export function useTrackMenuActions({
   const [editing, setEditing] = useState(false);
   const [showingInfo, setShowingInfo] = useState(false);
   const [sharingCard, setSharingCard] = useState(false);
-  const [creatingPlaylist, setCreatingPlaylist] = useState(false);
   const [editingArtist, setEditingArtist] = useState<EditableArtist | null>(null);
   const [confirm, confirmDialog] = useConfirm();
   const player = usePlayerActions();
   const invalidate = useInvalidate();
-  const playlists = useQuery(queries.playlists());
   const addRule = useMutation({
     mutationFn: api.addTasteRule,
     onSuccess: (rule) => {
@@ -63,16 +59,6 @@ export function useTrackMenuActions({
     event.preventDefault();
     run();
   };
-
-  const addTo = useMutation({
-    mutationFn: (playlist: Playlist) => api.addToPlaylist(playlist.id, [track.id]),
-    onSuccess: (_, playlist) => {
-      recordEvent({ type: "trackAddedToPlaylist", trackId: track.id, entityId: playlist.id });
-      invalidate("playlists");
-      notify(t("menu.addedToPlaylist", { name: playlist.name }), "success");
-      onOpenChange(false);
-    },
-  });
 
   const share = async () => {
     const path = track.albumId ? `/albums/${track.albumId}` : `/artists/${track.artistId}`;
@@ -113,21 +99,18 @@ export function useTrackMenuActions({
     },
   });
 
-  const download = useMutation({
-    mutationFn: () =>
-      api.downloadTrack(track.id, `${track.title}${extensionOf(track.originalFileName) || ".mp3"}`),
-    onSuccess: (file) => {
-      saveFile(file);
-      onOpenChange(false);
-    },
-  });
-
   const undoRemove = useMutation({
     mutationFn: async (playlist: string) => {
-      await api.addToPlaylist(playlist, [track.id]);
-      if (playlistTrackIds) await api.reorderPlaylist(playlist, playlistTrackIds);
+      await api.changePlaylistMembership(playlist, [track.id], true);
+      if (!playlistTrackIds) return;
+      const latest = (await api.playlist(playlist)).tracks.map(({ id }) => id);
+      const restored = restoredPlaylistOrder(latest, track.id, playlistTrackIds);
+      if (restored.some((id, index) => id !== latest[index])) {
+        await api.reorderPlaylist(playlist, restored);
+      }
     },
-    onSuccess: changed,
+    onSettled: changed,
+    onError: (error) => notifyError(error, t("playlists.changeFailed")),
   });
 
   const removeFromPlaylist = useMutation({
@@ -160,25 +143,19 @@ export function useTrackMenuActions({
     setShowingInfo,
     sharingCard,
     setSharingCard,
-    creatingPlaylist,
-    setCreatingPlaylist,
     editingArtist,
     setEditingArtist,
     confirm,
     confirmDialog,
     player,
-    invalidate,
-    playlists,
     addRule,
     credits,
     changed,
     stayOpen,
-    addTo,
     share,
     recommendations,
     radio,
     editArtist,
-    download,
     removeFromPlaylist,
     deleteTrack,
   };

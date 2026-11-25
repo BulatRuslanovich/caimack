@@ -60,10 +60,8 @@ export function ToolbarFilters({
       {mobileFilters && (
         <Button
           size={compact ? "icon" : "icon-lg"}
-          className={cn(
-            "shrink-0 rounded-lg md:hidden min-[24rem]:w-auto min-[24rem]:px-3",
-            (filtersOpen || mobileFilters.active) && "border-primary bg-primary-soft text-primary",
-          )}
+          className="shrink-0 md:hidden min-[24rem]:w-auto min-[24rem]:px-3 min-[24rem]:pointer-coarse:w-auto"
+          data-active={mobileFilters.active}
           aria-expanded={filtersOpen}
           aria-controls={controlsId}
           title={t("filter.options")}
@@ -136,14 +134,14 @@ export function Pagination({
 
   return (
     <nav className="flex items-center justify-center gap-3 pt-2" aria-label={t("pagination.label")}>
-      <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => goTo(page - 1)}>
+      <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => goTo(page - 1)}>
         {t("pagination.previous")}
       </Button>
       <span className="text-sm text-muted-foreground tabular-nums">
         {t("pagination.pageOf", { page, totalPages })}
       </span>
       <Button
-        variant="outline"
+        variant="secondary"
         size="sm"
         disabled={page >= totalPages}
         onClick={() => goTo(page + 1)}

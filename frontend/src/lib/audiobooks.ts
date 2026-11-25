@@ -2,6 +2,7 @@
 
 import { request } from "./http";
 import type { AudiobookValues } from "./schemas";
+import { uploadAudiobook } from "./upload/audiobookUpload";
 
 export interface AudiobookChapter {
   id: string;
@@ -62,12 +63,14 @@ export const audiobookApi = {
     request<Audiobook[]>("/audiobooks", { signal, onResponse }),
   detail: (id: string, signal: AbortSignal, onResponse?: (headers: Headers) => void) =>
     request<Audiobook>(audiobookHref(id), { signal, onResponse }),
+  upload: uploadAudiobook,
   edit: (id: string, values: AudiobookValues, cover: File | null, removeCover: boolean) => {
     const body = new FormData();
     body.set("details", JSON.stringify({ ...values, removeCover }));
     if (cover) body.set("file", cover);
     return request<void>(audiobookHref(id), { method: "PUT", body });
   },
+  delete: (id: string) => request<void>(audiobookHref(id), { method: "DELETE" }),
   writeProgress: (
     id: string,
     body: AudiobookProgress,

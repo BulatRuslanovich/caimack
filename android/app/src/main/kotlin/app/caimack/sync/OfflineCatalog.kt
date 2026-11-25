@@ -37,6 +37,7 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
                 ?.takeIf { it.startsWith("{") }
                 ?.let { store.json.parseToJsonElement(it).jsonObject } ?: buildJsonObject {}
         val snapshot = store.snapshot ?: return@Interceptor chain.proceed(request)
+        playlistRequest(request, path, body)?.let { return@Interceptor response(request, it) }
         val mutation = mutation(request.method, path, body, snapshot)
         if (mutation != null) {
             if (!store.enqueue(mutation)) throw IOException("Offline action could not be saved")
@@ -60,6 +61,76 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
     }
 
     data class Result(val value: JsonElement = JsonNull, val code: Int = 200)
+
+    private fun playlistRequest(request: Request, path: String, body: JsonObject): Result? = synchronized(store) {
+        val parts = path.split('/')
+        val id = parts.getOrNull(1)
+        val method = request.method
+        val membership = method == "PUT" && parts.size == 4 && parts.drop(2) == listOf("tracks", "membership")
+        val copy = method == "POST" && parts.size == 3 && parts.last() == "copy-tracks"
+        val create = method == "POST" && path == "playlists/with-tracks"
+        val list = method == "GET" && path == "playlists/memberships"
+        if (parts.first() != "playlists" || !(membership || copy || create || list)) return@synchronized null
+
+        val data = store.catalogView() ?: throw IOException("Sync account changed")
+        val owned = data.objects("playlists").filter { it.string("ownerId") == store.boundUser }
+        if (list) {
+            val track = request.url.queryParameter("trackId") ?: return@synchronized Result(code = 400)
+            return@synchronized playlistMemberships(data, owned, track, store.pending())
+        }
+
+        fun queue(action: SyncAction) {
+            if (!store.enqueue(action)) throw IOException("Offline action could not be saved")
+            changed()
+        }
+
+        val wanted = (body["trackIds"] as? JsonArray).orEmpty().distinct()
+        if (create) {
+            val newId = body.string("requestId").ifEmpty { UUID.randomUUID().toString() }
+            val prior = owned.find { it.string("id") == newId }
+            fun result(playlist: JsonObject) = Result(playlist.with(
+                "pendingSync" to JsonPrimitive(store.pending().any { it.kind == "playlistCreate" && it.entityId == newId }),
+            ))
+            if (prior != null) return@synchronized result(prior)
+            if (store.edits().any { it.kind == "playlistCreate" && it.entityId == newId }) {
+                return@synchronized Result(code = 404)
+            }
+            if (wanted.size > 10_000) return@synchronized Result(code = 400)
+            if (!containsTracks(data, wanted)) return@synchronized Result(code = 404)
+            queue(SyncAction(id = newId, kind = "playlistCreate", entityId = newId, payload = body))
+            val created = store.catalogView()?.objects("playlists")?.find { it.string("id") == newId }
+                ?: throw IOException("Sync account changed")
+            return@synchronized result(created)
+        }
+
+        val destination = if (copy) body.string("destinationId") else id
+        if (owned.none { it.string("id") == destination }) return@synchronized Result(code = 404)
+        if (copy && data.objects("playlists").none { it.string("id") == id }) return@synchronized Result(code = 404)
+        val tracks = if (copy) playlistTracks(data, id) else wanted
+        if (tracks.size > 10_000 || (!copy && tracks.isEmpty())) return@synchronized Result(code = 400)
+        val present = if (copy) true else {
+            body["present"]?.jsonPrimitive?.booleanOrNull ?: return@synchronized Result(code = 400)
+        }
+        if (present && !containsTracks(data, tracks)) return@synchronized Result(code = 404)
+        val current = playlistTracks(data, destination).toHashSet()
+        val changedTracks = tracks.filter { (it in current) != present }
+        val kind = if (present) "playlistAdd" else "playlistRemove"
+        if (changedTracks.isNotEmpty()) {
+            queue(SyncAction(kind = kind, entityId = destination, payload = buildJsonObject {
+                put("trackIds", JsonArray(changedTracks))
+            }))
+        }
+        val affected = tracks.toHashSet()
+        val pending = store.pending().any { edit ->
+            edit.entityId == destination && edit.kind in listOf("playlistAdd", "playlistRemove", "playlistCreate") &&
+                (edit.payload["trackIds"] as? JsonArray).orEmpty().any { it in affected }
+        }
+        Result(buildJsonObject {
+            put("changed", changedTracks.size)
+            put("unchanged", tracks.size - changedTracks.size)
+            put("pendingSync", pending)
+        })
+    }
 
     private fun mutation(
         method: String,
@@ -132,6 +203,37 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
     companion object {
         internal const val MAX_PAGE_SIZE = 10_000
 
+        private fun playlistTracks(data: JsonObject, id: String?): List<JsonElement> =
+            (data["playlistTracks"]?.jsonObject?.get(id) as? JsonArray).orEmpty()
+
+        private fun containsTracks(data: JsonObject, wanted: List<JsonElement>): Boolean {
+            val missing = wanted.toHashSet()
+            return missing.isEmpty() || data.objects("tracks").any { track ->
+                track["id"]?.let(missing::remove) == true && missing.isEmpty()
+            }
+        }
+
+        internal fun playlistMemberships(
+            data: JsonObject,
+            owned: List<JsonObject>,
+            trackId: String,
+            pending: List<SyncAction>,
+        ): Result {
+            val track = JsonPrimitive(trackId)
+            val changed = pending.asSequence()
+                .filter { it.kind in listOf("playlistAdd", "playlistRemove", "playlistCreate") }
+                .filter { track in (it.payload["trackIds"] as? JsonArray).orEmpty() }
+                .mapTo(hashSetOf()) { it.entityId }
+            return Result(JsonArray(owned.map { playlist ->
+                val id = playlist.string("id")
+                buildJsonObject {
+                    put("playlist", playlist)
+                    put("containsTrack", track in playlistTracks(data, id))
+                    put("pendingSync", id in changed)
+                }
+            }))
+        }
+
         internal fun response(request: Request, result: Result): Response =
             Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
                 .code(result.code).message("Offline library")
@@ -167,6 +269,7 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
                 }
             }
             val membership = (snapshot["playlistTracks"] as? JsonObject).orEmpty().toMutableMap()
+            val memberDates = (snapshot["playlistTrackAddedAt"] as? JsonObject).orEmpty().toMutableMap()
             var recent = (snapshot["recent"] as? JsonArray).orEmpty()
             for (action in actions) {
                 val p = action.payload
@@ -197,9 +300,13 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
                             listOf(p.getValue("trackId")) + recent.filter { it != p["trackId"] }
                     "playlistCreate" -> {
                         save("playlist", id, action.occurredAt)
+                        if (playlists.any { it.string("id") == id }) continue
+                        val initial = (p["trackIds"] as? JsonArray).orEmpty().distinct()
+                        membership[id!!] = JsonArray(initial)
+                        memberDates[id] = JsonObject(initial.associate { it.jsonPrimitive.content to JsonPrimitive(action.occurredAt) })
                         playlists =
-                            playlists.filter { it.string("id") != id } +
-                                p.with(
+                            playlists +
+                                JsonObject(p - setOf("trackIds", "requestId")).with(
                                     "id" to JsonPrimitive(id),
                                     "ownerId" to
                                         snapshot.getValue("user").jsonObject.getValue("id"),
@@ -215,6 +322,7 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
                     "playlistDelete" -> {
                         playlists = playlists.filter { it.string("id") != id }
                         membership.remove(id)
+                        memberDates.remove(id)
                     }
                     "playlistAdd",
                     "playlistRemove",
@@ -228,6 +336,16 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
                                 else -> wanted.filter { it in old } + old.filter { it !in wanted }
                             }
                         membership[id!!] = JsonArray(next)
+                        if (action.kind != "playlistOrder") {
+                            val dates = (memberDates[id] as? JsonObject).orEmpty()
+                            memberDates[id] = JsonObject(if (action.kind == "playlistAdd") {
+                                dates + wanted.filterNot { it in old }.associate {
+                                    it.jsonPrimitive.content to JsonPrimitive(action.occurredAt)
+                                }
+                            } else {
+                                dates - wanted.map { it.jsonPrimitive.content }.toSet()
+                            })
+                        }
                     }
                 }
             }
@@ -293,6 +411,7 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
                 "tracks" to JsonArray(tracks),
                 "playlists" to JsonArray(playlists),
                 "playlistTracks" to JsonObject(membership),
+                "playlistTrackAddedAt" to JsonObject(memberDates),
                 "recent" to JsonArray(recent),
             )
         }
@@ -510,7 +629,10 @@ class OfflineCatalog(private val store: SyncStore, private val changed: () -> Un
                         (data["playlistTracks"]?.jsonObject?.get(id) as? JsonArray)
                             .orEmpty()
                             .mapNotNull { byId[it.jsonPrimitive.content] }
-                    result(find(playlists, id)?.with("tracks" to JsonArray(members)))
+                    result(find(playlists, id)?.with(
+                        "tracks" to JsonArray(members),
+                        "trackAddedAt" to (data["playlistTrackAddedAt"]?.jsonObject?.get(id) ?: buildJsonObject {}),
+                    ))
                 }
                 path == "search" ->
                     Result(

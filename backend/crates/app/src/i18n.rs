@@ -73,6 +73,21 @@ fn russian(template: &str) -> Option<&'static str> {
         "Audiobook cover not found." => "Обложка аудиокниги не найдена.",
         "Audiobook audio file not found." => "Аудиофайл книги не найден.",
         "Invalid audiobook details." => "Некорректные данные аудиокниги.",
+        "The audiobook files have changed. Wait for the catalog to refresh and try again." => {
+            "Файлы аудиокниги изменились. Дождитесь обновления каталога и попробуйте ещё раз."
+        }
+        "The server needs write access to delete the audiobook." => {
+            "Для удаления аудиокниги серверу требуется доступ на запись."
+        }
+        "Invalid audiobook upload." => "Некорректный запрос на загрузку аудиокниги.",
+        "Invalid audiobook chapter file: {0}." => "Некорректный файл главы: {0}.",
+        "An audiobook can have at most {0} chapters." => "В аудиокниге может быть не более {0} глав.",
+        "Audiobook chapter names must be unique: {0}." => "Имена файлов глав должны быть уникальными: {0}.",
+        "Choose at least one audiobook chapter." => "Выберите хотя бы один файл главы.",
+        "Some audiobook chapters could not be read." => "Не удалось прочитать некоторые главы аудиокниги.",
+        "Could not read audiobook chapter: {0}." => "Не удалось прочитать главу аудиокниги: {0}.",
+        "An audiobook already uses this upload ID." => "Этот идентификатор загрузки уже используется.",
+        "The audiobook exceeds the 2 GB upload limit." => "Размер аудиокниги превышает лимит в 2 ГБ.",
         "Enter a title of at most {0} characters." => "Введите название длиной до {0} символов.",
         "Enter a year between {0} and {1}." => "Введите год от {0} до {1}.",
         "Choose whether to replace or remove the cover." => "Выберите одно действие с обложкой: заменить или удалить.",
@@ -190,6 +205,13 @@ fn russian(template: &str) -> Option<&'static str> {
         "Select the tracks to remove." => "Выберите треки, которые убрать.",
 
         "Add a Yandex Music token in the settings first." => "Сначала добавьте токен Яндекс Музыки в настройках.",
+        "Invalid VK Music upload." => "Некорректная загрузка из VK Музыки.",
+        "The VK Music upload is too large." => "Загрузка из VK Музыки слишком большая.",
+        "The VK Music file exceeds the 24 MB upload limit." => "Файл из VK Музыки превышает лимит в 24 МБ.",
+        "The VK Music track has invalid title or artist information." => {
+            "У трека VK Музыки некорректное название или имя исполнителя."
+        }
+        "Could not read the audio from VK Music." => "Не удалось прочитать аудио из VK Музыки.",
         "The Yandex Music token is too long." => "Токен Яндекс Музыки слишком длинный.",
         "Yandex Music rejected the token." => "Яндекс Музыка не приняла токен.",
         "Yandex Music did not answer ({0})." => "Яндекс Музыка не ответила ({0}).",
@@ -197,6 +219,11 @@ fn russian(template: &str) -> Option<&'static str> {
         "This import is already running." => "Этот импорт уже идёт.",
         "Import not found." => "Импорт не найден.",
         "Nothing to import here." => "Здесь нечего импортировать.",
+        "Enter a Yandex Music playlist link." => "Вставьте ссылку на плейлист Яндекс Музыки.",
+        "Yandex Music returned an incomplete playlist. Try importing it again." => {
+            "Яндекс Музыка вернула неполный плейлист. Попробуйте импортировать его снова."
+        }
+        "No tracks were available to add to the playlist." => "В плейлисте нет треков, доступных для добавления.",
         "This track is not available on Yandex Music." => "Трек недоступен в Яндекс Музыке.",
         "Yandex Music did not give a download link for this track." => "Яндекс Музыка не дала ссылку на этот трек.",
         "Yandex Music offered only {0}, which Caimack does not store." => {

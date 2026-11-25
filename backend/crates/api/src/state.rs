@@ -33,4 +33,5 @@ pub struct AppState {
     pub playback: PlaybackRegistry,
     pub yandex: YandexMusic,
     pub recommendations: Recommendations,
+    pub music: app::integrations::music::Music,
 }

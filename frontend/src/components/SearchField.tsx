@@ -17,6 +17,8 @@ export function SearchField({
   autoFocus = false,
   className,
   inputRef,
+  onSubmit,
+  onDraftChange,
   onBlur,
   onEmptyEscape,
 }: {
@@ -26,6 +28,8 @@ export function SearchField({
   autoFocus?: boolean;
   className?: string;
   inputRef?: Ref<HTMLInputElement>;
+  onDraftChange?: (value: string) => void;
+  onSubmit?: (value: string) => void;
   onBlur?: (value: string) => void;
   onEmptyEscape?: () => void;
 }) {
@@ -64,6 +68,7 @@ export function SearchField({
 
   const clear = () => {
     setInput("");
+    onDraftChange?.("");
     commit("");
   };
 
@@ -73,7 +78,7 @@ export function SearchField({
         if (!event.currentTarget.contains(event.relatedTarget)) onBlur?.(input.trim());
       }}
       className={cn(
-        "search-field flex max-w-xl items-center gap-2.5 rounded-lg border border-border bg-card px-3.5 text-muted-foreground transition-[background-color,border-color,box-shadow] duration-150",
+        "search-field flex max-w-xl items-center gap-2.5 rounded-full border border-border bg-card px-3.5 text-muted-foreground transition-[background-color,border-color,box-shadow] duration-150 motion-reduce:transition-none",
         "hover:border-border-strong focus-within:border-ring focus-within:bg-raised focus-within:text-foreground focus-within:ring-2 focus-within:ring-ring/15",
         className,
       )}
@@ -90,15 +95,21 @@ export function SearchField({
         value={input}
         autoComplete="off"
         autoFocus={autoFocus}
-        onChange={(event) => setInput(event.target.value)}
+        onChange={(event) => {
+          const next = event.target.value;
+          setInput(next);
+          onDraftChange?.(next);
+        }}
         onKeyDown={(event) => {
           if (
             event.key === "Enter" &&
             !event.nativeEvent.isComposing &&
-            input.trim() !== committed
+            (onSubmit || input.trim() !== committed)
           ) {
             event.preventDefault();
-            commit(input.trim());
+            const trimmed = input.trim();
+            if (trimmed !== committed) commit(trimmed);
+            onSubmit?.(trimmed);
           }
           if (event.key === "Escape" && (input !== "" || onEmptyEscape)) {
             event.preventDefault();

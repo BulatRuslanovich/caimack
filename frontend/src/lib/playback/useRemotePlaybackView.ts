@@ -33,6 +33,7 @@ function useRemoteState(remote: RemoteView | null): PlayerState {
     autoplay = true,
     sleepTimer = null,
     radio = null,
+    collection = null,
   } = remote?.active ?? {};
   return useMemo(() => {
     const next = order[order.indexOf(index) + 1] ?? (repeat === "all" ? order[0] : -1);
@@ -55,6 +56,7 @@ function useRemoteState(remote: RemoteView | null): PlayerState {
       sleepTimer,
       radio: "idle",
       radioSession: radio,
+      collection,
     };
   }, [
     tracks,
@@ -72,6 +74,7 @@ function useRemoteState(remote: RemoteView | null): PlayerState {
     autoplay,
     sleepTimer,
     radio,
+    collection,
   ]);
 }
 
@@ -83,6 +86,7 @@ export function useRemotePlaybackView({
   localActions,
   localProgress,
   send,
+  beginPlaylistRadio,
   continueHere,
   patchTrack,
 }: {
@@ -93,6 +97,7 @@ export function useRemotePlaybackView({
   localActions: PlayerActions;
   localProgress: PlayerProgress;
   send: SendCommand;
+  beginPlaylistRadio: () => () => boolean;
   continueHere: () => Promise<boolean>;
   patchTrack: PlayerActions["patchTrack"];
 }) {
@@ -155,6 +160,7 @@ export function useRemotePlaybackView({
             send,
             continueHere,
             patchTrack,
+            beginPlaylistRadio,
           )
         : localActions,
     [
@@ -164,6 +170,7 @@ export function useRemotePlaybackView({
       getPosition,
       revision,
       send,
+      beginPlaylistRadio,
       continueHere,
       patchTrack,
       localActions,

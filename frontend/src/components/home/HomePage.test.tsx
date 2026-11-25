@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { expect, it, vi } from "vitest";
 import { queries } from "@/lib/queries";
 import type { Audiobook } from "@/lib/audiobooks";
-import type { HomeBlock } from "@/lib/types";
+import type { Album, Artist, HomeBlock, Track } from "@/lib/types";
 import { HomePage } from "./HomePage";
 
 const catalog = vi.hoisted(() => ({ books: [] as Audiobook[] }));
@@ -22,8 +22,31 @@ vi.mock("@/contexts/AudiobookContext", () => ({
 }));
 vi.mock("@/lib/useFormat", () => ({ useFormat: () => ({ totalDuration: () => "" }) }));
 vi.mock("@/lib/useShelfImpression", () => ({ useShelfImpression: () => null }));
-vi.mock("@/components/collection/RankedList", () => ({ RankedList: () => null }));
+vi.mock("@/components/collection/RankedList", () => ({
+  RankedList: ({
+    tracks,
+    ranked,
+    density,
+  }: {
+    tracks: Track[];
+    ranked: boolean;
+    density: string;
+  }) => (
+    <ol data-density={density} data-ranked={ranked}>
+      {tracks.map((track) => (
+        <li key={track.id}>{track.title}</li>
+      ))}
+    </ol>
+  ),
+}));
+vi.mock("@/components/MediaCard", () => ({
+  AlbumCard: ({ album }: { album: Album }) => <p>{album.title}</p>,
+  ArtistCard: ({ artist, bare }: { artist: Artist; bare: boolean }) => (
+    <p data-bare={bare}>{artist.name}</p>
+  ),
+}));
 vi.mock("@/components/PageHeader", () => ({
+  SectionHeader: ({ title }: { title: string }) => <h2>{title}</h2>,
   Section: ({ title, children }: { title: string; children: ReactNode }) => (
     <section>
       <h2>{title}</h2>
@@ -77,6 +100,36 @@ function render(blocks: HomeBlock[], books: Audiobook[]) {
       favoriteCount: 0,
     },
   });
+  const metadata = {
+    artistId: "artist-0",
+    artistName: "Artist 0",
+    createdAt: "2026-01-01T00:00:00Z",
+    durationSeconds: 180,
+    hasCover: false,
+  };
+  client.setQueryData(queries.searchPopular().queryKey, {
+    tracks: Array.from({ length: 10 }, (_, index) => ({
+      ...metadata,
+      id: `track-${index}`,
+      title: `Track ${index}`,
+      originalFileName: `track-${index}.mp3`,
+      isFavorite: false,
+      hasLyrics: false,
+    })),
+    albums: Array.from({ length: 5 }, (_, index) => ({
+      ...metadata,
+      id: `album-${index}`,
+      title: `Album ${index}`,
+      trackCount: 2,
+    })),
+    artists: Array.from({ length: 5 }, (_, index) => ({
+      id: `artist-${index}`,
+      name: `Artist ${index}`,
+      trackCount: 2,
+      albumCount: 1,
+      hasImage: false,
+    })),
+  });
   return renderToStaticMarkup(
     <QueryClientProvider client={client}>
       <HomePage />
@@ -95,7 +148,7 @@ it("shows only the most recent unfinished audiobook immediately after fresh arri
     ],
   );
   expect(html).toMatch(
-    /home\.newArrivals.*audiobooks\.continueAtHome.*href="\/audiobooks\/last-book".*home\.topThisWeek/,
+    /home\.newArrivals.*audiobooks\.continueAtHome.*href="\/audiobooks\/last-book".*search\.mostPlayedTracks/,
   );
   expect(html.match(/href="\/audiobooks\//g)).toHaveLength(1);
 });
@@ -105,4 +158,17 @@ it("keeps the last audiobook available without a music feed and hides the card w
   expect(render([block("newArrivals")], [book("unplayed-book")])).not.toContain(
     'href="/audiobooks/',
   );
+});
+
+it("replaces the weekly chart with popular tracks, albums and artists", () => {
+  const markup = render([block("topTracks"), block("newAlbums")], []);
+  expect(markup).toMatch(
+    /search.mostPlayedTracks.*search.mostPlayedAlbums.*search.mostPlayedArtists.*home.newAlbums/,
+  );
+  expect(markup).not.toContain("home.topThisWeek");
+  expect(markup).toContain('data-density="compact" data-ranked="false"');
+  expect(markup.match(/<li>Track \d+<\/li>/g)).toHaveLength(10);
+  expect(markup.match(/<p>Album \d+<\/p>/g)).toHaveLength(5);
+  expect(markup.match(/<p data-bare="true">Artist \d+<\/p>/g)).toHaveLength(5);
+  expect(render([block("newArrivals")], [])).toContain("search.mostPlayedTracks");
 });

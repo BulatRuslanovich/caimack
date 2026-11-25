@@ -102,7 +102,6 @@ async fn audio(
         content_type: track.content_type,
         etag: track.etag,
         cache_control: "private, no-store",
-        download_name: None,
         ranges: true,
     }
     .send(&headers)

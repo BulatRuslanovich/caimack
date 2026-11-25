@@ -11,15 +11,24 @@ import { cn } from "@/lib/cn";
 import { formatAudioSpec, formatDuration, isLossless } from "@/lib/format";
 import { keyName } from "@/lib/musicalKey";
 import { queueEntryKey } from "@/lib/playback/queueEntries";
+import { samePlaybackCollection, type PlaybackCollection } from "@/lib/playback/playerTypes";
 import { smoothUnlessReduced } from "@/lib/scroll";
-import type { Track } from "@/lib/types";
+import type { SortDirection, Track } from "@/lib/types";
 import { useFormat } from "@/lib/useFormat";
 import { useStableEntries } from "@/lib/useStableEntries";
 import { useToggleFavorite } from "@/lib/useToggleFavorite";
 import { type DragEndEvent } from "@dnd-kit/core";
 import { arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { EllipsisVerticalIcon, HeartIcon, MusicIcon, PauseIcon, PlayIcon } from "lucide-react";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  EllipsisVerticalIcon,
+  HeartIcon,
+  MusicIcon,
+  PauseIcon,
+  PlayIcon,
+} from "lucide-react";
 import { PrefetchLink as Link } from "@/components/PrefetchLink";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArtistLinks } from "./ArtistLinks";
@@ -35,7 +44,7 @@ import {
   playbackRowClass,
   playbackTitleClass,
 } from "./PlaybackListRows";
-import { TrackMenu } from "./TrackMenu";
+import { TrackMenu, type TrackMenuProps } from "./TrackMenu";
 import { DragHandle, VerticalSortable } from "./VerticalSortable";
 import { VirtualList, type VirtualListHandle } from "./VirtualList";
 import { Button } from "./ui/button";
@@ -48,8 +57,17 @@ interface TrackSelection {
   onToggleAll: () => void;
 }
 
+export type TrackSortColumn = "title" | "album" | "added" | "duration";
+
+interface TrackTableSort {
+  active?: TrackSortColumn;
+  direction: SortDirection;
+  onChange: (column: TrackSortColumn) => void;
+}
+
 interface TrackListProps {
   tracks: Track[];
+  collection?: PlaybackCollection;
   showCover?: boolean;
   showAlbum?: boolean;
   showArtist?: boolean;
@@ -57,8 +75,12 @@ interface TrackListProps {
   showTempoKey?: boolean;
   useTrackNumbers?: boolean;
   playedAt?: Record<string, string>;
+  addedAt?: Readonly<Record<string, string>> | "createdAt";
+  sort?: TrackTableSort;
   onChanged?: () => void;
   playlistId?: string;
+  savedPlaylistTracks?: Track[];
+  onOpenMembership?: TrackMenuProps["onOpenMembership"];
   onReorder?: (trackIds: string[]) => void;
   emptyMessage?: string;
   selection?: TrackSelection;
@@ -83,12 +105,18 @@ const ROW_COLUMNS = {
 const revealOnRow =
   "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 data-[state=open]:opacity-100 max-md:opacity-100 [@media(hover:none)]:opacity-100";
 
-function rowGridFor(showAlbum: boolean, showDate: boolean, showTempoKey: boolean): string {
+function rowGridFor(
+  showAlbum: boolean,
+  showDate: boolean,
+  showTempoKey: boolean,
+  showDurationOnMobile: boolean,
+): string {
   const parts = [showAlbum && "album", showDate && "date", showTempoKey && "tempo"].filter(Boolean);
   const key = (parts.join("+") || "plain") as keyof typeof ROW_COLUMNS;
   return cn(
     playbackGridClass,
-    "max-md:grid-cols-[2.125rem_minmax(0,1fr)_auto_var(--track-actions)] max-[380px]:grid-cols-[2.125rem_minmax(0,1fr)_var(--track-actions)]",
+    "max-md:grid-cols-[2.125rem_minmax(0,1fr)_auto_var(--track-actions)]",
+    !showDurationOnMobile && "max-[380px]:grid-cols-[2.125rem_minmax(0,1fr)_var(--track-actions)]",
     ROW_COLUMNS[key],
     isDesktop
       ? "[--track-duration:5.5rem] [--track-actions:3.5rem] pointer-coarse:[--track-actions:3.75rem]"
@@ -98,6 +126,7 @@ function rowGridFor(showAlbum: boolean, showDate: boolean, showTempoKey: boolean
 
 export function TrackList({
   tracks,
+  collection,
   showCover = true,
   showAlbum = true,
   showArtist = true,
@@ -105,13 +134,24 @@ export function TrackList({
   showTempoKey = false,
   useTrackNumbers = false,
   playedAt,
+  addedAt,
+  sort,
   onChanged,
   playlistId,
+  savedPlaylistTracks = tracks,
+  onOpenMembership,
   onReorder,
   emptyMessage,
   selection,
 }: TrackListProps) {
-  const { currentTrackId, isPlaying } = useNowPlaying();
+  const nowPlaying = useNowPlaying();
+  const { isPlaying } = nowPlaying;
+  const currentTrackId =
+    !collection ||
+    !nowPlaying.collection ||
+    samePlaybackCollection(collection, nowPlaying.collection)
+      ? nowPlaying.currentTrackId
+      : null;
   const actions = usePlayerActions();
   const entries = useStableEntries(tracks);
   const t = useT();
@@ -178,9 +218,10 @@ export function TrackList({
         actions.toggle();
         return;
       }
-      actions.playQueue(tracks, index);
+      if (collection) actions.playQueue(tracks, index, { collection });
+      else actions.playQueue(tracks, index);
     },
-    [actions, tracks],
+    [actions, collection, tracks],
   );
 
   const focusRow = (index: number) => {
@@ -221,17 +262,22 @@ export function TrackList({
       return;
     }
 
+    if (event.key === " " && selection) {
+      event.preventDefault();
+      selection.onToggle(tracks[from].id, from, event.shiftKey);
+    }
+
     if (event.key === "Enter") {
       event.preventDefault();
       play(from);
     }
   };
 
-  const sortable = Boolean(playlistId && onReorder);
+  const sortable = Boolean(playlistId && onReorder && !selection);
 
   const playlistTrackIds = useMemo(
-    () => (playlistId ? tracks.map((item) => item.id) : undefined),
-    [playlistId, tracks],
+    () => (playlistId ? savedPlaylistTracks.map((item) => item.id) : undefined),
+    [playlistId, savedPlaylistTracks],
   );
 
   const selectable = selection !== undefined;
@@ -267,9 +313,13 @@ export function TrackList({
   }
 
   const visibleAlbum = showAlbum && columns !== "narrow" && (!showTempoKey || columns !== "album");
-  const visibleDate = playedAt !== undefined && columns === "all";
+  const visibleAdded =
+    addedAt !== undefined && columns !== "narrow" && (!showTempoKey || columns === "all");
+  const visibleDate =
+    addedAt !== undefined ? visibleAdded : playedAt !== undefined && columns === "all";
   const visibleTempo = showTempoKey && columns !== "narrow";
-  const grid = rowGridFor(visibleAlbum, visibleDate, visibleTempo);
+  const showDurationOnMobile = sort !== undefined;
+  const grid = rowGridFor(visibleAlbum, visibleDate, visibleTempo, showDurationOnMobile);
 
   const rows = tracks.map((track, index) => (
     <TrackRow
@@ -285,11 +335,13 @@ export function TrackList({
       showArtist={showArtist}
       showAudioSpec={showAudioSpec}
       showTempoKey={visibleTempo}
+      showDurationOnMobile={showDurationOnMobile}
       useTrackNumbers={useTrackNumbers}
-      playedAt={playedAt?.[track.id]}
-      showPlayedAt={visibleDate}
+      date={addedAt === "createdAt" ? track.createdAt : (addedAt ?? playedAt)?.[track.id]}
+      dateKind={visibleDate ? (visibleAdded ? "added" : "played") : undefined}
       playlistId={playlistId}
       playlistTrackIds={playlistTrackIds}
+      onOpenMembership={onOpenMembership}
       isCurrent={currentTrackId === track.id}
       isPlaying={currentTrackId === track.id && isPlaying}
       isFavorite={isFavorite(track)}
@@ -333,27 +385,35 @@ export function TrackList({
             #
           </Caption>
         )}
-        <Caption role="columnheader" className="truncate">
+        <TrackColumnHeader column="title" sort={sort}>
           {t("column.title")}
-        </Caption>
+        </TrackColumnHeader>
         {visibleAlbum && (
-          <Caption role="columnheader" className="track-album-cell truncate max-md:hidden">
+          <TrackColumnHeader column="album" sort={sort} className="track-album-cell max-md:hidden">
             {t("column.album")}
-          </Caption>
+          </TrackColumnHeader>
         )}
         {visibleDate && (
-          <Caption role="columnheader" className="track-date-cell truncate max-md:hidden">
-            {t("column.played")}
-          </Caption>
+          <TrackColumnHeader
+            column="added"
+            sort={visibleAdded ? sort : undefined}
+            className="track-date-cell max-md:hidden"
+          >
+            {t(visibleAdded ? "column.added" : "column.played")}
+          </TrackColumnHeader>
         )}
         {visibleTempo && (
           <Caption role="columnheader" className="track-tempo-cell truncate max-md:hidden">
             {t("column.tempoKey")}
           </Caption>
         )}
-        <Caption role="columnheader" className="text-right max-[380px]:hidden">
+        <TrackColumnHeader
+          column="duration"
+          sort={sort}
+          className={cn("text-right", !showDurationOnMobile && "max-[380px]:hidden")}
+        >
           {t("column.duration")}
-        </Caption>
+        </TrackColumnHeader>
         <span role="columnheader" aria-label={t("column.actions")} />
       </div>
 
@@ -409,6 +469,44 @@ export function TrackList({
   );
 }
 
+function TrackColumnHeader({
+  column,
+  sort,
+  className,
+  children,
+}: {
+  column: TrackSortColumn;
+  sort?: TrackTableSort;
+  className?: string;
+  children: string;
+}) {
+  const active = sort?.active === column;
+  const DirectionIcon = sort?.direction === "desc" ? ArrowDownIcon : ArrowUpIcon;
+  return (
+    <Caption
+      role="columnheader"
+      aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : undefined}
+      className={cn("min-w-0 truncate", className)}
+    >
+      {sort ? (
+        <button
+          type="button"
+          onClick={() => sort.onChange(column)}
+          className={cn(
+            "inline-flex max-w-full items-center gap-1 rounded-sm align-middle hover:text-foreground focus-visible:outline-offset-0",
+            active && "text-primary",
+          )}
+        >
+          <span className="truncate">{children}</span>
+          {active && <DirectionIcon size={13} className="shrink-0" aria-hidden="true" />}
+        </button>
+      ) : (
+        children
+      )}
+    </Caption>
+  );
+}
+
 interface TrackRowProps {
   entryId: string;
   track: Track;
@@ -420,11 +518,13 @@ interface TrackRowProps {
   showArtist: boolean;
   showAudioSpec: boolean;
   showTempoKey: boolean;
+  showDurationOnMobile: boolean;
   useTrackNumbers: boolean;
-  playedAt?: string;
-  showPlayedAt: boolean;
+  date?: string;
+  dateKind?: "added" | "played";
   playlistId?: string;
   playlistTrackIds?: string[];
+  onOpenMembership?: TrackMenuProps["onOpenMembership"];
   focused: boolean;
   isCurrent: boolean;
   isPlaying: boolean;
@@ -458,11 +558,13 @@ const TrackRowContent = memo(function TrackRowContent({
   showArtist,
   showAudioSpec,
   showTempoKey,
+  showDurationOnMobile,
   useTrackNumbers,
-  playedAt,
-  showPlayedAt,
+  date,
+  dateKind,
   playlistId,
   playlistTrackIds,
+  onOpenMembership,
   focused,
   isCurrent,
   isPlaying,
@@ -602,12 +704,16 @@ const TrackRowContent = memo(function TrackRowContent({
         </span>
       )}
 
-      {showPlayedAt && (
+      {dateKind && (
         <span
           className="track-date-cell library-secondary truncate text-sm max-md:hidden"
           role="cell"
         >
-          {playedAt ? format.playedAt(playedAt) : ""}
+          {date && (
+            <time dateTime={date} title={dateKind === "added" ? format.playedAt(date) : undefined}>
+              {dateKind === "added" ? format.relativeDate(date) : format.playedAt(date)}
+            </time>
+          )}
         </span>
       )}
 
@@ -616,7 +722,8 @@ const TrackRowContent = memo(function TrackRowContent({
       <span
         className={cn(
           playbackDurationClass,
-          "flex items-center justify-end gap-1 max-[380px]:hidden",
+          "flex items-center justify-end gap-1",
+          !showDurationOnMobile && "max-[380px]:hidden",
         )}
         role="cell"
         data-track-duration
@@ -633,6 +740,7 @@ const TrackRowContent = memo(function TrackRowContent({
           onOpenChange={(open) => onMenuOpenChange(track.id, open)}
           playlistId={playlistId}
           playlistTrackIds={playlistTrackIds}
+          onOpenMembership={onOpenMembership}
           onChanged={onChanged}
           isFavorite={isFavorite}
           onToggleFavorite={() => onToggleFavorite(track, isFavorite)}

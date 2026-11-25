@@ -64,10 +64,16 @@ val LocalSnackbar = staticCompositionLocalOf<androidx.compose.material3.Snackbar
 object Remote {
     val cache = ConcurrentHashMap<String, Any>()
     val updates = MutableSharedFlow<Pair<String, Any>>(extraBufferCapacity = 16, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    val invalidations = MutableSharedFlow<String>(extraBufferCapacity = 16, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
     fun update(key: String, value: Any) {
         cache[key] = value
         updates.tryEmit(key to value)
+    }
+
+    fun invalidate(key: String) {
+        cache.remove(key)
+        invalidations.tryEmit(key)
     }
 }
 @Composable
@@ -77,9 +83,8 @@ fun <T : Any> Load(
     isEmpty: (T) -> Boolean = { false },
     empty: @Composable () -> Unit = {},
     error: @Composable (() -> Unit) -> Unit = { Failure(it) },
-    loading: @Composable () -> Unit = {
-        Box(Modifier.fillMaxWidth().padding(vertical = 64.dp), contentAlignment = Alignment.Center) { RecordLoading(44.dp) }
-    },
+    loading: @Composable () -> Unit = { Loading() },
+    staleContentModifier: Modifier = Modifier,
     content: @Composable (T) -> Unit,
 ) {
     val local = LocalOfflineLibrary.current
@@ -88,6 +93,10 @@ fun <T : Any> Load(
     var value by remember(key, local) { mutableStateOf(if (local) null else Remote.cache[key] as T?) }
     var failed by remember(key) { mutableStateOf(false) }
     var attempt by remember(key) { mutableIntStateOf(0) }
+
+    LaunchedEffect(key) {
+        Remote.invalidations.collect { if (it == key) attempt++ }
+    }
 
     LaunchedEffect(key, local) {
         if (local) return@LaunchedEffect
@@ -123,13 +132,18 @@ fun <T : Any> Load(
 
     val shown = value
     when {
-        shown != null -> if (failed) Column {
+        shown != null -> if (failed) Column(staleContentModifier) {
             RefreshFailure { attempt++ }
             if (isEmpty(shown)) empty() else content(shown)
         } else if (isEmpty(shown)) empty() else content(shown)
         failed -> error { attempt++ }
         else -> loading()
     }
+}
+
+@Composable
+internal fun Loading() {
+    Box(Modifier.fillMaxWidth().padding(vertical = 64.dp), contentAlignment = Alignment.Center) { RecordLoading(44.dp) }
 }
 
 @Composable

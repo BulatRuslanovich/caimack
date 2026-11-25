@@ -6,6 +6,12 @@ import app.caimack.api.AddTracksRequest
 import app.caimack.api.CaimackApi
 import app.caimack.api.PlaylistDetail
 import app.caimack.api.Track
+import app.caimack.R
+import java.text.Collator
+import java.time.OffsetDateTime
+import java.time.format.DateTimeParseException
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import retrofit2.HttpException
 
 internal class PlaylistTrackActions(private val api: CaimackApi) {
@@ -25,6 +31,41 @@ internal class PlaylistTrackActions(private val api: CaimackApi) {
         }
         return latest.copy(tracks = ordered)
     }
+}
+
+internal enum class PlaylistSort(val label: Int) {
+    Manual(R.string.playlist_sort_manual),
+    Title(R.string.playlist_sort_title),
+    Artist(R.string.playlist_sort_artist),
+    DateAdded(R.string.playlist_sort_added),
+    Duration(R.string.playlist_sort_duration);
+
+    fun tracks(playlist: PlaylistDetail): List<Track> = when (this) {
+        Manual -> playlist.tracks
+        Title -> playlist.tracks.sortedWith(compareBy(Collator.getInstance(), Track::title))
+        Artist -> playlist.tracks.sortedWith(compareBy(Collator.getInstance(), Track::artistName))
+        DateAdded -> {
+            val dates = playlist.trackAddedAt.mapValues { (_, date) ->
+                try {
+                    OffsetDateTime.parse(date).toInstant()
+                } catch (_: DateTimeParseException) {
+                    null
+                }
+            }
+            playlist.tracks.sortedWith(compareBy(nullsLast(reverseOrder())) { dates[it.id] })
+        }
+        Duration -> playlist.tracks.sortedBy { it.durationSeconds }
+    }
+}
+
+internal inline fun <T> playlistResult(request: () -> T): Result<T> = runCatching(request).onFailure {
+    if (it is CancellationException && it !is TimeoutCancellationException) throw it
+}
+
+internal fun invalidatePlaylistLists() {
+    Remote.invalidate("playlists:mine")
+    Remote.invalidate("playlists:public")
+    Remote.invalidate(SAVED_LIBRARY)
 }
 
 internal fun restoreTrackOrder(current: List<Track>, trackId: String, originalOrder: List<String>): List<Track> {

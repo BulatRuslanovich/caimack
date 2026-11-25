@@ -10,6 +10,8 @@
     <string name="action_pause">Пауза</string>
     <string name="queue_title">Очередь</string>
     <string name="player_now_playing">Сейчас играет</string>
+    <string name="player_from_album">Из альбома · %1$s</string>
+    <string name="player_from_playlist">Из плейлиста · %1$s</string>
     <string name="queue_edit">Изменить очередь</string>
     <string name="queue_move_up">Переместить выше</string>
     <string name="queue_move_down">Переместить ниже</string>
@@ -18,6 +20,7 @@
     <string name="queue_current_paused">Текущий трек, пауза</string>
     <string name="queue_empty">Очередь пуста.</string>
     <string name="lyrics_title">Текст</string>
+    <string name="lyrics_follow">К текущей строке</string>
     <string name="lyrics_none">Для этого трека текста нет.</string>
     <string name="player_playing_elsewhere">Пауза — воспроизведение продолжено на другом устройстве.</string>
     <string name="player_playing_on">Пауза — теперь играет на %1$s.</string>

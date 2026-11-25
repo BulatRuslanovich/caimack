@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="playlist_memberships">In playlists</string>
+    <string name="playlist_membership_saved">Saved</string>
+    <string name="playlist_membership_failed">Could not save</string>
+    <string name="playlist_membership_partial">Some changes failed. Try again to save the remaining changes.</string>
+    <string name="playlist_pending_sync">Waiting to sync</string>
+    <string name="playlist_select_tracks">Select tracks</string>
+    <string name="playlist_copy_selected">To another playlist</string>
+    <string name="playlist_queue_selected">Add to queue</string>
+    <string name="playlist_remove_selected">Remove from playlist</string>
+    <plurals name="playlist_selected_count">
+        <item quantity="one">%d track selected</item>
+        <item quantity="other">%d tracks selected</item>
+    </plurals>
+    <string name="playlist_sort">Sort playlist</string>
+    <string name="playlist_sort_manual">Playlist order</string>
+    <string name="playlist_sort_title">By title</string>
+    <string name="playlist_sort_artist">By artist</string>
+    <string name="playlist_sort_added">By date added</string>
+    <string name="playlist_sort_duration">By duration</string>
+    <string name="playlist_add_tracks">Add tracks</string>
+    <string name="playlist_search_tracks">Search tracks</string>
+    <string name="playlist_already_in">Already in the playlist</string>
+    <string name="playlist_more_tracks">More tracks</string>
+    <string name="playlist_no_destination">No other editable playlists</string>
+    <string name="playlist_copy_all">Add all tracks to another playlist</string>
+    <string name="playlist_copy_result">Added %1$d · Already in playlist %2$d</string>
+    <string name="playlist_copy_pending">Waiting to sync · To add %1$d · Already in playlist %2$d</string>
+    <string name="playlist_suggestions">Suggested tracks</string>
+    <string name="playlist_suggestions_empty">Suggestions are unavailable. You can still search for tracks.</string>
+    <string name="playlist_radio">Playlist radio</string>
+    <string name="playlist_radio_no_audio">Playlist radio needs at least one track with audio analysis.</string>
+    <string name="playlist_radio_empty">No matching tracks for this playlist radio.</string>
+    <string name="playlist_reason_similar">Sounds like this playlist</string>
+</resources>

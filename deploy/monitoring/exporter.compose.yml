@@ -1,0 +1,13 @@
+name: caimack-monitoring-exporter
+
+services:
+  node-exporter:
+    image: prom/node-exporter:v1.13.1
+    restart: unless-stopped
+    network_mode: host
+    pid: host
+    command:
+      - --path.rootfs=/host
+      - --web.listen-address=127.0.0.1:19100
+    volumes:
+      - /:/host:ro,rslave

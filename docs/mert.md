@@ -1,15 +1,29 @@
+[Documentation](README.md#run-a-server)
+
 # Optional recommendations module
 
-Recommendations are disabled by default. The ordinary release deployment requires
-no GPU driver, MERT image or model download:
+MERT runs audio analysis on your own GPU for radio, mixes, and the library map.
+The default deployment supports library browsing, playback, history, favourites,
+uploads, and CPU audio analysis with recommendations disabled.
 
-```sh
-docker compose -f docker-compose.yml -f docker-compose.images.yml pull
-docker compose -f docker-compose.yml -f docker-compose.images.yml up -d
+## Enable or disable with the server manager
+
+Use the manager to enable the module:
+
+```bash
+./caimack.sh recommendations on
 ```
 
-To enable recommendations on a host with NVIDIA GPU support, add the module file
-to both commands:
+The manager picks the GPU configuration and validates it before starting the
+module. See [Automatic GPU selection and AMD](#automatic-gpu-selection-and-amd)
+for overrides and host requirements. Use `./caimack.sh recommendations off`
+to disable the module. Reload the web app or reopen Android after toggling
+recommendations. Cached weights and embeddings stay on disk.
+
+## Manual Compose setup
+
+On a host with NVIDIA support, add the recommendation module after the base
+and image files.
 
 ```sh
 docker compose -f docker-compose.yml -f docker-compose.images.yml -f docker-compose.recommendations.yml pull
@@ -19,9 +33,8 @@ docker compose -f docker-compose.yml -f docker-compose.images.yml -f docker-comp
 For source builds, use the base and module files with `up -d --build`.
 The module starts MERT and sets `RECOMMENDATIONS_ENABLED=true` on the API.
 For an API launched outside Docker, set that flag and `MERT_URL` explicitly.
-Without the module, recommendation routes are unavailable; clients hide radio,
-personalized mixes, map, recap and taste controls. Library browsing, playback,
-history, favorites, uploads and CPU audio analysis remain available.
+Without the module, the API reports the capability as disabled and clients hide
+radio, personalised mixes, the map, recap, and taste controls.
 
 To disable an existing deployment, stop the GPU services explicitly and apply the
 ordinary configuration again:
@@ -31,17 +44,7 @@ docker compose -f docker-compose.yml -f docker-compose.images.yml --profile reco
 docker compose -f docker-compose.yml -f docker-compose.images.yml up -d
 ```
 
-Cached weights and embeddings
-are retained for later re-enabling. Reload the web client or reopen Android after
-changing the configuration.
-
 ## Automatic GPU selection and AMD
-
-The server manager selects the container configuration before starting MERT:
-
-```sh
-./caimack.sh recommendations on
-```
 
 `MERT_GPU_BACKEND=auto` (the default) detects NVIDIA or AMD on the local host,
 preferring NVIDIA if both are present. Set it to `nvidia` or `amd` in `.env` to
@@ -101,11 +104,13 @@ not been configured; it does not prevent running the ordinary CPU deployment.
 
 ## Behaviour when enabled
 
-The API extracts 3–8 five-second mono fragments at 24 kHz. MERT runs serially on
-the local GPU, producing normalized 1024-dimensional vectors. Old models and
-strategies are reanalysed automatically. The recommendation index accepts only
-matching model, strategy, dimension and audio hash. Model loading and transient
-GPU outages do not block ordinary library browsing or playback.
+The API plans three to eight five-second mono windows at 24 kHz. Very short
+tracks use fewer windows, down to one when the duration is at most 5.05 seconds.
+MERT runs serially on the local GPU, producing normalized 1024-dimensional
+vectors. Tracks with older embeddings are reanalysed automatically. The index
+accepts only embeddings with a matching model, strategy, dimension, and audio
+hash. Model loading and transient GPU outages leave library browsing and
+playback available.
 
 ### On-demand GPU lifecycle
 
@@ -194,7 +199,16 @@ Change these settings in the deployment `.env` and recreate the service with you
 usual Compose file list. Updated Python code requires rebuilding/pulling the MERT
 image before recreating it. Restarting an existing image alone does not update it.
 
-The CUDA and ROCm GPU images are published alongside the API and web images only on `v*` release
-tags. Default deployments do not pull or start those images. Model weights are
-licensed separately under CC BY-NC 4.0. Music specialization does not by itself
-guarantee better ranking or a more uniform 2D map.
+The CUDA and ROCm images are published with the API and web images on release
+tags. Model weights are licensed separately under CC BY-NC 4.0.
+
+## How recommendations use the analysis
+
+The server builds a recommendation index from compatible audio vectors.
+Seeded radio searches nearby tracks first, then expands according to the
+selected focus and applies artist and duplicate limits. The server chooses a
+batch before ordering it by tempo, key, and loudness transitions. Listening
+and skips can influence future selections without running more GPU inference.
+See [the library map](library-map.md) for the projection and
+[recommendation metrics](listening-stats.md#recommendation-metrics) for feedback
+from playback.

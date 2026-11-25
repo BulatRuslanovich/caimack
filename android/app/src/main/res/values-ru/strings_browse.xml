@@ -22,7 +22,9 @@
     <string name="home_new_arrivals">Новинки</string>
     <string name="home_liked_songs">Любимые треки</string>
     <string name="home_top_this_week">Ваш топ за неделю</string>
-    <string name="home_top_period">За 7 дней</string>
+    <string name="home_popular_tracks">Самые прослушиваемые треки</string>
+    <string name="home_popular_albums">Самые прослушиваемые альбомы</string>
+    <string name="home_popular_artists">Самые прослушиваемые исполнители</string>
     <string name="home_new_albums">Новые альбомы</string>
     <string name="home_quick_picks">Снова к ним</string>
     <string name="home_your_playlists">Ваши плейлисты</string>

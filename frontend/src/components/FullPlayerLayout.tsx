@@ -20,6 +20,7 @@ export function FullPlayerLayout({
   backdrop,
   actions,
   chrome,
+  contextLabel,
   children,
 }: {
   onClose: () => void;
@@ -28,6 +29,7 @@ export function FullPlayerLayout({
   backdrop: ReactNode;
   actions: ReactNode;
   chrome?: string;
+  contextLabel?: ReactNode;
   children: ReactNode;
 }) {
   const t = useT();
@@ -96,7 +98,9 @@ export function FullPlayerLayout({
               >
                 <ChevronDownIcon size={22} />
               </Button>
-              <span className="min-w-0 truncate text-sm text-muted-foreground">{label}</span>
+              <span className="min-w-0 max-w-[min(40vw,27rem)] truncate text-center text-sm text-muted-foreground max-sm:max-w-[65vw]">
+                {contextLabel ?? label}
+              </span>
               {actions}
             </header>
             {children}

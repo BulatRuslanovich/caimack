@@ -2,6 +2,11 @@
 
 package app.caimack.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
@@ -15,6 +20,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -85,6 +91,7 @@ fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit, initialCa
     var input by rememberSaveable { mutableStateOf("") }
     var query by rememberSaveable { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf(initialCategory) }
+    var inputFocused by remember { mutableStateOf(false) }
     val categoryState = rememberSaveableStateHolder()
     val catalog = browsingAudiobooks()
     val audiobooksEnabled by container.audiobooksEnabled.collectAsStateWithLifecycle()
@@ -107,8 +114,14 @@ fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit, initialCa
         play(tracks, index)
     }
 
-    Column(Modifier.fillMaxSize()) {
-        PageTitle(stringResource(R.string.nav_search))
+    Column(Modifier.fillMaxSize().imePadding()) {
+        AnimatedVisibility(
+            visible = !inputFocused,
+            enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
+            exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
+        ) {
+            PageTitle(stringResource(R.string.nav_search))
+        }
         SearchInput(
             value = input,
             onValueChange = { input = it; if (it.isEmpty()) query = "" },
@@ -119,7 +132,8 @@ fun SearchScreen(nav: NavController, play: (List<Track>, Int) -> Unit, initialCa
                     else -> R.string.search_placeholder
                 },
             ),
-            modifier = Modifier.padding(horizontal = 16.dp),
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp),
+            onFocusChange = { inputFocused = it },
             onSearch = {
                 query = input.trim()
                 if (query.length >= MIN_LENGTH) container.recentSearches.remember(query)

@@ -3,8 +3,10 @@
 
 mod edits;
 mod names;
+mod removal;
 mod scan;
 mod state;
+mod upload;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -23,15 +25,17 @@ use crate::i18n::{self, Lang};
 use crate::{AppError, AppResult};
 
 pub use edits::BookEdit;
+pub use upload::BookUpload;
 
 #[derive(Clone, Default)]
 pub struct Audiobooks {
     catalog: Arc<RwLock<Arc<Snapshot>>>,
     requested: Arc<Notify>,
+    scan_lock: Arc<Mutex<()>>,
     experiment: Arc<Mutex<watch::Sender<Option<bool>>>>,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct Snapshot {
     root: PathBuf,
     books: HashMap<Uuid, Arc<Book>>,
@@ -156,21 +160,24 @@ impl Audiobooks {
                     }
                     continue;
                 }
+                let guard = audiobooks.scan_lock.lock().await;
                 let previous = audiobooks.snapshot();
                 let root = root.clone();
                 let cancel_scan = cancel.clone();
                 let result = tokio::task::spawn_blocking(move || scan::read(&root, &previous, &cancel_scan)).await;
-                if cancel.is_cancelled() {
-                    return;
-                }
                 match result {
-                    Ok(Ok(snapshot)) => {
+                    Ok(Ok(snapshot)) if !cancel.is_cancelled() => {
                         tracing::debug!("Audiobook folder contains {} books", snapshot.books.len());
                         *audiobooks.catalog.write().unwrap_or_else(std::sync::PoisonError::into_inner) =
                             Arc::new(snapshot);
                     }
+                    Ok(Ok(_)) => {}
                     Ok(Err(error)) => tracing::warn!(%error, "Could not scan the audiobook folder"),
                     Err(error) => tracing::error!(%error, "Audiobook scan failed"),
+                }
+                drop(guard);
+                if cancel.is_cancelled() {
+                    return;
                 }
                 let next_scan = async {
                     match interval {

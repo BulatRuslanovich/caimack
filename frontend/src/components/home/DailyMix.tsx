@@ -8,9 +8,7 @@ import Link from "next/link";
 import { useId } from "react";
 import { cn } from "@/lib/cn";
 import { formatArtists, formatDuration } from "@/lib/format";
-import { trackCoverUrl } from "@/lib/media";
 import { useFormat } from "@/lib/useFormat";
-import { toneStyle, useVividTone } from "@/lib/useCoverTone";
 import { usePlayback } from "@/lib/playback/usePlayback";
 import type { HomeBlock } from "@/lib/types";
 import { useT } from "@/contexts/I18nContext";
@@ -18,7 +16,7 @@ import { TrackCover } from "@/components/Cover";
 import { PlayAllButton } from "@/components/PlayAllButton";
 import { PlayBadge } from "@/components/PlayBadge";
 
-export const HERO_PREVIEW_SIZE = 4;
+export const HERO_PREVIEW_SIZE = 3;
 
 const BYLINE_ARTISTS = 3;
 
@@ -37,7 +35,9 @@ export function DailyMix<T extends string>({
   href?: Route<T>;
 }) {
   const t = useT();
-  const artistDescriptionId = useId();
+  const id = useId();
+  const headingId = `${id}-title`;
+  const artistDescriptionId = `${id}-artists`;
   const format = useFormat();
   const { currentTrackId, playTrack, soundingNow } = usePlayback();
 
@@ -52,13 +52,6 @@ export function DailyMix<T extends string>({
         ) === index,
     )
     .slice(0, 4);
-
-  const art = collage[0] ?? lead;
-  const tone = useVividTone(
-    collage.length > 0
-      ? collage.map((track) => trackCoverUrl(track, "thumb"))
-      : [art?.hasCover ? trackCoverUrl(art, "thumb") : null],
-  );
 
   if (!lead) return null;
 
@@ -79,10 +72,8 @@ export function DailyMix<T extends string>({
 
   return (
     <section
-      data-tone=""
-      style={toneStyle(tone)}
       className="daily-mix"
-      aria-labelledby="daily-mix-heading"
+      aria-labelledby={headingId}
       aria-describedby={artistDescriptionId}
     >
       <div className="daily-mix-header">
@@ -94,10 +85,18 @@ export function DailyMix<T extends string>({
           )}
         </div>
         <div className="min-w-0">
-          <h2 id="daily-mix-heading" className="text-xl font-semibold">
+          <h2 id={headingId} className="font-semibold">
             {title}
           </h2>
-          <p className="mt-1 text-xs text-muted-foreground">{size}</p>
+          <div className="daily-mix-meta">
+            <span>{size}</span>
+            {href && (
+              <Link href={href} className="daily-mix-link">
+                {t("action.seeAll")}
+                <ChevronRightIcon size={14} aria-hidden="true" />
+              </Link>
+            )}
+          </div>
         </div>
         <PlayAllButton tracks={tracks} name={title} />
       </div>
@@ -119,7 +118,7 @@ export function DailyMix<T extends string>({
                   )}
                   className="daily-preview-track group"
                 >
-                  <span className="relative size-10 overflow-hidden rounded-xs shadow-art">
+                  <span className="relative size-8 overflow-hidden rounded-xs shadow-art">
                     <TrackCover track={track} />
                     <PlayBadge
                       size={8}
@@ -151,12 +150,6 @@ export function DailyMix<T extends string>({
           })}
         </ol>
       </div>
-      {href && (
-        <Link href={href} className="daily-mix-link">
-          {t("action.seeAll")}
-          <ChevronRightIcon size={16} />
-        </Link>
-      )}
     </section>
   );
 }

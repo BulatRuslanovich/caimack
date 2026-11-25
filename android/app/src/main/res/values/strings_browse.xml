@@ -22,7 +22,9 @@
     <string name="home_new_arrivals">Fresh arrivals</string>
     <string name="home_liked_songs">Liked songs</string>
     <string name="home_top_this_week">Your top this week</string>
-    <string name="home_top_period">Last 7 days</string>
+    <string name="home_popular_tracks">Most played tracks</string>
+    <string name="home_popular_albums">Most played albums</string>
+    <string name="home_popular_artists">Most played artists</string>
     <string name="home_new_albums">New albums</string>
     <string name="home_quick_picks">Jump back in</string>
     <string name="home_your_playlists">Your playlists</string>

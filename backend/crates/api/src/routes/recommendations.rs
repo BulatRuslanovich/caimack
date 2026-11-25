@@ -2,6 +2,7 @@
 
 use app::recommendations::duplicates::{DismissDuplicatesRequest, MergeDuplicatesRequest};
 use app::recommendations::home::MixKind;
+use app::recommendations::map::MapProjection;
 use app::recommendations::radio::RadioRequestDto;
 use app::recommendations::rules::CreateRuleRequest;
 use axum::Router;
@@ -31,6 +32,7 @@ pub fn router(enabled: bool) -> Router<AppState> {
     }
     base.route("/api/home/mixes/{kind}", get(mix))
         .route("/api/recommendations/radio", post(radio))
+        .route("/api/playlists/{id}/suggestions", get(playlist_suggestions))
         .route("/api/recommendations/stats", get(stats))
         .route("/api/recommendations/rules", get(rules).post(add_rule))
         .route("/api/recommendations/rules/{id}", delete(remove_rule))
@@ -71,6 +73,14 @@ async fn radio(
     Json(request): Json<RadioRequestDto>,
 ) -> ApiResult<impl IntoResponse> {
     Ok(Json(state.recommendations.radio(user.user_id, request).await?))
+}
+
+async fn playlist_suggestions(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    RoutePath(id): RoutePath<Uuid>,
+) -> ApiResult<impl IntoResponse> {
+    Ok(Json(state.recommendations.playlist_suggestions(user.user_id, id).await?))
 }
 
 async fn rules(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> ApiResult<impl IntoResponse> {
@@ -116,8 +126,18 @@ async fn recap(State(state): State<AppState>, CurrentUser(user): CurrentUser) ->
     })
 }
 
-async fn map(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> ApiResult<impl IntoResponse> {
-    Ok(Json(state.recommendations.map(user.user_id).await?))
+#[derive(Deserialize)]
+struct MapQuery {
+    #[serde(default)]
+    projection: MapProjection,
+}
+
+async fn map(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Query(query): Query<MapQuery>,
+) -> ApiResult<impl IntoResponse> {
+    Ok(Json(state.recommendations.map(user.user_id, query.projection).await?))
 }
 
 async fn duplicates(State(state): State<AppState>, Admin(user): Admin) -> ApiResult<impl IntoResponse> {

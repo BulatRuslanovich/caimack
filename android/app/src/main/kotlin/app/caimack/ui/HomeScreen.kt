@@ -2,6 +2,7 @@
 
 package app.caimack.ui
 
+import android.util.Log
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -52,15 +53,19 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import app.caimack.R
 import app.caimack.api.HomeBlock
+import app.caimack.api.SearchResults
 import app.caimack.playback.LocalLibrary
 import app.caimack.api.Track
 import app.caimack.audiobooks.AudiobookCatalog
 import app.caimack.playback.matchesCollection
+import java.io.IOException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import retrofit2.HttpException
 
 private const val HERO_PREVIEW = 3
 private const val MOBILE_UP_NEXT = 2
 private const val MOBILE_QUICK = 4
-private const val MOBILE_CHART = 5
 private const val MIN_DISTINCT = 3
 
 @Composable
@@ -140,9 +145,23 @@ private fun MusicHome(nav: NavController, audiobooks: AudiobookCatalog?, filters
     Load(
         key = "home",
         load = {
-            if (!offline) container.flushSignals()
-            val blocks = container.api.homeFeed().blocks
-            if (!offline) blocks else blocks.map { block ->
+            if (!offline) {
+                container.flushSignals()
+                coroutineScope {
+                    val popular = async {
+                        try {
+                            container.api.searchPopular()
+                        } catch (error: IOException) {
+                            Log.w("Caimack", "Loading popular music failed", error)
+                            SearchResults()
+                        } catch (error: HttpException) {
+                            Log.w("Caimack", "Loading popular music failed", error)
+                            SearchResults()
+                        }
+                    }
+                    withPopularMusic(container.api.homeFeed().blocks, popular.await())
+                }
+            } else container.api.homeFeed().blocks.filterNot { it.baseKey == "topTracks" }.map { block ->
                 val truncated = (block.totalCount ?: 0) > block.tracks.orEmpty().size
                 if (block.baseKey == "dailyMix" && truncated) {
                     val mix = container.api.homeMix("daily")
@@ -168,6 +187,23 @@ private fun MusicHome(nav: NavController, audiobooks: AudiobookCatalog?, filters
             { Empty(stringResource(R.string.home_empty_title)) }
         } else null)
     }
+}
+
+private fun withPopularMusic(blocks: List<HomeBlock>, popular: SearchResults): List<HomeBlock> {
+    val sections = listOfNotNull(
+        popular.tracks.takeIf { it.isNotEmpty() }?.let {
+            HomeBlock("popularTracks", "popularTracks", "TrackList", "Browse", tracks = it)
+        },
+        popular.albums.takeIf { it.isNotEmpty() }?.let {
+            HomeBlock("popularAlbums", "popularAlbums", "Shelf", "Browse", albums = it)
+        },
+        popular.artists.takeIf { it.isNotEmpty() }?.let {
+            HomeBlock("popularArtists", "popularArtists", "Shelf", "Browse", artists = it)
+        },
+    )
+    val weeklyTop = blocks.indexOfFirst { it.baseKey == "topTracks" }
+    if (weeklyTop < 0) return blocks + sections
+    return blocks.take(weeklyTop) + sections + blocks.drop(weeklyTop + 1)
 }
 
 private fun offlineHomeBlocks(blocks: List<HomeBlock>, library: LocalLibrary): List<HomeBlock> = blocks.mapNotNull { block ->
@@ -243,7 +279,6 @@ private fun Block(block: HomeBlock, nav: NavController, shown: Set<String>, seen
     Shown(source, seen)
     val title = blockTitle(block)
     val note = when {
-        block.baseKey == "topTracks" -> stringResource(R.string.home_top_period)
         block.baseKey in setOf("forYou", "artistsForYou") -> block.reason?.let { reasonLabel(it) }
         else -> null
     }
@@ -269,14 +304,14 @@ private fun Block(block: HomeBlock, nav: NavController, shown: Set<String>, seen
                 }
             }
         }
-        "Chart" -> Column(
+        "TrackList" -> Column(
             Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             SectionHeader(title, note, seeAll)
             Column {
-                tracks.take(MOBILE_CHART).forEachIndexed { index, track ->
-                    TrackRow(track, { play(tracks, index) }, index = index + 1)
+                tracks.forEachIndexed { index, track ->
+                    TrackRow(track, { play(tracks, index) })
                 }
             }
         }
@@ -409,27 +444,38 @@ internal fun CollectionTransportButton(
 
 @Composable
 fun PlayActions(modifier: Modifier = Modifier, enabled: Boolean = true, trackIds: List<String> = emptyList(), onPlay: () -> Unit) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        CollectionPlayButton(trackIds, enabled = enabled, onPlay = onPlay)
+        CollectionShuffleButton(enabled)
+    }
+}
+
+@Composable
+internal fun CollectionShuffleButton(enabled: Boolean, compact: Boolean = false) {
     val palette = LocalPalette.current
     val player = LocalContainer.current.player
     val state by player.state.collectAsStateWithLifecycle()
+    val label = stringResource(R.string.action_shuffle)
+    val toggle = Modifier.clip(CircleShape)
+        .toggleable(value = state.shuffle, enabled = enabled, role = Role.Checkbox, onValueChange = player::setShuffle)
+    if (compact) {
+        Box(Modifier.size(48.dp).then(toggle), contentAlignment = Alignment.Center) {
+            Icon(Lucide.Shuffle, label, tint = if (state.shuffle) palette.primary else palette.muted)
+        }
+        return
+    }
+
     val background by animateColorAsState(if (state.shuffle) palette.primary else palette.background, label = "shuffle background")
     val foreground by animateColorAsState(if (state.shuffle) palette.onPrimary else palette.foreground, label = "shuffle foreground")
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        CollectionPlayButton(trackIds, enabled = enabled, onPlay = onPlay)
-        Row(
-            Modifier
-                .heightIn(min = 48.dp)
-                .clip(CircleShape)
-                .background(background)
-                .border(1.dp, if (state.shuffle) palette.primary else palette.controlBorder, CircleShape)
-                .toggleable(value = state.shuffle, enabled = enabled, role = Role.Checkbox, onValueChange = player::setShuffle)
-                .padding(horizontal = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Icon(Lucide.Shuffle, null, tint = foreground, modifier = Modifier.size(16.dp))
-            Text(stringResource(R.string.action_shuffle), color = foreground, style = Type.small.copy(fontWeight = FontWeight.Medium))
-        }
+    Row(
+        Modifier.heightIn(min = 48.dp).clip(CircleShape).background(background)
+            .border(1.dp, if (state.shuffle) palette.primary else palette.controlBorder, CircleShape)
+            .then(toggle).padding(horizontal = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(Lucide.Shuffle, null, tint = foreground, modifier = Modifier.size(16.dp))
+        Text(label, color = foreground, style = Type.small.copy(fontWeight = FontWeight.Medium))
     }
 }
 
@@ -532,7 +578,9 @@ private fun blockTitle(block: HomeBlock): String {
         "favorites" -> stringResource(R.string.home_liked_songs)
         "quickTiles" -> stringResource(R.string.home_quick_picks)
         "newArrivals" -> stringResource(R.string.home_new_arrivals)
-        "topTracks" -> stringResource(R.string.home_top_this_week)
+        "popularTracks" -> stringResource(R.string.home_popular_tracks)
+        "popularAlbums" -> stringResource(R.string.home_popular_albums)
+        "popularArtists" -> stringResource(R.string.home_popular_artists)
         "newAlbums" -> stringResource(R.string.home_new_albums)
         "yourPlaylists" -> stringResource(R.string.home_your_playlists)
         "becauseYouListened" -> if (subject != null) stringResource(R.string.rec_because_you_listened, subject) else stringResource(R.string.rec_for_you)
@@ -547,7 +595,6 @@ private fun blockLink(block: HomeBlock): Any? = when (block.baseKey) {
     "favorites" -> FavoritesRoute
     "quickTiles" -> RecentRoute
     "newArrivals" -> MixRoute("new")
-    "topTracks" -> MixRoute("top")
     "newAlbums" -> SearchRoute(SearchCategory.Albums)
     "yourPlaylists" -> SearchRoute(SearchCategory.Playlists)
     "artistsForYou" -> SearchRoute(SearchCategory.Artists)

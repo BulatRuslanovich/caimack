@@ -1,35 +1,43 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Bulat Ruslanovich
 
+use anyhow::Context;
 use app::AppError;
-use app::audiobooks::{Audiobooks, BookEdit, Progress};
+use app::audiobooks::{Audiobooks, BookEdit, BookUpload, Progress};
 use app::covers::MAX_IMAGE_BYTES;
 use axum::Router;
 use axum::body::Bytes;
+use axum::extract::multipart::MultipartError;
 use axum::extract::{DefaultBodyLimit, Multipart, Request, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::middleware::{Next, from_fn_with_state};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, put};
 use serde::{Deserialize, Serialize};
+use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
 use super::media::read_image_field;
 use crate::auth::{Admin, CurrentUser};
 use crate::extract::{Json, RequestLang, RoutePath};
 use crate::files::{self, FileReply};
-use crate::problem::ApiResult;
+use crate::problem::{ApiError, ApiResult};
 use crate::state::AppState;
 
 const MEDIA_CACHE: &str = "private, max-age=300";
+const MAX_UPLOAD_BODY: usize = 2 * 1024 * 1024 * 1024;
 const SERVER_TIME: header::HeaderName = header::HeaderName::from_static("x-caimack-server-time-ms");
 
 pub(super) fn router(state: AppState) -> Router<AppState> {
     Router::new()
         .route("/api/audiobooks", get(list))
+        .route("/api/audiobooks/uploads/{id}", put(upload_book).layer(DefaultBodyLimit::max(MAX_UPLOAD_BODY)))
         .route(
             "/api/audiobooks/{id}",
-            get(get_book).put(edit_book).layer(DefaultBodyLimit::max(MAX_IMAGE_BYTES as usize + 16 * 1024)),
+            get(get_book)
+                .put(edit_book)
+                .delete(delete_book)
+                .layer(DefaultBodyLimit::max(MAX_IMAGE_BYTES as usize + 16 * 1024)),
         )
         .route("/api/audiobooks/{id}/saved", put(save).delete(remove))
         .route("/api/audiobooks/{id}/progress", put(set_progress))
@@ -87,6 +95,61 @@ async fn get_book(
 ) -> ApiResult<Response> {
     let book = state.audiobooks.get(&state.db, user.user_id, id, lang).await?;
     Ok(timed_json(book))
+}
+
+async fn delete_book(
+    State(state): State<AppState>,
+    Admin(_): Admin,
+    RoutePath(id): RoutePath<Uuid>,
+) -> ApiResult<StatusCode> {
+    state.audiobooks.delete(id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn upload_book(
+    State(state): State<AppState>,
+    Admin(_): Admin,
+    RoutePath(id): RoutePath<Uuid>,
+    mut form: Multipart,
+) -> ApiResult<StatusCode> {
+    let invalid = || AppError::validation("Invalid audiobook upload.");
+    let mut upload = BookUpload::start(state.storage.audiobooks_root(), id).await?;
+    let mut title = None;
+    while let Some(mut field) = form.next_field().await.map_err(upload_error)? {
+        match field.name() {
+            Some("title") if title.is_none() => {
+                let mut bytes = Vec::new();
+                while let Some(chunk) = field.chunk().await.map_err(upload_error)? {
+                    if bytes.len() + chunk.len() > 1200 {
+                        return Err(AppError::validation("Enter a title of at most {0} characters.").arg(300).into());
+                    }
+                    bytes.extend_from_slice(&chunk);
+                }
+                title = Some(String::from_utf8(bytes).map_err(|_| invalid())?);
+            }
+            Some("file") => {
+                let mut file = upload.chapter(field.file_name().ok_or_else(invalid)?).await?;
+                while let Some(chunk) = field.chunk().await.map_err(upload_error)? {
+                    file.write_all(&chunk)
+                        .await
+                        .context("Could not write an audiobook chapter")
+                        .map_err(AppError::from)?;
+                }
+                file.flush().await.context("Could not flush an audiobook chapter").map_err(AppError::from)?;
+            }
+            _ => return Err(invalid().into()),
+        }
+    }
+    upload.finish(state.audiobooks, title.as_deref().ok_or_else(invalid)?).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+fn upload_error(error: MultipartError) -> ApiError {
+    if error.status() == StatusCode::PAYLOAD_TOO_LARGE {
+        AppError::payload_too_large("The audiobook exceeds the 2 GB upload limit.").into()
+    } else {
+        AppError::validation("Invalid audiobook upload.").into()
+    }
 }
 
 async fn edit_book(
@@ -165,7 +228,6 @@ async fn stream(
         content_type: file.content_type.to_owned(),
         etag: file.etag,
         cache_control: MEDIA_CACHE,
-        download_name: None,
         ranges: true,
     };
     Ok(reply.send(&headers).await)

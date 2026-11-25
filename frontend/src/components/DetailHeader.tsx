@@ -11,6 +11,7 @@ import { isDesktop } from "@/desktop/runtime";
 export function DetailHeader({
   kind,
   title,
+  byline,
   art,
   facts = [],
   description,
@@ -22,6 +23,7 @@ export function DetailHeader({
 }: {
   kind: string;
   title: string;
+  byline?: ReactNode;
   art: ReactNode;
   facts?: ReactNode[];
   description?: ReactNode;
@@ -36,7 +38,10 @@ export function DetailHeader({
   );
 
   return (
-    <header className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-end gap-8 pt-2 [--art:clamp(15rem,20vw,18rem)] max-md:grid-cols-1 max-md:gap-4 max-md:[--art:12rem]">
+    <header
+      data-detail-backdrop={backdrop ? "" : undefined}
+      className="detail-header grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-end gap-8 pt-2 max-md:grid-cols-1 max-md:gap-4"
+    >
       <ArtBackdrop src={backdrop} mode="header" />
 
       <div
@@ -50,14 +55,17 @@ export function DetailHeader({
       </div>
 
       <div className="flex min-w-0 flex-col gap-3">
-        <h1
-          className={cn(
-            displayTitleClass(title),
-            "text-balance wrap-anywhere max-md:text-[clamp(1.75rem,7.7vw,2rem)] max-md:leading-tight",
-          )}
-        >
-          {title}
-        </h1>
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <h1
+            className={cn(
+              displayTitleClass(title),
+              "text-balance wrap-anywhere max-md:text-[clamp(1.75rem,7.7vw,2rem)] max-md:leading-tight",
+            )}
+          >
+            {title}
+          </h1>
+          {byline && <p className="text-lg leading-tight font-semibold wrap-anywhere">{byline}</p>}
+        </div>
         {description && (
           <p className="max-w-[62ch] text-muted-foreground max-md:text-sm">{description}</p>
         )}

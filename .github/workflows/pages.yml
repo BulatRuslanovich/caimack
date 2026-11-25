@@ -1,0 +1,72 @@
+name: GitHub Pages
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "landing/**"
+      - "docs/**"
+      - "frontend/public/logo*.svg"
+      - "frontend/public/wordmark.svg"
+      - "android/app/src/main/res/font/onest_variable.ttf"
+      - "mkdocs.yml"
+      - "scripts/build_pages.py"
+      - "scripts/pages-requirements.txt"
+      - ".github/workflows/pages.yml"
+  pull_request:
+    branches: [master]
+    paths:
+      - "landing/**"
+      - "docs/**"
+      - "frontend/public/logo*.svg"
+      - "frontend/public/wordmark.svg"
+      - "android/app/src/main/res/font/onest_variable.ttf"
+      - "mkdocs.yml"
+      - "scripts/build_pages.py"
+      - "scripts/pages-requirements.txt"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+          cache: pip
+          cache-dependency-path: scripts/pages-requirements.txt
+      - name: Install documentation dependencies
+        run: python -m pip install -r scripts/pages-requirements.txt
+      - name: Build the landing page and documentation
+        run: python scripts/build_pages.py
+      - name: Upload Pages artifact
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: out/pages
+
+  deploy:
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

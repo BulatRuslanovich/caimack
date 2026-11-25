@@ -14,11 +14,12 @@ import { useFormat } from "@/lib/useFormat";
 import { usePage } from "@/lib/usePage";
 import { useInvalidate } from "@/lib/useInvalidate";
 import { useRowSelection } from "@/lib/useRowSelection";
+import { useTrackSort } from "@/lib/useTrackSort";
 import { useAuth } from "@/contexts/AuthContext";
 import { useT } from "@/contexts/I18nContext";
 import { useToast } from "@/lib/useToast";
 import { Section } from "@/components/PageHeader";
-import { Pagination, SortSelect, ToolbarFilters } from "@/components/PageToolbar";
+import { Pagination, ToolbarFilters } from "@/components/PageToolbar";
 import {
   Select,
   SelectContent,
@@ -29,7 +30,8 @@ import {
 import { PlayAllButton } from "@/components/PlayAllButton";
 import { ShuffleButton } from "@/components/ShuffleButton";
 import { Query } from "@/components/Query";
-import { TrackList } from "@/components/TrackList";
+import { TrackList, type TrackSortColumn } from "@/components/TrackList";
+import { TrackSortMenu } from "@/components/TrackSortMenu";
 import { TrackDisplayMenu } from "@/components/TrackDisplayMenu";
 import { useTrackDisplay } from "@/lib/trackDisplay";
 import { Button } from "@/components/ui/button";
@@ -41,9 +43,18 @@ const sortKeys: Record<TrackSort, TranslationKey> = {
   Recent: "sort.dateAdded",
   Artist: "sort.artist",
   Album: "sort.album",
+  Duration: "sort.duration",
+  Year: "sort.year",
   Bpm: "sort.bpm",
   Key: "sort.key",
   Loudness: "sort.loudness",
+};
+
+const COLUMN_SORTS: Record<TrackSortColumn, TrackSort> = {
+  title: "Title",
+  album: "Album",
+  added: "Recent",
+  duration: "Duration",
 };
 
 const ANY = "any";
@@ -62,10 +73,14 @@ export function TracksPage({ query }: { query: string }) {
   const { isAdmin } = useAuth();
   const [confirm, confirmDialog] = useConfirm();
 
-  const [sort, setSort] = useState<TrackSort>("Title");
+  const sorting = useTrackSort<TrackSort>("Title", { Recent: "desc", Loudness: "desc" });
+  const { value: sort, direction } = sorting;
+  const sortColumn = (Object.keys(COLUMN_SORTS) as TrackSortColumn[]).find(
+    (column) => COLUMN_SORTS[column] === sort,
+  );
   const [tempo, setTempo] = useState(ANY);
   const [key, setKey] = useState(ANY);
-  const [page, setPage] = usePage([sort, query, tempo, key]);
+  const [page, setPage] = usePage([sort, direction, query, tempo, key]);
   const filter: TrackFilter = {
     ...TEMPOS[tempo]?.filter,
     key: key === ANY ? undefined : key,
@@ -76,6 +91,7 @@ export function TracksPage({ query }: { query: string }) {
       page,
       pageSize: TRACK_PAGE_SIZE,
       sort,
+      direction,
       q: query || undefined,
       ...filter,
     }),
@@ -86,7 +102,10 @@ export function TracksPage({ query }: { query: string }) {
   const items = useMemo(() => tracks.data?.items ?? [], [tracks.data]);
   const ids = useMemo(() => items.map((track) => track.id), [items]);
 
-  const selection = useRowSelection(ids, JSON.stringify([page, sort, query, tempo, key]));
+  const selection = useRowSelection(
+    ids,
+    JSON.stringify([page, sort, direction, query, tempo, key]),
+  );
 
   const [selecting, setSelecting] = useState(false);
   const { clear } = selection;
@@ -100,8 +119,13 @@ export function TracksPage({ query }: { query: string }) {
     if (!selecting) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (
+        document.querySelector(
+          '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]',
+        )
+      )
+        return;
 
       stopSelecting();
     };
@@ -125,13 +149,13 @@ export function TracksPage({ query }: { query: string }) {
       )}
 
       <div className="library-toolbar flex flex-wrap items-center gap-2">
+        <TrackSortMenu {...sorting} options={sortKeys} />
         <ToolbarFilters
           compact
-          mobileFilters={{ active: sort !== "Title" || tempo !== ANY || key !== ANY || selecting }}
+          mobileFilters={{ active: tempo !== ANY || key !== ANY || selecting }}
         >
-          <SortSelect value={sort} onChange={setSort} options={sortKeys} />
           <Select value={tempo} onValueChange={setTempo}>
-            <SelectTrigger aria-label={t("sort.bpm")}>
+            <SelectTrigger aria-label={t("sort.bpm")} data-active={tempo !== ANY}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -144,7 +168,7 @@ export function TracksPage({ query }: { query: string }) {
             </SelectContent>
           </Select>
           <Select value={key} onValueChange={setKey}>
-            <SelectTrigger aria-label={t("sort.key")}>
+            <SelectTrigger aria-label={t("sort.key")} data-active={key !== ANY}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -170,11 +194,7 @@ export function TracksPage({ query }: { query: string }) {
         {items.length > 0 && (
           <div className="ml-auto flex shrink-0 items-center gap-2">
             <PlayAllButton tracks={items} className="size-10 pointer-coarse:size-11" />
-            <ShuffleButton
-              tracks={items}
-              compact
-              className="rounded-lg px-3 max-md:size-10 pointer-coarse:h-11 pointer-coarse:max-md:w-11"
-            />
+            <ShuffleButton tracks={items} compact />
           </div>
         )}
       </div>
@@ -184,6 +204,12 @@ export function TracksPage({ query }: { query: string }) {
           <Section className="gap-2">
             <TrackList
               tracks={data.items}
+              addedAt="createdAt"
+              sort={{
+                active: sortColumn,
+                direction,
+                onChange: (column) => sorting.onChange(COLUMN_SORTS[column]),
+              }}
               showTempoKey={display.showTempoKey}
               showAudioSpec={display.showAudioSpec}
               emptyMessage={filtered ? t("filter.nothingMatched") : undefined}
@@ -238,7 +264,7 @@ function BulkActions({
 
   if (!selecting) {
     return (
-      <Button variant="ghost" className="rounded-lg px-3 pointer-coarse:h-11" onClick={onStart}>
+      <Button onClick={onStart}>
         <CheckIcon size={16} />
         {t("tracks.selectMode")}
       </Button>
@@ -254,7 +280,6 @@ function BulkActions({
       {selected.size > 0 && (
         <Button
           variant="destructive"
-          className="rounded-lg px-3 pointer-coarse:h-11"
           disabled={deleteSelected.isPending}
           onClick={() =>
             confirm({
@@ -270,12 +295,7 @@ function BulkActions({
         </Button>
       )}
 
-      <Button
-        variant="ghost"
-        className="rounded-lg px-3 pointer-coarse:h-11"
-        disabled={deleteSelected.isPending}
-        onClick={onStop}
-      >
+      <Button data-active disabled={deleteSelected.isPending} onClick={onStop}>
         {t("tracks.exitSelectMode")}
       </Button>
     </div>

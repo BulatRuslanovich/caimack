@@ -4,10 +4,17 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import { queries } from "@/lib/queries";
-import type { Album, Artist, Track } from "@/lib/types";
+import type { SearchResults, SearchTopResult, Track } from "@/lib/types";
 import SearchPage from "./page";
+import type { MusicImport, MusicSource } from "@/integrations/music";
 
-const route = vi.hoisted(() => ({ search: "", audiobooksEnabled: true }));
+const route = vi.hoisted(() => ({
+  search: "",
+  audiobooksEnabled: true,
+  isAdmin: false,
+  externalSearch: true,
+  linkImport: true,
+}));
 const books = vi.hoisted(() => [
   {
     id: "quantum",
@@ -22,9 +29,12 @@ const books = vi.hoisted(() => [
     narrator: "Михаил Росляков",
   },
 ]);
-vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(route.search) }));
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(route.search),
+  useRouter: () => ({ push: vi.fn() }),
+}));
+vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ isAdmin: route.isAdmin }) }));
 vi.mock("@/contexts/I18nContext", () => ({ useT: () => (key: string) => key }));
-vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ isAdmin: false }) }));
 vi.mock("@/contexts/AudiobookContext", () => ({
   useAudiobooks: () => ({
     enabled: route.audiobooksEnabled,
@@ -35,29 +45,23 @@ vi.mock("@/contexts/AudiobookContext", () => ({
 vi.mock("@/components/audiobooks/AudiobookViews", () => ({
   AudiobookRow: ({ book }: { book: (typeof books)[number] }) => <li>{book.title}</li>,
 }));
-vi.mock("@/lib/useYandexMusic", () => ({ useYandexMusicSettings: () => ({ enabled: false }) }));
+vi.mock("@/integrations/registry", () => ({ useAvailableIntegrations: () => [] }));
+vi.mock("@/integrations/useMusicSources", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/integrations/useMusicSources")>()),
+  useExternalMusicSearch: () => route.externalSearch,
+  usePlaylistLinkImport: () => route.linkImport,
+}));
 vi.mock("./RecentSearches", () => ({ RecentSearches: () => <p>recent searches</p> }));
-vi.mock("@/components/collection/RankedList", () => ({
-  RankedList: ({
-    tracks,
-    ranked,
-    density,
-  }: {
-    tracks: Track[];
-    ranked: boolean;
-    density: string;
-  }) => (
-    <ol data-density={density} data-ranked={ranked}>
+vi.mock("./TopResult", () => ({
+  TopResult: ({ top }: { top: SearchTopResult }) => <p data-top-result>{top.track?.title}</p>,
+}));
+vi.mock("@/components/TrackList", () => ({
+  TrackList: ({ tracks }: { tracks: Track[] }) => (
+    <ul>
       {tracks.map((track) => (
         <li key={track.id}>{track.title}</li>
       ))}
-    </ol>
-  ),
-}));
-vi.mock("@/components/MediaCard", () => ({
-  AlbumCard: ({ album }: { album: Album }) => <p>{album.title}</p>,
-  ArtistCard: ({ artist, bare }: { artist: Artist; bare: boolean }) => (
-    <p data-bare={bare}>{artist.name}</p>
+    </ul>
   ),
 }));
 vi.mock("@/app/tracks/TracksPage", () => ({
@@ -70,40 +74,57 @@ vi.mock("@/app/genres/GenresPage", () => ({
   GenresPage: ({ selected }: { selected: string }) => <p data-selected-genre={selected} />,
 }));
 
-function render(search: string, audiobooksEnabled = true) {
+function render(
+  search: string,
+  {
+    audiobooksEnabled = true,
+    isAdmin = false,
+    externalSearch = true,
+    linkImport = true,
+    results,
+    playlistSource,
+    importedJobs,
+  }: {
+    audiobooksEnabled?: boolean;
+    isAdmin?: boolean;
+    externalSearch?: boolean;
+    linkImport?: boolean;
+    results?: SearchResults;
+    playlistSource?: MusicSource;
+    importedJobs?: MusicImport[];
+  } = {},
+) {
   route.search = search;
   route.audiobooksEnabled = audiobooksEnabled;
+  route.isAdmin = isAdmin;
+  route.externalSearch = externalSearch;
+  route.linkImport = linkImport;
   const client = new QueryClient();
-  const metadata = {
-    artistId: "artist-0",
-    artistName: "Artist 0",
-    createdAt: "2026-01-01T00:00:00Z",
-    durationSeconds: 180,
-    hasCover: false,
-  };
-  client.setQueryData(queries.searchPopular().queryKey, {
-    tracks: Array.from({ length: 10 }, (_, index) => ({
-      ...metadata,
-      id: `track-${index}`,
-      title: `Track ${index}`,
-      originalFileName: `track-${index}.mp3`,
-      isFavorite: false,
-      hasLyrics: false,
-    })),
-    albums: Array.from({ length: 5 }, (_, index) => ({
-      ...metadata,
-      id: `album-${index}`,
-      title: `Album ${index}`,
-      trackCount: 2,
-    })),
-    artists: Array.from({ length: 5 }, (_, index) => ({
-      id: `artist-${index}`,
-      name: `Artist ${index}`,
-      trackCount: 2,
-      albumCount: 1,
-      hasImage: false,
-    })),
-  });
+  if (isAdmin) {
+    client.setQueryData(
+      ["music-sources", false],
+      [
+        {
+          id: "soundcloud",
+          name: "SoundCloud",
+          status: "ready",
+          audioStatus: "ready",
+          capabilities: { tracks: true, audio: true },
+        },
+      ],
+    );
+  }
+  if (playlistSource) {
+    client.setQueryData(
+      ["music-playlist-source", new URLSearchParams(search).get("q")],
+      playlistSource,
+    );
+  }
+  if (importedJobs) client.setQueryData(["music-imports"], importedJobs);
+  if (results) {
+    const query = new URLSearchParams(search).get("q") ?? "";
+    client.setQueryData(queries.search(query).queryKey, results);
+  }
   return renderToStaticMarkup(
     <QueryClientProvider client={client}>
       <SearchPage />
@@ -121,24 +142,17 @@ it("shows all catalog tabs on the search start screen", () => {
 });
 
 it("hides the audiobook search filter while its experiment is disabled", () => {
-  const markup = render("tab=audiobooks&q=Hawking", false);
+  const markup = render("tab=audiobooks&q=Hawking", { audiobooksEnabled: false });
   expect(markup).not.toContain(">nav.audiobooks</button>");
   expect(markup).not.toContain("search.audiobookPlaceholder");
 });
 
-it("shows popular tracks, albums and artists in order on the empty All tab", () => {
-  const markup = render("");
-  expect(markup).toMatch(
-    /recent searches.*search.mostPlayedTracks.*search.mostPlayedAlbums.*search.mostPlayedArtists/,
-  );
-  expect(markup).toContain('data-density="compact" data-ranked="false"');
-  expect(markup.match(/<li>Track \d+<\/li>/g)).toHaveLength(10);
-  expect(markup.match(/<p>Album \d+<\/p>/g)).toHaveLength(5);
-  expect(markup.match(/<p data-bare="true">Artist \d+<\/p>/g)).toHaveLength(5);
-  expect(render("q=ab")).not.toContain("search.mostPlayedTracks");
-  expect(render("q=abc")).not.toContain("search.mostPlayedTracks");
-  expect(render("tab=tracks")).toContain('data-tracks-query=""');
-  expect(render("tab=tracks")).not.toContain("search.mostPlayedTracks");
+it("keeps old provider links in the common search without rendering a provider tab", () => {
+  const markup = render("tab=vk&q=Kingdom+of+Predators", { isAdmin: true });
+  expect(markup).toContain('value="Kingdom of Predators"');
+  expect(markup).toContain(">nav.tracks</button>");
+  expect(markup).toContain("music.sourceFilter");
+  expect(markup).not.toContain(">VK Music</button>");
 });
 
 it("opens the selected catalog category with or without a query", () => {
@@ -155,4 +169,101 @@ it("finds audiobooks by title, author and narrator from the filter and All", () 
   expect(filtered).not.toContain("(Не)совершенная случайность");
   expect(render(`q=${query}`)).toContain("Квантовый кот вселенной");
   expect(render("tab=audiobooks&q=nonexistent")).toContain("search.nothingFound");
+});
+
+it("shows a sole matching track once when it is also the top result", () => {
+  const track = { id: "first", title: "First tone" } as Track;
+  const results: SearchResults = {
+    tracks: [track],
+    artists: [],
+    albums: [],
+    genres: [],
+    top: { kind: "Track", track },
+  };
+  const markup = render("q=first", { results });
+
+  expect(markup).not.toContain("data-top-result");
+  expect(markup).toContain("<li>First tone</li>");
+});
+
+it("uses the main search field for a playlist import with external search off", () => {
+  const link = "https://open.spotify.com/playlist/0123456789012345678901";
+  const markup = render(`q=${encodeURIComponent(link)}`, {
+    isAdmin: true,
+    externalSearch: false,
+    playlistSource: {
+      id: "spotify",
+      name: "Spotify",
+      status: "ready",
+      audioStatus: "ready",
+      capabilities: { tracks: false, albums: false, playlist: true, audio: false },
+    },
+  });
+  expect(markup).toContain("music.placeholder");
+  expect(markup).toContain("music.readPlaylist");
+  expect(markup).toContain(">Spotify</span>");
+  expect(markup).not.toContain("search.nothingFound");
+});
+
+it("prompts for a playlist link before typing when external search is off", () => {
+  const markup = render("", { isAdmin: true, externalSearch: false });
+
+  expect(markup).toContain('placeholder="music.placeholder"');
+  expect(markup).not.toContain("music.sourceFilter");
+});
+
+it("omits the playlist link prompt when only external search is on", () => {
+  const markup = render("", { isAdmin: true, linkImport: false });
+
+  expect(markup).toContain('placeholder="search.placeholderWithAudiobooks"');
+  expect(markup).toContain("music.sourceFilter");
+});
+
+it("shows library results with the external search disabled", () => {
+  const markup = render("q=first", {
+    isAdmin: true,
+    externalSearch: false,
+    results: {
+      tracks: [{ id: "first", title: "First tone" } as Track],
+      artists: [],
+      albums: [],
+      genres: [],
+    },
+  });
+
+  expect(markup).toContain("First tone");
+  expect(markup).not.toContain("music.sourceFilter");
+  expect(markup).not.toContain("music.externalResults");
+});
+
+it("shows the disabled link message without offering a playlist preview", () => {
+  const link = "https://open.spotify.com/playlist/0123456789012345678901";
+  const markup = render(`q=${encodeURIComponent(link)}`, { isAdmin: true, linkImport: false });
+
+  expect(markup).toContain("music.linkImportDisabled");
+  expect(markup).not.toContain("music.readPlaylist");
+  expect(markup).not.toContain("music.externalResults");
+});
+
+it("keeps the previous import history out of search", () => {
+  const markup = render("q=example", {
+    isAdmin: true,
+    importedJobs: [
+      {
+        id: "previous-job",
+        title: "Previously imported track",
+        state: "finished",
+        error: null,
+        playlistId: null,
+        omitted: 0,
+        partial: false,
+        total: 1,
+        done: 1,
+        failed: 0,
+      },
+    ],
+  });
+
+  expect(markup).not.toContain("music.imports");
+  expect(markup).not.toContain("Previously imported track");
 });

@@ -200,7 +200,11 @@ export async function fixture({ trackCount = 1, isAdmin = false } = {}) {
     if (path === "/api/auth/me") return json(account);
     if (path === "/api/auth/logout") return response.writeHead(204).end();
     if (path === "/api/config")
-      return json({ recommendationsEnabled: false, accessTokenMinutes: 15 });
+      return json({
+        recommendationsEnabled: false,
+        accessTokenMinutes: 15,
+        integrations: ["yandex", "vk"],
+      });
     if (path === "/api/me/settings")
       return json({ quality: state.quality, timeZone: "UTC" });
     if (path === "/api/home/feed" || path === "/api/library/overview") {

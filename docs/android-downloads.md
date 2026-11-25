@@ -1,76 +1,78 @@
-# Individual Android downloads
+[Documentation](README.md#listen-on-your-devices)
 
-For one track, open its **⋮ → Download** menu. The same menu offers **Cancel
-download** while a transfer is queued or running, **Retry download** after a
-failure, and **Remove download** once it is complete. Progress and downloaded
-tracks are available in **Library → Downloads**. These actions manage the app's
-offline copy, not the original server file.
+# Android downloads
 
-Download an album or playlist with the download button next to playback. Existing automatic
-download preferences continue to work. Browsing the catalog does not download
-its audio, and downloading audio does not add albums, artists or playlists to
-the personal library.
+Download individual tracks, albums, or playlists in the native Android app.
+Use [full library synchronization](android-library-sync.md) to copy your entire
+music collection over your home network.
 
-## Browsing without the server
+## Save music for offline listening
 
-The app retains metadata from pages opened while connected. Saved albums,
-artists, playlists and personal folders keep their structure after an app
-restart. Metadata is stored separately for each server and account.
+| What to download | Where to find the control |
+| --- | --- |
+| A track | Open its **⋮** menu and choose **Download**. |
+| An album or playlist | Use the download button next to the playback controls. |
+| Audiobooks | Download each book from [its own menu](audiobooks.md#listen-and-download). |
 
-Tracks without completed local audio remain visible in cached lists but are
-dimmed and cannot be played. Starting a collection while the server is
-unavailable queues only its completed downloads, preserving their order.
-Downloaded audio from another server is excluded from the active server's list.
-**Library → Downloads** always provides access to individual transfers and their
-removal. The storage total includes both individual downloads and audio from
-full-library synchronization. Completed copies from full sync remain playable
-and can be removed from Downloads when sync is turned off.
+<p align="center">
+  <img src="screenshots/landing/android-daily-mix.webp" width="280" alt="Android playlist screen with the download button beside playback controls">
+</p>
 
-Previously unseen pages require a connection. Open an older playlist online
-once to retain its membership and ordering. A download's own metadata is enough
-to browse its album and credited artists, including collaborators.
+Use the individual controls when full library sync is inactive. Open
+**Library → Downloads** to see progress and available audio. A track's menu
+offers **Cancel download** while queued or running, **Retry download** after
+a failure, and **Remove download** once complete. Removing a download leaves
+the original server file in place.
 
-Listening to downloaded tracks, including tracks in a saved playlist, records
-plays and skips for the signed-in account. Likes, unlikes and new recommendation
-rules also use a private queue that survives app restarts. The app retries these
-actions when it can reach the server, using the same action receipts as full
-library sync. The server updates the recommendation profile after applying them.
-Catalog and folder editing in individual-download mode require the server.
-The lightweight sync identity endpoint requires an updated server.
+Configured automatic downloads still run. Opening a page does not download its
+audio. A download also leaves your list of saved albums, artists, and playlists
+as it was.
 
-## Artwork and startup
+## Browse and play offline
 
-Album covers and images of all credited artists are retained alongside download
-metadata in private app storage, separately from the evictable image cache.
-Missing images are retried on startup, resume and reconnection. They also remain
-available to the system media controls. Image failures do not block audio
-downloads. Retained images are periodically revalidated while online. Images
-from the fork's older flat cache are imported automatically on first access,
-including when the server is unavailable.
-Editing artwork requests immediate revalidation and keeps the previous image
-available if the server cannot be reached.
+- Saved albums, artists, playlists, and folders keep their structure after a
+  restart. The app keeps metadata from pages opened online, separately for each
+  server and account. Open an older playlist online once to retain its track
+  list and order.
+- Tracks without a completed offline copy are dimmed. When you start a collection
+  offline, the queue contains its downloaded tracks in the same order.
+- A track download includes enough metadata to browse its album and credited
+  artists. Other pages need a connection the first time you open them.
+- **Library → Downloads** includes audio from full library synchronization in
+  the storage total. Turning sync off leaves completed copies playable and
+  removable from Downloads.
 
-Lyrics are fetched automatically for individual downloads, without opening the
-lyrics panel first, and retained in private storage for the current server and
-account. Plain text, line/word timestamps and provider credits survive app restarts.
-Plain text and line-only timing are provisional while the server looks for word
-timing. Downloads retry incomplete lyrics every 15 seconds, up to five checks
-per refresh, and retain word intervals for the same progressive karaoke fill
-used online. Existing line-only downloads are upgraded on startup, resume or
-reconnection without downloading their audio again. Manual lyrics are preserved.
-When no word-timed source exists, line highlighting remains the fallback;
-the app does not invent word timings.
-Previously downloaded tracks receive missing lyrics when the app next starts,
-resumes or reconnects to the server; their audio does not need to be downloaded
-again. Failed requests keep the last saved text. Lyrics must be available on the
-server at least once before they can be displayed offline.
+With a saved account, the app opens while it validates the session. If the
+server is unreachable, downloaded music remains available. A rejected session
+requires sign-in. A validation response that arrives after logout or expiry
+cannot restore the old session.
 
-With a saved account, the interface opens immediately while the server validates
-the session. An unreachable server keeps access to individual downloads; a
-rejected session still requires sign-in. A late validation response cannot
-restore a session after logout or expiry.
+## Artwork and lyrics
 
-This feature uses ordinary catalog requests and the existing individual download
-manager. It does not synchronize the full library, export audio or companions to
-a selected folder, rename music files, or modify tags, artwork or lyrics inside
-those files.
+Artwork for albums and credited artists is stored alongside download metadata,
+separate from the evictable image cache. Missing images are retried on app
+startup, resume, and reconnection. Image failures leave audio downloads usable.
+Existing images are periodically revalidated, and editing artwork requests an
+immediate refresh. If the server is unavailable, the app keeps the last copy.
+The app can import images from the older flat cache on first access.
+
+The app fetches lyrics automatically and keeps text, line and word timing,
+and provider credits. It checks incomplete results every 15 seconds, up to
+five times per refresh, and upgrades older downloads on startup, resume, or
+reconnection without downloading the audio again. Failed requests keep the
+saved text, and manual lyrics are preserved. When a source has only line
+timing, the app highlights lines. See [how Caimack finds lyrics](lyrics.md).
+
+## Sync your listening activity
+
+The app queues listening, skips, likes, unlikes, and new recommendation rules
+for the signed-in account, including actions from downloaded playlists. The
+queue survives restarts. When the app reaches an updated server, it sends these
+actions with the same receipts used by full library sync. The server then
+updates the recommendation profile. The lightweight identity endpoint requires
+an updated server.
+
+Editing the catalog and personal folders in individual-download mode requires
+the server. Audio, metadata, and artwork stay in the app's private storage.
+Use the [desktop client](desktop.md#library-synchronization) to export a
+synchronized music library to a regular folder.

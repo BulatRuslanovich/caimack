@@ -5,6 +5,7 @@ pub mod tags;
 
 use std::collections::BTreeMap;
 
+use chrono::{DateTime, Utc};
 use serde::Serialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -62,15 +63,19 @@ pub async fn snapshot(db: &PgPool, storage: &Storage, user: Uuid) -> AppResult<V
     pq.push(" WHERE p.user_id=").push_bind(user).push(" OR p.is_public ORDER BY p.name,p.id");
     let playlist_summaries = playlists::fetch(&mut *tx, pq).await?;
     let ids: Vec<Uuid> = playlist_summaries.iter().map(|p| p.id).collect();
-    let members: Vec<(Uuid, Uuid)> = sqlx::query_as(
-        "SELECT playlist_id,track_id FROM playlist_tracks WHERE playlist_id=ANY($1) ORDER BY position,id",
+    let members: Vec<(Uuid, Uuid, Option<DateTime<Utc>>)> = sqlx::query_as(
+        "SELECT playlist_id,track_id,added_at FROM playlist_tracks WHERE playlist_id=ANY($1) ORDER BY position,id",
     )
     .bind(&ids)
     .fetch_all(&mut *tx)
     .await?;
     let mut playlist_tracks: BTreeMap<Uuid, Vec<Uuid>> = BTreeMap::new();
-    for (playlist, track) in members {
+    let mut playlist_track_added_at = BTreeMap::new();
+    for (playlist, track, added_at) in members {
         playlist_tracks.entry(playlist).or_default().push(track);
+        if let Some(at) = added_at {
+            playlist_track_added_at.entry(playlist).or_insert_with(BTreeMap::new).insert(track, at);
+        }
     }
     let genres: Vec<sqlx::types::Json<Value>> = sqlx::query_scalar(
         "SELECT jsonb_build_object('id',g.id,'name',g.name,'trackCount',count(t.id),'coverAlbumIds',
@@ -128,6 +133,7 @@ pub async fn snapshot(db: &PgPool, storage: &Storage, user: Uuid) -> AppResult<V
         "protocol":1, "serverId":server, "user":{"id":user,"username":username},
         "generatedAt":chrono::Utc::now(), "tracks":tracks, "files":files, "albums":albums,"artists":artists,
         "libraryOrder":library_order, "savedLibrary":saved_library, "libraryFolders":library_folders, "genres":genres, "playlists":playlist_summaries, "playlistTracks":playlist_tracks,
+        "playlistTrackAddedAt":playlist_track_added_at,
         "lyrics":lyrics,"waveforms":waveforms,"recent":recent,"assets":asset_manifest,
         "vectorVersion":hash(vector_revision.as_bytes())
     }))

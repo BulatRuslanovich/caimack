@@ -2,17 +2,18 @@
 
 import { api, type SearchTab } from "@/lib/api";
 import { ApiError } from "@/lib/http";
+import { defaultMapProjection } from "@/lib/mapProjection";
 import { WAVEFORM_VERSION } from "@/lib/waveform";
 import { CARD_PAGE_SIZE, TRACK_PAGE_SIZE } from "@/lib/pageSizes";
 import { isCatalogTab, type CatalogTab } from "@/lib/searchNavigation";
 import type {
   ArtistDetail,
   HomeMixSlug,
+  MapProjection,
   PageParams,
   Paged,
   Track,
-  TrackFilter,
-  TrackSort,
+  TrackListParams,
 } from "@/lib/types";
 import {
   infiniteQueryOptions,
@@ -129,7 +130,7 @@ export const queries = {
       queryFn: ({ signal }) => api.homeMix(kind, signal),
     }),
 
-  tracks: (params: PageParams & TrackFilter & { sort?: TrackSort; q?: string }) =>
+  tracks: (params: TrackListParams) =>
     queryOptions({
       queryKey: ["tracks", params],
       queryFn: ({ signal }) => api.tracks(params, signal),
@@ -220,10 +221,10 @@ export const queries = {
   libraryOverview: () =>
     queryOptions({ queryKey: ["libraryOverview"], queryFn: () => api.libraryOverview() }),
 
-  libraryMap: () =>
+  libraryMap: (projection: MapProjection = "2d") =>
     queryOptions({
-      queryKey: ["libraryMap"],
-      queryFn: () => api.libraryMap(),
+      queryKey: projection === "3d" ? ["libraryMap", "3d"] : ["libraryMap"],
+      queryFn: ({ signal }) => api.libraryMap(projection, signal),
       staleTime: 300_000,
       refetchInterval: (query) => {
         const data = query.state.data;
@@ -248,6 +249,18 @@ export const queries = {
   playlist: (id: string) =>
     queryOptions({ queryKey: ["playlist", id], queryFn: () => api.playlist(id) }),
 
+  playlistMemberships: (trackId: string) =>
+    queryOptions({
+      queryKey: ["playlistMemberships", trackId],
+      queryFn: ({ signal }) => api.playlistMemberships(trackId, signal),
+    }),
+
+  playlistSuggestions: (id: string) =>
+    queryOptions({
+      queryKey: ["playlistSuggestions", id],
+      queryFn: ({ signal }) => api.playlistSuggestions(id, signal),
+    }),
+
   recentlyPlayed: (params: PageParams) =>
     queryOptions({
       queryKey: ["history", "recent", params],
@@ -268,24 +281,6 @@ export const queries = {
       queryFn: () => api.adminUsers(params),
       placeholderData: keepPreviousData,
     }),
-
-  yandexSearch: (q: string) =>
-    queryOptions({
-      queryKey: ["yandexSearch", q],
-      queryFn: ({ signal }) => api.yandexSearch(q, signal),
-      enabled: q.length >= SEARCH_MIN_LENGTH,
-      staleTime: 60_000,
-    }),
-
-  yandexImports: () =>
-    queryOptions({
-      queryKey: ["yandexImports"],
-      queryFn: () => api.yandexImports(),
-      refetchInterval: (query) =>
-        query.state.data?.some((job) => job.status === "Queued" || job.status === "Running")
-          ? 2000
-          : false,
-    }),
 };
 
 export function prefetchSearchCategory(client: QueryClient, tab: CatalogTab, q?: string) {
@@ -295,7 +290,7 @@ export function prefetchSearchCategory(client: QueryClient, tab: CatalogTab, q?:
       return Promise.resolve();
     case "tracks":
       return client.prefetchQuery(
-        queries.tracks({ page: 1, pageSize: TRACK_PAGE_SIZE, sort: "Title", q }),
+        queries.tracks({ page: 1, pageSize: TRACK_PAGE_SIZE, sort: "Title", direction: "asc", q }),
       );
     case "albums":
       return client.prefetchInfiniteQuery(queries.albumsFeed({ q }));
@@ -319,7 +314,7 @@ export const navigationPrefetch: Record<string, (client: QueryClient) => Promise
     ]);
   },
   "/search": (client) => client.prefetchQuery(queries.genres()),
-  "/map": (client) => client.prefetchQuery(queries.libraryMap()),
+  "/map": (client) => client.prefetchQuery(queries.libraryMap(defaultMapProjection())),
   "/favorites": (client) =>
     client.prefetchQuery(queries.favorites({ page: 1, pageSize: TRACK_PAGE_SIZE })),
   "/recently-played": (client) =>
@@ -364,7 +359,14 @@ export const invalidates = {
     ["libraryMap"],
     ["duplicates"],
   ],
-  playlists: [["savedLibrary"], ["playlists"], ["playlist"], ["homeFeed"]],
+  playlists: [
+    ["savedLibrary"],
+    ["playlists"],
+    ["playlist"],
+    ["playlistMemberships"],
+    ["playlistSuggestions"],
+    ["homeFeed"],
+  ],
   favorites: [
     ["favorites"],
     ["tracks"],

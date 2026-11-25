@@ -6,6 +6,7 @@ import * as SelectPrimitive from "@radix-ui/react-select";
 import type { ComponentProps } from "react";
 import { cn } from "@/lib/cn";
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react";
+import { Button } from "./button";
 
 export const Select = SelectPrimitive.Root;
 export function SelectValue(props: ComponentProps<typeof SelectPrimitive.Value>) {
@@ -16,26 +17,24 @@ export function SelectTrigger({
   className,
   children,
   ...props
-}: ComponentProps<typeof SelectPrimitive.Trigger>) {
+}: Omit<ComponentProps<typeof SelectPrimitive.Trigger>, "asChild">) {
   return (
-    <SelectPrimitive.Trigger
-      data-slot="select-trigger"
-      className={cn(
-        "select-trigger",
-        "disabled:cursor-not-allowed disabled:opacity-50",
-        "data-[placeholder]:text-faint",
-        className,
-      )}
-      {...props}
-    >
-      {children}
-      <SelectPrimitive.Icon asChild>
-        <ChevronDownIcon
-          data-slot="select-chevron"
-          size={16}
-          className="shrink-0 text-muted-foreground transition-transform duration-150"
-        />
-      </SelectPrimitive.Icon>
+    <SelectPrimitive.Trigger asChild {...props}>
+      <Button
+        data-slot="select-trigger"
+        className={cn(
+          "group max-w-full min-w-0 justify-between data-[placeholder]:text-faint [&>[data-slot=select-value]]:truncate",
+          className,
+        )}
+      >
+        {children}
+        <SelectPrimitive.Icon asChild>
+          <ChevronDownIcon
+            size={16}
+            className="opacity-75 transition-transform duration-150 group-aria-expanded:rotate-180 motion-reduce:transition-none"
+          />
+        </SelectPrimitive.Icon>
+      </Button>
     </SelectPrimitive.Trigger>
   );
 }

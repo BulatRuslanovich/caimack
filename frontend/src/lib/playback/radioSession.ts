@@ -1,8 +1,44 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { api } from "@/lib/api";
 import type { RadioSessionState } from "@/lib/playback/playerTypes";
 import type { QueueSignals, RecommendationReason, RecommendedTrack, Track } from "@/lib/types";
 import type { PlaybackEventInput } from "@/lib/events";
+
+export function playlistRadioContext(session: RadioSessionState | null) {
+  return session?.playlistId
+    ? { playlistId: session.playlistId, sessionId: session.sessionId ?? undefined }
+    : {};
+}
+
+export async function loadPlaylistRadio(
+  playlistId: string,
+  members: Track[],
+  signal?: AbortSignal,
+) {
+  const sessionId = crypto.randomUUID();
+  const batch = await api.radio(
+    { playlistId, sessionId, seedTrackId: null, exclude: [], limit: 6 },
+    signal,
+  );
+  if (batch.playlistSeedCount === 0) return { status: "noAudio" } as const;
+
+  const seedId = batch.playlistSeedCount === 1 ? batch.seedTrackId : null;
+  const seed = seedId
+    ? (members.find((track) => track.id === seedId) ??
+      (await api.lookupTracks([seedId], signal).catch(() => []))[0])
+    : undefined;
+  const { tracks, reasons, signals } = mergeRadioBatch(seed ? [seed] : [], {}, {}, batch.tracks);
+  if (!seed && !tracks.length) return { status: "empty" } as const;
+  const session: RadioSessionState = {
+    playlistId,
+    sessionId,
+    seedTrackId: seed?.id ?? null,
+    reasons,
+    signals,
+  };
+  return { status: "ready", tracks: seed ? [seed, ...tracks] : tracks, session } as const;
+}
 
 export function radioReaction(event: PlaybackEventInput): boolean {
   return (
@@ -89,6 +125,13 @@ export function validRadioSession(value: unknown): value is RadioSessionState {
     (!Array.isArray(candidate.manualTrackIds) ||
       !candidate.manualTrackIds.every((id) => typeof id === "string"))
   )
+    return false;
+  if (
+    candidate.playlistId != null &&
+    (typeof candidate.playlistId !== "string" || !candidate.playlistId)
+  )
+    return false;
+  if (candidate.playlistId && (typeof candidate.sessionId !== "string" || !candidate.sessionId))
     return false;
   return typeof candidate.reasons === "object" && candidate.reasons !== null;
 }

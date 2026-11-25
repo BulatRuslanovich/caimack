@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { DownloadedFile } from "./http";
-
-export function saveFile({ blob, fileName }: DownloadedFile): void {
+export function saveFile({ blob, fileName }: { blob: Blob; fileName: string }): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
 

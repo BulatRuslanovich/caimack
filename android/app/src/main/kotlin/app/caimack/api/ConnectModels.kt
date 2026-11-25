@@ -16,10 +16,15 @@ data class ConnectRadio(
     val seedTrackId: String? = null,
     val focus: String? = null,
     @EncodeDefault val reasons: Map<String, RecommendationReason> = emptyMap(),
+    val playlistId: String? = null,
+    val sessionId: String? = null,
 )
 
 @Serializable
 data class ConnectSleep(val kind: String, val minutes: Int = 0, val endsAt: Long = 0)
+
+@Serializable
+data class PlaybackCollection(val kind: String, val id: String)
 
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
@@ -43,6 +48,7 @@ data class ConnectState(
     val normalizeVolume: Boolean = false,
     @EncodeDefault val autoplay: Boolean = true,
     val sleepTimer: ConnectSleep? = null,
+    val collection: PlaybackCollection? = null,
 )
 
 @Serializable
@@ -68,6 +74,7 @@ sealed interface ConnectCommand {
         val trackIds: List<String>, val index: Int, val positionSeconds: Double,
         val playing: Boolean, val shuffle: Boolean, val repeat: String, val source: String? = null,
         val order: List<Int>? = null, val radio: ConnectRadio? = null,
+        val collection: PlaybackCollection? = null,
     ) : ConnectCommand
     @Serializable @SerialName("playAudiobook") data class PlayAudiobook(
         val bookId: String, val chapterId: String, val positionMs: Long, val playing: Boolean,

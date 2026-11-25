@@ -24,11 +24,34 @@
   --art-direction: -1;
 }
 
+.detail-header,
+.detail-backdrop-host {
+  --art: clamp(15rem, 20vw, 18rem);
+}
+
+@media (width < 48rem) {
+  .detail-header,
+  .detail-backdrop-host {
+    --art: 12rem;
+  }
+}
+
+.detail-backdrop-host .art-backdrop {
+  translate: 0 calc(-1 * var(--detail-scroll-top, 0px));
+}
+
 .art-backdrop[data-mode="header"] {
   inset: 0 0 auto;
   z-index: -1;
   height: calc(var(--art, 18rem) + 12rem);
   mask-image: linear-gradient(to bottom, #000 45%, transparent);
+}
+
+.app-shell[data-queue-docked="true"] .detail-backdrop-host .art-backdrop[data-mode="header"] {
+  mask-image:
+    linear-gradient(to bottom, #000 45%, transparent),
+    linear-gradient(to right, #000 calc(100% - clamp(7rem, 13vw, 14rem)), transparent);
+  mask-composite: intersect;
 }
 
 .art-backdrop-palette {

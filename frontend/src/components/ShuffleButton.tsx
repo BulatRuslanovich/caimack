@@ -12,11 +12,11 @@ import { Button } from "./ui/button";
 export function ShuffleButton({
   tracks,
   compact = false,
-  className,
+  iconOnly = false,
 }: {
   tracks: Track[];
   compact?: boolean;
-  className?: string;
+  iconOnly?: boolean;
 }) {
   const t = useT();
   const player = usePlayerActions();
@@ -27,15 +27,18 @@ export function ShuffleButton({
       onClick={player.toggleShuffle}
       aria-pressed={shuffle}
       disabled={tracks.length === 0}
+      variant={iconOnly ? "ghost" : "secondary"}
+      size={iconOnly ? "icon-lg" : "md"}
+      title={iconOnly ? t("action.shuffle") : undefined}
       className={cn(
-        compact && "max-md:size-11 max-md:px-0",
-        shuffle &&
-          "border-primary bg-primary-soft text-primary hover:border-primary hover:bg-primary-soft",
-        className,
+        compact && "max-md:size-10 max-md:px-0 pointer-coarse:max-md:size-11",
+        iconOnly && shuffle && "bg-primary-soft text-primary hover:text-primary",
       )}
     >
-      <ShuffleIcon size={16} />
-      <span className={cn(compact && "max-md:sr-only")}>{t("action.shuffle")}</span>
+      <ShuffleIcon size={iconOnly ? 20 : 16} />
+      <span className={cn(iconOnly && "sr-only", compact && "max-md:sr-only")}>
+        {t("action.shuffle")}
+      </span>
     </Button>
   );
 }

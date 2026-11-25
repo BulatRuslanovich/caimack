@@ -227,7 +227,9 @@ mod tests {
         let png = "89504e470d0a1a0a0000000d4948445200000002000000020802000000fdd49a730000001649444154789c63fccfc0c0c0c0c0c4c0c0c0c0c000000d1d01036ac29be90000000049454e44ae426082";
         let png: Vec<_> = png
             .as_bytes()
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
             .collect();
         fs::write(album_dir.join("imagine_dragons_mercury_act2.png"), &png)?;

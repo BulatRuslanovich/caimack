@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT file_path, mime_type, content_hash FROM tracks WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "file_path",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tracks",
+            "name": "file_path"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "mime_type",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tracks",
+            "name": "mime_type"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "content_hash",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tracks",
+            "name": "content_hash"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "fa58d35ec69d457f02b8a0f47c825ba2135dcb76419325a78d34d9cfdaa6ba06"
+}

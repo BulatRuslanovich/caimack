@@ -479,18 +479,22 @@ export function paintMap(
         context.stroke();
       }
       context.textAlign = "center";
-      context.font = `600 13px ${palette.font}`;
+      context.font = `600 14px ${palette.font}`;
       context.lineWidth = 4;
       context.strokeStyle = rgba(palette.card, 0.95);
-      const artist = clipText(point.artist || point.title, labelWidth - 16);
-      context.strokeText(artist, labelX, at.y + 34);
-      context.fillStyle = rgba(palette.ink, 1);
-      context.fillText(artist, labelX, at.y + 34);
-      context.font = `400 12px ${palette.font}`;
+      const artist = point.artist.trim();
       const title = clipText(point.title, labelWidth - 16);
-      context.strokeText(title, labelX, at.y + 51);
-      context.fillStyle = rgba(palette.ink, 0.76);
-      context.fillText(title, labelX, at.y + 51);
+      const titleY = at.y + (artist ? 34 : 42);
+      context.strokeText(title, labelX, titleY);
+      context.fillStyle = rgba(palette.ink, 1);
+      context.fillText(title, labelX, titleY);
+      if (artist) {
+        context.font = `400 12px ${palette.font}`;
+        const artistLabel = clipText(artist, labelWidth - 16);
+        context.strokeText(artistLabel, labelX, at.y + 51);
+        context.fillStyle = rgba(palette.ink, 0.86);
+        context.fillText(artistLabel, labelX, at.y + 51);
+      }
       const image = cover(point);
       context.fillStyle = rgba(palette.card, 1);
       dots([at], 21);

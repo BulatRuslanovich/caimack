@@ -2,7 +2,8 @@
 
 "use client";
 
-import { useMemo, type CSSProperties } from "react";
+import { createContext, useContext, useMemo, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import type { BackdropTone } from "@/lib/coverTone";
 import type { ArtworkDirection } from "@/lib/playback/useArtworkNavigation";
 import { useCoverTone } from "@/lib/useCoverTone";
@@ -10,6 +11,8 @@ import { useArtworkTransition } from "@/lib/visuals/useArtworkTransition";
 import { backdropPalette } from "@/lib/visuals/backdropPalette";
 import { PLAYER_BACKDROP, backdropRgb, playerBackdropSurface } from "@/lib/visuals/playerBackdrop";
 import { useArtworkScene } from "./ArtworkScene";
+
+export const HeaderBackdropHost = createContext<HTMLDivElement | null>(null);
 
 function paletteStyle(
   tone: BackdropTone | null,
@@ -38,8 +41,10 @@ export function ArtBackdrop({
   mode: "stage" | "header" | "player";
   direction?: ArtworkDirection;
 }) {
+  const host = useContext(HeaderBackdropHost);
   if (src === null && mode === "header") return null;
-  return <CoverBackdrop src={src} mode={mode} direction={direction} />;
+  const backdrop = <CoverBackdrop src={src} mode={mode} direction={direction} />;
+  return host && mode === "header" ? createPortal(backdrop, host) : backdrop;
 }
 
 export function PlayerBackdrop() {

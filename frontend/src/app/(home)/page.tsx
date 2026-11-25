@@ -6,7 +6,12 @@ import { queries } from "@/lib/queries";
 import { prefetchInitialPage as prefetchOnServer } from "@/lib/server/prefetch";
 
 export default async function Page() {
-  const state = await prefetchOnServer((client) => client.prefetchQuery(queries.homeFeed()));
+  const state = await prefetchOnServer((client) =>
+    Promise.all([
+      client.prefetchQuery(queries.homeFeed()),
+      client.prefetchQuery(queries.searchPopular()),
+    ]),
+  );
 
   return (
     <HydrationBoundary state={state}>

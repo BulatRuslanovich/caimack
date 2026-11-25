@@ -1,0 +1,28 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+@layer components {
+  .control-surface {
+    border: 1px solid transparent;
+    border-radius: 9999px;
+    background: color-mix(in oklab, var(--foreground) 9%, transparent);
+    color: var(--foreground);
+  }
+
+  .control-surface:not(:disabled):hover {
+    background: color-mix(in oklab, var(--foreground) 15%, transparent);
+  }
+
+  .control-surface:is([aria-expanded="true"], [aria-pressed="true"], [data-active="true"]) {
+    border-color: color-mix(in oklab, var(--primary) 24%, transparent);
+    background: var(--primary-soft);
+    color: var(--primary);
+  }
+
+  .control-surface:not(:disabled):is(
+      [aria-expanded="true"],
+      [aria-pressed="true"],
+      [data-active="true"]
+    ):hover {
+    background: color-mix(in oklab, var(--primary) 18%, transparent);
+  }
+}

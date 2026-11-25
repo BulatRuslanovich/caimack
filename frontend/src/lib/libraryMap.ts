@@ -5,6 +5,11 @@ import { SpatialIndex } from "./spatialIndex";
 export interface Spot {
   x: number;
   y: number;
+  z?: number;
+}
+
+export function distanceSquared(a: Spot, b: Spot): number {
+  return (a.x - b.x) ** 2 + (a.y - b.y) ** 2 + ((a.z ?? 0) - (b.z ?? 0)) ** 2;
 }
 
 export interface MapView {
@@ -207,7 +212,7 @@ export function soundPath<T extends Spot>(spots: T[]): T[] {
     let best = Infinity;
 
     for (let i = 0; i < left.length; i++) {
-      const distance = (left[i].x - last.x) ** 2 + (left[i].y - last.y) ** 2;
+      const distance = distanceSquared(left[i], last);
       if (distance < best) {
         best = distance;
         nearest = i;
@@ -223,11 +228,14 @@ export function soundPath<T extends Spot>(spots: T[]): T[] {
 export function closestToCentre<T extends Spot>(spots: T[], limit: number): T[] {
   if (spots.length <= limit) return spots;
 
-  const cx = spots.reduce((sum, spot) => sum + spot.x, 0) / spots.length;
-  const cy = spots.reduce((sum, spot) => sum + spot.y, 0) / spots.length;
+  const centre = {
+    x: spots.reduce((sum, spot) => sum + spot.x, 0) / spots.length,
+    y: spots.reduce((sum, spot) => sum + spot.y, 0) / spots.length,
+    z: spots.reduce((sum, spot) => sum + (spot.z ?? 0), 0) / spots.length,
+  };
 
   return [...spots]
-    .sort((a, b) => (a.x - cx) ** 2 + (a.y - cy) ** 2 - ((b.x - cx) ** 2 + (b.y - cy) ** 2))
+    .sort((a, b) => distanceSquared(a, centre) - distanceSquared(b, centre))
     .slice(0, limit);
 }
 

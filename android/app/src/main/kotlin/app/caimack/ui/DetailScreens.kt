@@ -14,6 +14,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -41,20 +42,21 @@ import app.caimack.sync.OfflineCatalog
 import kotlinx.coroutines.launch
 
 @Composable
-fun AlbumScreen(id: String, nav: NavController, play: (List<Track>, Int) -> Unit) {
+internal fun AlbumScreen(id: String, nav: NavController, play: (List<Track>, Int) -> Unit, account: @Composable () -> Unit) {
     val container = LocalContainer.current
     val api = catalogApi()
-    Load("album:$id", { api.album(id) }) { album ->
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding(bottom = 24.dp)) {
-            item {
-                DetailHeader(
-                    kind = stringResource(R.string.albums_kind),
-                    title = album.title,
-                    facts = listOfNotNull(album.artistName, album.year?.toString(), pluralStringResource(R.plurals.count_tracks, album.tracks.size, album.tracks.size)),
-                    backdrop = container.media.cover(album.id, null, album.hasCover, small = true),
-                ) { Cover(container.media.cover(album.id, null, album.hasCover, small = false), album.title, it) }
-            }
-            item { Actions(album.tracks, play, libraryAction = { LibrarySaveButton("album", id) }) }
+    val onBack: () -> Unit = { nav.popBackStack() }
+    LoadCollection("album:$id", { api.album(id) }, onBack, account) { album ->
+        CollectionPage(
+            kind = stringResource(R.string.albums_kind),
+            title = album.title,
+            facts = listOfNotNull(album.artistName, album.year?.toString(), pluralStringResource(R.plurals.count_tracks, album.tracks.size, album.tracks.size)),
+            backdrop = container.media.cover(album.id, null, album.hasCover, small = true),
+            onBack = onBack,
+            account = account,
+            cover = { Cover(container.media.cover(album.id, null, album.hasCover, small = false), album.title, it) },
+            actions = { Actions(album.tracks, play, libraryAction = { LibrarySaveButton("album", id) }, prominentPlay = true) },
+        ) {
             itemsIndexed(album.tracks) { index, track -> TrackRow(track, { play(album.tracks, index) }, index = index + 1) }
             item {
                 Load("artist:${album.artistId}", { api.artist(album.artistId) }) { artist ->
@@ -151,7 +153,14 @@ fun MixScreen(kind: String, play: (List<Track>, Int) -> Unit) {
 
 @OptIn(UnstableApi::class)
 @Composable
-internal fun Actions(tracks: List<Track>, play: (List<Track>, Int) -> Unit, onMore: (() -> Unit)? = null, libraryAction: (@Composable () -> Unit)? = null, beforeDownload: suspend () -> Unit = {}) {
+internal fun Actions(
+    tracks: List<Track>,
+    play: (List<Track>, Int) -> Unit,
+    onMore: (() -> Unit)? = null,
+    libraryAction: (@Composable () -> Unit)? = null,
+    prominentPlay: Boolean = false,
+    beforeDownload: suspend () -> Unit = {},
+) {
     if (tracks.isEmpty()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             libraryAction?.invoke()
@@ -170,9 +179,10 @@ internal fun Actions(tracks: List<Track>, play: (List<Track>, Int) -> Unit, onMo
         .filter { it.download.state != Download.STATE_FAILED }
     val pending = mine.any { !it.done }
     val complete = mine.count { it.done } == tracks.size
+    val enabled = !LocalOfflineLibrary.current || tracks.any { it.id in LocalAvailableTracks.current }
 
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        PlayActions(Modifier.weight(1f), enabled = !LocalOfflineLibrary.current || tracks.any { it.id in LocalAvailableTracks.current }, trackIds = tracks.map { it.id }, onPlay = { play(tracks, 0) })
+        if (!prominentPlay) PlayActions(Modifier.weight(1f), enabled, tracks.map { it.id }) { play(tracks, 0) }
         libraryAction?.invoke()
         if (!librarySync && !LocalOfflineLibrary.current) Box(
             Modifier.size(48.dp).clip(CircleShape).clickable {
@@ -196,7 +206,12 @@ internal fun Actions(tracks: List<Track>, play: (List<Track>, Int) -> Unit, onMo
                 else -> Icon(Lucide.Download, stringResource(R.string.downloads_add), tint = palette.muted)
             }
         }
+        if (prominentPlay) CollectionShuffleButton(enabled, compact = true)
         onMore?.let { MoreButton(it) }
+        if (prominentPlay) {
+            Spacer(Modifier.weight(1f))
+            CollectionPlayButton(tracks.map { it.id }, enabled, size = 56.dp, iconSize = 24.dp) { play(tracks, 0) }
+        }
     }
 }
 

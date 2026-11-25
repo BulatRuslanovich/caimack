@@ -16,6 +16,7 @@ import androidx.media3.session.SessionToken
 import androidx.media3.session.SessionCommand
 import app.caimack.api.Media
 import app.caimack.api.ConnectCommand
+import app.caimack.api.PlaybackCollection
 import app.caimack.api.RadioBatch
 import app.caimack.api.Track
 import app.caimack.ui.artistsOf
@@ -35,6 +36,7 @@ data class PlayerState(
     val nextIndex: Int = C.INDEX_UNSET,
     val volume: Float = 1f,
     val muted: Boolean = false,
+    val collection: PlaybackCollection? = null,
 ) {
     val current: Track? get() = queue.getOrNull(index)
 
@@ -42,7 +44,10 @@ data class PlayerState(
     val next: Track? get() = queue.getOrNull(nextIndex)
 }
 
-data class QueueSnapshot(val tracks: List<Track>, val index: Int, val positionMs: Long, val radio: RadioState)
+data class QueueSnapshot(
+    val tracks: List<Track>, val index: Int, val positionMs: Long, val radio: RadioState,
+    val collection: PlaybackCollection? = null,
+)
 
 class PlayerConnection(
     private val context: Context,
@@ -92,12 +97,15 @@ class PlayerConnection(
 
     fun connect() = withController { }
 
-    fun play(tracks: List<Track>, index: Int, source: String? = null) = withController(
-        ConnectCommand.Play(tracks.map { it.id }, index, 0.0, true, state.value.shuffle, repeatOf(state.value.repeat), source),
+    fun play(tracks: List<Track>, index: Int, source: String? = null, collection: PlaybackCollection? = null) = withController(
+        ConnectCommand.Play(
+            tracks.map { it.id }, index, 0.0, true, state.value.shuffle, repeatOf(state.value.repeat),
+            source, collection = collection,
+        ),
     ) {
         PlaySources.tag(tracks.map { track -> track.id }, source)
         radio.reset()
-        load(it, tracks, index)
+        load(it, tracks, index, collection = collection)
     }
 
     fun startRadio(seed: Track, batch: RadioBatch) = withController(ConnectCommand.StartRadio(seed.id)) {
@@ -111,25 +119,56 @@ class PlayerConnection(
 
         tracks.forEach { track -> known[track.id] = track }
         val current = it.currentMediaItemIndex
+        it.currentMediaItem?.let { item ->
+            if (item.playbackCollection() != null) it.replaceMediaItem(current, item.withPlaybackCollection(null))
+        }
         it.removeMediaItems(current + 1, it.mediaItemCount)
         it.removeMediaItems(0, current)
         it.addMediaItems(tracks.map { track -> track.toMediaItem(media) })
         it.play()
     }
 
+    fun startPlaylistRadio(playlistId: String, sessionId: String, seed: Track?, batch: RadioBatch) {
+        val tracks = listOfNotNull(seed) + batch.tracks.map { it.track }.filter { it.id != seed?.id }
+        if (tracks.isEmpty()) return
+        val metadata = app.caimack.api.ConnectRadio(
+            seedTrackId = seed?.id,
+            reasons = batch.tracks.mapNotNull { item -> item.reason?.let { item.track.id to it } }.toMap(),
+            playlistId = playlistId,
+            sessionId = sessionId,
+        )
+        withController(ConnectCommand.Play(
+            tracks.map { it.id }, 0, 0.0, true, state.value.shuffle, repeatOf(state.value.repeat),
+            source = PlaySources.radio(playlist = true), order = tracks.indices.toList(), radio = metadata,
+        )) {
+            radio.start(seed?.id, batch, playlistId, sessionId)
+            load(it, tracks, 0, preserveOrder = true)
+        }
+    }
+
     fun enqueue(track: Track, next: Boolean) = withController(ConnectCommand.Enqueue(track.id, next)) {
-        known[track.id] = track
-        PlaySources.tag(listOf(track.id), "queue")
-        signals.choice("trackAddedToQueue", track.id, track.durationSeconds)
-        val item = track.toMediaItem(media)
+        enqueue(it, listOf(track), next)
+    }
+
+    fun enqueueAll(tracks: List<Track>) = withController { enqueue(it, tracks, next = false) }
+
+    private fun enqueue(player: MediaController, tracks: List<Track>, next: Boolean) {
+        if (tracks.isEmpty()) return
+        PlaySources.tag(tracks.map { it.id }, "queue")
+        tracks.forEach { track ->
+            known[track.id] = track
+            signals.choice("trackAddedToQueue", track.id, track.durationSeconds)
+        }
+        val collection = player.playbackCollection()
+        val items = tracks.map { it.toMediaItem(media).withPlaybackCollection(collection) }
         when {
-            it.mediaItemCount == 0 -> {
-                it.setMediaItem(item)
-                it.prepare()
-                it.play()
+            player.mediaItemCount == 0 -> {
+                player.setMediaItems(preserveQueue(items))
+                player.prepare()
+                player.play()
             }
-            next -> it.addMediaItem(it.currentMediaItemIndex + 1, item)
-            else -> it.addMediaItem(item)
+            next -> player.addMediaItems(player.currentMediaItemIndex + 1, items)
+            else -> player.addMediaItems(items)
         }
     }
 
@@ -194,16 +233,18 @@ class PlayerConnection(
         withController(ConnectCommand.ClearUpcoming) { it.removeMediaItems(it.currentMediaItemIndex + 1, it.mediaItemCount) }
     }
 
-    fun snapshot(): QueueSnapshot = current.value.let { QueueSnapshot(it.queue, it.index, position, radio.state.value) }
+    fun snapshot(): QueueSnapshot = current.value.let { QueueSnapshot(it.queue, it.index, position, radio.state.value, it.collection) }
 
     fun restore(snapshot: QueueSnapshot) = withController(ConnectCommand.Play(
         snapshot.tracks.map { it.id }, snapshot.index, snapshot.positionMs / 1000.0,
         state.value.playing, state.value.shuffle, repeatOf(state.value.repeat),
         order = snapshot.tracks.indices.toList(),
+        collection = snapshot.collection,
     )) {
         if (snapshot.tracks.isEmpty()) return@withController
         snapshot.tracks.forEach { track -> known[track.id] = track }
-        it.setMediaItems(preserveQueue(snapshot.tracks.map { track -> track.toMediaItem(media) }), snapshot.index, snapshot.positionMs)
+        val items = snapshot.tracks.map { track -> track.toMediaItem(media).withPlaybackCollection(snapshot.collection) }
+        it.setMediaItems(preserveQueue(items), snapshot.index, snapshot.positionMs)
         it.prepare()
         radio.restore(snapshot.radio)
     }
@@ -256,9 +297,13 @@ class PlayerConnection(
         it.clearMediaItems()
     }
 
-    private fun load(player: MediaController, tracks: List<Track>, index: Int) {
+    private fun load(
+        player: MediaController, tracks: List<Track>, index: Int, preserveOrder: Boolean = false,
+        collection: PlaybackCollection? = null,
+    ) {
         tracks.forEach { track -> known[track.id] = track }
-        player.setMediaItems(tracks.map { track -> track.toMediaItem(media) }, index, 0)
+        val items = tracks.map { it.toMediaItem(media).withPlaybackCollection(collection) }
+        player.setMediaItems(if (preserveOrder) preserveQueue(items) else items, index, 0)
         player.prepare()
         player.play()
     }
@@ -319,10 +364,38 @@ class PlayerConnection(
             nextIndex = player.nextMediaItemIndex,
             volume = localVolume,
             muted = localMuted,
+            collection = player.playbackCollection(),
         )
         if (remotePosition == null) current.value = local
     }
 }
+
+private const val COLLECTION_KIND = "app.caimack.collection.kind"
+private const val COLLECTION_ID = "app.caimack.collection.id"
+
+internal fun MediaItem.playbackCollection(): PlaybackCollection? {
+    val extras = mediaMetadata.extras ?: return null
+    val kind = extras.getString(COLLECTION_KIND)
+    val id = extras.getString(COLLECTION_ID) ?: return null
+    return if (kind == "album" || kind == "playlist") PlaybackCollection(kind, id) else null
+}
+
+internal fun MediaItem.withPlaybackCollection(collection: PlaybackCollection?): MediaItem {
+    if (collection == null && playbackCollection() == null) return this
+    val extras = Bundle(mediaMetadata.extras ?: Bundle.EMPTY)
+    if (collection != null) {
+        extras.putString(COLLECTION_KIND, collection.kind)
+        extras.putString(COLLECTION_ID, collection.id)
+    } else {
+        extras.remove(COLLECTION_KIND)
+        extras.remove(COLLECTION_ID)
+    }
+    return buildUpon().setMediaMetadata(mediaMetadata.buildUpon().setExtras(extras).build()).build()
+}
+
+internal fun Player.playbackCollection(): PlaybackCollection? =
+    currentMediaItem?.playbackCollection()
+        ?: (0 until mediaItemCount).firstNotNullOfOrNull { getMediaItemAt(it).playbackCollection() }
 
 internal fun repeatOf(mode: Int): String = when (mode) {
     Player.REPEAT_MODE_ALL -> "all"

@@ -246,7 +246,7 @@ export default function LibraryPage() {
     }
     return (
       <>
-        <div className={grid ? undefined : "max-w-3xl"}>
+        <div>
           <LibraryDragList
             key={folderId ?? "root"}
             entries={entries}
@@ -318,12 +318,13 @@ export default function LibraryPage() {
     );
   };
   return (
-    <section className="space-y-5">
+    <section className="saved-library space-y-5 max-md:space-y-3">
       <div>
         <PageHeader
           title={currentFolder?.name ?? t("nav.mediaLibrary")}
+          className="max-md:flex-nowrap max-md:items-center max-md:gap-3 max-md:[&_h1]:text-[1.5rem] max-md:[&_h1]:wrap-anywhere"
           actions={
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 max-md:gap-0.5">
               {currentFolder && <LibraryFolderMenu folder={currentFolder} />}
               <Button
                 ref={searchButton}
@@ -352,9 +353,10 @@ export default function LibraryPage() {
                     variant="ghost"
                     disabled={!folderResult.data}
                     aria-label={t("action.create")}
+                    className="max-md:size-11 max-md:px-0"
                   >
                     <PlusIcon size={20} />
-                    {t("action.create")}
+                    <span className="max-md:hidden">{t("action.create")}</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent>
@@ -413,10 +415,11 @@ export default function LibraryPage() {
         </nav>
       )}
       <div className="space-y-1">
-        <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 shadow-[inset_0_-1px_0_var(--border)]">
+        <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 shadow-[inset_0_-1px_0_var(--border)] max-md:flex-col max-md:items-stretch max-md:shadow-none">
           <ToggleGroup
             aria-label={t("nav.mediaLibrary")}
-            className="min-w-0 shadow-none max-sm:w-full"
+            className="min-w-0 shadow-none"
+            mobileChips
           >
             {filters
               .filter(([value]) => audiobooksEnabled || value !== "audiobook")
@@ -430,7 +433,7 @@ export default function LibraryPage() {
                 </ToggleGroupButton>
               ))}
           </ToggleGroup>
-          <div className="library-toolbar ml-auto flex shrink-0 items-center gap-2.5 max-sm:order-first">
+          <div className="library-toolbar ml-auto flex shrink-0 items-center gap-2.5 max-md:ml-0 max-md:justify-between">
             <SortSelect
               value={sort}
               onChange={setSort}
@@ -442,8 +445,8 @@ export default function LibraryPage() {
               }}
             />
             <Button
-              variant="ghost"
               size="icon"
+              className="size-10 pointer-coarse:size-11"
               aria-label={t(grid ? "collection.list" : "collection.grid")}
               onClick={() => setGrid(!grid)}
             >

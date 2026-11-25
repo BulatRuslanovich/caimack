@@ -58,17 +58,21 @@ function OfflineHome({ status }: { status: DesktopStatus }) {
             <Blocks blocks={blocks} offline localRadio={radio} />
           ) : (
             <div className="home-page">
-              <RadioHero tracks={radio} offline />
-              <DailyMix
-                title={t("home.downloaded")}
-                block={{
-                  key: "downloads",
-                  baseKey: "downloads",
-                  zone: "Lead",
-                  layout: "Hero",
-                  tracks: downloads,
-                }}
-              />
+              <div className="home-listening-stage">
+                <RadioHero tracks={radio} offline />
+                <div className="home-daily-selection">
+                  <DailyMix
+                    title={t("home.downloaded")}
+                    block={{
+                      key: "downloads",
+                      baseKey: "downloads",
+                      zone: "Lead",
+                      layout: "Hero",
+                      tracks: downloads,
+                    }}
+                  />
+                </div>
+              </div>
             </div>
           )
         }
@@ -133,12 +137,19 @@ function Blocks({
 
   const seen = new Set(shown);
   const browse = [];
+  let includesPopular = false;
   const audiobookAnchor =
     blocks.find((block) => block.zone === "Browse" && block.baseKey === "newArrivals") ??
     blocks.find((block) => block.zone === "Browse" && block.baseKey === "newAlbums");
 
   for (const block of blocks) {
     if (block.zone !== "Browse") continue;
+
+    if (!offline && block.baseKey === "topTracks") {
+      browse.push(<PopularMusic key="popular-music" />);
+      includesPopular = true;
+      continue;
+    }
 
     const before = new Set(seen);
     let visible = block;
@@ -165,18 +176,21 @@ function Blocks({
     <div className="home-page [&_h2]:line-clamp-2 [&_h2]:whitespace-normal">
       <div className="home-listening-stage">
         <RadioHero tracks={localRadio ?? radioTracks} offline={offline} />
+        {lead.length > 0 && (
+          <div className="home-daily-selection">
+            {lead.map((block) => (
+              <Block key={block.key} block={block} shown={shown} />
+            ))}
+          </div>
+        )}
         {quick.length > 0 && <QuickTiles blocks={quick} />}
-        <div className="home-daily-selection">
-          {lead.map((block) => (
-            <Block key={block.key} block={block} shown={shown} />
-          ))}
-        </div>
       </div>
 
       {!offline && <RecapBanner />}
 
       {!audiobookAnchor && <AudiobookHome />}
       {browse}
+      {!offline && !includesPopular && <PopularMusic />}
     </div>
   );
 }
@@ -246,8 +260,16 @@ function BlockBody({ block, shown }: { block: HomeBlock; shown: Set<string> }) {
         );
       }
 
+      const wholeCards = block.baseKey === "newAlbums";
       return (
-        <Shelf title={title} titleHref={titleHref} note={note} href={href} className={section}>
+        <Shelf
+          title={title}
+          titleHref={titleHref}
+          note={note}
+          href={href}
+          className={wholeCards ? undefined : section}
+          wholeCards={wholeCards}
+        >
           <ShelfItems block={block} />
         </Shelf>
       );
@@ -288,4 +310,37 @@ function onePerAlbum(tracks: Track[]): Track[] {
   });
 
   return distinct.length >= MIN_DISTINCT ? distinct : tracks;
+}
+
+function PopularMusic() {
+  const t = useT();
+  const result = useQuery(queries.searchPopular());
+
+  return (
+    <Query result={result}>
+      {({ tracks, albums, artists }) => (
+        <>
+          {tracks.length > 0 && (
+            <Section title={t("search.mostPlayedTracks")}>
+              <RankedList tracks={tracks} ranked={false} density="compact" />
+            </Section>
+          )}
+          {albums.length > 0 && (
+            <Shelf title={t("search.mostPlayedAlbums")} className="gap-2.5">
+              {albums.map((album) => (
+                <AlbumCard key={album.id} album={album} />
+              ))}
+            </Shelf>
+          )}
+          {artists.length > 0 && (
+            <Shelf title={t("search.mostPlayedArtists")} className="gap-2.5">
+              {artists.map((artist) => (
+                <ArtistCard key={artist.id} artist={artist} bare />
+              ))}
+            </Shelf>
+          )}
+        </>
+      )}
+    </Query>
+  );
 }

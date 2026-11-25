@@ -20,6 +20,8 @@ export function FormDialog<TInput extends FieldValues, TOutput extends FieldValu
   submitLabel,
   pendingLabel,
   children,
+  bottomOnCompact,
+  onCloseAutoFocus,
 }: {
   title: string;
   description?: string;
@@ -31,6 +33,8 @@ export function FormDialog<TInput extends FieldValues, TOutput extends FieldValu
   submitLabel?: string;
   pendingLabel?: string;
   children: ReactNode;
+  bottomOnCompact?: boolean;
+  onCloseAutoFocus?: (event: Event) => void;
 }) {
   const t = useT();
   const { notify, notifyError } = useToast();
@@ -56,6 +60,8 @@ export function FormDialog<TInput extends FieldValues, TOutput extends FieldValu
       <DialogContent
         title={title}
         description={description}
+        bottomOnCompact={bottomOnCompact}
+        onCloseAutoFocus={onCloseAutoFocus}
         footer={
           <>
             <Button variant="primary" form="form-dialog" type="submit" disabled={saving}>
@@ -63,7 +69,7 @@ export function FormDialog<TInput extends FieldValues, TOutput extends FieldValu
                 ? (pendingLabel ?? t("action.saving"))
                 : (submitLabel ?? t("action.saveChanges"))}
             </Button>
-            <Button variant="outline" onClick={onClose} disabled={saving}>
+            <Button variant="secondary" onClick={onClose} disabled={saving}>
               {t("action.cancel")}
             </Button>
           </>

@@ -23,7 +23,7 @@ use uuid::Uuid;
 
 use self::index::EmbeddingIndex;
 use self::listener::Listeners;
-use self::map::MapCache;
+use self::map::{MapCache, MapProjection};
 use crate::catalog::dto::TrackDto;
 
 #[derive(Clone)]
@@ -33,6 +33,7 @@ pub struct Recommendations {
     pub index: EmbeddingIndex,
     pub listeners: Listeners,
     pub map: MapCache,
+    map_3d: MapCache,
     compute: compute::ComputePool,
 }
 
@@ -44,6 +45,7 @@ impl Recommendations {
             index: EmbeddingIndex::default(),
             listeners: Listeners::default(),
             map: MapCache::default(),
+            map_3d: MapCache::new(MapProjection::ThreeD),
             compute: compute::ComputePool::default(),
         }
     }
@@ -83,6 +85,7 @@ pub mod reasons {
     pub const BECAUSE_YOU_LISTENED: &str = "becauseYouListened";
     pub const FRESH_IN_LIBRARY: &str = "freshInLibrary";
     pub const SOUNDS_LIKE: &str = "soundsLike";
+    pub const SOUNDS_LIKE_PLAYLIST: &str = "soundsLikePlaylist";
     pub const MATCHES_YOUR_TASTE: &str = "matchesYourTaste";
     pub const DISCOVERY: &str = "discovery";
 }

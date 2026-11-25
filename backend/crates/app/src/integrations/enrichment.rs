@@ -88,7 +88,7 @@ impl Enrichment {
 
     async fn track_cover(&self, track: Uuid) -> anyhow::Result<Outcome> {
         let row = sqlx::query!(
-            r#"SELECT t.title, t.artist_id, t.album_id, t.year, ar.name AS artist_name,
+            r#"SELECT t.title AS "title!", t.artist_id AS "artist_id!", t.album_id, t.year, ar.name AS "artist_name!",
                       al.title AS "album_title?", al.cover_path
                FROM tracks t JOIN artists ar ON ar.id = t.artist_id LEFT JOIN albums al ON al.id = t.album_id
                WHERE t.id = $1"#,

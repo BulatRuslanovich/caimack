@@ -7,9 +7,8 @@ import type { ComponentProps } from "react";
 import { cn } from "@/lib/cn";
 
 const variants = {
-  outline: "border border-control-border text-foreground hover:border-foreground",
   primary: "bg-action font-semibold text-action-foreground hover:bg-action-hover",
-  secondary: "bg-raised text-foreground hover:bg-accent",
+  secondary: "control-surface",
   ghost: "text-muted-foreground hover:bg-accent hover:text-foreground",
   text: "text-muted-foreground hover:text-foreground hover:underline",
   destructive: "border border-destructive/60 text-destructive hover:bg-destructive/10",
@@ -18,7 +17,7 @@ const variants = {
 
 const sizes = {
   sm: "h-8 rounded-full px-3.5 text-xs",
-  md: "h-10 rounded-full px-5 text-sm",
+  md: "h-10 rounded-full px-4 text-sm pointer-coarse:h-11",
   lg: "h-12 rounded-full px-6 text-sm",
   icon: "size-9 rounded-full max-md:size-10 pointer-coarse:size-11",
   "icon-sm": "size-7 rounded-full",
@@ -30,7 +29,7 @@ const sizes = {
 
 export function Button({
   className,
-  variant = "outline",
+  variant = "secondary",
   size = "md",
   asChild,
   type,
@@ -46,7 +45,7 @@ export function Button({
     <Component
       type={asChild ? undefined : (type ?? "button")}
       className={cn(
-        "inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap transition-[background-color,border-color,color,opacity,scale] duration-150 ease-brand outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 motion-reduce:active:scale-100 [&_svg]:shrink-0",
+        "inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap transition-[background-color,border-color,color,opacity,scale] duration-150 ease-brand outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:active:scale-100 [&_svg]:shrink-0",
         variants[variant],
         sizes[size],
         className,

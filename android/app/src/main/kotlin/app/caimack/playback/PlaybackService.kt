@@ -27,10 +27,9 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSourceBitmapLoader
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
+import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.DefaultLoadControl
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import androidx.media3.session.CacheBitmapLoader
@@ -48,10 +47,10 @@ import app.caimack.api.RadioRequest
 import app.caimack.api.Track
 import app.caimack.api.ConnectCommand
 import app.caimack.api.ConnectState
-import app.caimack.api.ConnectRadio
 import app.caimack.api.ConnectSleep
 import app.caimack.ui.Appearance
 import app.caimack.ui.withNetworkRetries
+import java.net.HttpURLConnection.HTTP_ACCEPTED
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -65,7 +64,10 @@ import okhttp3.Request
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class SavedQueue(val tracks: List<Track>, val index: Int, val positionMs: Long)
+data class SavedQueue(
+    val tracks: List<Track>, val index: Int, val positionMs: Long,
+    val collection: app.caimack.api.PlaybackCollection? = null,
+)
 
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaLibraryService() {
@@ -85,6 +87,7 @@ class PlaybackService : MediaLibraryService() {
     private var playbackLease = false
     private var outputPlayer: ExoPlayer? = null
     private lateinit var queuePlayback: QueuePlayback
+    private lateinit var nextTrackPreload: NextTrackPreload
     private var connectPlayer: ConnectMediaPlayer? = null
     private var connectSession: Job? = null
     private var heart: Job? = null
@@ -109,23 +112,21 @@ class PlaybackService : MediaLibraryService() {
         val container = (application as CaimackApp).container
         musicHaptics = app.caimack.haptics.AudioHaptics(app.caimack.haptics.AndroidAudioHapticFactory, container.haptics::reportMusicStatus)
         val data = OkHttpDataSource.Factory(container.http)
+        nextTrackPreload = NextTrackPreload(this, container.streamCache, container.http) { container.connect.isRemote }
+        val local = ResolvingDataSource.Factory(container.downloads.playback) { spec ->
+            val id = spec.key?.takeIf { it.startsWith("sync:") }?.removePrefix("sync:")
+            id?.let { container.syncStore.audio(it) }?.let(spec::withUri) ?: spec
+        }
+        val errors = object : DefaultLoadErrorHandlingPolicy(NETWORK_RETRIES) {
+            override fun getRetryDelayMsFor(info: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
+                val status = statusOf(info.exception)
+                return if (status in 400..499 || status == HTTP_ACCEPTED) C.TIME_UNSET else super.getRetryDelayMsFor(info)
+            }
+        }
 
         val player = ExoPlayer.Builder(this)
-            .setLoadControl(DefaultLoadControl.Builder()
-                .setBufferDurationsMs(60_000, 180_000, 1500, 5000)
-                .setPrioritizeTimeOverSizeThresholds(true)
-                .build())
-            .setMediaSourceFactory(
-                DefaultMediaSourceFactory(androidx.media3.datasource.ResolvingDataSource.Factory(container.downloads.playback) { spec ->
-                    val id = spec.key?.takeIf { it.startsWith("sync:") }?.removePrefix("sync:")
-                    id?.let { container.syncStore.audio(it) }?.let(spec::withUri) ?: spec
-                }).setLoadErrorHandlingPolicy(
-                    object : DefaultLoadErrorHandlingPolicy(NETWORK_RETRIES) {
-                        override fun getRetryDelayMsFor(info: LoadErrorHandlingPolicy.LoadErrorInfo): Long =
-                            if (statusOf(info.exception) in 400..499) C.TIME_UNSET else super.getRetryDelayMsFor(info)
-                    },
-                ),
-            )
+            .setLoadControl(nextTrackPreload.loadControl())
+            .setMediaSourceFactory(container.streamCache.playbackFactory(local, errors))
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
                     .setHapticChannelsMuted(!container.haptics.musicEnabled.value).build(),
@@ -169,6 +170,7 @@ class PlaybackService : MediaLibraryService() {
 
         val tick = object : Runnable {
             override fun run() {
+                nextTrackPreload.update(player)
                 player.currentMediaItem?.let { signals.progress(it.mediaId, secondsOf(it), player.currentPosition / 1000.0) }
                 if (++reportTicks % REPORT_EVERY_TICKS == 0) report(container, player)
                 if (reportTicks % WIDGET_EVERY_TICKS == 0 && !container.connect.isRemote && player.isPlaying && getSystemService(PowerManager::class.java).isInteractive) {
@@ -202,7 +204,7 @@ class PlaybackService : MediaLibraryService() {
                 if (player.playWhenReady) report(container, player)
 
                 val fallback = reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED &&
-                    mediaItem?.mediaId == listening
+                    mediaItem != null && mediaItem.mediaId == listening && signals.hasSameSession(mediaItem.mediaId)
                 if (fallback) return
 
                 val natural = reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT
@@ -249,6 +251,7 @@ class PlaybackService : MediaLibraryService() {
             }
 
             override fun onEvents(ignored: Player, events: Player.Events) {
+                nextTrackPreload.update(player)
                 container.connect.changed()
                 if (player.mediaItemCount == 0) {
                     playbackLease = false
@@ -314,7 +317,7 @@ class PlaybackService : MediaLibraryService() {
                 if (item.localConfiguration?.mimeType == MimeTypes.APPLICATION_M3U8 && fellBack.add(item.mediaId)) {
                     val index = player.currentMediaItemIndex
                     val position = player.currentPosition
-                    player.replaceMediaItem(index, item.buildUpon().setUri(original(container, item.mediaId)).setMimeType(null).build())
+                    player.replaceMediaItem(index, container.streamCache.online(item, original(container, item.mediaId), null))
                     player.seekTo(index, position)
                     player.prepare()
                     return
@@ -381,6 +384,7 @@ class PlaybackService : MediaLibraryService() {
             connectSession = container.scope.launch(Dispatchers.Main) {
                 container.connect.state.map { it.selectedId }.distinctUntilChanged().collect { selected ->
                     if (selected != null) {
+                        nextTrackPreload.stop()
                         playbackLease = false
                         exclusive.release()
                         player.pause()
@@ -405,6 +409,7 @@ class PlaybackService : MediaLibraryService() {
         leveling = container.scope.launch(Dispatchers.Main) { container.playbackPrefs.normalizeVolume.collect { normalize(container, player) } }
         qualityChanges = container.scope.launch(Dispatchers.Main) {
             container.settings.map { it.quality }.distinctUntilChanged().drop(1).collect {
+                nextTrackPreload.stop()
                 networkRecovery?.cancel()
                 bufferingRecovery?.cancel()
                 fellBack.clear()
@@ -444,6 +449,7 @@ class PlaybackService : MediaLibraryService() {
         networkCallback = null
         networkRecovery?.cancel()
         bufferingRecovery?.cancel()
+        nextTrackPreload.close()
         equalizer?.release()
         equalizer = null
         ticks.removeCallbacksAndMessages(null)
@@ -486,7 +492,7 @@ class PlaybackService : MediaLibraryService() {
         val index = player.currentMediaItemIndex
         val position = player.currentPosition
         reduced.add(item.mediaId)
-        player.replaceMediaItem(index, item.buildUpon().setUri(master.toString().toUri()).setMimeType(MimeTypes.APPLICATION_M3U8).build())
+        player.replaceMediaItem(index, container.streamCache.online(item, master.toString().toUri(), MimeTypes.APPLICATION_M3U8))
         player.seekTo(index, position)
         player.prepare()
         Toast.makeText(this, Appearance.localized(this).getString(R.string.player_quality_reduced), Toast.LENGTH_LONG).show()
@@ -500,23 +506,22 @@ class PlaybackService : MediaLibraryService() {
                 .setMimeType(request.mimeType)
                 .setCustomCacheKey(request.customCacheKey)
                 .setStreamKeys(request.streamKeys)
+                .setTag(null)
                 .build()
         }
         container.syncStore.audio(item.mediaId)?.let { uri ->
-            return item.buildUpon().setUri(uri).setMimeType(null).setCustomCacheKey("sync:${item.mediaId}").setStreamKeys(emptyList()).build()
+            return item.buildUpon().setUri(uri).setMimeType(null).setCustomCacheKey("sync:${item.mediaId}")
+                .setStreamKeys(emptyList()).setTag(null).build()
         }
 
         val quality = container.settings.value.quality
-        val adaptive = quality != ORIGINAL
-
-        if (!adaptive || item.mediaId in fellBack) {
-            return item.buildUpon().setUri(original(container, item.mediaId)).setMimeType(null).build()
+        if (quality == ORIGINAL || item.mediaId in fellBack) {
+            return container.streamCache.online(item, original(container, item.mediaId), null)
         }
 
-        val cap = if (quality == ORIGINAL) NORMAL else quality
         val master = container.server.resolve("api/tracks/${item.mediaId}/hls/master.m3u8")
-            ?.newBuilder()?.addQueryParameter("maxQuality", cap)?.build().toString()
-        return item.buildUpon().setUri(master.toUri()).setMimeType(MimeTypes.APPLICATION_M3U8).build()
+            ?.newBuilder()?.addQueryParameter("maxQuality", quality)?.build().toString()
+        return container.streamCache.online(item, master.toUri(), MimeTypes.APPLICATION_M3U8)
     }
 
     private fun trimSilence(container: AppContainer, item: MediaItem): MediaItem {
@@ -598,7 +603,8 @@ class PlaybackService : MediaLibraryService() {
         } else queued.indices.toSet()
         val excluded = RadioPolicy.exclusions(order, player.currentMediaItemIndex, retained).map { queued[it] }
         radioRequest = container.scope.launch(Dispatchers.Main) {
-            val batch = runCatching { withNetworkRetries { container.radio(RadioRequest(seed, excluded, focus = state.focus)) } }.getOrNull()
+            val request = RadioRequest(seed, excluded, sessionId = state.sessionId, focus = state.focus, playlistId = state.playlistId)
+            val batch = runCatching { withNetworkRetries { container.radio(request) } }.getOrNull()
                 ?: run { radioSeed = null; return@launch }
             val fresh = batch.tracks.map { it.track }.filter { it.id !in excluded }
             if (fresh.isEmpty()) return@launch
@@ -620,7 +626,8 @@ class PlaybackService : MediaLibraryService() {
                     queued.indices.reversed().filter { it !in retained }.forEach { player.removeMediaItem(it) }
                 }
                 container.radio.extend(batch)
-                player.addMediaItems(fresh.map { resolve(container, it.toMediaItem(container.media)) })
+                val collection = player.playbackCollection()
+                player.addMediaItems(fresh.map { resolve(container, it.toMediaItem(container.media).withPlaybackCollection(collection)) })
             }
         }
     }
@@ -701,14 +708,15 @@ class PlaybackService : MediaLibraryService() {
     private fun save(container: AppContainer, player: Player) {
         val ids = idsOf(player)
         val tracks = ids.mapNotNull { container.tracks[it] }
-        val saved = SavedQueue(tracks, player.currentMediaItemIndex, player.currentPosition).takeIf { ids.isNotEmpty() && tracks.size == ids.size }
+        val saved = SavedQueue(tracks, player.currentMediaItemIndex, player.currentPosition, player.playbackCollection())
+            .takeIf { ids.isNotEmpty() && tracks.size == ids.size }
         container.scope.launch(saving) {
             if (saved == null) container.queue.delete() else container.queue.writeText(container.json.encodeToString(SavedQueue.serializer(), saved))
         }
     }
 
     private fun report(container: AppContainer, player: Player) {
-        if (container.connect.isRemote) return
+        if (container.connect.isRemote || !container.connect.hasPeer) return
         val ids = idsOf(player)
         if (ids.isEmpty()) return
         val current = player.currentMediaItemIndex.coerceIn(0, ids.size - 1)
@@ -754,10 +762,11 @@ class PlaybackService : MediaLibraryService() {
             isPlaying = player.playWhenReady, buffering = player.playbackState == Player.STATE_BUFFERING,
             volume = container.player.localVolume.toDouble(), muted = container.player.localMuted,
             shuffle = player.shuffleModeEnabled, repeat = repeatOf(player.repeatMode),
-            radio = if (radio.active) ConnectRadio(radio.seedTrackId, radio.focus, radio.notes.mapValues { it.value.reason }) else null,
+            radio = if (radio.active) radio.connectRadio() else null,
             smartTransitions = container.playbackPrefs.smartTransitions.value,
             normalizeVolume = container.playbackPrefs.normalizeVolume.value, autoplay = container.radio.autoplay.value,
             sleepTimer = sleep,
+            collection = player.playbackCollection(),
         )
     }
 
@@ -786,17 +795,20 @@ class PlaybackService : MediaLibraryService() {
             is ConnectCommand.Play -> {
                 val tracks = container.connect.lookup(command.trackIds)
                 container.radio.reset()
-                PlaySources.tag(command.trackIds, command.source)
+                PlaySources.tag(command.trackIds, command.source, command.radio?.sessionId)
                 player.shuffleModeEnabled = command.shuffle
                 player.repeatMode = repeatModeOf(command.repeat)
-                val (items, index) = if (command.order != null) orderedQueue(tracks.map(::item), command.index, command.order)
-                    else tracks.map(::item) to command.index
-                player.setMediaItems(items, index, (command.positionSeconds * 1000).toLong())
+                val queue = tracks.map { item(it).withPlaybackCollection(command.collection) }
+                val (items, index) = if (command.order != null) orderedQueue(queue, command.index, command.order)
+                    else queue to command.index
                 command.radio?.let { radio ->
                     container.radio.restore(RadioState(seedTrackId = radio.seedTrackId,
-                        notes = radio.reasons.mapValues { RadioNote(it.value, false) }, active = true, focus = radio.focus))
-                    PlaySources.tag(radio.reasons.keys.toList(), PlaySources.radio(seeded = radio.seedTrackId != null))
+                        notes = radio.reasons.mapValues { RadioNote(it.value, false) }, active = true, focus = radio.focus,
+                        playlistId = radio.playlistId, sessionId = radio.sessionId))
+                    val ids = if (radio.playlistId == null) radio.reasons.keys else radio.reasons.keys + listOfNotNull(radio.seedTrackId)
+                    PlaySources.tag(ids, PlaySources.radio(seeded = radio.seedTrackId != null, playlist = radio.playlistId != null), radio.sessionId)
                 }
+                player.setMediaItems(items, index, (command.positionSeconds * 1000).toLong())
                 player.prepare()
                 playbackLease = true
                 exclusive.hold()
@@ -807,7 +819,7 @@ class PlaybackService : MediaLibraryService() {
                 PlaySources.tag(listOf(track.id), "queue")
                 container.signals.choice("trackAddedToQueue", track.id, track.durationSeconds)
                 val at = if (command.next) (player.currentMediaItemIndex + 1).coerceAtLeast(0) else player.mediaItemCount
-                player.addMediaItem(at, item(track))
+                player.addMediaItem(at, item(track).withPlaybackCollection(player.playbackCollection()))
             }
             is ConnectCommand.Remove -> { checkIndex(command.index, command.trackId); player.removeMediaItem(command.index) }
             is ConnectCommand.Jump -> { checkIndex(command.index, command.trackId); queuePlayback.jumpTo(command.index) }

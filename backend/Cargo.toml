@@ -3,14 +3,14 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-version = "1.1.3"
+version = "1.2.3"
 edition = "2024"
 rust-version = "1.94"
 license = "AGPL-3.0-only"
 publish = false
 
 [workspace.dependencies]
-app = { path = "crates/app" }
+app = { path = "crates/app", default-features = false }
 media = { path = "crates/media" }
 reco = { path = "crates/reco" }
 
@@ -36,7 +36,6 @@ realfft = "3.5.1"
 regex = "1.13.1"
 roxmltree = "0.21"
 html-escape = "0.2"
-rubato = "5.0.1"
 rusty-chromaprint = "0.3.0"
 reqwest = { version = "0.13.5", default-features = false, features = ["form", "json", "query", "rustls"] }
 serde = { version = "1.0.229", features = ["derive"] }

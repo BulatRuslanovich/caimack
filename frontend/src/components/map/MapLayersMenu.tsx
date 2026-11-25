@@ -66,12 +66,12 @@ export function MapLayersMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="group pointer-coarse:min-h-11">
+        <Button size="sm" className="group">
           <LayersIcon size={14} />
           {t("map.layersCount", { count })}
           <ChevronDownIcon
             size={14}
-            className="text-muted-foreground transition-transform group-data-[state=open]:rotate-180"
+            className="map-layers-chevron text-muted-foreground transition-transform group-data-[state=open]:rotate-180"
           />
         </Button>
       </DropdownMenuTrigger>

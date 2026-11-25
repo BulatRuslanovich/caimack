@@ -8,7 +8,7 @@ mod persistence;
 mod tests;
 
 use reco::map::MapLayout;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use sqlx::PgPool;
 use tokio::sync::Mutex;
@@ -26,7 +26,16 @@ struct MapState {
 }
 
 #[derive(Clone, Default)]
-pub struct MapCache(Arc<Mutex<MapState>>);
+pub struct MapCache(Arc<Mutex<MapState>>, MapProjection);
+
+#[derive(Clone, Copy, Debug, Default, Deserialize)]
+pub enum MapProjection {
+    #[default]
+    #[serde(rename = "2d")]
+    TwoD,
+    #[serde(rename = "3d")]
+    ThreeD,
+}
 
 #[skip_serializing_none]
 #[derive(Debug, Serialize)]
@@ -37,6 +46,8 @@ pub struct MapPointDto {
     pub x: f64,
     #[serde(serialize_with = "json::number")]
     pub y: f64,
+    #[serde(serialize_with = "json::optional_number")]
+    pub z: Option<f64>,
     pub title: String,
     pub artist: String,
     pub album_id: Option<Uuid>,
@@ -67,6 +78,10 @@ fn rounded(value: f32) -> f64 {
 }
 
 impl MapCache {
+    pub(super) fn new(projection: MapProjection) -> Self {
+        Self(Arc::default(), projection)
+    }
+
     async fn layout(
         &self,
         db: &PgPool,
@@ -90,7 +105,7 @@ impl MapCache {
                     let (cache, library, db) = (self.clone(), Arc::clone(library), db.clone());
                     let pool = pool.clone();
                     tokio::spawn(async move {
-                        let built = persistence::build(&db, &pool, Arc::clone(&library)).await;
+                        let built = persistence::build(&db, &pool, Arc::clone(&library), cache.1).await;
                         let mut state = cache.0.lock().await;
                         state.building = false;
                         match built {
@@ -108,7 +123,7 @@ impl MapCache {
             }
         }
 
-        let layout = persistence::build(db, pool, Arc::clone(library)).await?;
+        let layout = persistence::build(db, pool, Arc::clone(library), self.1).await?;
         state.generation = library.generation;
         state.layout = Some(Arc::clone(&layout));
         Ok((layout, false))
@@ -116,9 +131,13 @@ impl MapCache {
 }
 
 impl Recommendations {
-    pub async fn map(&self, user: Uuid) -> AppResult<LibraryMapDto> {
+    pub async fn map(&self, user: Uuid, projection: MapProjection) -> AppResult<LibraryMapDto> {
         let library = self.index.library();
-        let (layout, updating) = self.map.layout(&self.db, &self.compute, &library).await?;
+        let cache = match projection {
+            MapProjection::TwoD => &self.map,
+            MapProjection::ThreeD => &self.map_3d,
+        };
+        let (layout, updating) = cache.layout(&self.db, &self.compute, &library).await?;
 
         let tracks: HashMap<Uuid, PointTrack> = sqlx::query_as!(
             PointTrack,
@@ -151,6 +170,7 @@ impl Recommendations {
                         id: *id,
                         x: rounded(x),
                         y: rounded(y),
+                        z: layout.z.get(index).copied().map(rounded),
                         title: track.title.clone(),
                         artist: track.artist.clone(),
                         album_id: track.album_id,

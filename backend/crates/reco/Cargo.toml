@@ -9,7 +9,6 @@ description = "Recommendations without IO: the embedding snapshot, taste, shelve
 
 [dependencies]
 serde.workspace = true
-serde_json.workspace = true
 uuid.workspace = true
 
 [lints]

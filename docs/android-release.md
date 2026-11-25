@@ -1,11 +1,14 @@
+[Documentation](README.md#develop-and-release)
+
 # Android releases and in-app updates
 
-Pushing a version tag such as `v1.2.3` runs `.github/workflows/android-release.yml`.
-The tag must match `frontend/package.json`; the Android build reads that version.
-The workflow runs unit tests, builds and verifies a signed release APK, saves it
-as an Actions artifact for 30 days, attaches it to the matching GitHub Release,
-then sends the file to one configured Telegram group. Master pushes and pull
-requests do not publish releases or send messages.
+Follow the [release guide](releases.md) to create and push a version tag.
+The [Android release workflow](../.github/workflows/android-release.yml)
+checks the tag against `frontend/package.json`, runs unit tests, and builds
+and verifies a signed ARM64 APK. It keeps the APK as a workflow artifact for
+30 days, publishes the APK and [desktop packages](desktop.md#releases) to
+GitHub Releases, then sends the APK to the configured Telegram group.
+Manual runs can include desktop packages with `include_desktop`.
 
 ## GitHub Releases
 
@@ -13,10 +16,10 @@ The workflow uses the built-in GitHub token with `contents: write`; no additiona
 release token is needed. The repository must be public for unauthenticated in-app
 update checks and downloads.
 
-If the tag has no release, the publisher creates a draft with generated release
-notes, uploads `caimack-vX.Y.Z-arm64.apk`, and publishes only after GitHub confirms
-the attachment. Existing release descriptions are preserved: you can prepare your
-own notes in a draft before pushing the tag. Rebuilding an existing release replaces
+If the tag has no release, the workflow creates a draft with [release notes from
+Git history](releases.md#release-notes), uploads `caimack-vX.Y.Z-arm64.apk`, and
+publishes only after GitHub confirms the attachment. You can prepare your own notes
+in a draft before pushing the tag. Rebuilding an existing release replaces
 its APK attachment when its content differs, uploading the replacement before
 removing the old file. Identical uploaded files are reused. If immutable releases
 are enabled for your repository, a published APK cannot be replaced; publish a
@@ -73,8 +76,8 @@ The workflow definition comes from the selected branch; application sources are
 checked out from `refs/tags/<release_tag>`. Version validation, artifact names,
 the APK source URL and the Telegram caption use the selected tag and its actual
 commit. The normal test, signing, artifact, GitHub Release and Telegram delivery
-steps still run. The publisher is checked out from the workflow's own commit so
-manual runs can also publish APKs for tags predating the updater.
+steps still run. The release tools are checked out from the workflow's own commit
+so manual runs can also publish APKs for tags predating the updater.
 The selected tag must already exist and match its own `frontend/package.json`.
 
 GitHub CLI equivalent:
@@ -121,6 +124,29 @@ PowerShell alternative:
 ```powershell
 [Convert]::ToBase64String([IO.File]::ReadAllBytes('C:\path\caimack-release.jks')) | Set-Clipboard
 ```
+
+## Sign a local build
+
+Use the original signing key when building an update for an installed APK.
+For a new signing identity, generate a key once and keep it private.
+
+```bash
+keytool -genkeypair -v -keystore ~/caimack-release.jks -alias caimack \
+  -keyalg RSA -keysize 4096 -validity 10000
+```
+
+Set the location and credentials in the Git-ignored
+`android/keystore.properties` file.
+
+```properties
+storeFile=/home/me/caimack-release.jks
+storePassword=...
+keyAlias=caimack
+keyPassword=...
+```
+
+Run `make apk` from the repository root to build the signed APK under
+`android/app/build/outputs/apk/release/`.
 
 ## Telegram group
 

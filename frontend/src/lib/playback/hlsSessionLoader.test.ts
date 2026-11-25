@@ -33,8 +33,13 @@ class FakeLoader implements Loader<LoaderContext> {
     FakeLoader.loads.push(context.url);
 
     const status = FakeLoader.statuses.shift() ?? 200;
-    if (status === 200) {
-      callbacks.onSuccess({ url: context.url, data: "ok" }, this.stats, context, null);
+    if (status >= 200 && status < 300) {
+      callbacks.onSuccess(
+        { url: context.url, data: "ok", code: status },
+        this.stats,
+        context,
+        null,
+      );
       return;
     }
 
@@ -53,13 +58,14 @@ function run() {
   const onSuccess = vi.fn();
   const onError = vi.fn();
 
-  new Loader({} as HlsConfig).load(context, configuration, {
+  const loader = new Loader({} as HlsConfig);
+  loader.load(context, configuration, {
     onSuccess,
     onError,
     onTimeout: vi.fn(),
   });
 
-  return { onSuccess, onError };
+  return { loader, onSuccess, onError };
 }
 
 describe("session aware hls loader", () => {
@@ -110,5 +116,27 @@ describe("session aware hls loader", () => {
 
     expect(refreshSession).not.toHaveBeenCalled();
     expect(FakeLoader.loads).toHaveLength(1);
+  });
+
+  it("passes an accepted response to hls.js as a loading error", () => {
+    FakeLoader.statuses = [202];
+    const { onSuccess, onError } = run();
+    expect(onSuccess).not.toHaveBeenCalled();
+    expect(onError.mock.calls[0]?.[0]).toMatchObject({ code: 202 });
+    expect(refreshSession).not.toHaveBeenCalled();
+  });
+
+  it("does not replay a request canceled while refreshing the session", async () => {
+    FakeLoader.statuses = [401, 200];
+    const renewal = Promise.withResolvers<boolean>();
+    refreshSession.mockReturnValue(renewal.promise);
+    const { loader, onSuccess, onError } = run();
+    loader.abort();
+    renewal.resolve(true);
+    await renewal.promise;
+
+    expect(FakeLoader.loads).toEqual([context.url]);
+    expect(onSuccess).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
   });
 });

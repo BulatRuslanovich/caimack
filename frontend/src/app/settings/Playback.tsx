@@ -53,7 +53,13 @@ export function Playback() {
 
   return (
     <Panel title={t("settings.playback")}>
-      <PlaybackDevices />
+      <div className="settings-choice">
+        <span className="font-medium">{t("connect.title")}</span>
+        <PlaybackDevices
+          variant="secondary"
+          className="settings-device-trigger min-h-11 min-w-0 justify-self-start px-4 text-sm"
+        />
+      </div>
       <Choice
         legend={
           <SettingHelp hint={t("settings.help.quality")}>{t("settings.quality")}</SettingHelp>

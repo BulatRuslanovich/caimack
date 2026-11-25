@@ -6,21 +6,28 @@ import { useCallback } from "react";
 import type { Track } from "@/lib/types";
 import { useNowPlaying, usePlayerActions, usePlayerQueue } from "@/contexts/PlayerContext";
 import { matchesCollection } from "./collectionQueue";
+import { samePlaybackCollection, type PlaybackCollection } from "./playerTypes";
 
-export function usePlayback() {
-  const { currentTrackId, isPlaying, automaticTrackIds = [] } = useNowPlaying();
+export function usePlayback(collection?: PlaybackCollection) {
+  const {
+    currentTrackId,
+    isPlaying,
+    automaticTrackIds = [],
+    collection: activeCollection,
+  } = useNowPlaying();
   const queue = usePlayerQueue();
   const player = usePlayerActions();
 
   const setIsOnAir = useCallback(
     (tracks: Track[]) =>
+      (!collection || !activeCollection || samePlaybackCollection(collection, activeCollection)) &&
       matchesCollection(
         tracks.map((track) => track.id),
         queue.map((track) => track.id),
         currentTrackId,
         automaticTrackIds,
       ),
-    [automaticTrackIds, currentTrackId, queue],
+    [activeCollection, automaticTrackIds, collection, currentTrackId, queue],
   );
 
   const playTrack = useCallback(
@@ -44,9 +51,10 @@ export function usePlayback() {
         return;
       }
 
-      player.playQueue(tracks, startIndex);
+      if (collection) player.playQueue(tracks, startIndex, { collection });
+      else player.playQueue(tracks, startIndex);
     },
-    [setIsOnAir, player],
+    [collection, setIsOnAir, player],
   );
 
   const soundingNow = useCallback(

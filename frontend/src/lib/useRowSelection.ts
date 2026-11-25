@@ -14,7 +14,7 @@ interface RowSelection {
 export function useRowSelection(ids: readonly string[], listKey: string): RowSelection {
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const [knownKey, setKnownKey] = useState(listKey);
-  const anchor = useRef<{ key: string; index: number } | null>(null);
+  const anchor = useRef<{ key: string; id: string } | null>(null);
 
   if (knownKey !== listKey) {
     setKnownKey(listKey);
@@ -23,7 +23,9 @@ export function useRowSelection(ids: readonly string[], listKey: string): RowSel
 
   const toggle = useCallback(
     (id: string, index: number, extend: boolean) => {
-      const from = extend && anchor.current?.key === listKey ? anchor.current.index : index;
+      const anchored =
+        extend && anchor.current?.key === listKey ? ids.indexOf(anchor.current.id) : -1;
+      const from = anchored < 0 ? index : anchored;
 
       setSelected((current) => {
         const next = new Set(current);
@@ -40,13 +42,13 @@ export function useRowSelection(ids: readonly string[], listKey: string): RowSel
         return next;
       });
 
-      anchor.current = { key: listKey, index };
+      anchor.current = { key: listKey, id };
     },
     [ids, listKey],
   );
 
   const toggleAll = useCallback(() => {
-    setSelected((current) => (current.size === ids.length ? new Set() : new Set(ids)));
+    setSelected((current) => (ids.every((id) => current.has(id)) ? new Set() : new Set(ids)));
     anchor.current = null;
   }, [ids]);
 

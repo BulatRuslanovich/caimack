@@ -29,13 +29,15 @@ import type {
   ConnectSnapshot,
 } from "./connect";
 import { positionAt, remoteState } from "./connect";
-import { lookupQueue } from "./connectCommands";
+import { applyConnectCommand, lookupQueue } from "./connectCommands";
 import type { PlayerActions, PlayerProgress, PlayerState } from "./playerTypes";
 import { queueEntries } from "./queueEntries";
 import { useConnectTransport, type ConnectRenderer } from "./useConnectTransport";
 import { useRemotePlaybackView, type RemoteView } from "./useRemotePlaybackView";
 
 export type AudiobookReceiver = (command: AudiobookHandoff, signal: AbortSignal) => Promise<void>;
+
+const DEVICE_FALLBACK_DELAY_MS = 30_000;
 
 interface ConnectControls {
   activeBook: ActiveBook | null;
@@ -68,6 +70,7 @@ function playbackState(
     shuffle: state.shuffle,
     repeat: state.repeat,
     radio: state.radioSession,
+    collection: state.collection,
     crossfade: state.crossfade,
     smartTransitions: state.smartTransitions,
     normalizeVolume: state.normalizeVolume,
@@ -86,7 +89,7 @@ export function useConnectPlayback(
   receiveAudiobookExperiment: (enabled: boolean) => void,
 ) {
   const t = useT();
-  const { notifyError, notify } = useToast();
+  const { notifyError } = useToast();
   const [snapshot, setSnapshot] = useState<ConnectSnapshot>({
     epoch: "",
     version: 0,
@@ -121,6 +124,13 @@ export function useConnectPlayback(
     null,
   );
   const selectionEpoch = useRef(0);
+  const playlistRadioRequest = useRef(0);
+  const beginPlaylistRadio = useCallback(() => {
+    const epoch = selectionEpoch.current;
+    const request = ++playlistRadioRequest.current;
+    return () => epoch === selectionEpoch.current && request === playlistRadioRequest.current;
+  }, []);
+  const fallenBackFrom = useRef<number | null>(null);
   const hydrated = useRef(0);
   useLayoutEffect(() => {
     latest.current = {
@@ -159,7 +169,13 @@ export function useConnectPlayback(
       (device) => device.id === (latest.current.selectedId ?? active?.deviceId),
     );
     if (named) setSelectedName(named.name);
-    if (next.audiobook || !active || active.deviceId === own.current) return;
+    if (
+      next.audiobook ||
+      !active ||
+      active.deviceId === own.current ||
+      !next.devices.some((device) => device.id === active.deviceId)
+    )
+      return;
     if (!latest.current.selectedId && !latest.current.local.isPlaying && !wantsLocal.current) {
       latest.current.localActions.pause();
       latest.current.output(false);
@@ -207,6 +223,7 @@ export function useConnectPlayback(
           if (
             !id ||
             id !== requestedConnection ||
+            currentSnapshot.current.devices.length < 2 ||
             value.selectedId ||
             (!value.local.queue.length &&
               currentSnapshot.current.playback?.deviceId !== own.current)
@@ -249,18 +266,74 @@ export function useConnectPlayback(
     setLease,
   });
 
+  const hasPeer = snapshot.devices.length > 1;
   useEffect(() => {
-    if (!connected || selectedId) return;
+    if (!connected || !hasPeer || selectedId) return;
     void report().catch(() => {});
     const interval = window.setInterval(() => void report().catch(() => {}), 2000);
     return () => clearInterval(interval);
-  }, [connected, selectedId, local, report]);
+  }, [connected, hasPeer, selectedId, local, report]);
 
   const available =
     connected &&
     (selectedId === null || snapshot.devices.some((device) => device.id === selectedId));
+  const takeLocal = useCallback((automatic: boolean) => {
+    const value = latest.current;
+    const target = value.selectedId;
+    if (!target) return;
+    fallenBackFrom.current = automatic ? selectionEpoch.current : null;
+    selectionEpoch.current += 1;
+    wantsLocal.current = true;
+    const view = value.remote?.active.deviceId === target ? value.remote : null;
+    flushSync(() => {
+      setSelectedId(null);
+      setLease(true);
+      value.output(true);
+      if (!view?.tracks.length) return;
+      const { active, tracks, receivedAt } = view;
+      const position = positionAt(
+        active,
+        receivedAt,
+        performance.now(),
+        tracks[active.index]?.durationSeconds ?? 0,
+        value.connected && currentSnapshot.current.devices.some((device) => device.id === target),
+      );
+      value.load(tracks, {
+        type: "play",
+        trackIds: active.trackIds,
+        index: active.index,
+        positionSeconds: position,
+        playing: active.isPlaying && !currentSnapshot.current.audiobook,
+        shuffle: active.shuffle,
+        repeat: active.repeat,
+        order: active.order,
+        radio: active.radio,
+        collection: active.collection,
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!userId || !selectedId || available) return;
+    const epoch = selectionEpoch.current;
+    const timer = window.setTimeout(() => {
+      if (epoch !== selectionEpoch.current || latest.current.selectedId !== selectedId) return;
+      if (
+        !latest.current.connected ||
+        !currentSnapshot.current.devices.some((device) => device.id === selectedId)
+      )
+        takeLocal(true);
+    }, DEVICE_FALLBACK_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [userId, selectedId, available, takeLocal]);
+
   const send = useCallback(
-    (command: ConnectCommand, queueRevision?: number, reportError = true): Promise<void> => {
+    (
+      command: ConnectCommand,
+      queueRevision?: number,
+      reportError = true,
+      replayLocal = true,
+    ): Promise<void> => {
       const target = latest.current.selectedId;
       const epoch = selectionEpoch.current;
       if (!target) return Promise.reject(new Error("No playback device selected."));
@@ -273,20 +346,40 @@ export function useConnectPlayback(
         .enqueue(
           command,
           async (command) => {
+            const isFallback = () =>
+              fallenBackFrom.current === epoch &&
+              selectionEpoch.current === epoch + 1 &&
+              latest.current.selectedId === null;
+            const replay = async () => {
+              if (!replayLocal || queueRevision !== undefined) return;
+              const value = latest.current;
+              await applyConnectCommand(command, value.local, value.localActions, value.load);
+            };
+            if (isFallback()) {
+              if (reportError) await replay();
+              return;
+            }
             if (epoch !== selectionEpoch.current || latest.current.selectedId !== target)
               throw new Error(t("connect.changed"));
             if (
               !latest.current.connected ||
               !currentSnapshot.current.devices.some((device) => device.id === target)
-            )
-              throw new Error(t("connect.offline"));
-            const next = await api.connectCommand(
-              crypto.randomUUID(),
-              target,
-              command,
-              queueRevision,
-            );
-            if (epoch === selectionEpoch.current) receive(next);
+            ) {
+              if (reportError) throw new Error(t("connect.offline"));
+              return;
+            }
+            try {
+              const next = await api.connectCommand(
+                crypto.randomUUID(),
+                target,
+                command,
+                queueRevision,
+              );
+              if (epoch === selectionEpoch.current) receive(next);
+            } catch (reason) {
+              if (!isFallback()) throw reason;
+              if (reportError) await replay();
+            }
           },
           coalesce,
         )
@@ -317,6 +410,18 @@ export function useConnectPlayback(
     async (device: string | null) => {
       const target = device === own.current ? null : device;
       if (target === latest.current.selectedId) return;
+      if (!target) {
+        takeLocal(false);
+        return;
+      }
+      if (
+        !latest.current.connected ||
+        !currentSnapshot.current.devices.some((device) => device.id === target)
+      ) {
+        const error = new Error(t("connect.offline"));
+        notifyError(error);
+        throw error;
+      }
       selectionEpoch.current += 1;
       const value = latest.current;
       const visible =
@@ -343,21 +448,8 @@ export function useConnectPlayback(
         repeat: visible.state.repeat,
         order: visible.state.queueOrder,
         radio: visible.state.radioSession,
+        collection: visible.state.collection,
       };
-      if (!target) {
-        wantsLocal.current = true;
-        flushSync(() => {
-          setSelectedId(null);
-          setLease(true);
-          value.output(true);
-        });
-        if (transfer.trackIds.length) value.load(visible.state.queue, transfer);
-        return;
-      }
-      if (!currentSnapshot.current.devices.some((device) => device.id === target)) {
-        notify(t("connect.offline"), "error");
-        return;
-      }
       wantsLocal.current = false;
       flushSync(() => {
         value.localActions.pause();
@@ -380,10 +472,10 @@ export function useConnectPlayback(
           tracks: visible.state.queue,
           receivedAt: performance.now(),
         });
-        await send(transfer);
+        await send(transfer, undefined, true, false);
       }
     },
-    [notify, receive, send, t],
+    [notifyError, receive, send, t, takeLocal],
   );
 
   const continueHere = useCallback(async () => {
@@ -418,6 +510,7 @@ export function useConnectPlayback(
     available,
     local,
     localActions,
+    beginPlaylistRadio,
     localProgress,
     send,
     continueHere,

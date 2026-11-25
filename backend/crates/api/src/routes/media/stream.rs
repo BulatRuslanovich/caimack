@@ -24,24 +24,6 @@ pub(super) async fn stream(
         content_type: track.content_type,
         etag: track.etag,
         cache_control: "private, max-age=604800",
-        download_name: None,
-        ranges: true,
-    };
-    Ok(reply.send(&headers).await)
-}
-
-pub(super) async fn download(
-    State(state): State<AppState>,
-    RoutePath(id): RoutePath<Uuid>,
-    headers: HeaderMap,
-) -> ApiResult<Response> {
-    let track = streaming::open_track(&state.db, &state.storage, id).await?;
-    let reply = FileReply {
-        path: track.path,
-        content_type: track.content_type,
-        etag: track.etag,
-        cache_control: "private, no-store",
-        download_name: Some(track.download_name),
         ranges: true,
     };
     Ok(reply.send(&headers).await)
@@ -126,7 +108,6 @@ pub(super) async fn hls_asset(
                 content_type: asset.content_type.to_owned(),
                 etag: asset.etag,
                 cache_control: "private, max-age=31536000, immutable",
-                download_name: None,
                 ranges: true,
             };
             reply.send(&headers).await

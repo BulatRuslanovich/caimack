@@ -60,7 +60,7 @@ export function LibraryFolder() {
       className="workspace-panel upload-library-folder p-5 max-md:p-4"
       title={t("library.folder")}
       actions={
-        <Button variant="outline" size="sm" disabled={running} onClick={() => rescan.mutate()}>
+        <Button variant="secondary" size="sm" disabled={running} onClick={() => rescan.mutate()}>
           <RefreshCwIcon size={14} className={running ? "animate-spin" : undefined} />
           {running ? t("library.scanning") : t("library.rescan")}
         </Button>

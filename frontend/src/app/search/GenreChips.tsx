@@ -9,32 +9,44 @@ import { AlbumCover, Cover } from "@/components/Cover";
 import { useT } from "@/contexts/I18nContext";
 
 export function GenreCategories({ genres }: { genres: Genre[] }) {
-  const t = useT();
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4">
       {genres.map((genre) => (
-        <Link
-          key={genre.id}
-          href={`/search?tab=genres&id=${genre.id}`}
-          className="flex min-h-24 min-w-0 flex-col gap-2 rounded-md bg-card p-3 hover:bg-raised hover:no-underline focus-visible:outline-2 focus-visible:outline-ring"
-        >
-          <span className="text-body font-semibold wrap-anywhere">{genreName(genre.name)}</span>
-          <span className="mt-auto flex items-end justify-between gap-2">
-            <span className="text-xs text-muted-foreground">
-              {t("count.tracks", { count: genre.trackCount })}
-            </span>
-            {genre.coverAlbumIds[0] ? (
-              <AlbumCover
-                album={{ id: genre.coverAlbumIds[0], title: genre.name, hasCover: true }}
-                size={48}
-              />
-            ) : (
-              <Cover name={genre.name} hasCover={false} size={48} />
-            )}
-          </span>
-        </Link>
+        <GenreCategory key={genre.id} genre={genre} />
       ))}
     </div>
+  );
+}
+
+function GenreCategory({ genre }: { genre: Genre }) {
+  const t = useT();
+  const name = genreName(genre.name);
+  const albumId = genre.coverAlbumIds[0];
+
+  return (
+    <Link
+      href={`/search?tab=genres&id=${genre.id}`}
+      className="flex min-h-23 min-w-0 items-center justify-between gap-1.5 rounded-md border border-border bg-card px-2.5 py-3 hover:bg-raised hover:no-underline focus-visible:outline-2 focus-visible:outline-ring sm:min-h-30 sm:gap-3 sm:p-4"
+    >
+      <span className="flex min-w-0 flex-col gap-1">
+        <span className="wrap-anywhere text-sm leading-tight font-semibold sm:text-base">
+          {name}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          {t("count.tracks", { count: genre.trackCount })}
+        </span>
+      </span>
+      <span
+        aria-hidden="true"
+        className="size-11 shrink-0 overflow-hidden rounded-xs shadow-art min-[375px]:size-13 sm:size-22"
+      >
+        {albumId ? (
+          <AlbumCover album={{ id: albumId, title: name, hasCover: true }} />
+        ) : (
+          <Cover name={name} hasCover={false} />
+        )}
+      </span>
+    </Link>
   );
 }
 

@@ -49,7 +49,7 @@ function AlertDialogContent({
 
           <div className="mt-5 flex flex-wrap justify-end gap-2.5 max-md:[&>*]:flex-1">
             <AlertDialogPrimitive.Cancel asChild>
-              <Button variant="outline">{cancelLabel}</Button>
+              <Button variant="secondary">{cancelLabel}</Button>
             </AlertDialogPrimitive.Cancel>
             <AlertDialogPrimitive.Action asChild>
               <Button variant={destructive ? "destructive" : "primary"} onClick={onConfirm}>

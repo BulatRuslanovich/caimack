@@ -10,6 +10,7 @@ cd -- "$ROOT"
 ENV_FILE="$ROOT/.env" STATE="$ROOT/.caimack"
 MODULE=docker-compose.recommendations.yml
 AMD_MODULE=docker-compose.mert-amd.yml
+MONITORING_EXPORTER=deploy/monitoring/exporter.compose.yml
 REPOSITORY=BulatRuslanovich/caimack
 ACTION='' MODE='' SERVICE='' DOMAIN='' LIBRARY='' OWNER='' VERSION=''
 YES=false BUILD=false FOLLOW=false RESET_PENDING=false
@@ -36,6 +37,7 @@ Usage: ./caimack.sh [command] [options]
   status                     Deployment configuration and container status
   logs [service] [-f]        Recent logs; -f follows output
   recommendations on | off   Attach or detach MERT (auto NVIDIA / AMD)
+  monitoring on | off | status   Manage optional LAN monitoring
   owner [--owner NAME]       Assign the deployment owner / administrator
   reset once | on | off      One-time or persistent owner password reset
   credentials                Explicitly display owner credentials from .env
@@ -59,7 +61,11 @@ EOF
 }
 while (($#)); do
   case "$1" in
-    install|update|start|stop|restart|status|logs|recommendations|owner|reset|credentials|doctor|self-update)
+    status)
+      if [[ $ACTION == monitoring && -z $MODE ]]; then MODE=status
+      else [[ -z $ACTION ]] || die 'Only one command can be specified.'; ACTION=status; fi
+      shift ;;
+    install|update|start|stop|restart|logs|recommendations|monitoring|owner|reset|credentials|doctor|self-update)
       [[ -z $ACTION ]] || die 'Only one command can be specified.'; ACTION=$1; shift ;;
     on|off|once) [[ -z $MODE ]] || die 'Mode specified twice.'; MODE=$1; shift ;;
     --domain|--library|--owner|--version)
@@ -236,12 +242,18 @@ download_files() {
   local ref destination file
   ref=$(release_ref)
   STAGING=$(mktemp -d "$STATE/download.XXXXXX")
-  local assets=(.env.example docker-compose.yml docker-compose.images.yml "$MODULE" "$AMD_MODULE" deploy/Caddyfile caimack.sh setup.sh)
+  local assets=(.env.example docker-compose.yml docker-compose.images.yml "$MODULE" "$AMD_MODULE" deploy/Caddyfile caimack.sh)
   for file in "${assets[@]}"; do
     mkdir -p -- "$STAGING/$(dirname -- "$file")"
     fetch "https://raw.githubusercontent.com/$REPOSITORY/$ref/$file" "$STAGING/$file" || die "Could not download $file from $ref. Existing files were preserved."
   done
-  bash -n "$STAGING/caimack.sh"; bash -n "$STAGING/setup.sh"
+  if grep -Fq "$MONITORING_EXPORTER" "$STAGING/caimack.sh"; then
+    file=$MONITORING_EXPORTER
+    mkdir -p -- "$STAGING/$(dirname -- "$file")"
+    fetch "https://raw.githubusercontent.com/$REPOSITORY/$ref/$file" "$STAGING/$file" || die "Could not download $file from $ref. Existing files were preserved."
+    assets+=("$file")
+  fi
+  bash -n "$STAGING/caimack.sh";
   if [[ -f $ENV_FILE ]]; then
     cp -- "$ENV_FILE" "$STAGING/.env"
     docker compose --env-file "$STAGING/.env" -f "$STAGING/docker-compose.yml" -f "$STAGING/docker-compose.images.yml" -f "$STAGING/$MODULE" config --quiet
@@ -252,8 +264,10 @@ download_files() {
     if [[ -f $file ]]; then mkdir -p -- "$destination/$(dirname -- "$file")"; cp -p -- "$file" "$destination/$file"; fi
     mkdir -p -- "$(dirname -- "$file")"; mv -f -- "$STAGING/$file" "$file"
   done
-  chmod 755 caimack.sh setup.sh
-  rm -f -- "$STAGING/.env"; rmdir "$STAGING/deploy" "$STAGING"; STAGING=''
+  chmod 755 caimack.sh
+  rm -f -- "$STAGING/.env"
+  [[ ! -d $STAGING/deploy/monitoring ]] || rmdir "$STAGING/deploy/monitoring"
+  rmdir "$STAGING/deploy" "$STAGING"; STAGING=''
   touch "$STATE/managed"
   ok "Deployment files updated to $ref. Backup: ${destination#"$ROOT/"}"
 }
@@ -307,6 +321,32 @@ status() {
   require_install; runtime_snapshot
   # CLI status is unrestricted; the compact dashboard limits its runtime rows.
   if [[ $DOCKER_READY == true ]]; then compose ps; else runtime_panel; fi
+}
+monitoring_exporter_containers() {
+  docker ps --quiet --filter label=com.docker.compose.project=caimack-monitoring-exporter \
+    --filter label=com.docker.compose.service=node-exporter
+}
+monitoring() {
+  local mode=${MODE:-status}
+  case "$mode" in on|off|status) ;; *) die 'Use monitoring on, off, or status.' ;; esac
+
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*)
+      [[ -f $ROOT/deploy/monitoring/monitoring.ps1 ]] || die 'Use a Caimack repository checkout on the monitoring PC.'
+      powershell.exe -NoProfile -File "$(cygpath -w "$ROOT/deploy/monitoring/monitoring.ps1")" "$mode"
+      return ;;
+  esac
+
+  require_docker
+  [[ -f $MONITORING_EXPORTER ]] || die 'Monitoring files are missing. Run ./caimack.sh self-update.'
+  local containers exporter=(docker compose --project-name caimack-monitoring-exporter -f "$MONITORING_EXPORTER")
+  case "$mode" in
+    on) "${exporter[@]}" up -d; ok 'Linux metrics exporter enabled.' ;;
+    off) "${exporter[@]}" stop; ok 'Linux metrics exporter disabled.' ;;
+    status)
+      containers=$(monitoring_exporter_containers)
+      if [[ -n $containers ]]; then info 'Linux metrics exporter: on'; else info 'Linux metrics exporter: off'; fi ;;
+  esac
 }
 apply() {
   info 'Reconciling deployment; waiting for healthy application services...'
@@ -453,29 +493,33 @@ cleanup() {
 }
 trap cleanup EXIT
 menu() {
-  local selected=0 key sequence index toggle reset_toggle rows
+  local selected=0 key sequence index toggle reset_toggle monitoring_mode rows
   local labels=('Start services' 'Enable recommendations' 'Stop services' 'Change owner'
     'Restart services' 'Reset password once' 'Pull updates' 'Arm password reset'
-    'Follow logs' 'Update manager' 'Run diagnostics' 'Show credentials' 'Quit')
-  local keys=(s m x a r p u t l i d c q)
+    'Follow logs' 'Update manager' 'Run diagnostics' 'Show credentials' 'Enable monitoring exporter' 'Quit')
+  local keys=(s m x a r p u t l i d c n q)
   while true; do
     rows=${LINES:-$(tput lines 2>/dev/null || printf 24)}
     COMPACT=false; if [[ $rows =~ ^[0-9]+$ ]] && ((rows < 32)); then COMPACT=true; fi
     runtime_snapshot
     toggle=on; labels[1]='Enable recommendations'
     if module_enabled; then toggle=off; labels[1]='Disable recommendations'; fi
+    monitoring_mode=on; labels[12]='Enable monitoring exporter'
+    if [[ $DOCKER_READY == true && -n $(monitoring_exporter_containers) ]]; then
+      monitoring_mode=off; labels[12]='Disable monitoring exporter'
+    fi
     reset_toggle=on; labels[7]='Arm password reset'
     if [[ $(cfg_get OWNER_RESET_PASSWORD false) == true ]]; then reset_toggle=off; labels[7]='Disarm password reset'; fi
     while true; do
       if [[ ${TERM:-dumb} != dumb ]]; then printf '\033[H\033[2J'; fi
       heading; deployment_panel; runtime_panel
       section controls
-      for ((index=0; index<12; index+=2)); do
+      for ((index=0; index<${#keys[@]}; index+=2)); do
         menu_cell "$index" "$selected" "${keys[index]}" "${labels[index]}"
         menu_cell "$((index + 1))" "$selected" "${keys[index + 1]}" "${labels[index + 1]}"
         printf '\n'
       done
-      menu_cell 12 "$selected" q Quit; printf '\n\n'
+      printf '\n'
       printf '  %s↑↓ / jk select   ←→ column   Enter run   g refresh%s\n' "$DIM" "$NORMAL"
       printf '  %scaimack%s › ' "$ACCENT" "$NORMAL"
       IFS= read -r -s -n 1 key || return 0
@@ -485,14 +529,14 @@ menu() {
           case "$sequence" in '[A') key=k ;; '[B') key=j ;; '[C') key='>' ;; '[D') key='<' ;; *) continue ;; esac ;;
       esac
       case "$key" in
-        k) if ((selected == 12)); then selected=10; else selected=$(((selected + 10) % 12)); fi; continue ;;
-        j) if ((selected >= 10)); then selected=$((selected == 12 ? 0 : 12)); else selected=$((selected + 2)); fi; continue ;;
-        '>') if ((selected < 12)); then selected=$((selected % 2 == 0 ? selected + 1 : selected)); fi; continue ;;
-        '<') if ((selected < 12)); then selected=$((selected % 2 == 1 ? selected - 1 : selected)); fi; continue ;;
+        k) selected=$(((selected + ${#keys[@]} - 2) % ${#keys[@]})); continue ;;
+        j) selected=$(((selected + 2) % ${#keys[@]})); continue ;;
+        '>') selected=$((selected + 1 - selected % 2)); continue ;;
+        '<') selected=$((selected - selected % 2)); continue ;;
         g) break ;; q|0) printf '\n'; return 0 ;;
         '') key=${keys[selected]} ;;
       esac
-      case "$key" in s|x|r|u|l|d|m|a|p|t|i|c) ;; *) continue ;; esac
+      case "$key" in s|x|r|u|l|d|m|a|p|t|i|c|n) ;; *) continue ;; esac
       printf '\n\n'
       # Isolate errors in child processes so failed actions do not close the console.
       case "$key" in
@@ -500,6 +544,7 @@ menu() {
         r) bash "$ROOT/caimack.sh" restart || true ;; u) bash "$ROOT/caimack.sh" update || true ;;
         l) bash "$ROOT/caimack.sh" logs -f || true ;; d) bash "$ROOT/caimack.sh" doctor || true ;;
         m) bash "$ROOT/caimack.sh" recommendations "$toggle" || true ;;
+        n) bash "$ROOT/caimack.sh" monitoring "$monitoring_mode" || true ;;
         a) bash "$ROOT/caimack.sh" owner || true ;; p) bash "$ROOT/caimack.sh" reset once || true ;;
         t) bash "$ROOT/caimack.sh" reset "$reset_toggle" || true ;; i) bash "$ROOT/caimack.sh" self-update || true ;;
         c) bash "$ROOT/caimack.sh" credentials || true ;;
@@ -520,10 +565,11 @@ if [[ -z $ACTION ]]; then
   else ACTION=status; fi
 fi
 if [[ -n $VERSION ]]; then VERSION=$(normalize_version "$VERSION"); fi
-if [[ -n $MODE && $ACTION != recommendations && $ACTION != reset ]]; then die 'on/off/once can only be used with recommendations or reset.'; fi
+if [[ -n $MODE && $ACTION != recommendations && $ACTION != reset && $ACTION != monitoring ]]; then die 'Use modes with recommendations, reset, or monitoring.'; fi
 if [[ $BUILD == true && $ACTION != install ]]; then die '--build is an install option; updates preserve the original deployment mode.'; fi
 case "$ACTION" in
   install) install ;; update) update ;; recommendations) recommendations ;; reset) reset_password ;; owner) owner ;;
+  monitoring) monitoring ;;
   status) status ;; credentials) credentials ;; doctor) doctor ;;
   self-update)
     require_docker

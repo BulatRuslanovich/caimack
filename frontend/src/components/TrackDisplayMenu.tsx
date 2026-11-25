@@ -20,7 +20,10 @@ export function TrackDisplayMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="rounded-lg px-3 max-md:hidden pointer-coarse:h-11">
+        <Button
+          className="max-md:hidden"
+          data-active={display.showAudioSpec || display.showTempoKey}
+        >
           <SlidersHorizontalIcon size={16} />
           {t("tracks.display")}
         </Button>

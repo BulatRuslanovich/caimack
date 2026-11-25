@@ -6,9 +6,10 @@ on:
     paths:
       [
         "caimack.sh",
-        "setup.sh",
         "tests/test_caimack_cli.py",
+        "tests/test_release_notes.py",
         "tests/test_telegram_apk.py",
+        "scripts/release_notes.py",
         "scripts/send_telegram_apk.py",
         "scripts/image-plan*.mjs",
         "scripts/release*.mjs",
@@ -22,9 +23,10 @@ on:
     paths:
       [
         "caimack.sh",
-        "setup.sh",
         "tests/test_caimack_cli.py",
+        "tests/test_release_notes.py",
         "tests/test_telegram_apk.py",
+        "scripts/release_notes.py",
         "scripts/send_telegram_apk.py",
         "scripts/image-plan*.mjs",
         "scripts/release*.mjs",
@@ -51,11 +53,10 @@ jobs:
       - name: Check Bash syntax and ShellCheck
         run: |
           bash -n caimack.sh
-          bash -n setup.sh
           if ! command -v shellcheck >/dev/null; then
             sudo apt-get update
             sudo apt-get install -y --no-install-recommends shellcheck
           fi
-          shellcheck caimack.sh setup.sh
+          shellcheck caimack.sh
       - name: Test server manager and Telegram release delivery
         run: python3 -m unittest discover -s tests -p 'test_*.py'

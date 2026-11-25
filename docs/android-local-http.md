@@ -1,8 +1,24 @@
+[Documentation](README.md#listen-on-your-devices)
+
 # Optional local HTTP
 
-**Allow HTTP on the local network** is available in connection settings on the
-sign-in screen and in **Settings → Account**. It is off by default and saved only
-on this device. Ordinary addresses without a scheme use HTTPS.
+Use local HTTP when your Caimack server exposes a separate HTTP endpoint on
+your home network. Addresses entered without a scheme use HTTPS.
+
+## Connect to a local HTTP endpoint
+
+1. Open the connection settings on the sign-in screen or in **Settings → Account**.
+2. Turn on **Allow HTTP on the local network**. The setting is off by default
+   and is saved on this device.
+3. Enter the full server address, including `http://`, the local IP, and the
+   listening port.
+
+The default Caddy configuration serves the configured HTTPS hostname and can
+redirect a plain HTTP request. Use an explicitly configured HTTP endpoint
+for a local IP, or use your usual hostname with
+[local DNS](android-library-sync.md#a-public-domain-on-the-home-wi-fi).
+
+## Connection checks
 
 When enabled, HTTP is allowed only to the selected server, whose host must be a
 private, loopback or link-local IP literal, or `localhost`. Public IP addresses
@@ -21,9 +37,7 @@ server uses HTTP; retained downloads remain available.
 
 No build parameter or HTTP allowlist is required. Use HTTPS for public servers.
 
-On Android 17 and later, local servers also require the system local network
-permission. The app requests it only when local HTTP is enabled: when enabling
-the switch, or before signing in to a local address with the switch on. While
-the switch is off, the app does not request this permission. Turning HTTP off
-blocks HTTP requests immediately; Android manages the lifetime of an already
-granted system permission separately in the app permissions screen.
+On Android 17 and later, reaching a local server also requires Android's local
+network permission. The app requests it at startup when it has not already
+been granted. Review the permission in Android's app settings. The Caimack
+switch controls HTTP separately and blocks it immediately when turned off.

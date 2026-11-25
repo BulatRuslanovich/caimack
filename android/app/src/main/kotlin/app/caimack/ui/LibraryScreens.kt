@@ -105,6 +105,16 @@ fun PageTitle(title: String, subtitle: String? = null, inset: Boolean = true) {
 }
 
 @Composable
+private fun CatalogCount(text: String, inset: Boolean = true) {
+    Text(
+        text,
+        modifier = Modifier.padding(horizontal = if (inset) 16.dp else 0.dp, vertical = 8.dp),
+        style = Type.small,
+        color = LocalPalette.current.muted,
+    )
+}
+
+@Composable
 fun <T : Any> PagedColumn(
     pager: Pager<T>,
     emptyTitle: String,
@@ -164,7 +174,7 @@ fun <T : Any> PagedGrid(
 
 @Composable
 internal fun TrackPage(
-    key: String, title: String, emptyTitle: String, emptyDescription: String?,
+    key: String, title: String?, emptyTitle: String, emptyDescription: String?,
     play: (List<Track>, Int) -> Unit,
     toolbar: (@Composable () -> Unit)? = null,
     load: suspend (Int) -> Paged<Track>,
@@ -195,7 +205,12 @@ internal fun TrackPage(
         }
     }
     PagedColumn(pager, emptyTitle, emptyDescription, header = {
-        item { PageTitle(title, total?.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.count_tracks, it, it) }) }
+        val count = total?.takeIf { it > 0 }
+        if (title != null || count != null) item {
+            val summary = count?.let { pluralStringResource(R.plurals.count_tracks, it, it) }
+            if (title != null) PageTitle(title, summary)
+            else if (summary != null) CatalogCount(summary)
+        }
         toolbar?.let { item { it() } }
         if (total != null && total > 0) item {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -211,7 +226,7 @@ fun TracksScreen(query: String, play: (List<Track>, Int) -> Unit) {
     val api = catalogApi()
     var sort by rememberSaveable { mutableStateOf("Title") }
     // Keep controls mounted while the paged result reloads.
-    TrackPage("tracks:$query:$sort", stringResource(R.string.nav_tracks),
+    TrackPage("tracks:$query:$sort", null,
         stringResource(if (query.isBlank()) R.string.tracks_empty else R.string.tracks_no_match), null, play,
         toolbar = {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -255,14 +270,10 @@ fun AlbumsScreen(query: String, open: (Any) -> Unit) {
     val pager = rememberPager("albums:$query") { api.albums(it, CARD_PAGE_SIZE, query.takeIf(String::isNotEmpty)) }
     val total = pager.total
 
-    val header: @Composable () -> Unit = {
-        Column {
-            PageTitle(stringResource(R.string.nav_albums), total?.let { pluralStringResource(R.plurals.count_albums, it, it) }, inset = false)
-        }
-    }
-
     PagedGrid(pager, stringResource(if (query.isEmpty()) R.string.albums_empty else R.string.search_nothing_found), header = {
-        item(span = { GridItemSpan(maxLineSpan) }) { header() }
+        if (total != null) item(span = { GridItemSpan(maxLineSpan) }) {
+            CatalogCount(pluralStringResource(R.plurals.count_albums, total, total), inset = false)
+        }
     }) { album ->
         val cover = container.media.albumCover(album, small = true)
         Card(album.title, listOfNotNull(album.artistName, album.year?.toString()).joinToString(", "), { open(AlbumRoute(album.id)) }, toneUrl = cover) {
@@ -279,7 +290,9 @@ fun ArtistsScreen(query: String, open: (Any) -> Unit) {
     val pager = rememberPager("artists:$artworkRevision:$query") { api.artists(it, CARD_PAGE_SIZE, query.takeIf(String::isNotEmpty)) }
     val total = pager.total
     PagedGrid(pager, stringResource(if (query.isEmpty()) R.string.artists_empty else R.string.search_nothing_found), header = {
-        item(span = { GridItemSpan(maxLineSpan) }) { PageTitle(stringResource(R.string.nav_artists), total?.let { pluralStringResource(R.plurals.count_artists, it, it) }, inset = false) }
+        if (total != null) item(span = { GridItemSpan(maxLineSpan) }) {
+            CatalogCount(pluralStringResource(R.plurals.count_artists, total, total), inset = false)
+        }
     }) { artist ->
         val image = container.media.artistImage(artist.id, artist.hasImage, small = true)
         Card(artist.name, pluralStringResource(R.plurals.count_tracks, artist.trackCount, artist.trackCount), { open(ArtistRoute(artist.id)) }, round = true, toneUrl = image) {
@@ -295,13 +308,13 @@ fun GenresScreen(query: String, open: (Any) -> Unit) {
         "genres",
         { api.genres() },
         isEmpty = { it.isEmpty() },
-        empty = { Column { PageTitle(stringResource(R.string.nav_genres)); Empty(stringResource(R.string.genres_empty)) } },
+        empty = { Empty(stringResource(R.string.genres_empty)) },
     ) { genres ->
         val matching = if (query.isEmpty()) genres else genres.filter { genre ->
             genre.name.contains(query, ignoreCase = true) || genreTitle(genre.name).contains(query, ignoreCase = true)
         }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = playerContentPadding()) {
-            item { PageTitle(stringResource(R.string.nav_genres), pluralStringResource(R.plurals.count_genres, matching.size, matching.size)) }
+            item { CatalogCount(pluralStringResource(R.plurals.count_genres, matching.size, matching.size)) }
             if (matching.isEmpty()) item { Empty(stringResource(R.string.search_nothing_found)) }
             itemsIndexed(matching, key = { _, genre -> genre.id }) { _, genre -> GenreRow(genre) { open(GenreRoute(genre.id, genre.name)) } }
         }
@@ -351,7 +364,6 @@ fun PlaylistsScreen(query: String, open: (Any) -> Unit) {
     }
 
     Column(Modifier.fillMaxSize()) {
-        PageTitle(stringResource(R.string.nav_playlists))
         Tabs(
             Modifier.padding(vertical = 4.dp),
             trailing = {

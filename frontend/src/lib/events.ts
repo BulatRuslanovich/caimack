@@ -28,6 +28,7 @@ export interface PlaybackEventInput {
   listenedSeconds?: number;
   durationSeconds?: number;
   source?: string;
+  sessionId?: string;
 }
 
 interface QueuedEvent extends PlaybackEventInput {
@@ -84,7 +85,7 @@ export function recordEvent(event: PlaybackEventInput): void {
   const eventWithContext: QueuedEvent = {
     ...event,
     occurredAt: new Date().toISOString(),
-    sessionId: deviceId(),
+    sessionId: event.sessionId ?? deviceId(),
   };
 
   void getOutbox()

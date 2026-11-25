@@ -25,6 +25,7 @@ pub struct Config {
     pub library_scan_interval: Option<Duration>,
     pub rename_music_files: bool,
     pub export_music_metadata: bool,
+    pub music_sources: MusicSourcesConfig,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -100,6 +101,19 @@ pub struct YandexMusicConfig {
     pub sign_key: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct MusicSourcesConfig {
+    pub extractor: PathBuf,
+    pub chromium: PathBuf,
+    pub chromium_no_sandbox: bool,
+}
+
+impl Default for MusicSourcesConfig {
+    fn default() -> Self {
+        Self { extractor: "yt-dlp".into(), chromium: "chromium-headless-shell".into(), chromium_no_sandbox: false }
+    }
+}
+
 #[derive(Deserialize)]
 struct Env {
     #[serde(default)]
@@ -142,6 +156,10 @@ struct Env {
     rename_music_files: bool,
     #[serde(default)]
     export_music_metadata: bool,
+    music_extractor: Option<PathBuf>,
+    music_chromium: Option<PathBuf>,
+    #[serde(default)]
+    music_chromium_no_sandbox: bool,
 }
 
 impl Config {
@@ -214,7 +232,13 @@ impl Config {
             bail!("Invalid configuration:\n  {}", problems.join("\n  "));
         }
 
+        let music_sources = MusicSourcesConfig {
+            extractor: env.music_extractor.unwrap_or_else(|| "yt-dlp".into()),
+            chromium: env.music_chromium.unwrap_or_else(|| "chromium-headless-shell".into()),
+            chromium_no_sandbox: env.music_chromium_no_sandbox,
+        };
         Ok(Self {
+            music_sources,
             app_env: env.app_env,
             listen_addr,
             recommendations_enabled: env.recommendations_enabled,

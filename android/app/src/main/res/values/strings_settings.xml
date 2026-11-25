@@ -24,6 +24,7 @@
     <string name="settings_colorway_midnight">Midnight Blue</string>
     <string name="settings_colorway_plum">Plum Violet</string>
     <string name="settings_colorway_studio">Studio: Pine &amp; Lime</string>
+    <string name="settings_colorway_dodo">Rising Orange</string>
     <string name="settings_colorway_cover">From track artwork</string>
     <string name="settings_language">Language</string>
     <string name="language_english" translatable="false">English</string>

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { describe, expect, it, vi } from "vitest";
 import {
+  COLORWAYS,
   COLORWAY_STORAGE_KEY,
   NO_FLASH_THEME_SCRIPT,
   THEME_COLORS,
@@ -34,7 +35,16 @@ const contrast = (a: number[], b: number[]) => {
 };
 
 describe("shared application palettes", () => {
-  it("covers all ten fixed theme variants", () => expect(palettes).toHaveLength(10));
+  it("covers both modes of every fixed colorway", () => {
+    for (const name of COLORWAYS.filter((colorway) => colorway !== "cover")) {
+      expect(
+        palettes
+          .filter((p) => p.name === name)
+          .map((p) => p.mode)
+          .sort(),
+      ).toEqual(["dark", "light"]);
+    }
+  });
   it.each(["dark", "light"] as const)(
     "restores the cover palette in %s mode before art loads",
     (theme) => {
@@ -54,8 +64,16 @@ describe("shared application palettes", () => {
   );
   for (const { name, mode, tokens, body } of palettes) {
     it(`${name} ${mode}: readable content, selected labels and actions`, () => {
-      for (const surface of ["background", "card", "popover", "surface-raised"])
-        for (const text of ["foreground", "muted-foreground", "faint-foreground"])
+      for (const surface of ["background", "card", "popover", "surface-raised", "accent"])
+        for (const text of [
+          "foreground",
+          "muted-foreground",
+          "faint-foreground",
+          "primary",
+          "destructive",
+          "warning",
+          "success",
+        ])
           expect(
             contrast(rgb(tokens[text]), rgb(tokens[surface])),
             `${text} on ${surface}`,
@@ -63,8 +81,12 @@ describe("shared application palettes", () => {
       for (const [text, surface] of [
         ["primary-foreground", "primary"],
         ["action-foreground", "action"],
+        ["action-foreground", "action-hover"],
       ])
-        expect(contrast(rgb(tokens[text]), rgb(tokens[surface]))).toBeGreaterThanOrEqual(4.5);
+        expect(
+          contrast(rgb(tokens[text]), rgb(tokens[surface])),
+          `${text} on ${surface}`,
+        ).toBeGreaterThanOrEqual(4.5);
       const soft = body.match(/--primary-soft: rgb\((\d+) (\d+) (\d+) \/ (\d+)%\)/)!;
       const alpha = Number(soft[4]) / 100;
       const selected = rgb(tokens.card).map(
@@ -87,6 +109,13 @@ describe("shared application palettes", () => {
       };
       for (const [, key, value] of block.matchAll(/(\w+) = Color\(0xFF([\dA-F]{6})\)/g))
         expect(tokens[names[key] ?? key], key).toBe(`#${value.toLowerCase()}`);
+      const sleeves = block.match(/sleeves = listOf\(([\s\S]*?)\n\s*\),/);
+      const sleeveColors = [...(sleeves?.[1] ?? "").matchAll(/0xFF([\dA-F]{6})/g)].map(
+        ([, value]) => `#${value.toLowerCase()}`,
+      );
+      expect(sleeveColors).toEqual(
+        Array.from({ length: 6 }, (_, index) => tokens[`sleeve-${index}`]),
+      );
       expect(THEME_COLORS[name as keyof typeof THEME_COLORS][mode as "dark" | "light"]).toBe(
         tokens.background,
       );

@@ -16,7 +16,6 @@ import { TrackList } from "@/components/TrackList";
 import { PageHeader, Section } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/contexts/I18nContext";
-import { useYandexMusic } from "@/lib/useYandexMusic";
 import { LibraryFolder } from "@/components/LibraryFolder";
 import { BlankRecord, type BlankRecordState } from "./BlankRecord";
 import { FileCheckBadge } from "./FileCheckBadge";
@@ -27,7 +26,6 @@ export default function UploadPage() {
   const t = useT();
   const format = useFormat();
   const stats = useQuery(queries.libraryOverview()).data?.stats;
-  const yandex = useYandexMusic();
 
   const {
     queue,
@@ -87,18 +85,6 @@ export default function UploadPage() {
               }
             />
 
-            {yandex && (
-              <div className="workspace-panel flex flex-wrap items-center justify-between gap-3 p-5 max-md:p-4">
-                <div>
-                  <h2 className="text-section font-semibold">{t("yandex.title")}</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">{t("yandex.uploadHint")}</p>
-                </div>
-                <Button asChild size="sm">
-                  <Link href="/search?tab=yandex">{t("yandex.findMusic")}</Link>
-                </Button>
-              </div>
-            )}
-
             <section
               data-state={recordState}
               data-queued={queue.length > 0}
@@ -156,7 +142,7 @@ export default function UploadPage() {
                     <Button variant="primary" onClick={choose}>
                       {t("upload.chooseFiles")}
                     </Button>
-                    <Button variant="outline" onClick={chooseFolder} className="max-md:hidden">
+                    <Button variant="secondary" onClick={chooseFolder} className="max-md:hidden">
                       {t("upload.chooseFolder")}
                     </Button>
                   </div>

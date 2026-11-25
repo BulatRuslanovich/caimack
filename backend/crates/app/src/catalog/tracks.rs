@@ -183,6 +183,24 @@ pub enum TrackSort {
     Bpm,
     Key,
     Loudness,
+    Duration,
+    Year,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SortDirection {
+    Asc,
+    Desc,
+}
+
+impl SortDirection {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "asc" => Some(Self::Asc),
+            "desc" => Some(Self::Desc),
+            _ => None,
+        }
+    }
 }
 
 impl TrackSort {
@@ -195,25 +213,38 @@ impl TrackSort {
             "bpm" | "4" => Self::Bpm,
             "key" | "5" => Self::Key,
             "loudness" | "6" => Self::Loudness,
+            "duration" => Self::Duration,
+            "year" => Self::Year,
             _ => return None,
         })
     }
 
-    fn order_by(self) -> &'static str {
-        match self {
-            Self::Title => "t.title, ar.name",
-            Self::Recent => "t.created_at DESC, t.title",
-            Self::Artist => "ar.name, t.title",
-            Self::Album => "al.title, t.disc_number, t.track_number",
-            Self::Bpm => "c.tempo_bpm NULLS LAST, t.title",
-            Self::Key => CAMELOT_ORDER,
-            Self::Loudness => "c.loudness_lufs DESC NULLS LAST, t.title",
-        }
+    fn push_order(self, query: &mut QueryBuilder<Postgres>, direction: Option<SortDirection>) {
+        let (field, tie_breaker) = match self {
+            Self::Title => ("t.title", "ar.name"),
+            Self::Recent => ("t.created_at", "t.title"),
+            Self::Artist => ("ar.name", "t.title"),
+            Self::Album => ("al.title", "t.disc_number, t.track_number"),
+            Self::Bpm => ("c.tempo_bpm", "t.title"),
+            Self::Key => (CAMELOT_ORDER, "t.title"),
+            Self::Loudness => ("c.loudness_lufs", "t.title"),
+            Self::Duration => ("t.duration_seconds", "t.title"),
+            Self::Year => ("t.year", "t.title"),
+        };
+        let direction = direction.unwrap_or(match self {
+            Self::Recent | Self::Loudness => SortDirection::Desc,
+            _ => SortDirection::Asc,
+        });
+        query.push(field).push(match direction {
+            SortDirection::Asc => " ASC NULLS LAST, ",
+            SortDirection::Desc => " DESC NULLS LAST, ",
+        });
+        query.push(tie_breaker).push(", t.id");
     }
 }
 
 const CAMELOT_ORDER: &str = "(((c.musical_key % 12 + 3 * (c.musical_key / 12)) % 12 * 7 % 12 + 7) % 12) * 2
-        + (c.musical_key < 12)::int NULLS LAST, t.title";
+        + (c.musical_key < 12)::int";
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct TrackFilter {
@@ -244,6 +275,7 @@ pub async fn list(
     user: Uuid,
     page_request: PageRequest,
     sort: TrackSort,
+    direction: Option<SortDirection>,
     search: Option<&str>,
     filter: &TrackFilter,
 ) -> AppResult<Paged<TrackDto>> {
@@ -255,9 +287,7 @@ pub async fn list(
             query.push(" WHERE TRUE");
             push_filters(query, term.as_ref(), filter);
         },
-        |query| {
-            query.push(sort.order_by());
-        },
+        |query| sort.push_order(query, direction),
         page_request,
     )
     .await

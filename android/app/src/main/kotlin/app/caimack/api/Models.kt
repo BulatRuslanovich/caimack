@@ -137,6 +137,7 @@ data class Playlist(
     val hasCover: Boolean = false,
     val coverTrackId: String? = null,
     val coverTracks: List<PlaylistCoverTrack>? = null,
+    val pendingSync: Boolean = false,
 )
 
 @Serializable
@@ -151,7 +152,29 @@ data class PlaylistDetail(
     val hasCover: Boolean = false,
     val coverTrackId: String? = null,
     val tracks: List<Track>,
+    val trackAddedAt: Map<String, String> = emptyMap(),
 )
+
+@Serializable
+data class PlaylistMembership(val playlist: Playlist, val containsTrack: Boolean, val pendingSync: Boolean = false)
+
+@Serializable
+data class PlaylistMembershipChange(val trackIds: List<String>, val present: Boolean)
+
+@Serializable
+data class PlaylistMembershipResult(val changed: Int, val unchanged: Int, val pendingSync: Boolean = false)
+
+@Serializable
+data class CreatePlaylistWithTracks(
+    val name: String,
+    val description: String?,
+    val isPublic: Boolean,
+    val trackIds: List<String>,
+    val requestId: String,
+)
+
+@Serializable
+data class CopyPlaylistTracks(val destinationId: String)
 
 @Serializable
 data class Paged<T>(val items: List<T>, val total: Int, val page: Int, val pageSize: Int)
@@ -248,7 +271,13 @@ data class SignalBatch(val events: List<PlaybackSignal>)
 data class HistoryEntryRequest(val trackId: String, val playbackPosition: Int, val listenedSeconds: Int)
 
 @Serializable
-data class RadioRequest(val seedTrackId: String?, val exclude: List<String>, val sessionId: String? = null, val focus: String? = null)
+data class RadioRequest(
+    val seedTrackId: String?,
+    val exclude: List<String>,
+    val sessionId: String? = null,
+    val focus: String? = null,
+    val playlistId: String? = null,
+)
 
 @Serializable
 data class AddTracksRequest(val trackIds: List<String>)
@@ -263,7 +292,11 @@ data class QueueSignals(val explore: Boolean = false)
 data class RecommendedTrack(val track: Track, val reason: RecommendationReason? = null, val signals: QueueSignals? = null)
 
 @Serializable
-data class RadioBatch(val tracks: List<RecommendedTrack> = emptyList(), val seedTrackId: String? = null)
+data class RadioBatch(
+    val tracks: List<RecommendedTrack> = emptyList(),
+    val seedTrackId: String? = null,
+    val playlistSeedCount: Int? = null,
+)
 
 @Serializable
 data class SettingsChanges(val quality: String? = null)

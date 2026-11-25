@@ -12,6 +12,7 @@ use uuid::Uuid;
 use super::impressions::{self, Shown};
 use super::{ReasonDto, Recommendations, RecommendedTrackDto, SignalsDto, reasons, session};
 use crate::catalog::tracks;
+use crate::library::playlists;
 use crate::{AppError, AppResult};
 
 pub const MAX_BATCH: i64 = 20;
@@ -22,6 +23,7 @@ const DEFAULT_BATCH: i64 = 6;
 pub struct RadioRequestDto {
     pub session_id: Option<Uuid>,
     pub seed_track_id: Option<Uuid>,
+    pub playlist_id: Option<Uuid>,
     pub exclude: Option<Vec<Uuid>>,
     pub limit: Option<i64>,
     pub focus: Option<String>,
@@ -33,11 +35,26 @@ pub struct RadioRequestDto {
 pub struct RadioBatchDto {
     pub tracks: Vec<RecommendedTrackDto>,
     pub seed_track_id: Option<Uuid>,
+    pub playlist_seed_count: Option<usize>,
 }
 
 impl Recommendations {
     pub async fn radio(&self, user: Uuid, request: RadioRequestDto) -> AppResult<RadioBatchDto> {
-        self.radio_batch(user, request, false).await
+        self.radio_batch(user, request, true).await
+    }
+
+    pub async fn playlist_suggestions(&self, user: Uuid, playlist: Uuid) -> AppResult<RadioBatchDto> {
+        self.radio_batch(
+            user,
+            RadioRequestDto {
+                playlist_id: Some(playlist),
+                limit: Some(12),
+                focus: Some("closer".into()),
+                ..Default::default()
+            },
+            false,
+        )
+        .await
     }
 
     /// Preparing an offline station is not a listening impression. Only the
@@ -60,7 +77,7 @@ impl Recommendations {
                         exclude: Some(excluded.clone()),
                         ..Default::default()
                     },
-                    true,
+                    false,
                 )
                 .await?;
             if batch.tracks.is_empty() {
@@ -73,12 +90,12 @@ impl Recommendations {
                 }
             }
         }
-        Ok(RadioBatchDto { tracks, seed_track_id: None })
+        Ok(RadioBatchDto { tracks, seed_track_id: None, playlist_seed_count: None })
     }
 
-    async fn radio_batch(&self, user: Uuid, request: RadioRequestDto, offline: bool) -> AppResult<RadioBatchDto> {
+    async fn radio_batch(&self, user: Uuid, request: RadioRequestDto, record: bool) -> AppResult<RadioBatchDto> {
         let limit = request.limit.unwrap_or(DEFAULT_BATCH);
-        if !(1..=if offline { 100 } else { MAX_BATCH }).contains(&limit) {
+        if !(1..=MAX_BATCH).contains(&limit) {
             return Err(AppError::validation("Radio limit must be between 1 and {0}.").arg(MAX_BATCH));
         }
         let focus = match request.focus.as_deref() {
@@ -87,20 +104,38 @@ impl Recommendations {
             Some("wider") => Focus::Wider,
             Some(other) => return Err(AppError::validation("Unknown radio focus '{0}'.").arg(other)),
         };
-        let source = if request.seed_track_id.is_some() { "radio:track" } else { "radio" };
+        let members = match request.playlist_id {
+            Some(playlist) => Some(playlists::track_ids(&self.db, user, playlist).await?),
+            None => None,
+        };
+        let source = if members.is_some() {
+            "radio:playlist"
+        } else if request.seed_track_id.is_some() {
+            "radio:track"
+        } else {
+            "radio"
+        };
 
         let library = self.index.library();
         let snapshot = &library.snapshot;
         if snapshot.is_empty() {
-            return Ok(RadioBatchDto { tracks: vec![], seed_track_id: None });
+            return Ok(RadioBatchDto {
+                tracks: vec![],
+                seed_track_id: None,
+                playlist_seed_count: members.as_ref().map(|_| 0),
+            });
         }
 
         let listener = self.listeners.get(&self.db, user).await?;
-        let events = session::load(&self.db, user, request.session_id).await?;
+        let events = if members.is_some() && !record {
+            Vec::new()
+        } else {
+            session::load(&self.db, user, request.session_id).await?
+        };
 
         let queue = request.exclude.unwrap_or_default();
         let computing_library = Arc::clone(&library);
-        let batch = self
+        let (batch, playlist_seed_count) = self
             .compute
             .run(move || {
                 let snapshot = &computing_library.snapshot;
@@ -114,7 +149,12 @@ impl Recommendations {
                     limit: usize::try_from(limit).unwrap_or(1),
                     focus,
                 };
-                radio::next(snapshot, &listener, &taste, &request)
+                if let Some(members) = members {
+                    let (batch, seed_count) = radio::for_playlist(snapshot, &listener, &taste, &request, &members);
+                    (batch, Some(seed_count))
+                } else {
+                    (radio::next(snapshot, &listener, &taste, &request), None)
+                }
             })
             .await?;
 
@@ -128,7 +168,7 @@ impl Recommendations {
                 features: pick.features,
             })
             .collect();
-        if !offline && let Err(error) = impressions::record(&self.db, user, source, &shown).await {
+        if record && let Err(error) = impressions::record(&self.db, user, source, &shown).await {
             tracing::error!("Recording radio impressions failed: {error}");
         }
 
@@ -147,6 +187,8 @@ impl Recommendations {
                     ReasonDto { subject_id: anchor, ..ReasonDto::new(reasons::DISCOVERY) }
                 } else if batch.moved && index == 0 {
                     ReasonDto::new(reasons::MATCHES_YOUR_TASTE)
+                } else if playlist_seed_count.is_some_and(|count| count > 1) {
+                    ReasonDto::new(reasons::SOUNDS_LIKE_PLAYLIST)
                 } else if let Some(title) = &anchor_title {
                     ReasonDto { kind: reasons::SOUNDS_LIKE, subject: Some(title.clone()), subject_id: anchor }
                 } else {
@@ -160,6 +202,6 @@ impl Recommendations {
                 })
             })
             .collect();
-        Ok(RadioBatchDto { tracks, seed_track_id: anchor })
+        Ok(RadioBatchDto { tracks, seed_track_id: anchor, playlist_seed_count })
     }
 }

@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  loadPlaylistRadio,
+  playlistRadioContext,
   mergeRadioBatch,
   validRadioSession,
   radioRefreshPlan,
@@ -9,6 +11,9 @@ import {
   radioExclusions,
 } from "./radioSession";
 import type { RecommendedTrack, Track } from "@/lib/types";
+import { api } from "@/lib/api";
+
+vi.mock("@/lib/api", () => ({ api: { radio: vi.fn(), lookupTracks: vi.fn() } }));
 
 const track = (id: string): Track => ({
   id,
@@ -111,5 +116,75 @@ describe("adaptive continuation", () => {
     expect(radioReaction({ type: "trackStarted" })).toBe(false);
     expect(radioReaction({ type: "trackPlayed", listenedSeconds: 30 })).toBe(false);
     expect(radioReaction({ type: "trackPlayed", listenedSeconds: 60 })).toBe(true);
+  });
+});
+
+describe("playlist radio", () => {
+  it("uses a unique session and keeps it through serialization and refill requests", async () => {
+    vi.mocked(api.radio).mockResolvedValue({
+      playlistSeedCount: 1,
+      seedTrackId: "seed",
+      tracks: [recommended("seed"), recommended("picked")],
+    });
+
+    const result = await loadPlaylistRadio("playlist", [track("seed")]);
+    expect(result.status).toBe("ready");
+    if (result.status !== "ready") throw new Error("Expected a playable batch");
+    expect(result.tracks.map(({ id }) => id)).toEqual(["seed", "picked"]);
+    expect(result.session.seedTrackId).toBe("seed");
+    expect(api.radio).toHaveBeenLastCalledWith(
+      {
+        playlistId: "playlist",
+        sessionId: result.session.sessionId,
+        seedTrackId: null,
+        exclude: [],
+        limit: 6,
+      },
+      undefined,
+    );
+    const restored = JSON.parse(JSON.stringify(result.session));
+    expect(validRadioSession(restored)).toBe(true);
+    expect(validRadioSession({ ...restored, sessionId: undefined })).toBe(false);
+    expect(playlistRadioContext(restored)).toEqual({
+      playlistId: "playlist",
+      sessionId: result.session.sessionId,
+    });
+    const other = await loadPlaylistRadio("playlist", [track("seed")]);
+    expect(other.status === "ready" && other.session.sessionId).not.toBe(result.session.sessionId);
+  });
+
+  it("handles zero analyzed seeds, looks up an absent single seed, and skips multi-track anchors", async () => {
+    vi.mocked(api.radio).mockResolvedValueOnce({
+      playlistSeedCount: 0,
+      tracks: [recommended("picked")],
+    });
+    expect(await loadPlaylistRadio("playlist", [])).toEqual({ status: "noAudio" });
+    vi.mocked(api.lookupTracks).mockResolvedValueOnce([track("seed")]);
+    vi.mocked(api.radio).mockResolvedValueOnce({
+      playlistSeedCount: 1,
+      seedTrackId: "seed",
+      tracks: [],
+    });
+    expect(await loadPlaylistRadio("playlist", [])).toMatchObject({
+      status: "ready",
+      tracks: [track("seed")],
+      session: { seedTrackId: "seed" },
+    });
+    vi.mocked(api.radio).mockResolvedValueOnce({
+      playlistSeedCount: 3,
+      seedTrackId: "seed",
+      tracks: [],
+    });
+    expect(await loadPlaylistRadio("playlist", [track("seed")])).toEqual({ status: "empty" });
+    vi.mocked(api.radio).mockResolvedValueOnce({
+      playlistSeedCount: 3,
+      seedTrackId: "seed",
+      tracks: [recommended("picked")],
+    });
+    expect(await loadPlaylistRadio("playlist", [track("seed")])).toMatchObject({
+      status: "ready",
+      tracks: [track("picked")],
+      session: { seedTrackId: null },
+    });
   });
 });

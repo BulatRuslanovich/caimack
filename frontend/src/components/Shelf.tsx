@@ -29,6 +29,7 @@ export function Shelf<T extends string, U extends string>({
   note,
   href,
   className,
+  wholeCards = false,
   children,
 }: {
   title: string;
@@ -36,6 +37,7 @@ export function Shelf<T extends string, U extends string>({
   note?: string;
   href?: Route<T>;
   className?: string;
+  wholeCards?: boolean;
   children: ReactNode;
 }) {
   const t = useT();
@@ -48,7 +50,11 @@ export function Shelf<T extends string, U extends string>({
 
     const update = () => {
       const furthest = element.scrollWidth - element.clientWidth;
-      setEdges({ atStart: element.scrollLeft <= 1, atEnd: element.scrollLeft >= furthest - 1 });
+      const atStart = element.scrollLeft <= 1;
+      const atEnd = element.scrollLeft >= furthest - 1;
+      setEdges((edges) =>
+        edges.atStart === atStart && edges.atEnd === atEnd ? edges : { atStart, atEnd },
+      );
     };
 
     const resize = new ResizeObserver(update);
@@ -63,19 +69,46 @@ export function Shelf<T extends string, U extends string>({
 
   const scroll = (direction: 1 | -1) => {
     const element = shelf.current;
-    element?.scrollBy({ left: direction * element.clientWidth * 0.8, behavior: "smooth" });
+    if (!element) return;
+
+    const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? "instant"
+      : "smooth";
+    const firstCard = element.firstElementChild;
+    if (!wholeCards || !firstCard) {
+      element.scrollBy({ left: direction * element.clientWidth * 0.8, behavior });
+      return;
+    }
+
+    const gap = Number.parseFloat(getComputedStyle(element).columnGap);
+    const step = firstCard.getBoundingClientRect().width + gap;
+    const visible = Math.max(1, Math.floor((element.clientWidth + gap + 1) / step));
+    const pageStart = Math.round(element.scrollLeft / step);
+    element.scrollTo({ left: (pageStart + direction * visible) * step, behavior });
   };
 
   return (
-    <section className={cn("group/section flex flex-col gap-4", className)}>
+    <section
+      className={cn(
+        "group/section flex flex-col gap-4",
+        wholeCards && "whole-card-shelf",
+        className,
+      )}
+    >
       <SectionHeader
         title={title}
         titleHref={titleHref}
         note={note}
         href={href}
         actions={
-          !(edges.atStart && edges.atEnd) && (
-            <div className="flex gap-1 opacity-0 transition-opacity duration-150 ease-brand group-focus-within/section:opacity-100 group-hover/section:opacity-100 max-md:hidden">
+          (wholeCards || !(edges.atStart && edges.atEnd)) && (
+            <div
+              className={cn(
+                "flex gap-1",
+                !wholeCards &&
+                  "opacity-0 transition-opacity duration-150 ease-brand group-focus-within/section:opacity-100 group-hover/section:opacity-100 max-md:hidden",
+              )}
+            >
               <Button
                 variant="ghost"
                 size="icon"
@@ -99,7 +132,10 @@ export function Shelf<T extends string, U extends string>({
         }
       />
 
-      <div ref={shelf} className={cn(cardShelf, scrollFade, capEightOnMobile, "-mt-2 pt-2 pb-2")}>
+      <div
+        ref={shelf}
+        className={cn(cardShelf, !wholeCards && [scrollFade, capEightOnMobile], "-mt-2 pt-2 pb-2")}
+      >
         {children}
       </div>
     </section>

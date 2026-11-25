@@ -5,6 +5,8 @@ pub mod enrichment;
 mod enrichment_jobs;
 pub mod lrclib;
 pub mod lyrics;
+pub mod music;
+pub mod vk;
 pub mod yandex;
 
 use std::time::Duration;

@@ -1,12 +1,12 @@
+[Documentation](README.md#music-library)
+
 # Automatic music file names
 
-Set `RENAME_MUSIC_FILES=true` to name registered audio files from their catalog
-artist and title, for example `Imagine Dragons - Amsterdam.mp3`. The option is off
-by default. Imported files with a non-empty title and artist in their tags are
-eligible. Names inferred only from the incoming filename are left untouched until
-the artist or title is explicitly edited in the catalog. Existing libraries are
-checked against embedded tags when the option is first enabled. This is metadata
-provenance, not an online verification of a recording's identity.
+Use automatic naming to turn an eligible file such as `track01.mp3` into
+`Imagine Dragons - Amsterdam.mp3` using its catalog artist and title. The option
+is off by default and changes filenames in the underlying music folder.
+
+## Enable naming
 
 In a Docker installation, set both values in the root `.env`:
 
@@ -22,18 +22,25 @@ The API user needs write access to the parent directories, including the externa
 music directory. Symlinking the library root is supported; audio symlinks or
 subdirectory links escaping that root are not renamed.
 
-Files remain in their existing directories, including the internal upload shards.
-No album-folder reorganization happens. Names use the primary credited artist,
+## How Caimack chooses a name
+
+Imported files qualify when their tags supply a title and artist. For names
+inferred from the original filename, edit the title or artist in the catalog to
+make the file eligible. The first scan checks existing files for embedded tags.
+Online artwork and lyric lookups do not affect eligibility.
+
+Files remain in their existing directories, including upload subdirectories.
+Names use the primary credited artist,
 preserve Unicode and the audio extension, remove control characters and characters
 invalid on Windows, and limit the name length. Existing audio or companion files
 are never overwritten: conflicts produce `Artist - Title (2).ext`, `(3)`, etc.
 These suffixes are stable across rescans. An empty or unknown artist/title is skipped.
 
-The first scan renames eligible existing/imported files. A background check every
-30 seconds also picks up new uploads and catalog edits, independently of the normal
-library scan interval. Completion of online cover/lyrics lookups is not required:
-those lookups do not establish a track title or artist. Manual catalog corrections
-will be reflected in the next naming pass.
+The first scan renames eligible existing files. A background pass every
+30 seconds picks up uploads and catalog edits independently of the library scan
+schedule. The Upload page reports rename counts and errors.
+
+## Companion files and recovery
 
 Same-stem `.lrc`, `.txt`, `.srt`, `.jpg`, `.jpeg` and `.png` companions move with
 the audio. Language suffixes such as `Song.en.lrc` are retained. Shared `cover.jpg`
@@ -44,8 +51,7 @@ and create lyric companions from downloaded texts.
 
 Renaming does not change audio bytes or tags. The content hash, track ID, MERT
 embeddings, cue points, HLS cache, favorites, playlists and listening history stay
-valid. Both catalog paths and the library scan registry are updated. The Upload
-page shows a renamed count and any errors from the naming pass.
+valid. The catalog paths and scan registry are updated.
 
 The `file_renames` table records the old/new paths and companion moves before any
 filesystem changes. Every destination is reserved using a non-overwriting hard

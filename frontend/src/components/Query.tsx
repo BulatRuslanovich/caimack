@@ -18,7 +18,7 @@ export function LoadError({ message, onRetry }: { message: string; onRetry?: () 
     >
       <p className="flex-1">{message}</p>
       {onRetry && (
-        <Button variant="outline" size="sm" onClick={onRetry}>
+        <Button variant="secondary" size="sm" onClick={onRetry}>
           {t("action.tryAgain")}
         </Button>
       )}

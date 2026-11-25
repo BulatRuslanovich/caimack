@@ -1,19 +1,22 @@
+[Documentation](README.md#run-a-server)
+
 # Server manager
 
 `caimack.sh` manages a Caimack Docker Compose deployment. Its interface, prompts and
 errors are in English. It requires Bash, Docker with Compose v2, and standard Unix
-tools. Standalone downloads also require curl. Docker itself is installed separately.
+tools. Standalone downloads also require curl. Install Docker separately.
 
 ## Getting started
 
-Inside a checkout:
+Have a domain pointing at the server for Caddy's default HTTPS setup and the
+absolute path to your music folder ready. In a repository checkout, run:
 
 ```bash
 ./caimack.sh
 ```
 
-Or download the manager from a version tag into an empty deployment directory
-(replace `vX.Y.Z` with the version you want):
+For a standalone install, download the manager into an empty deployment
+directory. Replace `vX.Y.Z` with the release tag you want.
 
 ```bash
 mkdir caimack && cd caimack
@@ -22,23 +25,57 @@ chmod +x caimack.sh
 ./caimack.sh install --version vX.Y.Z
 ```
 
-When deployment files are missing, the manager downloads them from the matching
-release tag before installing. It creates `.env`, generates database and JWT
-secrets, downloads application images and waits for the deployment to become
-healthy. Recommendations are off by default; CPU-only installs do not download
-MERT or require GPU support. Interactive installation displays the initial admin
-credentials. Non-interactive installation stores them in `.env` without printing
-passwords into automation logs.
+The manager downloads missing deployment files from the matching tag. It
+creates `.env`, generates database and JWT secrets, then pulls the images and
+waits for the deployment to become healthy. Recommendations start disabled.
+The interactive installer displays the initial owner credentials. In automation,
+`--yes` generates and stores them in `.env` without printing them to the log.
+
+### Install without prompts
 
 ```bash
 ./caimack.sh install --domain music.example.com --library /srv/music --owner admin --yes
 ./caimack.sh install --version v1.2.3 --domain music.example.com --yes
 ```
 
-The library is mounted read-only by default. [Automatic file names](file-names.md)
+The library is mounted read-only by default. [Automatic file naming](file-names.md)
 and [artwork/lyric export](metadata-export.md) can be enabled explicitly with
 write access. An existing `.env` is never replaced by a second
 installation. Relative paths are resolved from the manager's directory.
+
+### Configure Compose by hand
+
+From the repository root, copy [`.env.example`](../.env.example) to `.env`.
+Replace the example domain and fill in the deployment settings.
+
+| Setting | Value |
+| --- | --- |
+| `PUBLIC_DOMAIN` | Hostname Caddy serves, such as `music.example.com`. |
+| `POSTGRES_PASSWORD` | A URL-safe secret. Generate one with `openssl rand -hex 32`. |
+| `JWT_SIGNING_KEY` | An independent signing secret. Generate one with `openssl rand -base64 48`. |
+| `OWNER_USERNAME` and `OWNER_PASSWORD` | Credentials for the initial owner account. |
+| `MUSIC_LIBRARY_PATH` | Existing music folder, or `./library` by default. |
+| `AUDIOBOOKS_PATH` | Optional [audiobook directory](audiobooks.md), or `./audiobooks` by default. |
+| `CAIMACK_VERSION` | Image tag. Use an exact version to pin the deployment. |
+
+Start the published images with:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.images.yml up -d
+```
+
+To update a manual image deployment, run `docker compose pull` and
+`docker compose up -d` with the same files and overrides. For a source build,
+omit the image override and use `docker compose up -d --build`. The manager
+offers the same source-build option through `./caimack.sh install --build`.
+
+### Library scans
+
+Caimack scans the music folder every hour by default. Set
+`LIBRARY_SCAN_INTERVAL_MINUTES=0` to turn off the recurring scan and use
+**Upload** to start a scan manually. A missing file is retained in the
+catalog for 30 days. Moving the same file preserves its track, likes, and
+listening history.
 
 ## Console
 
@@ -57,6 +94,7 @@ selection also has a direct shortcut:
 | `l` | Follow logs                                     |
 | `d` | Diagnostics                                     |
 | `m` | Enable or disable recommendations               |
+| `n` | Enable or disable the monitoring exporter      |
 | `a` | Change owner                                    |
 | `p` | Reset owner password once                       |
 | `t` | Arm or disarm reset on every startup            |
@@ -64,7 +102,8 @@ selection also has a direct shortcut:
 | `c` | Explicitly display credentials stored in `.env` |
 
 Short terminals use a compact dashboard. `NO_COLOR=1` disables colors, and
-non-interactive runs without a command display read-only status.
+non-interactive runs without a command display read-only status. Use
+`./caimack.sh --help` for command-line options.
 
 ## Updates and lifecycle
 
@@ -75,9 +114,14 @@ non-interactive runs without a command display read-only status.
 ./caimack.sh start
 ./caimack.sh stop
 ./caimack.sh restart
+./caimack.sh status
 ./caimack.sh logs backend -f
 ./caimack.sh doctor
 ```
+
+`./caimack.sh monitoring on`, `off`, or `status` manages the Linux exporter.
+See [LAN monitoring](../deploy/monitoring/README.md) to control both computers
+from Windows and [backend logging](backend-logging.md) for log filters.
 
 `update` pulls new images and recreates changed containers. A pinned version stays
 pinned unless another version is supplied. In a standalone, utility-managed
@@ -88,8 +132,9 @@ Source-based installs use `install --build`, require a full checkout and continu
 to build their local sources when updating. Pull source changes with Git first.
 
 `self-update` downloads the manager and deployment files into a private staging
-directory, checks Bash syntax and Compose configuration, then replaces files. The
-previous `.env` and files are backed up. Custom deployment file changes should be
+directory and checks Bash syntax. For an existing deployment it also validates
+the NVIDIA and AMD Compose configurations. It then backs up `.env` and the
+deployment files before applying the update. Custom deployment file changes should be
 maintained in a separate Compose override listed in `COMPOSE_FILE`; the manager
 preserves that list when toggling recommendations.
 
@@ -163,6 +208,8 @@ If Docker remains unavailable, run `reset off` when it recovers.
 startup restores the configured password and revokes the owner's sessions**.
 The dashboard marks this state as `ARMED`. Use `reset off` to disarm it.
 
-No command removes database volumes. Backups in `.caimack/backups/` contain secrets
-and should remain private. These are configuration backups, not database backups;
-follow your normal database backup procedure before upgrading.
+## Backups
+
+Configuration backups in `.caimack/backups/` contain secrets. Keep them private
+and back up PostgreSQL separately before upgrading. The manager preserves
+database volumes.

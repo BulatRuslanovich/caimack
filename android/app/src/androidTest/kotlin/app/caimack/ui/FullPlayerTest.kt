@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -17,6 +18,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
@@ -24,9 +27,15 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.test.platform.app.InstrumentationRegistry
 import app.caimack.CaimackApp
 import app.caimack.api.Track
+import app.caimack.api.LyricLine
+import app.caimack.api.Lyrics
+import app.caimack.api.PlaybackCollection
+import app.caimack.api.PlaylistDetail
 import app.caimack.playback.PlayerState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -38,6 +47,67 @@ import java.io.File
 class FullPlayerTest {
     @get:Rule
     val compose = createComposeRule()
+
+    @Test fun queueOriginOpensTheCollectionThatStartedPlayback() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val container = (context.applicationContext as CaimackApp).container
+        val track = Track(
+            id = "source-track", title = "Corner lights", albumId = "source-album",
+            albumTitle = "Coastline", artistId = "artist", artistName = "Harbor Signals", durationSeconds = 200,
+        )
+        val state = mutableStateOf(PlayerState(queue = listOf(track), collection = PlaybackCollection("album", "source-album")))
+        val playlist = PlaylistDetail(id = "source-playlist", name = "After Hours", tracks = listOf(track))
+        Remote.cache["playlist:${playlist.id}"] = playlist
+        var route: Any? = null
+
+        try {
+            compose.setContent {
+                CaimackTheme(dark = true) {
+                    CompositionLocalProvider(LocalContainer provides container, LocalNavigate provides { route = it }) {
+                        FullPlayer(state.value, onClose = {})
+                    }
+                }
+            }
+            compose.onNodeWithText(context.getString(R.string.player_from_album, "Coastline")).performClick()
+            compose.runOnIdle {
+                assertEquals(AlbumRoute("source-album"), route)
+                state.value = state.value.copy(collection = PlaybackCollection("playlist", playlist.id))
+            }
+            compose.onNodeWithText(context.getString(R.string.player_from_playlist, playlist.name)).performClick()
+            compose.runOnIdle { assertEquals(PlaylistRoute(playlist.id), route) }
+        } finally {
+            Remote.cache.remove("playlist:${playlist.id}")
+        }
+    }
+
+    @Test fun scrollingLyricsPausesFollowingUntilTheReturnButtonIsPressed() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val container = (context.applicationContext as CaimackApp).container
+        val active = mutableIntStateOf(0)
+        val lyrics = Lyrics(lines = List(50) { LyricLine(it * 1000L, "Line ${it + 1}") })
+
+        compose.setContent {
+            CaimackTheme(dark = true) {
+                CompositionLocalProvider(LocalContainer provides container) {
+                    TimedLyrics(lyrics, active.intValue, { active.intValue * 1000L }, {})
+                }
+            }
+        }
+
+        val list = compose.onNodeWithTag("timed-lyrics")
+        val follow = compose.onNodeWithText(context.getString(R.string.lyrics_follow))
+        fun scrollPosition() = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        list.performTouchInput { swipeUp(durationMillis = 600) }
+        follow.assertIsDisplayed()
+        val manualPosition = scrollPosition()
+        assertTrue("The lyrics moved in response to the swipe", manualPosition > 0f)
+        compose.runOnIdle { active.intValue = 33 }
+        assertEquals("Playback does not take over the scroll position", manualPosition, scrollPosition(), 0.01f)
+
+        follow.performClick()
+        compose.onNodeWithTag("lyrics-line-33").assertIsDisplayed().assertIsSelected()
+        follow.assertDoesNotExist()
+    }
 
     @Test fun changingTitleLengthKeepsArtworkStableAndHeaderCentered() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

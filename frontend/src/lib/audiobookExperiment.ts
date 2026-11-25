@@ -28,6 +28,7 @@ export function useAudiobookExperiment(scope: string | null) {
     networkMode: "always",
     staleTime: 60_000,
     refetchOnWindowFocus: true,
+    refetchOnReconnect: "always",
     meta: { handlesError: true },
   });
   const receive = useCallback(

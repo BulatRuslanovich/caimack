@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 use app::catalog::edit::{self, UpdateAlbumRequest, UpdateArtistRequest, UpdateTrackRequest};
-use app::catalog::tracks::{TrackFilter, TrackSort};
+use app::catalog::tracks::{SortDirection, TrackFilter, TrackSort};
 use app::catalog::{albums, artists, genres, lyrics, overview, search, tracks};
 use axum::Router;
 use axum::extract::State;
@@ -64,6 +64,7 @@ struct TrackListQuery {
     paging: Paging,
     q: Option<String>,
     sort: Option<String>,
+    direction: Option<String>,
     #[serde(flatten)]
     filter: TrackFilterQuery,
 }
@@ -103,11 +104,20 @@ async fn list_tracks(
             None => return invalid_query("sort", text),
         },
     };
+    let direction = match query.direction.as_deref().filter(|s| !s.trim().is_empty()) {
+        None => None,
+        Some(text) => match SortDirection::parse(text) {
+            Some(direction) => Some(direction),
+            None => return invalid_query("direction", text),
+        },
+    };
     let filter = match query.filter.parse() {
         Ok(filter) => filter,
         Err(error) => return *error,
     };
-    let result = tracks::list(&state.db, user.user_id, query.paging.request(), sort, query.q.as_deref(), &filter).await;
+    let result =
+        tracks::list(&state.db, user.user_id, query.paging.request(), sort, direction, query.q.as_deref(), &filter)
+            .await;
     respond(result)
 }
 

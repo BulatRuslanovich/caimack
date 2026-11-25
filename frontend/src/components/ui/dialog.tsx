@@ -32,17 +32,21 @@ export function DialogContent({
   title,
   description,
   footer,
+  bottomOnCompact,
   ...props
 }: ComponentProps<typeof DialogPrimitive.Content> & {
   title: string;
   description?: string;
   footer?: ReactNode;
+  bottomOnCompact?: boolean;
 }) {
   const t = useT();
 
   return (
     <DialogPrimitive.Portal>
-      <DialogOverlay>
+      <DialogOverlay
+        className={bottomOnCompact ? "max-[900px]:place-items-end max-[900px]:p-0" : undefined}
+      >
         <DialogPrimitive.Content
           data-slot="dialog-content"
           {...(description ? {} : { "aria-describedby": undefined })}
@@ -51,6 +55,8 @@ export function DialogContent({
             "dialog-panel relative flex max-h-[88dvh] w-[min(36rem,100%)] flex-col overflow-hidden",
             "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
             "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
+            bottomOnCompact &&
+              "max-[900px]:max-h-[82dvh] max-[900px]:w-full max-[900px]:rounded-t-[20px] max-[900px]:rounded-b-none max-[900px]:border-b-0 max-[900px]:pb-[env(safe-area-inset-bottom)] max-[900px]:data-[state=open]:slide-in-from-bottom max-[900px]:data-[state=closed]:slide-out-to-bottom max-[900px]:data-[state=open]:zoom-in-100 max-[900px]:data-[state=closed]:zoom-out-100",
             className,
           )}
           {...props}

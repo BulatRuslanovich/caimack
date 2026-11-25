@@ -1,18 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-pub mod client;
-pub mod importer;
-pub mod imports;
+pub(crate) mod client;
+pub(crate) mod importer;
+mod imports;
+pub(crate) mod playlist;
 
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use sqlx::PgPool;
+use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use self::client::{YandexClient, thumbnail_url};
 use self::imports::{ImportDto, ImportKind, ImportQueue};
+use crate::config::YandexMusicConfig;
 use crate::i18n::Lang;
-use crate::upload::{self, ProbeVerdict};
+use crate::upload::{self, ProbeVerdict, Uploads};
 use crate::{AppError, AppResult};
 
 const TOKEN_MAX_LENGTH: usize = 512;
@@ -57,12 +61,29 @@ pub struct StartImportRequest {
 
 #[derive(Clone)]
 pub struct YandexMusic {
-    pub db: PgPool,
-    pub client: YandexClient,
-    pub queue: ImportQueue,
+    db: PgPool,
+    client: YandexClient,
+    queue: ImportQueue,
 }
 
 impl YandexMusic {
+    pub(crate) fn client(&self) -> &YandexClient {
+        &self.client
+    }
+
+    pub fn start_worker(
+        config: YandexMusicConfig,
+        uploads: Uploads,
+        shutdown: CancellationToken,
+    ) -> (Self, JoinHandle<()>) {
+        let db = uploads.db.clone();
+        let client = YandexClient::new(config);
+        let (queue, jobs) = ImportQueue::new();
+        let importer = importer::Importer { yandex: client.clone(), uploads };
+        let worker = importer::spawn(importer, jobs, shutdown);
+        (Self { db, client, queue }, worker)
+    }
+
     pub async fn search(&self, token: Option<&str>, text: Option<&str>) -> AppResult<SearchDto> {
         let token = require_token(token)?;
         let Some(text) = text.map(str::trim).filter(|t| !t.is_empty()) else {
@@ -106,10 +127,23 @@ impl YandexMusic {
         Ok(SearchDto { tracks, albums })
     }
 
-    pub fn start(&self, token: Option<&str>, request: StartImportRequest, lang: Lang) -> AppResult<ImportDto> {
+    pub fn start(
+        &self,
+        user: Uuid,
+        token: Option<&str>,
+        request: StartImportRequest,
+        lang: Lang,
+    ) -> AppResult<ImportDto> {
         let token = require_token(token)?;
         let source = match request.kind {
             ImportKind::Likes => None,
+            ImportKind::Playlist => Some(
+                request
+                    .id
+                    .as_deref()
+                    .and_then(playlist::api_path)
+                    .ok_or_else(|| AppError::validation("Enter a Yandex Music playlist link."))?,
+            ),
             ImportKind::Album | ImportKind::Track => {
                 let id = request.id.as_deref().map(str::trim).filter(|id| !id.is_empty());
                 match id {
@@ -118,19 +152,19 @@ impl YandexMusic {
                 }
             }
         };
-        self.queue.enqueue(request.kind, source, token.to_owned(), lang)
+        self.queue.enqueue(user, request.kind, source, token.to_owned(), lang)
     }
 
-    pub fn list(&self) -> Vec<ImportDto> {
-        self.queue.list()
+    pub fn list(&self, user: Uuid) -> Vec<ImportDto> {
+        self.queue.list(user)
     }
 
-    pub fn remove(&self, id: Uuid) -> AppResult<()> {
-        if self.queue.remove(id) { Ok(()) } else { Err(AppError::not_found("Import not found.")) }
+    pub fn remove(&self, user: Uuid, id: Uuid) -> AppResult<()> {
+        if self.queue.remove(user, id) { Ok(()) } else { Err(AppError::not_found("Import not found.")) }
     }
 }
 
-fn require_token(token: Option<&str>) -> AppResult<&str> {
+pub(crate) fn require_token(token: Option<&str>) -> AppResult<&str> {
     match token.map(str::trim).filter(|t| !t.is_empty()) {
         None => Err(AppError::validation("Add a Yandex Music token in the settings first.")),
         Some(token) if token.chars().count() > TOKEN_MAX_LENGTH => {

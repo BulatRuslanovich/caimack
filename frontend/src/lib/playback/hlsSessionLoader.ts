@@ -11,6 +11,7 @@ import type {
 import { refreshSession } from "@/lib/http";
 
 const UNAUTHORIZED = 401;
+const ACCEPTED = 202;
 
 type LoaderConstructor = HlsConfig["loader"];
 
@@ -20,6 +21,7 @@ export function createSessionAwareLoader(BaseLoader: LoaderConstructor): LoaderC
     private inner: Loader<LoaderContext>;
     private refreshed = false;
     private destroyed = false;
+    private aborted = false;
 
     constructor(hlsConfig: HlsConfig) {
       this.hlsConfig = hlsConfig;
@@ -48,10 +50,12 @@ export function createSessionAwareLoader(BaseLoader: LoaderConstructor): LoaderC
       callbacks: LoaderCallbacks<LoaderContext>,
     ): void {
       this.refreshed = false;
+      this.aborted = false;
       this.inner.load(context, config, this.reauthorizing(context, config, callbacks));
     }
 
     abort(): void {
+      this.aborted = true;
       this.inner.abort();
     }
 
@@ -75,17 +79,31 @@ export function createSessionAwareLoader(BaseLoader: LoaderConstructor): LoaderC
     ): LoaderCallbacks<LoaderContext> {
       const wrapped: LoaderCallbacks<LoaderContext> = {
         ...callbacks,
+        onSuccess: (response, stats, responseContext, networkDetails) => {
+          if (response.code === ACCEPTED) {
+            callbacks.onError(
+              { code: ACCEPTED, text: "HLS is being prepared" },
+              responseContext,
+              networkDetails,
+              stats,
+            );
+            return;
+          }
+          callbacks.onSuccess(response, stats, responseContext, networkDetails);
+        },
         onError: (error, errorContext, networkDetails, stats) => {
           const surrender = () => callbacks.onError(error, errorContext, networkDetails, stats);
 
-          if (error.code !== UNAUTHORIZED || this.refreshed || this.destroyed) {
+          if (this.aborted || this.destroyed) return;
+          if (error.code !== UNAUTHORIZED || this.refreshed) {
             surrender();
             return;
           }
 
           this.refreshed = true;
           void refreshSession().then((renewed) => {
-            if (!renewed || this.destroyed) {
+            if (this.aborted || this.destroyed) return;
+            if (!renewed) {
               surrender();
               return;
             }

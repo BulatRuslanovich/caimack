@@ -12,6 +12,7 @@ import {
   AudioLinesIcon,
   ChartLineIcon,
   FlaskConicalIcon,
+  ListMusicIcon,
   PaletteIcon,
   RadioIcon,
   UserRoundIcon,
@@ -24,6 +25,7 @@ import { RecommendationStats } from "./RecommendationStats";
 import { Appearance } from "./Appearance";
 import { Playback } from "./Playback";
 import { Experimental } from "./Experimental";
+import { MusicSources } from "./MusicSources";
 import { Account } from "./Account";
 import { ListeningStats } from "./ListeningStats";
 
@@ -46,7 +48,13 @@ export default function SettingsPage() {
 }
 
 type SettingsSection =
-  "playback" | "appearance" | "listening" | "recommendations" | "account" | "experimental";
+  | "playback"
+  | "appearance"
+  | "listening"
+  | "recommendations"
+  | "account"
+  | "experimental"
+  | "music";
 
 const SECTIONS: SettingsSection[] = [
   "playback",
@@ -56,7 +64,7 @@ const SECTIONS: SettingsSection[] = [
   "account",
 ];
 
-const ADMIN_SECTIONS: SettingsSection[] = [...SECTIONS, "experimental"];
+const ADMIN_SECTIONS: SettingsSection[] = [...SECTIONS, "music", "experimental"];
 
 const DEFAULT_SECTION: SettingsSection = "playback";
 
@@ -67,6 +75,7 @@ const SECTION_ICONS = {
   recommendations: RadioIcon,
   account: UserRoundIcon,
   experimental: FlaskConicalIcon,
+  music: ListMusicIcon,
 };
 
 function SettingsSections() {
@@ -119,6 +128,7 @@ function SettingsSections() {
         {section === "listening" && <ListeningStats />}
         {section === "recommendations" && <RecommendationStats />}
         {section === "account" && <Account />}
+        {section === "music" && <MusicSources />}
         {section === "experimental" && <Experimental />}
       </div>
     </div>

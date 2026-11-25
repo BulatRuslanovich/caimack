@@ -15,17 +15,21 @@ import { cn } from "@/lib/cn";
 import { displayTitleClass, formatArtists, formatDuration } from "@/lib/format";
 import { leanBack } from "@/lib/leanBack";
 import { planTransition } from "@/lib/playback/transitions";
+import type { PlaybackCollection } from "@/lib/playback/playerTypes";
 import { useConnect } from "@/lib/playback/useConnectPlayback";
 import { usePlaybackProgress } from "@/lib/playback/usePlaybackProgress";
 import { prepareVinylDeck, releaseVinylDeck } from "@/lib/playback/vinylDeck";
 import { reasonLabel } from "@/lib/recommendationReason";
+import { queries } from "@/lib/queries";
 import { SEEK_STEP } from "@/lib/shortcuts";
 import type { Track } from "@/lib/types";
 import { useIdle } from "@/lib/useIdle";
+import { useQuery } from "@tanstack/react-query";
 import {
   EllipsisVerticalIcon,
   HeartIcon,
   ImageIcon,
+  ListPlusIcon,
   ListVideoIcon,
   MicVocalIcon,
   SofaIcon,
@@ -37,6 +41,7 @@ import { PlayerBackdrop } from "./ArtBackdrop";
 import { ArtworkScene } from "./ArtworkScene";
 import { ArtistLinks } from "./ArtistLinks";
 import { PlayerEffectsBackdrop } from "./PlayerEffectsBackdrop";
+import { PlaylistMembershipDialog } from "./PlaylistMembershipDialog";
 import { PlayerTransport } from "./PlayerTransport";
 import { PlayerPanelTransport } from "./PlayerPanelTransport";
 import { PlayerOptionsMenu } from "./PlayerOptionsMenu";
@@ -60,6 +65,33 @@ const LyricsPane = dynamic(() => import("./LyricsPane").then((m) => m.LyricsPane
 const ShareCardDialog = dynamic(() => import("./ShareCardDialog").then((m) => m.ShareCardDialog), {
   loading: () => null,
 });
+
+function CollectionLink({
+  collection,
+  onNavigate,
+}: {
+  collection: PlaybackCollection;
+  onNavigate: () => void;
+}) {
+  const t = useT();
+  const { kind, id } = collection;
+  const { data: album } = useQuery({ ...queries.album(id), enabled: kind === "album" });
+  const { data: playlist } = useQuery({ ...queries.playlist(id), enabled: kind === "playlist" });
+  const name = kind === "album" ? album?.title : playlist?.name;
+  if (!name) return t("player.nowPlaying");
+
+  const label = t(kind === "album" ? "player.fromAlbum" : "player.fromPlaylist", { name });
+  return (
+    <Link
+      href={kind === "album" ? `/albums/${id}` : `/playlists/${id}`}
+      onNavigate={onNavigate}
+      className="hover:text-foreground hover:underline"
+      title={label}
+    >
+      {label}
+    </Link>
+  );
+}
 
 function FullScreenProgress({ track, chrome }: { track: Track; chrome: string }) {
   const t = useT();
@@ -165,10 +197,12 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
   const [panel, setPanel] = useState<"art" | "queue" | "lyrics">("art");
   const [menuOpen, setMenuOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [membershipTrack, setMembershipTrack] = useState<Track | null>(null);
+  const membershipButton = useRef<HTMLButtonElement>(null);
   const track = player.currentTrack;
   const trackId = track?.id;
   const trackDuration = track?.durationSeconds;
-  const idle = useIdle(IDLE_MS, panel === "art" && !menuOpen && !optionsOpen);
+  const idle = useIdle(IDLE_MS, panel === "art" && !menuOpen && !optionsOpen && !membershipTrack);
   const stage = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -219,6 +253,9 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
       stage={stage}
       artworkShown={panel === "art"}
       chrome={chrome}
+      contextLabel={
+        player.collection && <CollectionLink collection={player.collection} onNavigate={onClose} />
+      }
       backdrop={
         <>
           <PlayerBackdrop />
@@ -297,6 +334,13 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
         </>
       }
     >
+      {membershipTrack && (
+        <PlaylistMembershipDialog
+          track={membershipTrack}
+          onClose={() => setMembershipTrack(null)}
+          returnFocus={() => membershipButton.current}
+        />
+      )}
       <div
         ref={stage}
         data-panel={panel}
@@ -365,6 +409,17 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
                 {reason && <p className="text-sm text-faint">{reasonLabel(reason, t)}</p>}
               </div>
               <Button
+                ref={membershipButton}
+                variant="ghost"
+                size="icon-lg"
+                className="library-save-control shrink-0"
+                onClick={() => setMembershipTrack(track)}
+                aria-label={t("playlists.memberships")}
+                title={t("playlists.memberships")}
+              >
+                <ListPlusIcon />
+              </Button>
+              <Button
                 variant="ghost"
                 size="icon-lg"
                 className={cn(
@@ -431,14 +486,12 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
         </div>
 
         {panel === "lyrics" && (
-          <div className="min-h-0 flex-1 overflow-y-auto scroll-smooth px-4 [scrollbar-width:none] motion-reduce:scroll-auto [&::-webkit-scrollbar]:hidden">
-            <LyricsPane
-              key={track.id}
-              track={track}
-              onSeek={player.seek}
-              onLyricsKnown={(hasLyrics) => player.patchTrack(track.id, { hasLyrics })}
-            />
-          </div>
+          <LyricsPane
+            key={track.id}
+            track={track}
+            onSeek={player.seek}
+            onLyricsKnown={(hasLyrics) => player.patchTrack(track.id, { hasLyrics })}
+          />
         )}
 
         {panel === "queue" && (

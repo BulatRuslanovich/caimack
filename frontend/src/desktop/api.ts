@@ -129,7 +129,11 @@ export function useDesktopDownloaded(id: string) {
 }
 
 export function useDesktopOffline() {
-  return useSyncExternalStore(subscribe, () => status?.online === false, () => false);
+  return useSyncExternalStore(
+    subscribe,
+    () => status?.online === false,
+    () => false,
+  );
 }
 
 export function useDesktopOfflinePlayback() {

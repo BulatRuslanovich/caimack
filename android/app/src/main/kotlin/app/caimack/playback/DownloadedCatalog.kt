@@ -144,6 +144,10 @@ class DownloadedCatalog(private val directory: File, private val json: Json, pri
                     put(id, JsonArray(members.jsonArray.filter { it.jsonPrimitive.content in ids }))
                 }
             }
+            val memberDates = buildJsonObject {
+                savedPlaylists.forEach { put(it.id, json.encodeToJsonElement(it.trackAddedAt.filterKeys { id -> id in ids })) }
+                (synced?.get("playlistTrackAddedAt") as? JsonObject).orEmpty().forEach { (id, dates) -> put(id, dates) }
+            }
             val lists = (savedPlaylists.map { json.encodeToJsonElement(it).jsonObject } + syncedPlaylists)
                 .distinctBy { it["id"] }.filter { membership[it["id"]?.jsonPrimitive?.content]?.jsonArray?.isNotEmpty() == true }
             val saved = buildJsonArray {
@@ -158,6 +162,7 @@ class DownloadedCatalog(private val directory: File, private val json: Json, pri
                 put("tracks", json.encodeToJsonElement(unique)); put("albums", json.encodeToJsonElement(albums))
                 put("artists", json.encodeToJsonElement(artists)); put("playlists", JsonArray(lists))
                 put("playlistTracks", membership); put("savedLibrary", saved); put("libraryFolders", JsonArray(emptyList()))
+                put("playlistTrackAddedAt", memberDates)
                 put("genres", json.encodeToJsonElement(unique.filter { !it.genreName.isNullOrBlank() }.groupBy { it.genreName!! }.map { (name, songs) ->
                     Genre(name, name, songs.size, songs.mapNotNull { it.albumId }.distinct().take(4))
                 }))

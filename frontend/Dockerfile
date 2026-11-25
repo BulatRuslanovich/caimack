@@ -33,6 +33,6 @@ USER node
 EXPOSE 3000
 
 HEALTHCHECK --interval=15s --timeout=4s --start-period=25s --retries=5 \
-    CMD node -e "fetch('http://127.0.0.1:3000/login').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+    CMD ["node", "-e", "fetch('http://127.0.0.1:3000/login').then(response => process.exit(response.ok ? 0 : 1), () => process.exit(1))"]
 
 CMD ["node", "server.js"]

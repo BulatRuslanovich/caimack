@@ -126,14 +126,14 @@ export function ShareCardDialog({
               </Button>
             )}
             <Button
-              variant={canShareFile ? "outline" : "primary"}
+              variant={canShareFile ? "secondary" : "primary"}
               disabled={!card}
               onClick={() => card && saveFile({ blob: card.blob, fileName })}
             >
               <DownloadIcon size={16} /> {t("share.download")}
             </Button>
             {canCopy && (
-              <Button variant="outline" disabled={!card} onClick={() => void copy()}>
+              <Button variant="secondary" disabled={!card} onClick={() => void copy()}>
                 <CopyIcon size={16} /> {t("share.copy")}
               </Button>
             )}

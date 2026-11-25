@@ -26,10 +26,11 @@ interface GestureInput {
   points: MapPoint[];
   bounds: Bounds | null;
   selecting: boolean;
+  preview: boolean;
   nearest: (at: Spot) => MapPoint | null;
   place: (point: MapPoint, at: Spot) => MapCard;
   setHovered: Dispatch<SetStateAction<MapCard | null>>;
-  setPicked: Dispatch<SetStateAction<MapCard | null>>;
+  onPick: (point: MapPoint | null) => void;
   setView: (view: MapView) => void;
   flyTo: (view: MapView, duration?: number) => void;
   redraw: () => void;
@@ -45,10 +46,11 @@ export function useMapGestures({
   points,
   bounds,
   selecting,
+  preview,
   nearest,
   place,
   setHovered,
-  setPicked,
+  onPick,
   setView,
   flyTo,
   redraw,
@@ -87,7 +89,7 @@ export function useMapGestures({
     const previous = pointersRef.current.get(event.pointerId);
 
     if (!gesture || !previous) {
-      if (event.pointerType === "mouse") {
+      if (preview && event.pointerType === "mouse") {
         const point = nearest(at);
         setHovered((shown) =>
           point ? (shown?.point.id === point.id ? shown : place(point, at)) : null,
@@ -140,17 +142,18 @@ export function useMapGestures({
     if (lasso && lasso.length > 2 && gesture?.moved && view) {
       const base = Math.min(sizeRef.current.width, sizeRef.current.height);
       const polygon = lasso.map((spot) => toMap(spot, view, base));
+      onPick(null);
       onSelect(points.filter((point) => pointInPolygon(point, polygon)));
       redraw();
       return;
     }
 
     redraw();
-    if (gesture?.moved) return;
+    if (gesture?.moved || selecting) return;
 
     const point = nearest(at);
     setHovered(null);
-    setPicked(point ? place(point, at) : null);
+    onPick(point);
   };
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLCanvasElement>) => {
@@ -173,7 +176,7 @@ export function useMapGestures({
     };
 
     if (event.key === "Escape") {
-      setPicked(null);
+      onPick(null);
       return;
     }
 

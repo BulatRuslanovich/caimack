@@ -32,9 +32,11 @@ float glints(vec2 p,vec2 range){
   float age=sparkEvents[i].x,seed=sparkEvents[i].z;
   if(age>=0.&&age<.8){
    float width=range.y-range.x+1./23.;
-   float coupling=exp(-2.*pow((seed-(range.x+range.y)*.5)/width,2.));
+   float bandOffset=(seed-(range.x+range.y)*.5)/width;
+   float coupling=exp(-2.*bandOffset*bandOffset);
    float x=clamp((seed-range.x)/(range.y-range.x),.05,.95)+age*.12;
-   value+=exp(-pow((p.x-x)*8.,2.))*(1.-exp(-age*age/.0016))*exp(-age*5.)*sparkEvents[i].y*coupling;
+   float distance=(p.x-x)*8.;
+   value+=exp(-distance*distance)*(1.-exp(-age*age/.0016))*exp(-age*5.)*sparkEvents[i].y*coupling;
   }
  }
  return value;
@@ -51,7 +53,8 @@ vec4 aurora(vec2 p){
   float age=beatEvents[i].x;
   if(age>=0.&&age<2.5){
    float frequency=beatEvents[i].z;
-   float coupling=exp(-2.*pow((frequency-(range.x+range.y)*.5)/width,2.));
+   float bandOffset=(frequency-(range.x+range.y)*.5)/width;
+   float coupling=exp(-2.*bandOffset*bandOffset);
    float origin=clamp((frequency-range.x)/(range.y-range.x),.12,.88);
    float left=p.x-origin+age*1.5,right=p.x-origin-age*1.5;
    float launch=1.-exp(-age*age/0.0064);
@@ -97,7 +100,8 @@ vec4 glass(vec2 p){
   vec2 bend=local*lens.zw*falloff*lensForce;
   q+=vec2(bend.x*optics.x-bend.y*optics.y,bend.x*optics.y+bend.y*optics.x);
   crystal+=falloff*optics.z;
-  facet+=exp(-pow(radius-.8,2.)*10.)*(.025+response.x*.08+response.y*.16);
+  float facetOffset=radius-.8;
+  facet+=exp(-facetOffset*facetOffset*10.)*(.025+response.x*.08+response.y*.16);
  }
  q+=vec2(sin(q.y*1.3),cos(q.x*.9))*.45;
  float ring=0.,stress=0.;
@@ -145,5 +149,8 @@ void main(){
  float top=1.-smoothstep(.78,1.,uv.y);
  float edge=1.-smoothstep(.22,1.2,length((uv-.5)*vec2(1.,.8)));
  float readability=1.-smoothstep(.48,.85,uv.x)*.3;
- gl_FragColor=vec4(clamp(mix(result.rgb,result.rgb*.62,light),0.,1.),result.a*intensity*(.7+.3*edge)*(.65+.35*top)*readability);
+ float alpha=result.a*intensity*(.7+.3*edge)*(.65+.35*top)*readability;
+ vec3 color=clamp(mix(result.rgb,result.rgb*.62,light),0.,1.);
+ // Match the canvas compositor's premultiplied-alpha format.
+ gl_FragColor=vec4(color*alpha,alpha);
 }`;

@@ -40,7 +40,7 @@ export interface PlaybackEngine {
 
   recoverSource: () => boolean;
 
-  startQueue: () => void;
+  startQueue: (track: Track, position?: number) => void;
   resetProgress: () => void;
   resumeAt: (trackId: string | undefined, seconds: number) => void;
 }

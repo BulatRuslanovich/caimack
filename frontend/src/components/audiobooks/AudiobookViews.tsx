@@ -2,6 +2,7 @@
 
 "use client";
 
+import { useMutation } from "@tanstack/react-query";
 import {
   ArrowDownToLineIcon,
   BookHeadphonesIcon,
@@ -15,6 +16,7 @@ import {
   PencilIcon,
   PlayIcon,
   Trash2Icon,
+  UploadIcon,
   XIcon,
 } from "lucide-react";
 import { useEffect, useState, type CSSProperties } from "react";
@@ -28,6 +30,7 @@ import { PageHeader, Section } from "@/components/PageHeader";
 import { PlayerProgressMeter } from "@/components/PlayerProgress";
 import { PrefetchLink } from "@/components/PrefetchLink";
 import { LoadError, Query } from "@/components/Query";
+import { useConfirm } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -46,14 +49,39 @@ import {
   type Audiobook,
 } from "@/lib/audiobooks";
 import { cn } from "@/lib/cn";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useFormat } from "@/lib/useFormat";
+import { useToast } from "@/lib/useToast";
 import { AudiobookChapterList } from "./AudiobookChapterList";
 import { AudiobookSaveButton } from "./AudiobookControls";
 
 const EditAudiobookDialog = dynamic(() =>
   import("./EditAudiobookDialog").then((module) => module.EditAudiobookDialog),
 );
+const UploadAudiobookDialog = dynamic(() =>
+  import("./UploadAudiobookDialog").then((module) => module.UploadAudiobookDialog),
+);
+
+function UploadAudiobookAction({
+  online,
+  onUploaded,
+}: {
+  online: boolean;
+  onUploaded: () => void;
+}) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <Button size="sm" disabled={!online} onClick={() => setOpen(true)}>
+        <UploadIcon size={16} />
+        {t("audiobooks.upload")}
+      </Button>
+      {open && <UploadAudiobookDialog onClose={() => setOpen(false)} onUploaded={onUploaded} />}
+    </>
+  );
+}
 
 export function useAudiobookArtwork(book: Audiobook | null) {
   const { scope, downloaded, online } = useAudiobooks();
@@ -180,7 +208,7 @@ function PlayBookButton({ book, hero }: { book: Audiobook; hero?: boolean }) {
   const playing = active && player.playing;
   return (
     <Button
-      variant={hero || playing ? "play" : "outline"}
+      variant={hero || playing ? "play" : "secondary"}
       size={hero ? "play" : "icon"}
       className="shrink-0"
       onClick={() => player.play(book)}
@@ -398,6 +426,7 @@ export function LibraryAudiobookCard({ book, grid }: { book: Audiobook; grid: bo
 export function AudiobooksPage() {
   const t = useT();
   const { enabled, books, result, downloaded, online } = useAudiobooks();
+  const { isAdmin } = useAuth();
   const [filter, setFilter] = useState<"all" | "duration" | "saved" | "downloaded">("all");
   if (!enabled) return <AudiobooksDisabled />;
   const saved = books.filter((book) => book.saved);
@@ -426,24 +455,35 @@ export function AudiobooksPage() {
       <PageHeader
         title={t("nav.audiobooks")}
         actions={
-          <div role="group" aria-label={t("nav.audiobooks")} className="flex flex-wrap gap-2">
-            {(["all", "duration", "downloaded", "saved"] as const)
-              .filter((option) => option !== "downloaded" || isDesktop)
-              .map((option) => (
-                <Button
-                  key={option}
-                  size="sm"
-                  variant={filter === option ? "primary" : "outline"}
-                  aria-pressed={filter === option}
-                  onClick={() => setFilter(option)}
-                >
-                  {option === "saved" && <CircleCheckIcon size={16} />}
-                  {option === "duration" && <Clock3Icon size={16} />}
-                  {option === "downloaded" && <ArrowDownToLineIcon size={16} />}
-                  {t(option === "all" ? "audiobooks.recent" : `audiobooks.${option}`)}
-                </Button>
-              ))}
-          </div>
+          <>
+            <div role="group" aria-label={t("nav.audiobooks")} className="flex flex-wrap gap-2">
+              {(["all", "duration", "downloaded", "saved"] as const)
+                .filter((option) => option !== "downloaded" || isDesktop)
+                .map((option) => (
+                  <Button
+                    key={option}
+                    size="sm"
+                    variant={filter === option ? "primary" : "secondary"}
+                    aria-pressed={filter === option}
+                    onClick={() => setFilter(option)}
+                  >
+                    {option === "saved" && <CircleCheckIcon size={16} />}
+                    {option === "duration" && <Clock3Icon size={16} />}
+                    {option === "downloaded" && <ArrowDownToLineIcon size={16} />}
+                    {t(option === "all" ? "audiobooks.recent" : `audiobooks.${option}`)}
+                  </Button>
+                ))}
+            </div>
+            {isAdmin && !isDesktop && (
+              <UploadAudiobookAction
+                online={online}
+                onUploaded={() => {
+                  setFilter("all");
+                  void result.refetch();
+                }}
+              />
+            )}
+          </>
         }
       />
       {filter === "all" && hero && (
@@ -524,10 +564,29 @@ function AudiobooksDisabled() {
 function BookDetail({ book }: { book: Audiobook }) {
   const t = useT();
   const { isAdmin } = useAuth();
+  const router = useRouter();
+  const { notify, notifyError } = useToast();
+  const [confirm, confirmation] = useConfirm();
   const [editing, setEditing] = useState(false);
   const { totalDuration } = useFormat();
-  const { online, downloaded, transfer, download, removeDownload, cancelDownload, result } =
-    useAudiobooks();
+  const {
+    online,
+    downloaded,
+    transfer,
+    download,
+    removeDownload,
+    cancelDownload,
+    result,
+    deleteBook,
+  } = useAudiobooks();
+  const deletion = useMutation({
+    mutationFn: deleteBook,
+    onSuccess: () => {
+      notify(t("audiobooks.deleted"), "success");
+      if (window.location.pathname === audiobookHref(book.id)) router.replace(audiobookCatalogHref);
+    },
+    onError: (error) => notifyError(error, t("audiobooks.deleteFailed")),
+  });
   const artwork = useAudiobookArtwork(book);
   const availableOffline = downloaded.has(book.id);
   const working = transfer?.bookId === book.id;
@@ -603,6 +662,26 @@ function BookDetail({ book }: { book: Audiobook }) {
                 <PencilIcon size={18} />
               </Button>
             )}
+            {isAdmin && !isDesktop && (
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={t("audiobooks.delete")}
+                title={t("audiobooks.delete")}
+                disabled={!online || deletion.isPending}
+                onClick={() =>
+                  confirm({
+                    title: t("audiobooks.delete"),
+                    description: t("audiobooks.deleteConfirm", { name: book.title }),
+                    confirmLabel: t("action.delete"),
+                    destructive: true,
+                    action: () => deletion.mutate(book.id),
+                  })
+                }
+              >
+                <Trash2Icon size={18} />
+              </Button>
+            )}
           </>
         }
       />
@@ -610,6 +689,7 @@ function BookDetail({ book }: { book: Audiobook }) {
         {book.progress && <BookProgress book={book} />}
         <AudiobookChapterList book={book} />
       </Section>
+      {confirmation}
       {isAdmin && editing && (
         <EditAudiobookDialog
           key={book.id}

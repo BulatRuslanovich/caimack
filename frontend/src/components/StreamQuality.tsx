@@ -10,6 +10,7 @@ import { STREAM_CHANGE } from "@/lib/playback/adaptivePlayback";
 import type { AudioQuality, Track } from "@/lib/types";
 import { useSettings } from "@/lib/useSettings";
 import { useT } from "@/contexts/I18nContext";
+import { Button } from "./ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,19 +60,22 @@ export function StreamQuality({ track, className }: { track: Track; className?: 
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        aria-label={t("player.quality", { stream: stream ?? "…" })}
-        title={reduced ? t("player.qualityReducedDetail") : undefined}
-        className={cn("quality-trigger group shrink-0", className)}
-      >
-        <AudioLinesIcon aria-hidden="true" size={13} className="text-primary" />
-        {reduced && <span aria-hidden="true">↓</span>}
-        {stream ?? "…"}
-        <ChevronDownIcon
-          aria-hidden="true"
-          size={12}
-          className="text-muted-foreground transition-transform group-data-[state=open]:rotate-180"
-        />
+      <DropdownMenuTrigger asChild>
+        <Button
+          size="sm"
+          aria-label={t("player.quality", { stream: stream ?? "…" })}
+          title={reduced ? t("player.qualityReducedDetail") : undefined}
+          className={cn("group shrink-0 gap-1.5 px-2.5 tabular-nums", className)}
+        >
+          <AudioLinesIcon aria-hidden="true" size={13} className="text-primary" />
+          {reduced && <span aria-hidden="true">↓</span>}
+          {stream ?? "…"}
+          <ChevronDownIcon
+            aria-hidden="true"
+            size={12}
+            className="opacity-75 transition-transform group-aria-expanded:rotate-180 motion-reduce:transition-none"
+          />
+        </Button>
       </DropdownMenuTrigger>
 
       <DropdownMenuContent className="w-72">

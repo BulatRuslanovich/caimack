@@ -149,6 +149,12 @@ interface CaimackApi {
     @POST("api/playlists")
     suspend fun createPlaylist(@Body changes: PlaylistChanges): Playlist
 
+    @POST("api/playlists/with-tracks")
+    suspend fun createPlaylistWithTracks(@Body request: CreatePlaylistWithTracks): Playlist
+
+    @GET("api/playlists/memberships")
+    suspend fun playlistMemberships(@Query("trackId") trackId: String): List<PlaylistMembership>
+
     @PUT("api/playlists/{id}")
     suspend fun updatePlaylist(@Path("id") id: String, @Body changes: PlaylistChanges): Playlist
 
@@ -180,6 +186,18 @@ interface CaimackApi {
     @POST("api/playlists/{id}/tracks")
     suspend fun addToPlaylist(@Path("id") id: String, @Body request: AddTracksRequest)
 
+    @PUT("api/playlists/{id}/tracks/membership")
+    suspend fun changePlaylistMembership(
+        @Path("id") id: String,
+        @Body request: PlaylistMembershipChange,
+    ): PlaylistMembershipResult
+
+    @POST("api/playlists/{id}/copy-tracks")
+    suspend fun copyPlaylistTracks(@Path("id") id: String, @Body request: CopyPlaylistTracks): PlaylistMembershipResult
+
+    @GET("api/playlists/{id}/suggestions")
+    suspend fun playlistSuggestions(@Path("id") id: String): RadioBatch
+
     @POST("api/tracks/{id}/favorite")
     suspend fun like(@Path("id") id: String)
 
@@ -194,6 +212,9 @@ interface CaimackApi {
 
     @GET("api/search")
     suspend fun search(@Query("q") query: String, @Query("limit") limit: Int = 8): SearchResults
+
+    @GET("api/search/popular")
+    suspend fun searchPopular(): SearchResults
 
     @GET("api/search/tracks")
     suspend fun searchTracks(@Query("q") query: String, @Query("page") page: Int, @Query("pageSize") pageSize: Int): Paged<Track>

@@ -40,6 +40,10 @@ export function onSessionExpired(listener: SessionExpiredListener): () => void {
   return () => sessionExpiredListeners.delete(listener);
 }
 
+export function notifySessionExpired(): void {
+  sessionExpiredListeners.forEach((listener) => listener());
+}
+
 export async function refreshSession(): Promise<boolean> {
   refreshInFlight ??= (async () => {
     try {
@@ -72,11 +76,6 @@ export async function fetchWithSession(
   await response.body?.cancel().catch(() => {});
 
   return (await refreshSession()) ? request() : response;
-}
-
-export interface DownloadedFile {
-  blob: Blob;
-  fileName: string;
 }
 
 interface RequestOptions {
@@ -197,7 +196,7 @@ async function send(path: string, options: RequestOptions = {}): Promise<Respons
     }
 
     if (!allowUnauthenticated) {
-      sessionExpiredListeners.forEach((listener) => listener());
+      notifySessionExpired();
     }
 
     throw new ApiError(401, tr("error.sessionExpired"));
@@ -219,30 +218,6 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
 
   return (await response.json()) as T;
-}
-
-export async function requestFile(path: string, fallbackName: string): Promise<DownloadedFile> {
-  const response = await send(path);
-
-  return {
-    blob: await response.blob(),
-    fileName: fileNameFromDisposition(response.headers.get("Content-Disposition")) ?? fallbackName,
-  };
-}
-
-function fileNameFromDisposition(header: string | null): string | null {
-  if (!header) return null;
-
-  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header);
-  if (encoded) {
-    try {
-      return decodeURIComponent(encoded[1]);
-    } catch {
-      return null;
-    }
-  }
-
-  return /filename="([^"]+)"/i.exec(header)?.[1] ?? null;
 }
 
 async function readErrorMessage(response: Response): Promise<string> {

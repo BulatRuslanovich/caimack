@@ -1,9 +1,15 @@
+[Documentation](README.md#music-library)
+
 # Artwork and lyrics beside music
 
-Set `EXPORT_MUSIC_METADATA=true` to export the catalog's downloaded or manually
-selected artwork and lyrics to registered music files. This option is independent
-of `RENAME_MUSIC_FILES` and is off by default. For Docker, set these in the root
-`.env` and recreate the API:
+Export embeds cover art in registered MP3 and FLAC files and writes lyric
+companions beside them. It uses the downloaded or manually selected artwork and
+lyrics from the catalog. Export is off by default and can be enabled
+independently of [automatic file naming](file-names.md).
+
+## Enable export
+
+For Docker, set both values in the deployment `.env` and recreate the API.
 
 ```dotenv
 EXPORT_MUSIC_METADATA=true
@@ -15,11 +21,13 @@ restart the API. Apply migration 0005 before starting the new backend. The API
 needs write access to the source directory, even when the library root is a
 symbolic link.
 
+## What changes on disk
+
 Artwork is embedded as a JPEG front cover using the audio format's native tags
 (ID3 APIC for MP3, PICTURE for FLAC). Other tags and encoded audio are retained.
-Synchronized lyrics are written as UTF-8 `Artist - Title.lrc` with timestamps;
-plain lyrics without timestamps use `Artist - Title.txt`. Companions always share
-the audio file's current basename. If several audio files share that basename
+Lyrics use the audio file's current basename. For `track.mp3`, export writes
+`track.lrc` with timestamps or `track.txt` for plain text. Both use UTF-8.
+If several audio files share that basename
 (for example MP3 and FLAC), export is skipped with an error to avoid overwriting
 a shared lyric file. No album-wide `cover.jpg` is written, because
 a directory may contain tracks from several albums. Lyrics are not embedded.
@@ -33,6 +41,8 @@ Embedding artwork changes the whole-file SHA-256, but does not re-encode audio.
 The database and scan registry adopt the new hash. Existing MERT vectors, analysis
 timestamps, cue points, HLS audio cache, track IDs and listening history are kept.
 An external audio replacement still invalidates audio analysis and cache normally.
+
+## Backups and recovery
 
 Files are prepared beside their destinations and installed with atomic renames.
 Originals of replaced audio or lyric files are retained in

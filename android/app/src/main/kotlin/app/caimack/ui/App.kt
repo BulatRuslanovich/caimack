@@ -20,9 +20,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
@@ -78,6 +80,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import app.caimack.R
 import app.caimack.api.Track
+import app.caimack.api.PlaybackCollection
 import app.caimack.api.User
 import app.caimack.audiobooks.Audiobook
 import app.caimack.playback.PlayerState
@@ -195,9 +198,11 @@ private fun AppContent(
     val container = LocalContainer.current
     val nav = rememberNavController()
     val destination = nav.currentBackStackEntryAsState().value?.destination
+    val collectionPage = destination?.let { it.hasRoute<AlbumRoute>() || it.hasRoute<PlaylistRoute>() } == true
+    val searchPage = destination?.hasRoute<SearchRoute>() == true
     LaunchedEffect(destination) {
         if (destination != null && (
-            destination.hasRoute<HomeRoute>() || destination.hasRoute<SearchRoute>() ||
+                destination.hasRoute<HomeRoute>() || searchPage ||
                 destination.hasRoute<LibraryRoute>() || destination.hasRoute<SavedAudiobooksRoute>() ||
                 destination.hasRoute<AudiobookRoute>()
             )
@@ -209,6 +214,7 @@ private fun AppContent(
     val snackbar = remember { SnackbarHostState() }
     var account by rememberSaveable { mutableStateOf(false) }
     val focus = LocalFocusManager.current
+    val openAccount: () -> Unit = { focus.clearFocus(); account = true }
     var expanded by rememberSaveable { mutableStateOf(false) }
     val offlineLibrary by container.libraryCache.offline.collectAsStateWithLifecycle()
     val audiobooksEnabled by container.audiobooksEnabled.collectAsStateWithLifecycle()
@@ -224,7 +230,14 @@ private fun AppContent(
         val playable = container.playable(tracks)
         if (playable.isNotEmpty()) {
             val selected = tracks.getOrNull(index)?.id
-            container.player.play(playable, playable.indexOfFirst { it.id == selected }.coerceAtLeast(0), sourceOf(nav.currentBackStackEntry))
+            val entry = nav.currentBackStackEntry
+            val source = sourceOf(entry)
+            val collection = when (source) {
+                "album" -> entry?.toRoute<AlbumRoute>()?.let { PlaybackCollection("album", it.id) }
+                "playlist" -> entry?.toRoute<PlaylistRoute>()?.let { PlaybackCollection("playlist", it.id) }
+                else -> null
+            }
+            container.player.play(playable, playable.indexOfFirst { it.id == selected }.coerceAtLeast(0), source, collection)
         }
     }
 
@@ -308,8 +321,12 @@ private fun AppContent(
         },
         topBar = {
             Column {
-                Header(nav, user, onBack = { nav.popBackStack() }) { focus.clearFocus(); account = true }
-                UpdateBanner(appUpdate, onDetails = { updateDetails = true }, onDismiss = { container.updates.dismiss() })
+                if (!collectionPage) Header(nav, user, onBack = { nav.popBackStack() }, onAccount = openAccount)
+                if (appUpdate.showBanner) {
+                    Box(if (collectionPage) Modifier.statusBarsPadding() else Modifier) {
+                        UpdateBanner(appUpdate, onDetails = { updateDetails = true }, onDismiss = { container.updates.dismiss() })
+                    }
+                }
             }
         },
         bottomBar = {
@@ -327,7 +344,12 @@ private fun AppContent(
     ) { padding ->
         AppNavHost(
             nav,
-            modifier = Modifier.padding(padding).fillMaxSize().background(palette.background),
+            modifier = Modifier.padding(padding)
+                .consumeWindowInsets(PaddingValues(
+                    top = if (collectionPage) padding.calculateTopPadding() else 0.dp,
+                    bottom = if (searchPage) padding.calculateBottomPadding() else 0.dp,
+                ))
+                .fillMaxSize().background(palette.background),
         ) {
             composable<HomeRoute> {
                 HomeScreen(nav, homeCategory, homeDownloads) { category, downloads ->
@@ -350,9 +372,13 @@ private fun AppContent(
             }
             composable<DownloadsRoute> { DownloadsScreen(play) }
             composable<SettingsSectionRoute> { SettingsScreen(SettingsCategory.of(it.toRoute<SettingsSectionRoute>().section)) }
-            composable<AlbumRoute> { AlbumScreen(it.toRoute<AlbumRoute>().id, nav, play) }
+            composable<AlbumRoute> {
+                AlbumScreen(it.toRoute<AlbumRoute>().id, nav, play) { AccountButton(user, openAccount) }
+            }
             composable<ArtistRoute> { ArtistScreen(it.toRoute<ArtistRoute>().id, nav, play) }
-            composable<PlaylistRoute> { PlaylistScreen(it.toRoute<PlaylistRoute>().id, play) { nav.popBackStack() } }
+            composable<PlaylistRoute> {
+                PlaylistScreen(it.toRoute<PlaylistRoute>().id, play, onBack = { nav.popBackStack() }) { AccountButton(user, openAccount) }
+            }
             composable<GenreRoute> { it.toRoute<GenreRoute>().let { route -> GenreScreen(route.id, route.name, play) } }
             composable<MixRoute> { MixScreen(it.toRoute<MixRoute>().kind, play) }
         }
@@ -434,16 +460,22 @@ private fun Header(nav: NavController, user: User, onBack: () -> Unit, onAccount
             }
             if (listening != null) {
                 androidx.compose.foundation.layout.Spacer(Modifier.width(48.dp))
-            } else Box(
-                Modifier.size(48.dp).clip(CircleShape).clickable(onClickLabel = stringResource(R.string.nav_account), onClick = onAccount),
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(Modifier.size(32.dp).clip(CircleShape).background(palette.raised), contentAlignment = Alignment.Center) {
-                    Text(user.username.take(1).uppercase(), style = Type.tiny.copy(fontWeight = FontWeight.SemiBold))
-                }
-            }
+            } else AccountButton(user, onAccount)
         }
         HorizontalDivider(color = palette.border)
+    }
+}
+
+@Composable
+private fun AccountButton(user: User, onAccount: () -> Unit) {
+    val palette = LocalPalette.current
+    Box(
+        Modifier.size(48.dp).clip(CircleShape).clickable(onClickLabel = stringResource(R.string.nav_account), onClick = onAccount),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.size(32.dp).clip(CircleShape).background(palette.raised), contentAlignment = Alignment.Center) {
+            Text(user.username.take(1).uppercase(), style = Type.tiny.copy(fontWeight = FontWeight.SemiBold))
+        }
     }
 }
 

@@ -26,6 +26,7 @@ class Signals(private val api: CaimackApi, private val scope: CoroutineScope, pr
     private val sending = Mutex()
     private var timer: Job? = null
     private var recorded: String? = null
+    private var trackSessionId: String? = null
     private val changes = MutableSharedFlow<PlaybackSignal>(extraBufferCapacity = 64)
     val reactions = changes.asSharedFlow()
 
@@ -33,7 +34,7 @@ class Signals(private val api: CaimackApi, private val scope: CoroutineScope, pr
         add(
             PlaybackSignal(
                 event.type, event.trackId, event.durationSeconds, event.positionSeconds, event.listenedSeconds,
-                Instant.now().toString(), sessionId, event.source,
+                Instant.now().toString(), trackSessionId ?: sessionId, event.source,
             ),
         )
     }
@@ -53,7 +54,8 @@ class Signals(private val api: CaimackApi, private val scope: CoroutineScope, pr
     }
 
     fun choice(type: String, trackId: String, duration: Int) {
-        add(PlaybackSignal(type, trackId, duration, occurredAt = Instant.now().toString(), sessionId = sessionId, source = PlaySources.of(trackId)))
+        add(PlaybackSignal(type, trackId, duration, occurredAt = Instant.now().toString(),
+            sessionId = PlaySources.sessionOf(trackId) ?: sessionId, source = PlaySources.of(trackId)))
     }
 
     fun progress(trackId: String, durationSeconds: Int, positionSeconds: Double) {
@@ -68,9 +70,12 @@ class Signals(private val api: CaimackApi, private val scope: CoroutineScope, pr
     }
 
     fun begin(trackId: String, durationSeconds: Int) {
+        trackSessionId = PlaySources.sessionOf(trackId)
         if (recorded != trackId) recorded = null
         tracker.begin(trackId, durationSeconds)
     }
+
+    internal fun hasSameSession(trackId: String): Boolean = trackSessionId == PlaySources.sessionOf(trackId)
 
     fun flush() {
         scope.launch { send() }

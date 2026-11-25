@@ -4,7 +4,7 @@
 
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import { CheckIcon, ChevronRightIcon } from "lucide-react";
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 export const DropdownMenu = DropdownMenuPrimitive.Root;
@@ -112,13 +112,14 @@ export function DropdownMenuSubContent({
 export function DropdownMenuRadioItem({
   className,
   children,
+  indicator = <CheckIcon size={16} />,
   ...props
-}: ComponentProps<typeof DropdownMenuPrimitive.RadioItem>) {
+}: ComponentProps<typeof DropdownMenuPrimitive.RadioItem> & { indicator?: ReactNode }) {
   return (
     <DropdownMenuPrimitive.RadioItem className={cn(itemClass, "pr-10", className)} {...props}>
       {children}
       <DropdownMenuPrimitive.ItemIndicator className="absolute right-3 text-primary">
-        <CheckIcon size={16} />
+        {indicator}
       </DropdownMenuPrimitive.ItemIndicator>
     </DropdownMenuPrimitive.RadioItem>
   );

@@ -5,7 +5,6 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { useT } from "@/contexts/I18nContext";
 import { usePlayerProgress, usePlayerClock, usePlayerState } from "@/contexts/PlayerContext";
-import { cn } from "@/lib/cn";
 import { activeLineAt, WordPainter } from "@/lib/lyrics";
 import { queries } from "@/lib/queries";
 import type { Track, LyricWord } from "@/lib/types";
@@ -36,6 +35,8 @@ export function LyricsPane({
   const client = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [browsing, setBrowsing] = useState(false);
+  const [following, setFollowing] = useState(true);
+  const scroller = useRef<HTMLDivElement>(null);
   const root = useRef<HTMLOListElement>(null);
   const wordPainter = useRef<WordPainter | null>(null);
   const getPosition = usePlayerClock();
@@ -48,6 +49,28 @@ export function LyricsPane({
   const lyrics = query.data ?? null;
   const lines = lyrics?.lines ?? [];
   const current = activeLineAt(lines, position * 1000);
+
+  useEffect(() => {
+    const panel = scroller.current;
+    const list = root.current;
+    if (!following || !panel || !list) return;
+    const line = list.children[current];
+    const readingInset = Number.parseFloat(getComputedStyle(list).paddingBlockStart);
+    const top = line
+      ? panel.scrollTop +
+        line.getBoundingClientRect().top -
+        panel.getBoundingClientRect().top -
+        readingInset
+      : 0;
+    panel.scrollTo({ top: Math.max(0, top) });
+  }, [following, current, lyrics]);
+
+  function pauseFollowing() {
+    const panel = scroller.current;
+    if (!following || !lines.length || !panel || panel.scrollHeight <= panel.clientHeight) return;
+    panel.scrollTo({ top: panel.scrollTop, behavior: "instant" });
+    setFollowing(false);
+  }
 
   useEffect(() => {
     if (!root.current || !lyrics?.lines.some((line) => line.words?.length)) return;
@@ -104,61 +127,94 @@ export function LyricsPane({
   }, [query.isSuccess, query.data, track.hasLyrics, onLyricsKnown]);
 
   return (
-    <>
-      {isAdmin && query.isSuccess && (
-        <div className="sticky top-0 z-1 flex justify-end">
-          <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
-            <PencilIcon size={14} />
-            {t("lyrics.edit")}
-          </Button>
-        </div>
-      )}
+    <div className="lyrics-pane relative flex min-h-0 min-w-0 flex-1">
+      <div
+        ref={scroller}
+        tabIndex={0}
+        role="region"
+        aria-label={t("lyrics.title")}
+        className="min-h-0 flex-1 overflow-y-auto scroll-smooth px-2 [scrollbar-width:none] sm:px-4 motion-reduce:scroll-auto [&::-webkit-scrollbar]:hidden"
+        onWheel={(event) => {
+          if (event.deltaY && !event.ctrlKey) pauseFollowing();
+        }}
+        onTouchMove={pauseFollowing}
+        onKeyDown={(event) => {
+          const scrollKey = ["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"].includes(
+            event.key,
+          );
+          if (scrollKey || (event.key === " " && event.target === event.currentTarget)) {
+            pauseFollowing();
+          }
+        }}
+      >
+        {isAdmin && query.isSuccess && (
+          <div className="sticky top-0 z-1 flex justify-end">
+            <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
+              <PencilIcon size={14} />
+              {t("lyrics.edit")}
+            </Button>
+          </div>
+        )}
 
-      {editing && (
-        <EditLyricsDialog
-          track={track}
-          lyrics={lyrics}
-          onClose={() => setEditing(false)}
-          onSaved={(saved) => client.setQueryData(queries.lyrics(track.id).queryKey, saved)}
-        />
-      )}
+        {editing && (
+          <EditLyricsDialog
+            track={track}
+            lyrics={lyrics}
+            onClose={() => setEditing(false)}
+            onSaved={(saved) => client.setQueryData(queries.lyrics(track.id).queryKey, saved)}
+          />
+        )}
 
-      {body()}
-      {lyrics?.provider && (
-        <p className="py-4 text-center text-xs text-muted-foreground">
-          {safeCreditUrl(lyrics.attribution?.url) ? (
-            <a
-              href={lyrics.attribution!.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline underline-offset-4"
-            >
-              {lyrics.provider}
-            </a>
-          ) : (
-            lyrics.provider
-          )}
-          {lyrics.attribution?.submitter && (
-            <>
-              {" "}
-              ·{" "}
-              {safeCreditUrl(lyrics.attribution.submitterUrl) ? (
-                <a
-                  href={lyrics.attribution.submitterUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline underline-offset-4"
-                >
-                  {lyrics.attribution.submitter}
-                </a>
-              ) : (
-                lyrics.attribution.submitter
-              )}
-            </>
-          )}
-        </p>
+        {body()}
+        {lyrics?.provider && (
+          <p className="lyrics-credit py-4 text-xs text-muted-foreground">
+            {safeCreditUrl(lyrics.attribution?.url) ? (
+              <a
+                href={lyrics.attribution!.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-4"
+              >
+                {lyrics.provider}
+              </a>
+            ) : (
+              lyrics.provider
+            )}
+            {lyrics.attribution?.submitter && (
+              <>
+                {" "}
+                ·{" "}
+                {safeCreditUrl(lyrics.attribution.submitterUrl) ? (
+                  <a
+                    href={lyrics.attribution.submitterUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline underline-offset-4"
+                  >
+                    {lyrics.attribution.submitter}
+                  </a>
+                ) : (
+                  lyrics.attribution.submitter
+                )}
+              </>
+            )}
+          </p>
+        )}
+      </div>
+      {!following && lines.length > 0 && (
+        <Button
+          variant="secondary"
+          size="sm"
+          className="absolute right-4 bottom-3 z-2 min-h-11 bg-popover shadow-lg"
+          onClick={() => {
+            scroller.current?.focus({ preventScroll: true });
+            setFollowing(true);
+          }}
+        >
+          {t("lyrics.follow")}
+        </Button>
       )}
-    </>
+    </div>
   );
 
   function body() {
@@ -172,7 +228,7 @@ export function LyricsPane({
 
     if (lines.length === 0) {
       return (
-        <p className="text-center leading-[1.7] whitespace-pre-wrap text-muted-foreground">
+        <p className="lyrics-plain leading-[1.7] whitespace-pre-wrap text-muted-foreground">
           {lyrics.plain}
         </p>
       );
@@ -181,7 +237,7 @@ export function LyricsPane({
     return (
       <ol
         ref={root}
-        className="flex flex-col gap-10 pt-[22vh] pb-[78vh] text-center md:gap-14"
+        className="lyrics-lines"
         onPointerEnter={() => setBrowsing(true)}
         onPointerLeave={() => setBrowsing(false)}
         onFocus={() => setBrowsing(true)}
@@ -195,7 +251,7 @@ export function LyricsPane({
             index={index}
             background={line.background}
             active={index === current}
-            dim={visible(index - current, browsing)}
+            dim={visible(index - current, browsing || !following)}
             at={line.at / 1000}
             onSeek={onSeek}
           />
@@ -205,12 +261,12 @@ export function LyricsPane({
   }
 }
 
-const PASSED = [1, 0.12];
-const UPCOMING = [1, 0.5, 0.34, 0.18];
+const PASSED = [1, 0.48, 0.38, 0.28, 0.22];
+const UPCOMING = [1, 0.67, 0.53, 0.42, 0.33, 0.26];
 
-const dim = (distance: number) => (distance < 0 ? PASSED : UPCOMING)[Math.abs(distance)] ?? 0;
+const dim = (distance: number) => (distance < 0 ? PASSED : UPCOMING)[Math.abs(distance)] ?? 0.18;
 
-const BROWSING_FLOOR = 0.4;
+const BROWSING_FLOOR = 0.62;
 
 const visible = (distance: number, browsing: boolean) =>
   browsing ? Math.max(dim(distance), BROWSING_FLOOR) : dim(distance);
@@ -235,27 +291,14 @@ const LyricLine = memo(function LyricLine({
   onSeek: (seconds: number) => void;
 }) {
   const t = useT();
-  const element = useRef<HTMLLIElement | null>(null);
-
-  useEffect(() => {
-    if (active) element.current?.scrollIntoView({ block: "start" });
-  }, [active]);
-
-  const styling = cn(
-    "block w-full text-2xl leading-[1.15] font-bold tracking-tight text-balance text-foreground transition-transform duration-300 ease-brand sm:text-4xl md:text-5xl motion-reduce:transition-none",
-    active && "scale-[1.02] motion-reduce:scale-100",
-  );
 
   return (
     <li
-      ref={element}
       data-lyric-index={index}
+      data-background-line={background || undefined}
       aria-current={active}
       style={{ opacity: dim }}
-      className={cn(
-        "scroll-mt-[22vh] transition-opacity duration-300 ease-brand motion-reduce:transition-none",
-        background && "text-sm italic",
-      )}
+      className="lyric-line motion-reduce:transition-none"
     >
       {text ? (
         <button
@@ -265,10 +308,7 @@ const LyricLine = memo(function LyricLine({
             onSeek(word ? Number(word.dataset.wordAt) / 1000 : at);
           }}
           aria-label={t("lyrics.seekTo", { line: text })}
-          className={cn(
-            styling,
-            "rounded-md px-3 py-1 hover:bg-foreground/10 focus-visible:bg-foreground/10 focus-visible:outline-none",
-          )}
+          className="lyric-line-text"
         >
           {words?.length
             ? words.map((word, i) => (
@@ -279,7 +319,9 @@ const LyricLine = memo(function LyricLine({
             : text}
         </button>
       ) : (
-        <span className={styling}> </span>
+        <span className="lyric-line-text" aria-hidden="true">
+          &nbsp;
+        </span>
       )}
     </li>
   );

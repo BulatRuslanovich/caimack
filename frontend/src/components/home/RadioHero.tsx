@@ -4,7 +4,7 @@
 
 import { useRecommendations } from "@/lib/useRecommendations";
 import { useMutation } from "@tanstack/react-query";
-import { PauseIcon, PlayIcon } from "lucide-react";
+import { LoaderCircleIcon, PauseIcon, PlayIcon } from "lucide-react";
 import { usePlayerActions, usePlayerState } from "@/contexts/PlayerContext";
 import { useT } from "@/contexts/I18nContext";
 import { TrackCover } from "@/components/Cover";
@@ -22,19 +22,28 @@ function EnabledRadioHero({ tracks, offline = false }: { tracks: Track[]; offlin
   const start = useMutation({ mutationFn: () => player.startRadio() });
   const active = Boolean(state.radioSession);
   const playing = active && state.isPlaying;
-  const art =
-    (active ? state.currentTrack : null) ?? tracks.find((track) => track.hasCover) ?? tracks[0];
-  const light = useCoverLight(art ? trackCoverUrl(art, "thumb") : null);
+  const current = active ? state.currentTrack : null;
+  const next = active ? state.nextTrack : null;
+  const featured = tracks.find((track) => track.hasCover) ?? tracks[0];
+  const art = current ?? featured;
   const sleeves = tracks
     .filter(
       (track, index, all) =>
         track.hasCover &&
-        (track.albumId ?? track.id) !== (art?.albumId ?? art?.id) &&
+        (track.albumId ?? track.id) !== (featured?.albumId ?? featured?.id) &&
         all.findIndex((other) => (other.albumId ?? other.id) === (track.albumId ?? track.id)) ===
           index,
     )
     .slice(0, 2);
-  const next = active ? state.nextTrack : null;
+  const lightTrack = sleeves[0] ?? featured;
+  const light = useCoverLight(lightTrack ? trackCoverUrl(lightTrack, "thumb") : null);
+  const action = start.isPending
+    ? t("menu.radioStarting")
+    : playing
+      ? t("action.pause")
+      : active
+        ? t("radio.resume")
+        : t("radio.start");
 
   if (!art) return null;
 
@@ -49,30 +58,50 @@ function EnabledRadioHero({ tracks, offline = false }: { tracks: Track[]; offlin
         <h1 id="personal-radio-title" className="radio-title">
           {t("radio.mine")}
         </h1>
-        <p className="radio-description">
-          {t(offline ? "radio.localDescription" : "radio.description")}
-        </p>
+        <div className="radio-info">
+          <p className="radio-description" aria-hidden={current ? true : undefined}>
+            {t(offline ? "radio.localDescription" : "radio.description")}
+          </p>
+          <div className="radio-status" role="status">
+            {current && (
+              <>
+                <span className="radio-status-indicator" aria-hidden="true">
+                  {playing ? <NowPlayingBars /> : <span className="radio-status-dot" />}
+                </span>
+                <div className="radio-status-copy">
+                  <span className="radio-status-track" title={current.title}>
+                    {current.title}
+                  </span>
+                  <span className="radio-status-caption" title={formatArtists(current)}>
+                    {formatArtists(current)} · {playing ? t("radio.onAir") : t("radio.paused")}
+                  </span>
+                  {next && (
+                    <span className="radio-status-caption" title={next.title}>
+                      {t("player.upNextNamed", { title: next.title })}
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
         <Button
           variant="primary"
           size="auto"
           className="radio-start"
+          data-playing={playing}
           disabled={start.isPending}
           aria-busy={start.isPending}
-          aria-label={`${t("radio.mine")}: ${playing ? t("action.pause") : t("action.play")}`}
+          aria-label={`${t("radio.mine")}: ${action}`}
           onClick={() => (active ? player.toggle() : start.mutate())}
         >
-          <span className="radio-start-icon">
-            {playing ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
-          </span>
-          <span className="min-w-0 truncate">
-            {start.isPending
-              ? t("menu.radioStarting")
-              : playing
-                ? t("action.pause")
-                : active
-                  ? t("radio.resume")
-                  : t("radio.start")}
-          </span>
+          {start.isPending ? (
+            <LoaderCircleIcon size={22} className="motion-safe:animate-spin" aria-hidden="true" />
+          ) : playing ? (
+            <PauseIcon size={22} className="fill-current" aria-hidden="true" />
+          ) : (
+            <PlayIcon size={22} className="translate-x-px fill-current" aria-hidden="true" />
+          )}
         </Button>
       </div>
 
@@ -92,33 +121,6 @@ function EnabledRadioHero({ tracks, offline = false }: { tracks: Track[]; offlin
             </span>
           ))}
         </div>
-      </div>
-
-      <div className="radio-foot">
-        <span className="radio-status" role="status">
-          {playing ? <NowPlayingBars /> : <span className="radio-status-dot" />}
-          {active && state.currentTrack ? (
-            <span
-              className="radio-status-copy"
-              title={`${state.currentTrack.title} — ${formatArtists(state.currentTrack)}`}
-            >
-              <span className="radio-status-track">{state.currentTrack.title}</span>
-              <span className="radio-status-caption">
-                {formatArtists(state.currentTrack)} ·{" "}
-                {playing ? t("radio.onAir") : t("radio.paused")}
-              </span>
-            </span>
-          ) : (
-            t(offline ? "radio.fromLocalLibrary" : "radio.fromLibrary")
-          )}
-        </span>
-        {next && (
-          <span className="radio-next">
-            <span className="radio-next-title">
-              {t("player.upNextNamed", { title: next.title })}
-            </span>
-          </span>
-        )}
       </div>
     </section>
   );

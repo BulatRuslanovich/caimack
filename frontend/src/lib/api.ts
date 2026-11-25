@@ -2,7 +2,7 @@
 
 import { deviceId, flushEvents } from "@/lib/events";
 import { isDesktop } from "@/desktop/runtime";
-import { fileForm, qs, request, requestFile } from "@/lib/http";
+import { fileForm, qs, request } from "@/lib/http";
 import { markImageChanged } from "@/lib/media";
 import { WAVEFORM_VERSION } from "@/lib/waveform";
 import type {
@@ -25,6 +25,7 @@ import type {
   HomeMix,
   HomeMixSlug,
   LibraryMap,
+  MapProjection,
   LibraryOverview,
   Lyrics,
   PageParams,
@@ -34,6 +35,8 @@ import type {
   PlayingElsewhere,
   Playlist,
   PlaylistDetail,
+  PlaylistMembership,
+  PlaylistTrackChanges,
   RadioBatch,
   RecommendationStats,
   Recap,
@@ -50,16 +53,12 @@ import type {
   TasteRuleAction,
   TasteRuleTarget,
   TrackFilter,
-  TrackSort,
+  TrackListParams,
   UploadProbeFile,
   UploadProbeResult,
   User,
   UserSettings,
-  YandexImport,
-  YandexImportKind,
-  YandexSearch,
 } from "@/lib/types";
-import { yandexMusicToken } from "@/lib/yandexMusic";
 import type {
   BookPlayback,
   ConnectCommand,
@@ -78,11 +77,6 @@ export interface SearchTabResult {
 }
 
 export type SearchTab = keyof SearchTabResult;
-
-function yandexHeaders(): Record<string, string> {
-  const token = yandexMusicToken();
-  return token ? { "X-Yandex-Music-Token": token } : {};
-}
 
 async function withImage<T>(upload: Promise<T>, kind: "album" | "artist" | "playlist", id: string) {
   const result = await upload;
@@ -174,7 +168,10 @@ export const api = {
     request<HomeMix>(`/home/mixes/${kind}`, { signal }),
   libraryOverview: () =>
     request<LibraryOverview>(`/library/overview${qs({ sectionSize: SECTION_SIZE })}`),
-  libraryMap: () => request<LibraryMap>("/library/map"),
+  libraryMap: (projection: MapProjection = "2d", signal?: AbortSignal) =>
+    request<LibraryMap>(projection === "3d" ? "/library/map?projection=3d" : "/library/map", {
+      signal,
+    }),
   duplicates: () => request<DuplicateReport>("/library/duplicates"),
   libraryScan: () => request<LibraryScan>("/library/scan"),
   rescanLibrary: () => request<LibraryScan>("/library/scan", { method: "POST" }),
@@ -185,10 +182,8 @@ export const api = {
   lookupTracks: (ids: string[], signal?: AbortSignal) =>
     request<Track[]>("/tracks/lookup", { method: "POST", body: { ids }, signal }),
 
-  tracks: (
-    params: PageParams & TrackFilter & { sort?: TrackSort; q?: string },
-    signal?: AbortSignal,
-  ) => request<Paged<Track>>(`/tracks${qs(params)}`, { signal }),
+  tracks: (params: TrackListParams, signal?: AbortSignal) =>
+    request<Paged<Track>>(`/tracks${qs(params)}`, { signal }),
   shuffleTracks: (params: TrackFilter & { limit?: number; q?: string } = {}) =>
     request<Track[]>(`/tracks/shuffle${qs(params)}`),
   artists: (params: PageParams & { q?: string }, signal?: AbortSignal) =>
@@ -236,8 +231,6 @@ export const api = {
   deleteTrack: (id: string) => request<void>(`/tracks/${id}`, { method: "DELETE" }),
   deleteTracks: (ids: string[]) =>
     request<BulkDeleteResult>("/tracks/bulk-delete", { method: "POST", body: { ids } }),
-  downloadTrack: (id: string, fallbackName: string) =>
-    requestFile(`/tracks/${id}/download`, fallbackName),
   checkUpload: (files: UploadProbeFile[]) =>
     request<UploadProbeResult>("/tracks/upload/check", { method: "POST", body: { files } }),
   updateArtist: (id: string, name: string) =>
@@ -271,6 +264,27 @@ export const api = {
   playlist: (id: string) => request<PlaylistDetail>(`/playlists/${id}`),
   createPlaylist: (name: string, description?: string, isPublic = false) =>
     request<Playlist>("/playlists", { method: "POST", body: { name, description, isPublic } }),
+  createPlaylistWithTracks: (body: {
+    name: string;
+    description?: string;
+    isPublic?: boolean;
+    trackIds: string[];
+    requestId?: string;
+  }) => request<Playlist>("/playlists/with-tracks", { method: "POST", body }),
+  playlistMemberships: (trackId: string, signal?: AbortSignal) =>
+    request<PlaylistMembership[]>(`/playlists/memberships${qs({ trackId })}`, { signal }),
+  changePlaylistMembership: (id: string, trackIds: string[], present: boolean) =>
+    request<PlaylistTrackChanges>(`/playlists/${id}/tracks/membership`, {
+      method: "PUT",
+      body: { trackIds, present },
+    }),
+  copyPlaylistTracks: (id: string, destinationId: string) =>
+    request<PlaylistTrackChanges>(`/playlists/${id}/copy-tracks`, {
+      method: "POST",
+      body: { destinationId },
+    }),
+  playlistSuggestions: (id: string, signal?: AbortSignal) =>
+    request<RadioBatch>(`/playlists/${id}/suggestions`, { signal }),
   updatePlaylist: (id: string, name: string, description?: string | null, isPublic = false) =>
     request<Playlist>(`/playlists/${id}`, {
       method: "PUT",
@@ -309,6 +323,8 @@ export const api = {
   radio: async (
     body: {
       seedTrackId: string | null;
+      playlistId?: string;
+      sessionId?: string;
       exclude: string[];
       limit?: number;
       focus?: RadioFocus | null;
@@ -318,7 +334,7 @@ export const api = {
     await flushEvents(EVENTS_FLUSH_WAIT_MS);
     return request<RadioBatch>("/recommendations/radio", {
       method: "POST",
-      body: { ...body, sessionId: deviceId() },
+      body: { ...body, sessionId: body.sessionId ?? deviceId() },
       signal,
     });
   },
@@ -358,19 +374,4 @@ export const api = {
     request<void>(`/admin/users/${id}/password`, { method: "POST", body: { newPassword } }),
   revokeUserSessions: (id: string) =>
     request<void>(`/admin/users/${id}/sessions/revoke`, { method: "POST" }),
-
-  yandexSearch: (q: string, signal?: AbortSignal) =>
-    request<YandexSearch>(`/integrations/yandex-music/search${qs({ q })}`, {
-      signal,
-      headers: yandexHeaders(),
-    }),
-  yandexImports: () => request<YandexImport[]>("/integrations/yandex-music/imports"),
-  startYandexImport: (kind: YandexImportKind, id?: string) =>
-    request<YandexImport>("/integrations/yandex-music/imports", {
-      method: "POST",
-      body: { kind, id },
-      headers: yandexHeaders(),
-    }),
-  removeYandexImport: (id: string) =>
-    request<void>(`/integrations/yandex-music/imports/${id}`, { method: "DELETE" }),
 };

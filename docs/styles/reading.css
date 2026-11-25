@@ -1,0 +1,38 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+.wy-nav-content-wrap {
+  background: #fcfcfc;
+}
+
+.wy-nav-content {
+  max-width: none;
+}
+
+.rst-content .section > :is(p, ul, ol) {
+  max-width: 80ch;
+}
+
+.rst-content .section table {
+  width: 100%;
+}
+
+.rst-content .section table.docutils {
+  display: table;
+}
+
+.rst-content .section table :is(th, td) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.rst-content .section table code {
+  overflow-wrap: anywhere;
+  hyphens: none;
+}
+
+@media (max-width: 768px) {
+  .rst-content .section table :is(th, td) {
+    padding-inline: 0.75rem;
+    hyphens: auto;
+  }
+}

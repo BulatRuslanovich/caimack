@@ -500,6 +500,7 @@ private fun colorwayName(colorway: Colorway) = when (colorway) {
     Colorway.Midnight -> R.string.settings_colorway_midnight
     Colorway.Plum -> R.string.settings_colorway_plum
     Colorway.Studio -> R.string.settings_colorway_studio
+    Colorway.Dodo -> R.string.settings_colorway_dodo
     Colorway.Cover -> R.string.settings_colorway_cover
 }
 

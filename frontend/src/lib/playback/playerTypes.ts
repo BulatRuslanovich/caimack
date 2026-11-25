@@ -9,11 +9,32 @@ export type RadioState = "idle" | "loading" | "empty" | "failed";
 
 export interface RadioSessionState {
   seedTrackId?: string | null;
+  playlistId?: string | null;
+  sessionId?: string | null;
   focus?: RadioFocus | null;
   reasons: Record<string, RecommendationReason>;
 
   signals?: Record<string, QueueSignals>;
   manualTrackIds?: string[];
+}
+
+export type PlaylistRadioStatus = "started" | "noAudio" | "empty" | "unavailable";
+
+export interface PlaybackCollection {
+  kind: "album" | "playlist";
+  id: string;
+}
+
+export interface PlayQueueOptions {
+  shuffle?: boolean;
+  collection?: PlaybackCollection;
+}
+
+export function samePlaybackCollection(
+  requested: PlaybackCollection,
+  current: PlaybackCollection | null | undefined,
+) {
+  return requested.kind === current?.kind && requested.id === current.id;
 }
 
 export interface QueueSnapshot {
@@ -23,6 +44,7 @@ export interface QueueSnapshot {
   position: number;
   radioFrom: number;
   radioSession: RadioSessionState | null;
+  collection?: PlaybackCollection | null;
 }
 
 export interface PlayerState {
@@ -44,6 +66,7 @@ export interface PlayerState {
   sleepTimer: SleepTimer | null;
   radio: RadioState;
   radioSession: RadioSessionState | null;
+  collection: PlaybackCollection | null;
 }
 
 export interface PlayerNowPlaying {
@@ -51,10 +74,11 @@ export interface PlayerNowPlaying {
   currentAlbumId: string | null;
   isPlaying: boolean;
   automaticTrackIds: string[];
+  collection?: PlaybackCollection | null;
 }
 
 export interface PlayerActions {
-  playQueue: (tracks: Track[], startIndex?: number, options?: { shuffle?: boolean }) => void;
+  playQueue: (tracks: Track[], startIndex?: number, options?: PlayQueueOptions) => void;
   playTrack: (track: Track, contextTracks?: Track[]) => void;
   toggle: () => void;
   pause: () => void;
@@ -87,6 +111,7 @@ export interface PlayerActions {
   snapshotQueue: () => QueueSnapshot;
   restoreQueue: (snapshot: QueueSnapshot) => void;
   startRadio: (seedTrack?: Track | null, signal?: AbortSignal) => Promise<boolean>;
+  startPlaylistRadio: (playlistId: string, members: Track[]) => Promise<PlaylistRadioStatus>;
   setRadioFocus: (focus: RadioFocus) => void;
   continueHere: () => Promise<boolean>;
 }

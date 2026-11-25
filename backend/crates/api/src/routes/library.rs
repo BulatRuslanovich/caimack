@@ -3,7 +3,7 @@
 use app::library::admin::{self, CreateUserRequest};
 use app::library::favorites;
 use app::library::history::{self, RecordPlayRequest};
-use app::library::playlists::{self, PlaylistRequest, TrackIdsRequest};
+use app::library::playlists::{self, MembershipChange, PlaylistRequest, TrackIdsRequest};
 use app::library::settings::{self, UpdateUserSettingsRequest};
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode, header};
@@ -64,9 +64,13 @@ pub fn router() -> Router<AppState> {
         .route("/api/history", get(list_history).post(record_play).delete(clear_history))
         .route("/api/history/recent", get(recently_played))
         .route("/api/playlists", get(own_playlists).post(create_playlist))
+        .route("/api/playlists/with-tracks", post(create_playlist_with_tracks))
+        .route("/api/playlists/memberships", get(playlist_memberships))
         .route("/api/playlists/public", get(public_playlists))
         .route("/api/playlists/{id}", get(playlist_detail).put(update_playlist).delete(delete_playlist))
         .route("/api/playlists/{id}/tracks", post(add_playlist_tracks))
+        .route("/api/playlists/{id}/tracks/membership", put(change_playlist_membership))
+        .route("/api/playlists/{id}/copy-tracks", post(copy_playlist_tracks))
         .route("/api/playlists/{id}/tracks/order", put(reorder_playlist))
         .route("/api/playlists/{id}/tracks/{track_id}", axum::routing::delete(remove_playlist_track))
         .route("/api/admin/users", get(list_users).post(create_user))
@@ -83,6 +87,7 @@ struct ClientConfig {
     max_image_upload_bytes: i64,
     access_token_minutes: i64,
     recommendations_enabled: bool,
+    integrations: Vec<&'static str>,
 }
 
 async fn client_config(State(state): State<AppState>) -> Json<ClientConfig> {
@@ -91,6 +96,7 @@ async fn client_config(State(state): State<AppState>) -> Json<ClientConfig> {
         max_image_upload_bytes: MAX_IMAGE_UPLOAD_BYTES,
         access_token_minutes: state.auth.tokens().access_token_minutes(),
         recommendations_enabled: state.config.recommendations_enabled,
+        integrations: super::integrations::supported(),
     })
 }
 
@@ -187,6 +193,20 @@ async fn own_playlists(State(state): State<AppState>, CurrentUser(user): Current
     Ok(Json(playlists::own(&state.db, user.user_id).await?))
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PlaylistMembershipQuery {
+    track_id: Uuid,
+}
+
+async fn playlist_memberships(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Query(query): Query<PlaylistMembershipQuery>,
+) -> ApiResult<impl IntoResponse> {
+    Ok(Json(playlists::memberships(&state.db, user.user_id, query.track_id).await?))
+}
+
 async fn public_playlists(State(state): State<AppState>) -> ApiResult<impl IntoResponse> {
     Ok(Json(playlists::public(&state.db).await?))
 }
@@ -205,6 +225,32 @@ async fn create_playlist(
     Json(request): Json<PlaylistRequest>,
 ) -> ApiResult<impl IntoResponse> {
     let playlist = playlists::create(&state.db, user.user_id, request).await?;
+    let location = format!("/api/playlists/{}", playlist.id);
+    Ok((StatusCode::CREATED, created_at(&location), Json(playlist)))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CreatePlaylistWithTracksRequest {
+    #[serde(flatten)]
+    playlist: PlaylistRequest,
+    track_ids: Vec<Uuid>,
+    request_id: Option<Uuid>,
+}
+
+async fn create_playlist_with_tracks(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Json(request): Json<CreatePlaylistWithTracksRequest>,
+) -> ApiResult<impl IntoResponse> {
+    let playlist = playlists::create_with_tracks_once(
+        &state.db,
+        user.user_id,
+        request.playlist,
+        &request.track_ids,
+        request.request_id,
+    )
+    .await?;
     let location = format!("/api/playlists/{}", playlist.id);
     Ok((StatusCode::CREATED, created_at(&location), Json(playlist)))
 }
@@ -254,6 +300,29 @@ async fn remove_playlist_track(
     Ok(StatusCode::NO_CONTENT)
 }
 
+async fn change_playlist_membership(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    RoutePath(id): RoutePath<Uuid>,
+    Json(change): Json<MembershipChange>,
+) -> ApiResult<impl IntoResponse> {
+    Ok(Json(playlists::change_membership(&state.db, user.user_id, id, change).await?))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CopyPlaylistTracksRequest {
+    destination_id: Uuid,
+}
+
+async fn copy_playlist_tracks(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    RoutePath(id): RoutePath<Uuid>,
+    Json(request): Json<CopyPlaylistTracksRequest>,
+) -> ApiResult<impl IntoResponse> {
+    Ok(Json(playlists::copy_tracks(&state.db, user.user_id, id, request.destination_id).await?))
+}
 async fn reorder_playlist(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,

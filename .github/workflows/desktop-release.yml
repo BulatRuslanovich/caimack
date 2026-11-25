@@ -1,0 +1,108 @@
+name: Desktop release
+run-name: Desktop ${{ inputs.release_tag || github.ref_name }}
+
+on:
+  workflow_call:
+    inputs:
+      release_tag:
+        description: Existing version tag to build (for example v1.2.3)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_TAG: ${{ inputs.release_tag }}
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            os: windows-latest
+            assets: desktop/release/*.exe
+          - platform: linux
+            os: ubuntu-latest
+            assets: |
+              desktop/release/*.AppImage
+              desktop/release/*.deb
+              desktop/release/*.tar.xz
+              desktop/release/arch/*.pkg.tar.zst
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    steps:
+      - name: Validate release tag
+        shell: bash
+        run: '[[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]'
+
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            desktop/package-lock.json
+
+      - name: Validate package versions
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          for (const directory of ['frontend', 'desktop']) {
+            const { version } = JSON.parse(readFileSync(directory + '/package.json', 'utf8'));
+            assert.equal('v' + version, process.env.RELEASE_TAG, directory + ' version must match the release tag');
+          }
+          JS
+
+      - name: Install dependencies and test
+        run: |
+          npm ci --prefix frontend
+          npm ci --prefix desktop
+          npm test --prefix desktop
+
+      - name: Build desktop packages
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run dist:${{ matrix.platform }} --prefix desktop
+
+      - name: Build the Arch Linux package
+        if: matrix.platform == 'linux'
+        run: |
+          # Electron is already built. makepkg records the runtime dependencies in .PKGINFO.
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
+            -v "$PWD/desktop/release/arch:/build" -w /build archlinux:base-devel \
+            makepkg --nodeps --clean --noconfirm
+
+      - name: Verify release assets
+        shell: bash
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          version=${RELEASE_TAG#v}
+          if [[ "$PLATFORM" == windows ]]; then
+            for target in setup portable; do
+              test -s "desktop/release/caimack-desktop-$version-windows-x64-$target.exe"
+            done
+          else
+            for extension in AppImage deb tar.xz; do
+              compgen -G "desktop/release/*.$extension" >/dev/null
+            done
+            test -s "desktop/release/arch/caimack-desktop-$version-1-x86_64.pkg.tar.zst"
+          fi
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: caimack-desktop-${{ matrix.platform }}-${{ env.RELEASE_TAG }}
+          path: ${{ matrix.assets }}
+          if-no-files-found: error
+          retention-days: 30
+

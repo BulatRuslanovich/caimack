@@ -24,6 +24,7 @@ interface PlaybackCallbacks {
 }
 
 const HLS_RETRY_DELAYS = [800, 2500, 6000];
+const MANIFEST_TIMEOUT_MS = 5_000;
 
 export const STREAM_CHANGE = "streamchange";
 
@@ -69,6 +70,9 @@ export class AdaptivePlayback {
   private generation = 0;
   private retryTimer: number | null = null;
   private retries = 0;
+  private nativeProbe: AbortController | null = null;
+  private manifestParsed = false;
+  private preloadSuspended = false;
   private metadataListener: (() => void) | null = null;
   private nativeErrorListener: (() => void) | null = null;
 
@@ -94,15 +98,19 @@ export class AdaptivePlayback {
     const local = localSource(request.trackId);
     const adaptive = local ? local === "hls" : adaptiveWanted(request);
     if (adaptive) this.hlsApi = await loadHls();
+    if (generation !== this.generation) return;
 
-    const useHlsJs = this.hlsApi?.default.isSupported() === true;
-    if (adaptive && (useHlsJs || this.audio.canPlayType("application/vnd.apple.mpegurl"))) {
+    if (adaptive) {
       const url = mediaUrl.hls(request.trackId, adaptiveCap(request.quality));
-      if (await this.hlsReady(url)) {
-        if (generation === this.generation) {
-          if (useHlsJs) this.attachAdaptive(url, request.startAt);
-          else this.attachNativeAdaptive(url, request.startAt);
-        }
+      if (this.hlsApi?.default.isSupported()) {
+        this.attachAdaptive(url, request.startAt);
+        return;
+      }
+      if (
+        this.audio.canPlayType("application/vnd.apple.mpegurl") &&
+        (await this.nativeHlsReady(url))
+      ) {
+        if (generation === this.generation) this.attachNativeAdaptive(url, request.startAt);
         return;
       }
     }
@@ -121,6 +129,29 @@ export class AdaptivePlayback {
     if (this.request) this.request.play = play;
     if (play) this.playIfReady();
     else this.audio.pause();
+  }
+
+  suspendPreload(): boolean {
+    // After parsing, hls.js can abort requests while keeping its media buffer.
+    if (!this.hls || !this.manifestParsed) {
+      // Keep a browser-managed source that already has data and is idle.
+      return (
+        this.audio.networkState === HTMLMediaElement.NETWORK_IDLE &&
+        this.audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA
+      );
+    }
+    if (!this.preloadSuspended) {
+      this.preloadSuspended = true;
+      this.clearRetryTimer();
+      this.hls.stopLoad();
+    }
+    return true;
+  }
+
+  resumePreload(): void {
+    if (!this.hls || !this.preloadSuspended) return;
+    this.preloadSuspended = false;
+    this.hls.startLoad(this.audio.currentTime || this.request?.startAt || -1);
   }
 
   private playIfReady(): void {
@@ -159,6 +190,14 @@ export class AdaptivePlayback {
     const { default: HlsCtor, Events } = this.hlsApi;
     const hls = new HlsCtor({
       loader: sessionAwareLoader ?? undefined,
+      manifestLoadPolicy: {
+        default: {
+          maxTimeToFirstByteMs: MANIFEST_TIMEOUT_MS,
+          maxLoadTimeMs: MANIFEST_TIMEOUT_MS,
+          timeoutRetry: null,
+          errorRetry: null,
+        },
+      },
       startLevel: -1,
       abrEwmaDefaultEstimate: 128_000,
       startFragPrefetch: true,
@@ -169,12 +208,23 @@ export class AdaptivePlayback {
     });
 
     this.hls = hls;
-    hls.on(Events.MEDIA_ATTACHED, () => hls.loadSource(url));
-    hls.on(Events.MANIFEST_PARSED, () => this.resumeAt(startAt));
-    hls.on(Events.ERROR, (_, data) => this.handleHlsError(data));
+    hls.on(Events.MANIFEST_PARSED, () => {
+      this.manifestParsed = true;
+      this.resumeAt(startAt);
+    });
+    hls.on(Events.ERROR, (_, data) => {
+      if (data.fatal && !this.manifestParsed) {
+        queueMicrotask(() => {
+          if (this.hls === hls) this.attachProgressive(startAt);
+        });
+        return;
+      }
+      this.handleHlsError(data);
+    });
     hls.on(Events.LEVEL_SWITCHED, (_, data) =>
       this.reportStream(Math.round((hls.levels[data.level]?.bitrate ?? 0) / 1000) || null),
     );
+    hls.loadSource(url);
     hls.attachMedia(this.audio);
     this.reportStream(null);
   }
@@ -229,7 +279,7 @@ export class AdaptivePlayback {
   }
 
   private handleHlsError(data: ErrorData): void {
-    if (!data.fatal || !this.hls || !this.hlsApi) return;
+    if (!data.fatal || !this.hls || !this.hlsApi || this.preloadSuspended) return;
 
     const { ErrorTypes } = this.hlsApi;
 
@@ -254,9 +304,10 @@ export class AdaptivePlayback {
     return true;
   }
 
-  private async hlsReady(url: string): Promise<boolean> {
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 5_000);
+  private async nativeHlsReady(url: string): Promise<boolean> {
+    // Native media elements do not expose the manifest's HTTP status.
+    const controller = (this.nativeProbe = new AbortController());
+    const timeout = window.setTimeout(() => controller.abort(), MANIFEST_TIMEOUT_MS);
 
     try {
       const response = await fetchWithSession(url, { signal: controller.signal });
@@ -266,10 +317,15 @@ export class AdaptivePlayback {
       return false;
     } finally {
       window.clearTimeout(timeout);
+      if (this.nativeProbe === controller) this.nativeProbe = null;
     }
   }
 
   private destroyDriver(): void {
+    this.nativeProbe?.abort();
+    this.nativeProbe = null;
+    this.manifestParsed = false;
+    this.preloadSuspended = false;
     if (this.nativeErrorListener) {
       this.audio.removeEventListener("error", this.nativeErrorListener);
       this.nativeErrorListener = null;
