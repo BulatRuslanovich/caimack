@@ -64,7 +64,10 @@ import okhttp3.Request
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class SavedQueue(val tracks: List<Track>, val index: Int, val positionMs: Long)
+data class SavedQueue(
+    val tracks: List<Track>, val index: Int, val positionMs: Long,
+    val collection: app.caimack.api.PlaybackCollection? = null,
+)
 
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaLibraryService() {
@@ -623,7 +626,8 @@ class PlaybackService : MediaLibraryService() {
                     queued.indices.reversed().filter { it !in retained }.forEach { player.removeMediaItem(it) }
                 }
                 container.radio.extend(batch)
-                player.addMediaItems(fresh.map { resolve(container, it.toMediaItem(container.media)) })
+                val collection = player.playbackCollection()
+                player.addMediaItems(fresh.map { resolve(container, it.toMediaItem(container.media).withPlaybackCollection(collection)) })
             }
         }
     }
@@ -704,7 +708,8 @@ class PlaybackService : MediaLibraryService() {
     private fun save(container: AppContainer, player: Player) {
         val ids = idsOf(player)
         val tracks = ids.mapNotNull { container.tracks[it] }
-        val saved = SavedQueue(tracks, player.currentMediaItemIndex, player.currentPosition).takeIf { ids.isNotEmpty() && tracks.size == ids.size }
+        val saved = SavedQueue(tracks, player.currentMediaItemIndex, player.currentPosition, player.playbackCollection())
+            .takeIf { ids.isNotEmpty() && tracks.size == ids.size }
         container.scope.launch(saving) {
             if (saved == null) container.queue.delete() else container.queue.writeText(container.json.encodeToString(SavedQueue.serializer(), saved))
         }
@@ -761,6 +766,7 @@ class PlaybackService : MediaLibraryService() {
             smartTransitions = container.playbackPrefs.smartTransitions.value,
             normalizeVolume = container.playbackPrefs.normalizeVolume.value, autoplay = container.radio.autoplay.value,
             sleepTimer = sleep,
+            collection = player.playbackCollection(),
         )
     }
 
@@ -792,8 +798,9 @@ class PlaybackService : MediaLibraryService() {
                 PlaySources.tag(command.trackIds, command.source, command.radio?.sessionId)
                 player.shuffleModeEnabled = command.shuffle
                 player.repeatMode = repeatModeOf(command.repeat)
-                val (items, index) = if (command.order != null) orderedQueue(tracks.map(::item), command.index, command.order)
-                    else tracks.map(::item) to command.index
+                val queue = tracks.map { item(it).withPlaybackCollection(command.collection) }
+                val (items, index) = if (command.order != null) orderedQueue(queue, command.index, command.order)
+                    else queue to command.index
                 command.radio?.let { radio ->
                     container.radio.restore(RadioState(seedTrackId = radio.seedTrackId,
                         notes = radio.reasons.mapValues { RadioNote(it.value, false) }, active = true, focus = radio.focus,
@@ -812,7 +819,7 @@ class PlaybackService : MediaLibraryService() {
                 PlaySources.tag(listOf(track.id), "queue")
                 container.signals.choice("trackAddedToQueue", track.id, track.durationSeconds)
                 val at = if (command.next) (player.currentMediaItemIndex + 1).coerceAtLeast(0) else player.mediaItemCount
-                player.addMediaItem(at, item(track))
+                player.addMediaItem(at, item(track).withPlaybackCollection(player.playbackCollection()))
             }
             is ConnectCommand.Remove -> { checkIndex(command.index, command.trackId); player.removeMediaItem(command.index) }
             is ConnectCommand.Jump -> { checkIndex(command.index, command.trackId); queuePlayback.jumpTo(command.index) }

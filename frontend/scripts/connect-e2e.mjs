@@ -65,6 +65,13 @@ const playlist = {
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
+const lyrics = {
+  plain: "",
+  lines: Array.from({ length: 20 }, (_, index) => ({
+    at: index * 5000,
+    text: `Lyric line ${index + 1}`,
+  })),
+};
 const audio = Buffer.alloc(44 + 8000 * 2 * 240);
 audio.write("RIFF");
 audio.writeUInt32LE(audio.length - 8, 4);
@@ -269,11 +276,8 @@ const backend = createServer(async (request, response) => {
         tracks.filter((track) => body.ids.includes(track.id)),
       );
     if (path.endsWith("/waveform")) return json(response, { peaks: [] });
-    if (path.endsWith("/lyrics")) {
-      response.writeHead(204);
-      response.end();
-      return;
-    }
+    if (path.endsWith("/lyrics"))
+      return json(response, { ...lyrics, trackId: path.split("/").at(-2), source: "Manual" });
     if (path.endsWith("/hls/master.m3u8"))
       return json(response, { detail: "No adaptive rendition in this fixture" }, 404);
     if (path.endsWith("/stream")) {
@@ -651,7 +655,7 @@ try {
   const collectionPlays = commands.filter((command) => command.type === "play").length;
   const navigate = async (href) => {
     await controller.page.eval(`(() => {
-      const link = [...document.querySelectorAll('a')].find(link => link.getAttribute('href') === ${JSON.stringify(href)});
+      const link = [...document.querySelectorAll('#content a')].find(link => link.getAttribute('href') === ${JSON.stringify(href)});
       if (!link) throw Error('Missing navigation link: ' + ${JSON.stringify(href)});
       link.click();
     })()`);
@@ -716,11 +720,13 @@ try {
   await switchCatalogTab("playlists");
   await until(
     () =>
-      controller.page.eval(`Boolean(document.querySelector('a[href="/playlists/${playlistId}"]'))`),
+      controller.page.eval(
+        `Boolean(document.querySelector('#content a[href="/playlists/${playlistId}"]'))`,
+      ),
     "playlist card loaded",
   );
   await navigate(`/playlists/${playlistId}`);
-  await toggleCollection("#content header", "Test playlist");
+  await toggleCollection(".playlist-toolbar", "Test playlist");
   await backToCatalog("playlists");
   await toggleCollection("#content .media-card", "Test playlist");
   await switchCatalogTab("albums");
@@ -884,6 +890,57 @@ try {
     true,
     "moving an occurrence preserves its DOM node",
   );
+  await switchCatalogTab("albums");
+  await navigate(`/albums/${albumId}`);
+  await click(controller.page, "Play Test album");
+  await until(
+    () => playback?.collection?.kind === "album" && playback.collection.id === albumId,
+    "the renderer reports the album that started its queue",
+  );
+  const playlistHref = `/playlists/${playlistId}`;
+  await backToCatalog("albums");
+  await switchCatalogTab("playlists");
+  await until(
+    () =>
+      controller.page.eval(`Boolean(document.querySelector('#content a[href="${playlistHref}"]'))`),
+    "the playlist is available in the catalog",
+  );
+  await navigate(playlistHref);
+  await click(controller.page, "Play Test playlist");
+  await until(
+    () => playback?.collection?.kind === "playlist" && playback.collection.id === playlistId,
+    "the renderer switches to a playlist with the same tracks",
+  );
+  await controller.page.send("Emulation.setDeviceMetricsOverride", {
+    width: 390,
+    height: 460,
+    deviceScaleFactor: 1,
+    mobile: true,
+  });
+  await controller.page.eval("document.querySelector('#content').scrollTop = 10000");
+  await until(
+    () =>
+      controller.page.eval(`(() => {
+      const header = document.querySelector('[data-playlist-mobile-header]');
+      return header?.innerText.trim() === "Test playlist" &&
+        Math.abs(header.getBoundingClientRect().top - document.querySelector('#content').getBoundingClientRect().top) < 2;
+    })()`),
+    "the playlist name stays in the mobile header after scrolling",
+  );
+  await click(controller.page, "Back");
+  await until(
+    () =>
+      controller.page.eval(
+        'location.pathname === "/search" && location.search === "?tab=playlists"',
+      ),
+    "the mobile Back action returns to the playlist catalog",
+  );
+  await controller.page.send("Emulation.setDeviceMetricsOverride", {
+    width: 1440,
+    height: 1000,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
   await click(controller.page, "Open the full player");
   await until(
     () =>
@@ -891,6 +948,13 @@ try {
         "Boolean(document.querySelector('[aria-label=\"Close the full player\"]'))",
       ),
     "lazy fullscreen player opened",
+  );
+  await until(
+    () =>
+      controller.page.eval(
+        `document.querySelector('[role=dialog] a[href="${playlistHref}"]')?.textContent.trim() === "From playlist · Test playlist"`,
+      ),
+    "the fullscreen controller links to the actual playback source",
   );
   await until(
     () =>
@@ -919,6 +983,48 @@ try {
   assert.equal(
     await controller.page.eval("document.querySelector('[role=dialog] .record').dataset.axis"),
     "responsive",
+  );
+  await controller.page.send("Emulation.setDeviceMetricsOverride", {
+    width: 1440,
+    height: 1000,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await click(controller.page, "Show lyrics");
+  await until(
+    () => controller.page.eval(`Boolean(document.querySelector('[data-lyric-index="19"]'))`),
+    "timed lyrics are visible",
+  );
+  await controller.page.eval(`(() => {
+    const lyrics = document.querySelector('[role="region"][aria-label="Lyrics"]');
+    lyrics.dispatchEvent(new WheelEvent('wheel', { deltaY: 700, bubbles: true }));
+    lyrics.scrollTo({ top: 700, behavior: "instant" });
+  })()`);
+  await renderer.page.eval(
+    `[...document.querySelectorAll('audio')].find(audio => !audio.paused).currentTime = 25`,
+  );
+  await until(
+    () =>
+      controller.page.eval(
+        `Boolean(document.querySelector('[data-lyric-index="5"][aria-current="true"]'))`,
+      ),
+    "lyric highlighting continues while browsing",
+  );
+  assert.equal(
+    await controller.page.eval(
+      `document.querySelector('[role="region"][aria-label="Lyrics"]').scrollTop`,
+    ),
+    700,
+    "playback does not move the lyrics viewport while browsing",
+  );
+  await controller.page.eval(`[...document.querySelectorAll('[role=dialog] button')]
+    .find(button => button.textContent.trim() === 'Back to current line').click()`);
+  await until(
+    () =>
+      controller.page.eval(
+        `document.querySelector('[role="region"][aria-label="Lyrics"]').scrollTop !== 700`,
+      ),
+    "the lyrics viewport follows playback again",
   );
   await click(controller.page, "Close the full player");
   await until(
@@ -974,6 +1080,15 @@ try {
     "the controller resumes the same track and position locally",
   );
   assert.ok(performance.now() - disconnectedAt >= 30_000, "fallback waits at least 30 seconds");
+  await click(controller.page, "Open the full player");
+  await until(
+    () =>
+      controller.page.eval(
+        `Boolean(document.querySelector('[role=dialog] a[href="${playlistHref}"]'))`,
+      ),
+    "local playback keeps its source after the renderer disconnects",
+  );
+  await click(controller.page, "Close the full player");
   const reportsAfterFailover = stateRequests();
   await delay(2200);
   assert.equal(stateRequests(), reportsAfterFailover, "reporting stops after the last peer leaves");
@@ -1011,6 +1126,9 @@ try {
         "keyboard queue reorder and stable row identity",
         "lazy fullscreen and effects",
         "single responsive record",
+        "compact mobile playlist header",
+        "playback source across remote queue changes and failover",
+        "manual lyrics browsing and return to current line",
         "fullscreen cleanup",
         "recovery after a brief renderer disconnect",
         "30-second grace period before local playback after renderer disconnect",

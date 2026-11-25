@@ -20,6 +20,23 @@ export interface RadioSessionState {
 
 export type PlaylistRadioStatus = "started" | "noAudio" | "empty" | "unavailable";
 
+export interface PlaybackCollection {
+  kind: "album" | "playlist";
+  id: string;
+}
+
+export interface PlayQueueOptions {
+  shuffle?: boolean;
+  collection?: PlaybackCollection;
+}
+
+export function samePlaybackCollection(
+  requested: PlaybackCollection,
+  current: PlaybackCollection | null | undefined,
+) {
+  return requested.kind === current?.kind && requested.id === current.id;
+}
+
 export interface QueueSnapshot {
   queue: Track[];
   order: number[];
@@ -27,6 +44,7 @@ export interface QueueSnapshot {
   position: number;
   radioFrom: number;
   radioSession: RadioSessionState | null;
+  collection?: PlaybackCollection | null;
 }
 
 export interface PlayerState {
@@ -48,6 +66,7 @@ export interface PlayerState {
   sleepTimer: SleepTimer | null;
   radio: RadioState;
   radioSession: RadioSessionState | null;
+  collection: PlaybackCollection | null;
 }
 
 export interface PlayerNowPlaying {
@@ -55,10 +74,11 @@ export interface PlayerNowPlaying {
   currentAlbumId: string | null;
   isPlaying: boolean;
   automaticTrackIds: string[];
+  collection?: PlaybackCollection | null;
 }
 
 export interface PlayerActions {
-  playQueue: (tracks: Track[], startIndex?: number, options?: { shuffle?: boolean }) => void;
+  playQueue: (tracks: Track[], startIndex?: number, options?: PlayQueueOptions) => void;
   playTrack: (track: Track, contextTracks?: Track[]) => void;
   toggle: () => void;
   pause: () => void;

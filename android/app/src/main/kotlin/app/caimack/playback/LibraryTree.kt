@@ -255,7 +255,7 @@ class LibraryTree(
         val saved = container.json.decodeFromString(SavedQueue.serializer(), container.queue.readText())
         saved.tracks.forEach { container.tracks[it.id] = it }
         return MediaSession.MediaItemsWithStartPosition(
-            preserveQueue(saved.tracks.map { resolve(it.toMediaItem(container.media)) }),
+            preserveQueue(saved.tracks.map { resolve(it.toMediaItem(container.media).withPlaybackCollection(saved.collection)) }),
             saved.index,
             saved.positionMs,
         )

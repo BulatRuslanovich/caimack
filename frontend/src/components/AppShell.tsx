@@ -84,7 +84,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </a>
 
       <Sidebar />
-      <MobileHeader />
+      {!/^\/playlists\/[^/]+\/?$/.test(pathname) && <MobileHeader />}
 
       <div
         ref={setBackdropHost}
@@ -95,7 +95,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         id="content"
         tabIndex={-1}
         onScroll={(event) => {
-          backdropHost?.style.setProperty("--detail-scroll-top", event.currentTarget.scrollTop + "px");
+          backdropHost?.style.setProperty(
+            "--detail-scroll-top",
+            event.currentTarget.scrollTop + "px",
+          );
         }}
         className="relative isolate overflow-y-auto overscroll-contain outline-none [grid-area:content] [scrollbar-gutter:stable]"
       >

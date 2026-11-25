@@ -78,6 +78,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import app.caimack.R
 import app.caimack.api.Track
+import app.caimack.api.PlaybackCollection
 import app.caimack.api.User
 import app.caimack.audiobooks.Audiobook
 import app.caimack.playback.PlayerState
@@ -224,7 +225,14 @@ private fun AppContent(
         val playable = container.playable(tracks)
         if (playable.isNotEmpty()) {
             val selected = tracks.getOrNull(index)?.id
-            container.player.play(playable, playable.indexOfFirst { it.id == selected }.coerceAtLeast(0), sourceOf(nav.currentBackStackEntry))
+            val entry = nav.currentBackStackEntry
+            val source = sourceOf(entry)
+            val collection = when (source) {
+                "album" -> entry?.toRoute<AlbumRoute>()?.let { PlaybackCollection("album", it.id) }
+                "playlist" -> entry?.toRoute<PlaylistRoute>()?.let { PlaybackCollection("playlist", it.id) }
+                else -> null
+            }
+            container.player.play(playable, playable.indexOfFirst { it.id == selected }.coerceAtLeast(0), source, collection)
         }
     }
 

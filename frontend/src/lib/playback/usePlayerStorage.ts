@@ -3,7 +3,7 @@
 "use client";
 
 import { CROSSFADE_CHOICES } from "@/lib/playback/crossfade";
-import type { RadioSessionState, RepeatMode } from "@/lib/playback/playerTypes";
+import type { PlaybackCollection, RadioSessionState, RepeatMode } from "@/lib/playback/playerTypes";
 import { validRadioSession } from "@/lib/playback/radioSession";
 import { readStoredJson, writeStored, writeStoredJson } from "@/lib/storage";
 import type { Track } from "@/lib/types";
@@ -26,6 +26,7 @@ export interface PersistedPlayer {
   normalizeVolume: boolean;
   autoplay: boolean;
   radioSession?: RadioSessionState | null;
+  collection?: PlaybackCollection | null;
 }
 
 export function readPersistedPlayer(userId: string | null): PersistedPlayer | null {
@@ -38,6 +39,7 @@ export function readPersistedPlayer(userId: string | null): PersistedPlayer | nu
   const saved = stored as Partial<PersistedPlayer>;
   const queue = Array.isArray(saved.queue) ? saved.queue : [];
   const index = typeof saved.index === "number" ? saved.index : 0;
+  const collection = saved.collection;
 
   return {
     queue,
@@ -54,6 +56,10 @@ export function readPersistedPlayer(userId: string | null): PersistedPlayer | nu
     normalizeVolume: saved.normalizeVolume === true,
     autoplay: saved.autoplay !== false,
     radioSession: validRadioSession(saved.radioSession) ? saved.radioSession : null,
+    ...(queue.length > 0 &&
+      collection &&
+      (collection.kind === "album" || collection.kind === "playlist") &&
+      typeof collection.id === "string" && { collection }),
   };
 }
 
@@ -82,6 +88,7 @@ export function usePersistedPlayer(
     normalizeVolume,
     autoplay,
     radioSession,
+    collection,
   } = snapshot;
 
   useEffect(() => {
@@ -100,6 +107,7 @@ export function usePersistedPlayer(
     normalizeVolume,
     autoplay,
     radioSession,
+    collection,
   ]);
 
   useEffect(() => {

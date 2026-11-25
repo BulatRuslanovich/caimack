@@ -70,6 +70,7 @@ function playbackState(
     shuffle: state.shuffle,
     repeat: state.repeat,
     radio: state.radioSession,
+    collection: state.collection,
     crossfade: state.crossfade,
     smartTransitions: state.smartTransitions,
     normalizeVolume: state.normalizeVolume,
@@ -307,6 +308,7 @@ export function useConnectPlayback(
         repeat: active.repeat,
         order: active.order,
         radio: active.radio,
+        collection: active.collection,
       });
     });
   }, []);
@@ -446,6 +448,7 @@ export function useConnectPlayback(
         repeat: visible.state.repeat,
         order: visible.state.queueOrder,
         radio: visible.state.radioSession,
+        collection: visible.state.collection,
       };
       wantsLocal.current = false;
       flushSync(() => {

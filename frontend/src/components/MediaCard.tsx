@@ -10,6 +10,7 @@ import { cn } from "@/lib/cn";
 import { queries } from "@/lib/queries";
 import type { Album, Artist, LibraryItem, Playlist, Track } from "@/lib/types";
 import { usePlayback } from "@/lib/playback/usePlayback";
+import type { PlaybackCollection } from "@/lib/playback/playerTypes";
 import { useNowPlaying } from "@/contexts/PlayerContext";
 import { useFormat } from "@/lib/useFormat";
 import { artistImageUrl, coverUrl, playlistCoverUrl } from "@/lib/media";
@@ -239,6 +240,7 @@ export const AlbumCard = memo(function AlbumCard({ album }: { album: Album }) {
         <>
           <CardPlayButton
             name={album.title}
+            sourceCollection={{ kind: "album", id: album.id }}
             tracks={detail.data?.tracks}
             load={async () => (await client.fetchQuery(queries.album(album.id))).tracks}
           />
@@ -314,6 +316,7 @@ export const PlaylistCard = memo(function PlaylistCard({
         <>
           <CardPlayButton
             name={playlist.name}
+            sourceCollection={{ kind: "playlist", id: playlist.id }}
             tracks={detail.data?.tracks}
             load={async () => (await client.fetchQuery(queries.playlist(playlist.id))).tracks}
           />
@@ -328,16 +331,18 @@ export function CardPlayButton({
   tracks,
   load,
   size,
+  sourceCollection,
   className = "right-2.5 bottom-2.5",
 }: {
   name: string;
   tracks?: Track[];
   load: () => Promise<Track[]>;
   size?: 8 | 9;
+  sourceCollection?: PlaybackCollection;
   className?: string;
 }) {
   const t = useT();
-  const { playSet, setIsOnAir, isPlaying } = usePlayback();
+  const { playSet, setIsOnAir, isPlaying } = usePlayback(sourceCollection);
   const play = useMutation({ mutationFn: load, onSuccess: (tracks) => playSet(tracks) });
   const collection = tracks ?? play.data;
   const active = collection !== undefined && setIsOnAir(collection);

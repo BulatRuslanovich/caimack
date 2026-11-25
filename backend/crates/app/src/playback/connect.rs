@@ -21,6 +21,13 @@ const MAX_COMMANDS: usize = 128;
 const MAX_QUEUE: usize = 10_000;
 const DEVICE_LEASE: Duration = Duration::from_secs(40);
 
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum PlaybackCollection {
+    Album { id: Uuid },
+    Playlist { id: Uuid },
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Playback {
@@ -35,6 +42,8 @@ pub struct Playback {
     pub shuffle: bool,
     pub repeat: String,
     pub radio: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub collection: Option<PlaybackCollection>,
     pub crossfade: f64,
     pub smart_transitions: bool,
     pub normalize_volume: bool,
@@ -56,6 +65,7 @@ impl Default for Playback {
             shuffle: false,
             repeat: "off".into(),
             radio: None,
+            collection: None,
             crossfade: 0.0,
             smart_transitions: true,
             normalize_volume: false,
@@ -123,6 +133,8 @@ pub enum Command {
         shuffle: bool,
         repeat: String,
         source: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        collection: Option<PlaybackCollection>,
         order: Option<Vec<usize>>,
         radio: Option<serde_json::Value>,
     },

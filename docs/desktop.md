@@ -5,6 +5,10 @@
 Caimack Desktop brings the web app's library, search, and player to Windows
 and Linux, with offline downloads and tray playback.
 
+When you start a new queue from a playlist or album, the full player links back
+to that collection. The link follows the queue when you switch playback devices
+in current versions of Caimack.
+
 ## Install and connect
 
 Download a package for your platform from

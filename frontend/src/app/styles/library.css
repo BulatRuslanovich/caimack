@@ -146,8 +146,11 @@
   font-size: 0.75rem;
 }
 
-.playlist-hero {
+.playlist-page {
   --playlist-tint: var(--primary);
+}
+
+.playlist-hero {
   --playlist-cover-size: clamp(9rem, 23cqi, 14rem);
   display: grid;
   grid-template-columns: var(--playlist-cover-size) minmax(0, 1fr);

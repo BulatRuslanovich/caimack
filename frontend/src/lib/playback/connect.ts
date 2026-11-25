@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type {
+  PlaybackCollection,
   PlayerActions,
   PlayerProgress,
   PlayerState,
@@ -35,6 +36,7 @@ export interface ConnectPlayback {
   shuffle: boolean;
   repeat: RepeatMode;
   radio: RadioSessionState | null;
+  collection?: PlaybackCollection | null;
   crossfade: number;
   smartTransitions: boolean;
   normalizeVolume: boolean;
@@ -83,6 +85,7 @@ export type ConnectCommand =
       shuffle: boolean;
       repeat: RepeatMode;
       source?: string | null;
+      collection?: PlaybackCollection | null;
       order?: number[];
       radio?: RadioSessionState | null;
     }
@@ -128,6 +131,7 @@ export function remoteState(active: ConnectPlayback, tracks: Track[]): PlayerSta
     sleepTimer: active.sleepTimer,
     radio: "idle",
     radioSession: active.radio,
+    collection: active.collection ?? null,
   };
 }
 
@@ -155,6 +159,7 @@ export function remoteActions(
       shuffle: options.shuffle ?? state.shuffle,
       repeat: state.repeat,
       source: sourceOf(tracks[index]?.id),
+      ...(options.collection && { collection: options.collection }),
     });
   };
   const seek = (seconds: number) =>
@@ -223,6 +228,7 @@ export function remoteActions(
       position: progress.getPosition(),
       radioFrom: state.queue.length,
       radioSession: state.radioSession,
+      collection: state.collection,
     }),
     restoreQueue: (snapshot) => {
       if (snapshot.queue.length)
@@ -236,6 +242,7 @@ export function remoteActions(
           repeat: state.repeat,
           order: snapshot.order,
           radio: snapshot.radioSession,
+          collection: snapshot.collection,
         });
     },
     startRadio: async (seed) => {

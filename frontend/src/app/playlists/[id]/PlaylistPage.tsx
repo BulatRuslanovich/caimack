@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { api } from "@/lib/api";
+import { cn } from "@/lib/cn";
 import { playlistCoverUrl } from "@/lib/media";
 import { queries } from "@/lib/queries";
 import { useFormat } from "@/lib/useFormat";
@@ -16,6 +17,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { usePlayerActions } from "@/contexts/PlayerContext";
 import { playlistSortOptions, sortPlaylistTracks, type PlaylistSort } from "@/lib/playlistTracks";
+import type { PlaybackCollection } from "@/lib/playback/playerTypes";
 import type { PlaylistDetail, Track } from "@/lib/types";
 import { useRecommendations } from "@/lib/useRecommendations";
 import { useRowSelection } from "@/lib/useRowSelection";
@@ -40,6 +42,7 @@ import { DesktopCollectionDownload } from "@/desktop/offline";
 import { useConfirm } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
+  ChevronLeftIcon,
   EllipsisIcon,
   ListMusicIcon,
   ListPlusIcon,
@@ -76,6 +79,7 @@ function PlaylistContent({ detail }: { detail: PlaylistDetail }) {
   const { t, locale } = useI18n();
   const format = useFormat();
   const { id } = detail;
+  const collection = useMemo<PlaybackCollection>(() => ({ kind: "playlist", id }), [id]);
   const router = useRouter();
   const client = useQueryClient();
   const invalidate = useInvalidate();
@@ -94,6 +98,8 @@ function PlaylistContent({ detail }: { detail: PlaylistDetail }) {
   const { value: sort, direction } = sorting;
   const [search, setSearch] = useState("");
   const [selecting, setSelecting] = useState(false);
+  const [compactHeader, setCompactHeader] = useState(false);
+  const hero = useRef<HTMLElement>(null);
   const addButton = useRef<HTMLButtonElement>(null);
   const editButton = useRef<HTMLButtonElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
@@ -110,6 +116,23 @@ function PlaylistContent({ detail }: { detail: PlaylistDetail }) {
         "--playlist-tint": `oklch(0.55 ${Math.min(tone.chroma * 1.35, 0.23)} ${tone.hue})`,
       } as CSSProperties)
     : undefined;
+
+  useEffect(() => {
+    const element = hero.current;
+    const scroller = element?.closest("main");
+    if (!element || !scroller) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setCompactHeader(
+          entry.rootBounds !== null && entry.boundingClientRect.bottom <= entry.rootBounds.top,
+        );
+      },
+      { root: scroller },
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   const sorted = useMemo(
     () => sortPlaylistTracks(detail, sort, locale, direction),
@@ -211,8 +234,43 @@ function PlaylistContent({ detail }: { detail: PlaylistDetail }) {
   });
 
   return (
-    <div className="playlist-page @container flex min-w-0 flex-col gap-3">
-      <header className="playlist-hero" style={coverStyle} data-detail-backdrop="">
+    <div className="playlist-page @container flex min-w-0 flex-col gap-3" style={coverStyle}>
+      <div
+        data-playlist-mobile-header
+        className={cn(
+          "sticky top-0 z-20 -mx-4 -mt-5 mb-1 hidden grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-center border-b border-transparent px-3 pt-[env(safe-area-inset-top)] transition-colors max-md:grid motion-reduce:transition-none",
+          compactHeader &&
+            "border-border bg-[color-mix(in_oklab,var(--playlist-tint,var(--background))_18%,var(--background))]",
+        )}
+      >
+        <Button
+          variant="ghost"
+          size="icon-lg"
+          aria-label={t("nav.back")}
+          onClick={() => {
+            const navigation = window.navigation;
+            const previous = navigation?.entries()[(navigation.currentEntry?.index ?? 0) - 1];
+            const previousUrl = previous?.url && new URL(previous.url);
+            if (
+              previousUrl &&
+              previousUrl.origin === location.origin &&
+              previousUrl.pathname !== "/login"
+            ) {
+              window.history.back();
+            } else {
+              router.push("/library");
+            }
+          }}
+        >
+          <ChevronLeftIcon size={22} />
+        </Button>
+        {compactHeader && (
+          <span className="truncate text-center text-sm font-semibold" aria-hidden="true">
+            {detail.name}
+          </span>
+        )}
+      </div>
+      <header ref={hero} className="playlist-hero" data-detail-backdrop="">
         <div className="playlist-hero-cover">
           <PlaylistCover
             playlist={{ ...detail, coverTracks: detail.tracks }}
@@ -245,7 +303,12 @@ function PlaylistContent({ detail }: { detail: PlaylistDetail }) {
 
       <div className="playlist-toolbar">
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          <PlayAllButton tracks={displayed} name={detail.name} className="size-13 sm:size-14" />
+          <PlayAllButton
+            tracks={displayed}
+            name={detail.name}
+            collection={collection}
+            className="size-13 sm:size-14"
+          />
           <ShuffleButton tracks={displayed} iconOnly />
           <LibrarySaveButton kind="playlist" id={id} />
           {isDesktop && <DesktopCollectionDownload tracks={detail.tracks} />}
@@ -395,6 +458,7 @@ function PlaylistContent({ detail }: { detail: PlaylistDetail }) {
           )}
           <TrackList
             tracks={displayed}
+            collection={collection}
             addedAt={detail.trackAddedAt ?? {}}
             sort={{
               active: SORT_COLUMNS.find((column) => column === sort),

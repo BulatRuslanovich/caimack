@@ -59,6 +59,8 @@ Compose setup, upgrades, and password recovery.
 
 Open Caimack in a browser to use the mobile web app, or install the native Android
 app for background playback, Android Auto, and offline music.
+In the mobile web app, a playlist's name and back button stay available as you
+scroll through its tracks.
 
 - [Download tracks, albums, and playlists](docs/android-downloads.md).
 - [Synchronize your entire music library over your home network](docs/android-library-sync.md).

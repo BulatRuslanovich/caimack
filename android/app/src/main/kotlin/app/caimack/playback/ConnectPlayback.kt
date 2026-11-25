@@ -342,6 +342,7 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
             shuffle = active.shuffle, repeat = repeatModeOf(active.repeat),
             previousIndex = active.order.getOrNull(orderPosition - 1) ?: -1, nextIndex = next ?: -1,
             volume = active.volume.toFloat(), muted = active.muted,
+            collection = active.collection,
         ), ::position)
     }
 
@@ -496,7 +497,10 @@ class ConnectPlayback(private val context: Context, private val container: AppCo
     }
 
     private fun ConnectState.handoff(position: Double) = takeIf { trackIds.isNotEmpty() }?.let {
-        ConnectCommand.Play(trackIds, index, position, isPlaying, shuffle, repeat, order = order, radio = radio)
+        ConnectCommand.Play(
+            trackIds, index, position, isPlaying, shuffle, repeat,
+            order = order, radio = radio, collection = collection,
+        )
     }
 
     private fun ConnectCommand.Play.downloaded(): ConnectCommand.Play? {

@@ -17,6 +17,8 @@ import {
 } from "@/lib/playback/playerQueue";
 import { queueEntries } from "@/lib/playback/queueEntries";
 import type {
+  PlaybackCollection,
+  PlayQueueOptions,
   PlayerActions,
   PlayerNowPlaying,
   PlayerProgress,
@@ -101,6 +103,8 @@ function PlayerSessionProvider({
     setShuffle,
     repeat,
     setRepeat,
+    collection,
+    setCollection,
     queueRef,
     orderRef,
     originalQueueRef,
@@ -190,9 +194,9 @@ function PlayerSessionProvider({
     onTrackEnded,
   });
 
-  const live = useRef({ currentIndex, shuffle, repeat, radioSession });
+  const live = useRef({ currentIndex, shuffle, repeat, radioSession, collection });
   useLayoutEffect(() => {
-    live.current = { currentIndex, shuffle, repeat, radioSession };
+    live.current = { currentIndex, shuffle, repeat, radioSession, collection };
   });
 
   usePlayerSession(
@@ -210,6 +214,7 @@ function PlayerSessionProvider({
       normalizeVolume,
       autoplay,
       radioSession,
+      collection,
     },
     isPlaying,
     {
@@ -234,6 +239,7 @@ function PlayerSessionProvider({
       startIndex = 0,
       shuffled = live.current.shuffle,
       session?: RadioSessionState,
+      sourceCollection?: PlaybackCollection,
     ) => {
       if (tracks.length === 0) return;
 
@@ -246,6 +252,7 @@ function PlayerSessionProvider({
       originalQueueRef.current = queueEntries(tracks);
       const next = startPlaybackQueue(originalQueueRef.current, safeIndex, shuffled);
       applyQueue(next.queue, next.order);
+      setCollection(sourceCollection ?? null);
       setShuffle(shuffled);
       setCurrentIndex(next.index);
       setIsPlaying(true);
@@ -255,6 +262,7 @@ function PlayerSessionProvider({
       originalQueueRef,
       resetRadio,
       restoreRadioSession,
+      setCollection,
       setCurrentIndex,
       setShuffle,
       startQueue,
@@ -262,7 +270,7 @@ function PlayerSessionProvider({
   );
 
   const playQueue = useCallback(
-    (tracks: Track[], startIndex = 0, options: { shuffle?: boolean } = {}) => {
+    (tracks: Track[], startIndex = 0, options: PlayQueueOptions = {}) => {
       if (isDesktop) {
         const startingId = tracks[startIndex]?.id;
         tracks = tracks.filter((track) => canPlayLocally(track.id));
@@ -273,7 +281,7 @@ function PlayerSessionProvider({
         );
       }
       stopRadioSession();
-      replaceQueue(tracks, startIndex, options.shuffle);
+      replaceQueue(tracks, startIndex, options.shuffle, undefined, options.collection);
     },
     [replaceQueue, stopRadioSession],
   );
@@ -473,6 +481,7 @@ function PlayerSessionProvider({
       position: trackedPosition(),
       radioFrom: radioFrom(),
       radioSession: live.current.radioSession,
+      collection: live.current.collection,
     }),
     [orderRef, queueRef, radioFrom, trackedPosition],
   );
@@ -484,9 +493,10 @@ function PlayerSessionProvider({
 
       const next = materializeQueue(snapshot.queue, snapshot.order, snapshot.index);
       applyQueue(next.queue, next.order);
+      setCollection(next.queue.length ? (snapshot.collection ?? null) : null);
       setCurrentIndex(next.index);
     },
-    [applyQueue, restoreRadioSession, resumeAt, setCurrentIndex],
+    [applyQueue, restoreRadioSession, resumeAt, setCollection, setCurrentIndex],
   );
 
   const clearQueue = useCallback(() => {
@@ -519,6 +529,7 @@ function PlayerSessionProvider({
       playing = true,
       original: Track[] = handoff.tracks,
       session?: RadioSessionState,
+      sourceCollection?: PlaybackCollection | null,
     ) => {
       const { tracks, index, positionSeconds } = handoff;
       const target = tracks[index];
@@ -535,6 +546,7 @@ function PlayerSessionProvider({
         tracks.map((_, position) => position),
       );
       setShuffle(handoff.shuffle);
+      setCollection(sourceCollection ?? null);
       setRepeat(handoff.repeat);
       setCurrentIndex(index);
 
@@ -545,6 +557,7 @@ function PlayerSessionProvider({
       originalQueueRef,
       resetRadio,
       restoreRadioSession,
+      setCollection,
       setCurrentIndex,
       setRepeat,
       setShuffle,
@@ -583,6 +596,7 @@ function PlayerSessionProvider({
       sleepTimer: sleep.timer,
       radio,
       radioSession,
+      collection,
     }),
     [
       queue,
@@ -603,6 +617,7 @@ function PlayerSessionProvider({
       sleep.timer,
       radio,
       radioSession,
+      collection,
     ],
   );
 
@@ -727,6 +742,7 @@ function PlayerSessionProvider({
         command.playing,
         original,
         command.radio ?? undefined,
+        command.collection,
       );
     },
     [takeOver],
@@ -770,8 +786,20 @@ function PlayerSessionProvider({
   );
 
   const nowPlaying = useMemo<PlayerNowPlaying>(
-    () => ({ currentTrackId, currentAlbumId, isPlaying: displayedPlaying, automaticTrackIds }),
-    [currentTrackId, currentAlbumId, displayedPlaying, automaticTrackIds],
+    () => ({
+      currentTrackId,
+      currentAlbumId,
+      isPlaying: displayedPlaying,
+      automaticTrackIds,
+      collection: connected.state.collection,
+    }),
+    [
+      currentTrackId,
+      currentAlbumId,
+      displayedPlaying,
+      automaticTrackIds,
+      connected.state.collection,
+    ],
   );
 
   return (
@@ -834,12 +862,12 @@ export function usePlayerActions(): PlayerActions {
         );
         actions.playTrack(track, contextTracks);
       },
-      playQueue: (tracks: Track[], startIndex?: number) => {
+      playQueue: (tracks: Track[], startIndex?: number, options?: PlayQueueOptions) => {
         tagSource(
           tracks.map((track) => track.id),
           source,
         );
-        actions.playQueue(tracks, startIndex);
+        actions.playQueue(tracks, startIndex, options);
       },
     }),
     [actions, source],

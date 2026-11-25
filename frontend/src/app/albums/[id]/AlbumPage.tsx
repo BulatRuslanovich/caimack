@@ -7,9 +7,10 @@ import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { PrefetchLink as Link } from "@/components/PrefetchLink";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { coverUrl } from "@/lib/media";
 import { queries } from "@/lib/queries";
+import type { PlaybackCollection } from "@/lib/playback/playerTypes";
 import { uniformAudioSpec } from "@/lib/format";
 import { useFormat } from "@/lib/useFormat";
 import { useEntityOpened } from "@/lib/useEntityOpened";
@@ -60,6 +61,7 @@ export function AlbumPage() {
   const more = (siblings.data?.items ?? []).filter((album) => album.id !== id);
 
   const tracks = data?.tracks ?? [];
+  const collection = useMemo<PlaybackCollection>(() => ({ kind: "album", id }), [id]);
 
   const hasFeatures = tracks.some((track) => track.artistId !== data?.artistId);
   const albumSpec = uniformAudioSpec(tracks);
@@ -105,7 +107,7 @@ export function AlbumPage() {
             ]}
             actions={
               <>
-                <PlayAllButton tracks={detail.tracks} name={detail.title} />
+                <PlayAllButton tracks={detail.tracks} name={detail.title} collection={collection} />
                 {detail.tracks.length > 1 && <ShuffleButton tracks={detail.tracks} />}
                 {detail.tracks.length > 0 && <RadioButton seed={detail.tracks[0]} />}
               </>
@@ -132,6 +134,7 @@ export function AlbumPage() {
           <Section title={t("albums.tracks")}>
             <TrackList
               tracks={detail.tracks}
+              collection={collection}
               showAlbum={false}
               showCover={false}
               showArtist={hasFeatures}

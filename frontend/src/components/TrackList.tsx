@@ -11,6 +11,7 @@ import { cn } from "@/lib/cn";
 import { formatAudioSpec, formatDuration, isLossless } from "@/lib/format";
 import { keyName } from "@/lib/musicalKey";
 import { queueEntryKey } from "@/lib/playback/queueEntries";
+import { samePlaybackCollection, type PlaybackCollection } from "@/lib/playback/playerTypes";
 import { smoothUnlessReduced } from "@/lib/scroll";
 import type { SortDirection, Track } from "@/lib/types";
 import { useFormat } from "@/lib/useFormat";
@@ -66,6 +67,7 @@ interface TrackTableSort {
 
 interface TrackListProps {
   tracks: Track[];
+  collection?: PlaybackCollection;
   showCover?: boolean;
   showAlbum?: boolean;
   showArtist?: boolean;
@@ -124,6 +126,7 @@ function rowGridFor(
 
 export function TrackList({
   tracks,
+  collection,
   showCover = true,
   showAlbum = true,
   showArtist = true,
@@ -141,7 +144,14 @@ export function TrackList({
   emptyMessage,
   selection,
 }: TrackListProps) {
-  const { currentTrackId, isPlaying } = useNowPlaying();
+  const nowPlaying = useNowPlaying();
+  const { isPlaying } = nowPlaying;
+  const currentTrackId =
+    !collection ||
+    !nowPlaying.collection ||
+    samePlaybackCollection(collection, nowPlaying.collection)
+      ? nowPlaying.currentTrackId
+      : null;
   const actions = usePlayerActions();
   const entries = useStableEntries(tracks);
   const t = useT();
@@ -208,9 +218,10 @@ export function TrackList({
         actions.toggle();
         return;
       }
-      actions.playQueue(tracks, index);
+      if (collection) actions.playQueue(tracks, index, { collection });
+      else actions.playQueue(tracks, index);
     },
-    [actions, tracks],
+    [actions, collection, tracks],
   );
 
   const focusRow = (index: number) => {

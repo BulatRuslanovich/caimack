@@ -3,7 +3,7 @@
 import type { Track } from "@/lib/types";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { advanceIn } from "./playerQueue";
-import type { RepeatMode } from "./playerTypes";
+import type { PlaybackCollection, RepeatMode } from "./playerTypes";
 import { queueEntries } from "./queueEntries";
 import type { PersistedPlayer } from "./usePlayerStorage";
 
@@ -13,6 +13,7 @@ export function useQueueState() {
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [shuffle, setShuffle] = useState(false);
   const [repeat, setRepeat] = useState<RepeatMode>("off");
+  const [collection, setCollection] = useState<PlaybackCollection | null>(null);
   const queueRef = useRef<Track[]>([]);
   const orderRef = useRef<number[]>([]);
   const originalQueueRef = useRef<Track[]>([]);
@@ -23,6 +24,7 @@ export function useQueueState() {
     orderRef.current = nextOrder;
     setQueue(entries);
     setOrder(nextOrder);
+    if (!entries.length) setCollection(null);
   }, []);
 
   const currentTrack = currentIndex >= 0 ? (queue[currentIndex] ?? null) : null;
@@ -36,6 +38,7 @@ export function useQueueState() {
       if (saved.index >= 0) setCurrentIndex(saved.index);
       setShuffle(saved.shuffle);
       setRepeat(saved.repeat);
+      setCollection(saved.collection ?? null);
     },
     [applyQueue],
   );
@@ -53,6 +56,8 @@ export function useQueueState() {
     setShuffle,
     repeat,
     setRepeat,
+    collection,
+    setCollection,
     queueRef,
     orderRef,
     originalQueueRef,
