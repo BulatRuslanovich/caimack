@@ -139,16 +139,16 @@ function SearchView() {
 
   return (
     <div className="search-page flex min-w-0 flex-col gap-3">
-      <div className="search-controls flex min-w-0 flex-col gap-3 [&>header]:items-center">
-        <PageHeader title={t("nav.search")} />
+      <PageHeader title={t("nav.search")} className="max-md:[&_h1]:text-[1.5rem]" />
 
+      <div className="search-controls flex min-w-0 flex-col gap-3 max-md:sticky max-md:top-0 max-md:z-20 max-md:-mx-4 max-md:gap-2 max-md:border-b max-md:border-border max-md:bg-background max-md:px-4 max-md:py-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <SearchField
             value={query}
             onChange={(next) => navigate(next, tab)}
             onDraftChange={(value) => setDraft({ query, value })}
             placeholder={t(searchPlaceholder)}
-            className="basis-64 grow"
+            className="min-w-0 basis-64 grow max-md:max-w-none max-md:basis-36 max-md:rounded-xl max-md:bg-raised"
             autoFocus
           />
           {unified && (
@@ -163,18 +163,17 @@ function SearchView() {
             />
           )}
         </div>
+        {!musicLink && (
+          <SearchTabs
+            tab={tab}
+            audiobooksEnabled={audiobooksEnabled}
+            onSelect={(value) => tab !== value && navigate(query, value, true)}
+            onIntent={(value) => {
+              if (tab !== value) void prefetchSearchCategory(client, value, query || undefined);
+            }}
+          />
+        )}
       </div>
-
-      {!musicLink && (
-        <SearchTabs
-          tab={tab}
-          audiobooksEnabled={audiobooksEnabled}
-          onSelect={(value) => tab !== value && navigate(query, value, true)}
-          onIntent={(value) => {
-            if (tab !== value) void prefetchSearchCategory(client, value, query || undefined);
-          }}
-        />
-      )}
 
       {musicLink && linkImport === false && (
         <p role="status" className="text-sm text-muted-foreground">

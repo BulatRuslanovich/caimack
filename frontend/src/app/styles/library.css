@@ -457,6 +457,35 @@
 }
 
 @media (width < 768px) {
+  .catalog-mobile-chips {
+    gap: 0.5rem;
+    box-shadow: none;
+  }
+
+  .catalog-mobile-chips > button {
+    min-height: 2.75rem;
+    padding: 0 0.875rem;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: var(--card);
+  }
+
+  .catalog-mobile-chips > button[aria-pressed="true"] {
+    border-color: var(--border);
+    background: var(--primary-soft);
+    color: var(--foreground);
+  }
+
+  .saved-library .media-card[data-layout="list"] {
+    min-height: 4.25rem;
+    padding: 0.25rem 0;
+  }
+
+  .saved-library .media-card[data-layout="list"] .card-art {
+    width: 3.75rem;
+    height: 3.75rem;
+  }
+
   .library-track-list {
     padding: 0;
   }
@@ -488,10 +517,46 @@
   }
 }
 
-@media (width >= 1280px) {
+@media (width >= 64rem) {
   .app-shell[data-queue-docked="true"] {
-    grid-template-columns: var(--sidebar-width) minmax(0, 1fr) 21rem;
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr) clamp(16rem, 24vw, 21rem);
     grid-template-areas: "sidebar content queue" "player player player";
+  }
+}
+
+@media (48rem <= width < 90rem) {
+  .app-shell[data-queue-open="true"] {
+    --sidebar-width: 4.5rem;
+    --sidebar-inset: 0.5rem;
+  }
+
+  .app-shell[data-queue-open="true"] .app-sidebar {
+    scrollbar-width: none;
+  }
+
+  .app-shell[data-queue-open="true"] .app-sidebar .sidebar-label {
+    display: none;
+  }
+
+  .app-shell[data-queue-open="true"] .app-sidebar :is(.sidebar-brand, .sidebar-nav-link) {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .app-shell[data-queue-open="true"] .app-sidebar .sidebar-nav-link {
+    position: relative;
+    min-height: 2.75rem;
+  }
+
+  .app-shell[data-queue-open="true"] .app-sidebar .sidebar-account {
+    flex-direction: column;
+  }
+
+  .app-shell[data-queue-open="true"] .app-sidebar .sidebar-upload-badge {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-end: 0;
+    padding-inline: 0.25rem;
   }
 }
 

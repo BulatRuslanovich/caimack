@@ -73,6 +73,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div
+      data-queue-open={!audiobook.active && queueOpen}
       data-queue-docked={!audiobook.active && queueDocked}
       className="app-shell grid h-dvh grid-cols-[var(--sidebar-width)_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] [grid-template-areas:'sidebar_content''player_player'] max-md:grid-cols-1 max-md:grid-rows-[auto_minmax(0,1fr)_auto_auto] max-md:[grid-template-areas:'mobile-header''content''player''nav']"
     >

@@ -30,20 +30,23 @@ export function NavLink({
   const pathname = usePathname();
   const active = isActivePath(pathname, entry.href);
   const Icon = entry.icon;
+  const label = t(entry.labelKey);
 
   return (
     <Link
       href={entry.href}
+      aria-label={label}
       aria-current={active ? "page" : undefined}
+      title={label}
       onClick={onNavigate}
       className={cn(
-        "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors duration-150 ease-brand hover:bg-raised hover:text-foreground hover:no-underline",
+        "sidebar-nav-link flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors duration-150 ease-brand hover:bg-raised hover:text-foreground hover:no-underline",
         compact && "py-1.5 text-[0.8125rem] text-faint",
         active && "bg-raised text-foreground [&>svg]:text-primary",
       )}
     >
       <Icon size={compact ? 16 : undefined} />
-      <span className="flex-1">{t(entry.labelKey)}</span>
+      <span className="sidebar-label flex-1">{label}</span>
       {entry.href === "/upload" && <UploadBadge />}
     </Link>
   );
@@ -59,7 +62,7 @@ function UploadBadge() {
     <span
       role="status"
       aria-label={t("upload.uploading", { progress: progress.percent })}
-      className="rounded-full bg-primary px-1.5 py-0.5 text-2xs font-semibold text-primary-foreground tabular-nums"
+      className="sidebar-upload-badge rounded-full bg-primary px-1.5 py-0.5 text-2xs font-semibold text-primary-foreground tabular-nums"
     >
       {progress.percent}%
     </span>
@@ -74,14 +77,17 @@ export function AccountRow() {
   if (!user) return null;
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="sidebar-account flex items-center gap-2">
       <span
         aria-hidden="true"
         className="grid size-8 shrink-0 place-items-center rounded-full bg-raised text-xs font-semibold uppercase"
       >
         {user.username.slice(0, 1)}
       </span>
-      <span className="min-w-0 flex-1 truncate text-sm font-medium" title={user.username}>
+      <span
+        className="sidebar-label min-w-0 flex-1 truncate text-sm font-medium"
+        title={user.username}
+      >
         {user.username}
       </span>
       <Button
@@ -111,7 +117,7 @@ function NavGroup({
 }) {
   return (
     <div className={cn("flex flex-col gap-0.5", compact && "gap-0", className)}>
-      {label && <p className="px-3 pb-1.5 text-xs text-faint">{label}</p>}
+      {label && <p className="sidebar-label px-3 pb-1.5 text-xs text-faint">{label}</p>}
       {entries.map((entry) => (
         <NavLink key={entry.href} entry={entry} compact={compact} />
       ))}
@@ -129,19 +135,19 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "app-sidebar flex flex-col gap-6 overflow-y-auto px-3 pt-5 pb-4 [grid-area:sidebar] max-md:hidden",
+        "app-sidebar flex flex-col gap-6 overflow-y-auto px-[var(--sidebar-inset,0.75rem)] pt-5 pb-4 [grid-area:sidebar] max-md:hidden",
         "[@media(max-height:52rem)]:gap-4 [@media(max-height:52rem)]:pt-4 [@media(max-height:52rem)]:pb-3",
       )}
     >
       <Link
         href="/"
         aria-label={t("nav.home")}
-        className="flex items-center gap-2.5 px-3 hover:no-underline"
+        className="sidebar-brand flex items-center gap-2.5 px-3 hover:no-underline"
       >
         <Pin>
           <BrandMark className="size-7" />
         </Pin>
-        <BrandWordmark />
+        <BrandWordmark className="sidebar-label" />
       </Link>
 
       <nav

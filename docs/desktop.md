@@ -8,6 +8,8 @@ and Linux, with offline downloads and tray playback.
 When you start a new queue from a playlist or album, the full player links back
 to that collection. The link follows the queue when you switch playback devices
 in current versions of Caimack.
+Pin the playback queue to keep it beside the catalog. In narrower windows the
+navigation switches to icons while the queue is open.
 
 ## Install and connect
 

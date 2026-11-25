@@ -613,6 +613,36 @@ try {
     "controller mirrors the renderer",
   );
   assert.equal(await playing(controller.page), false, "controller must not play audio");
+  await controller.page.send("Emulation.setDeviceMetricsOverride", {
+    width: 1120,
+    height: 900,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await click(controller.page, "Playback queue");
+  const sidebarWidth = () =>
+    controller.page.eval("document.querySelector('.app-sidebar').getBoundingClientRect().width");
+  await until(
+    async () => (await sidebarWidth()) < 90,
+    "the navigation compacts when the queue opens",
+  );
+  await click(controller.page, "Pin queue to the right");
+  await until(
+    () => controller.page.eval("Boolean(document.querySelector('[data-queue-panel=docked]'))"),
+    "the queue can dock in the narrower window",
+  );
+  await click(controller.page, "Unpin queue");
+  await click(controller.page, "Close the queue");
+  await until(
+    async () => (await sidebarWidth()) > 150,
+    "the navigation expands when the queue closes",
+  );
+  await controller.page.send("Emulation.setDeviceMetricsOverride", {
+    width: 1440,
+    height: 1000,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
   // Shuffle the entire existing queue, including the previous history, and
   // then follow exactly the sequence shown in the remote queue panel.
   for (const title of ["Second tone", "Third tone"]) {
@@ -1125,6 +1155,7 @@ try {
         "queue editing",
         "keyboard queue reorder and stable row identity",
         "lazy fullscreen and effects",
+        "compact desktop navigation and a docked queue at 1120px",
         "single responsive record",
         "compact mobile playlist header",
         "playback source across remote queue changes and failover",

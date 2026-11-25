@@ -117,6 +117,7 @@ export function Card<T extends string>({
     <div
       {...tone}
       data-round={round}
+      data-layout={layout}
       className={cn(
         "media-card group relative flex min-w-0",
         list ? "items-center gap-2 rounded-md p-2 hover:bg-raised" : "flex-col",

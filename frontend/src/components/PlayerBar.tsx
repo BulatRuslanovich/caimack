@@ -165,7 +165,7 @@ export function PlayerBar({
               aria-label={t("player.openFull")}
               onPointerEnter={preloadFullPlayer}
               onFocus={preloadFullPlayer}
-              className="player-artwork mr-2.5 shrink-0 leading-none"
+              className="player-artwork mr-2.5 shrink-0 leading-none max-md:mr-1"
             >
               {artwork(expanded)}
             </button>

@@ -47,7 +47,7 @@ export function QueuePanel({ onClose, docked = false }: { onClose: () => void; d
           <Button
             variant="ghost"
             size="icon"
-            className="max-xl:hidden"
+            className="max-lg:hidden"
             onClick={() => setQueuePinned(!queuePinned)}
             aria-label={queuePinned ? t("queue.unpin") : t("queue.pin")}
             title={queuePinned ? t("queue.unpin") : t("queue.pin")}

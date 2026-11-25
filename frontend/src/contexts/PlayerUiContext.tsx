@@ -22,7 +22,7 @@ const subscribe = (listener: () => void) => {
   };
 };
 const pinned = () => readStored(PIN_KEY) === "on";
-const wideQuery = "(min-width: 1280px)";
+const wideQuery = "(min-width: 64rem)";
 const subscribeWide = (listener: () => void) => {
   const media = window.matchMedia(wideQuery);
   media.addEventListener("change", listener);

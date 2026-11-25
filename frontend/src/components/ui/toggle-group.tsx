@@ -3,13 +3,18 @@
 import type { ComponentProps } from "react";
 import { cn } from "@/lib/cn";
 
-export function ToggleGroup({ className, ...props }: ComponentProps<"div">) {
+export function ToggleGroup({
+  className,
+  mobileChips = false,
+  ...props
+}: ComponentProps<"div"> & { mobileChips?: boolean }) {
   return (
     <div
       role="group"
       className={cn(
         "flex items-center gap-x-6 overflow-x-auto shadow-[inset_0_-1px_0_var(--border)]",
         "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        mobileChips && "catalog-mobile-chips",
         className,
       )}
       {...props}
