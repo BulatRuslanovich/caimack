@@ -46,18 +46,15 @@ impl Music {
     pub fn new(uploads: Uploads, config: MusicSourcesConfig, yandex: super::yandex::YandexMusic) -> AppResult<Self> {
         let transport = transport::Transport::new(config)?;
         let browser = Arc::new(browser::Browser::default());
-        let providers = providers::registry(&providers::ProviderContext {
-            transport: transport.clone(),
-            browser: Arc::clone(&browser),
-            yandex,
-        })?;
+        let context = providers::ProviderContext { transport, browser: Arc::clone(&browser), yandex };
+        let providers = providers::registry(&context)?;
         Ok(Self {
             uploads,
             providers,
             browser,
             previews: Arc::default(),
             #[cfg(all(test, feature = "integration-tests"))]
-            transport,
+            transport: context.transport,
         })
     }
 

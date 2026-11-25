@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use futures_util::{FutureExt, future::BoxFuture};
 use media::formats::{FLAC, MP3};
+use regex::Regex;
 use reqwest::Url;
 use serde::Deserialize;
 use serde_json::Value;
@@ -20,6 +21,9 @@ use crate::{AppError, AppResult};
 
 const BROWSER_SEARCH: Duration = Duration::from_secs(24);
 const BROWSER_AUDIO: Duration = Duration::from_secs(72);
+
+static PLAYLIST_ID: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r"^-?\d{1,20}_\d{1,20}(?:_[A-Za-z0-9-]{1,128})?$").ok());
 
 pub(super) fn register(context: &ProviderContext) -> Arc<dyn MusicProvider> {
     Arc::new(Vk(Arc::clone(&context.browser)))
@@ -49,10 +53,7 @@ impl MusicProvider for Vk {
             return None;
         }
         let id = url.path().trim_end_matches('/').strip_prefix("/music/playlist/")?;
-        static RE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-            regex::Regex::new(r"^-?\d{1,20}_\d{1,20}(?:_[A-Za-z0-9-]{1,128})?$").expect("fixed VK playlist pattern")
-        });
-        RE.is_match(id).then(|| id.to_owned())
+        PLAYLIST_ID.as_ref()?.is_match(id).then(|| id.to_owned())
     }
 
     fn search<'a>(&'a self, user: Uuid, query: &'a str, _albums: bool) -> BoxFuture<'a, AppResult<SearchResults>> {

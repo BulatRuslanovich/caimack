@@ -24,7 +24,7 @@ use crate::problem::ApiResult;
 use crate::state::AppState;
 
 pub fn router() -> Router<AppState> {
-    let router = Router::new()
+    Router::new()
         .route("/api/music/sources", get(sources))
         .route("/api/music/search", post(search))
         .route("/api/music/playlist", post(playlist))
@@ -33,11 +33,9 @@ pub fn router() -> Router<AppState> {
         .route("/api/music/imports/{id}", get(items).delete(cancel))
         .route("/api/music/imports/{id}/retry", post(retry))
         .route("/api/music/imports/{id}/upgrade/{position}", post(upgrade))
-        .route("/api/music/imports/{id}/pick/{position}", post(pick));
-    let router = router
+        .route("/api/music/imports/{id}/pick/{position}", post(pick))
         .route("/api/music/browser", get(browser_next))
-        .route("/api/music/browser/{id}", post(browser_complete).layer(DefaultBodyLimit::max(37 * 1024 * 1024)));
-    router
+        .route("/api/music/browser/{id}", post(browser_complete).layer(DefaultBodyLimit::max(37 * 1024 * 1024)))
 }
 
 fn register(state: &AppState, user: Uuid, headers: &HeaderMap) {
