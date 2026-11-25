@@ -29,11 +29,13 @@ internal class QueueDragState(
     var center by mutableFloatStateOf(0f)
         private set
 
-    fun start(key: Int) {
-        val row = list.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key } ?: return
+    fun start(key: Int): Boolean {
+        if (dragged != null) return false
+        val row = list.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key } ?: return false
         center = row.offset + row.size / 2f
         landed = null
         dragged = key
+        return true
     }
 
     fun dragBy(amount: Float) {

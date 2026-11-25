@@ -2,6 +2,7 @@
 
 package app.caimack.ui
 
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -75,6 +76,7 @@ fun QueuePanel(state: PlayerState, onUndoable: (String, QueueSnapshot) -> Unit) 
     val palette = LocalPalette.current
     val container = LocalContainer.current
     val player = container.player
+    val haptic = rememberPlayerHaptics()
     val radio = displayedRadio()
     val connect by container.connect.state.collectAsState()
     val localAutoplay by container.radio.autoplay.collectAsState()
@@ -96,7 +98,9 @@ fun QueuePanel(state: PlayerState, onUndoable: (String, QueueSnapshot) -> Unit) 
         },
     )
     val drag = rememberQueueDragState(list, order::move)
-    LaunchedEffect(order.revision) { drag.finish() }
+    LaunchedEffect(order.revision) {
+        if (drag.dragged != null) drag.cancel()
+    }
     LaunchedEffect(order.pending) {
         if (order.pending != null) {
             delay(12_500)
@@ -134,6 +138,24 @@ fun QueuePanel(state: PlayerState, onUndoable: (String, QueueSnapshot) -> Unit) 
     fun moveEntry(key: Int, target: Int) {
         order.move(key, target)
         order.commit(key)?.let { (source, destination) -> player.move(source, destination) }
+    }
+    fun finishReorder(key: Int) {
+        if (drag.dragged == key) {
+            drag.finish()
+            order.commit(key)?.let { (source, target) -> player.move(source, target) }
+        }
+    }
+    fun cancelReorder(key: Int) {
+        if (drag.dragged == key) {
+            drag.cancel()
+            order.cancel()
+        }
+    }
+    fun editEntry(change: (QueueSnapshot) -> String?) {
+        val snapshot = player.snapshot()
+        if (drag.dragged == null && snapshot.tracks == state.queue) {
+            change(snapshot)?.let { onUndoable(it, snapshot) }
+        }
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -198,47 +220,81 @@ fun QueuePanel(state: PlayerState, onUndoable: (String, QueueSnapshot) -> Unit) 
                         val isDragged = dragged == key
                         val isCurrent = order.sourceIndex(key) == state.index
                         val next = entries.getOrNull(current + 1)?.key == key
-                        QueueRow(
-                            track = track,
-                            current = isCurrent,
-                            playing = isCurrent && state.playing,
-                            editing = editing,
-                            enabled = order.pending == null,
-                            note = if (isCurrent || next) radio.notes[track.id] else null,
-                            modifier = (if (isDragged || drag.landed == key) Modifier.zIndex(if (isDragged) 1f else 0f).graphicsLayer { translationY = drag.translation(key) } else Modifier.animateItem()),
-                            lifted = isDragged,
-                            onPlay = { player.skipTo(order.sourceIndex(key)) },
-                            onRemove = {
-                                val snapshot = player.snapshot()
-                                player.remove(order.sourceIndex(key))
-                                onUndoable(resources.getString(R.string.queue_removed, track.title), snapshot)
-                            },
-                            onMoveUp = entries.getOrNull(line.position - 1)?.let { target ->
-                                { moveEntry(key, target.key) }
-                            },
-                            onMoveDown = entries.getOrNull(line.position + 1)?.let { target ->
-                                { moveEntry(key, target.key) }
-                            },
-                            handle = Modifier.pointerInput(key, order.pending) {
-                                if (order.pending != null) return@pointerInput
-                                detectDragGestures(
-                                    onDragStart = {
-                                        drag.start(key)
-                                    },
-                                    onDragEnd = {
-                                        val from = drag.finish()
-                                        if (from != null) order.commit(from)?.let { (source, target) -> player.move(source, target) }
-                                    },
-                                    onDragCancel = {
-                                        drag.cancel()
-                                        order.cancel()
-                                    },
-                                ) { change, amount ->
-                                    change.consume()
-                                    drag.dragBy(amount.y)
+                        val enabled = order.pending == null
+                        val revision = order.revision
+                        fun remove(fromSwipe: Boolean) {
+                            editEntry { snapshot ->
+                                val source = order.sourceIndex(key)
+                                val index = when {
+                                    !fromSwipe -> source.takeIf { it >= 0 }
+                                    source == snapshot.index -> null
+                                    else -> order.remove(key)
                                 }
-                            },
-                        )
+                                index?.let {
+                                    player.remove(index)
+                                    resources.getString(R.string.queue_removed, track.title)
+                                }
+                            }
+                        }
+                        val playNext: () -> Unit = {
+                            editEntry { snapshot ->
+                                val duplicate = if (order.sourceIndex(key) == snapshot.index) null
+                                    else order.duplicateNext(key, snapshot.index)
+                                duplicate?.let {
+                                    player.enqueue(duplicate, next = true)
+                                    resources.getString(R.string.menu_playing_next, duplicate.title)
+                                }
+                            }
+                        }
+                        QueueGestures(
+                            enabled = enabled && !isCurrent,
+                            revision = revision,
+                            onRemove = { remove(fromSwipe = true) },
+                            onPlayNext = playNext,
+                            onReorderStart = { drag.start(key) },
+                            onReorder = drag::dragBy,
+                            onReorderEnd = { finishReorder(key) },
+                            onReorderCancel = { cancelReorder(key) },
+                            haptic = haptic,
+                            modifier = if (isDragged || drag.landed == key) {
+                                Modifier.zIndex(if (isDragged) 1f else 0f).graphicsLayer { translationY = drag.translation(key) }
+                            } else Modifier.animateItem(),
+                        ) { swipe, body ->
+                            QueueRow(
+                                track = track,
+                                current = isCurrent,
+                                playing = isCurrent && state.playing,
+                                editing = editing,
+                                enabled = enabled,
+                                note = if (isCurrent || next) radio.notes[track.id] else null,
+                                modifier = swipe,
+                                body = body,
+                                lifted = isDragged,
+                                onPlay = { if (drag.dragged != key) player.skipTo(order.sourceIndex(key)) },
+                                onRemove = { remove(fromSwipe = false) },
+                                onMoveUp = entries.getOrNull(line.position - 1)?.let { target ->
+                                    { moveEntry(key, target.key) }
+                                },
+                                onMoveDown = entries.getOrNull(line.position + 1)?.let { target ->
+                                    { moveEntry(key, target.key) }
+                                },
+                                handle = Modifier.pointerInput(key, enabled, revision) {
+                                    if (!enabled) return@pointerInput
+                                    try {
+                                        detectDragGestures(
+                                            onDragStart = { drag.start(key) },
+                                            onDragEnd = { finishReorder(key) },
+                                            onDragCancel = { cancelReorder(key) },
+                                        ) { change, amount ->
+                                            change.consume()
+                                            if (drag.dragged == key) drag.dragBy(amount.y)
+                                        }
+                                    } finally {
+                                        cancelReorder(key)
+                                    }
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -270,22 +326,18 @@ internal fun QueueRow(
     onMoveDown: (() -> Unit)?,
     handle: Modifier,
     modifier: Modifier = Modifier,
+    body: Modifier = Modifier,
 ) {
     val palette = LocalPalette.current
     var menu by remember { mutableStateOf(false) }
+    val elevation by animateDpAsState(if (lifted) 12.dp else 0.dp, label = "queue row lift")
     val playbackLabel = stringResource(if (playing) R.string.queue_current_playing else R.string.queue_current_paused)
     Row(
         modifier
             .fillMaxWidth()
-            .heightIn(min = 64.dp)
-            .then(if (lifted) Modifier.shadow(12.dp, Radius.row) else Modifier)
+            .shadow(elevation, Radius.row, clip = false)
             .clip(Radius.row)
-            .background(when { lifted -> palette.raised; current -> palette.primarySoft; else -> Color.Transparent })
-            .semantics {
-                selected = current
-                if (current) stateDescription = playbackLabel
-            }
-            .clickable(onClick = onPlay),
+            .background(when { lifted -> palette.raised; current -> palette.primarySoft; else -> Color.Transparent }),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.width(3.dp).heightIn(min = 40.dp).background(if (current) palette.primary else Color.Transparent))
@@ -295,25 +347,36 @@ internal fun QueueRow(
         ) {
             Icon(Lucide.GripVertical, stringResource(R.string.queue_reorder, track.title), tint = palette.faint, modifier = Modifier.size(20.dp))
         }
-        Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-            Cover(trackCover(track), track.albumTitle ?: track.title, Modifier.fillMaxSize())
-            if (current) {
-                Box(Modifier.fillMaxSize().clip(Radius.cover).background(Color.Black.copy(alpha = 0.55f)), contentAlignment = Alignment.Center) {
-                    if (playing) NowPlayingBars(Color.White)
-                    else Icon(Lucide.Pause, null, tint = Color.White, modifier = Modifier.size(18.dp))
+        Row(
+            Modifier.weight(1f).heightIn(min = 64.dp)
+                .semantics {
+                    selected = current
+                    if (current) stateDescription = playbackLabel
+                }
+                .clickable(onClick = onPlay)
+                .then(body),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                Cover(trackCover(track), track.albumTitle ?: track.title, Modifier.fillMaxSize())
+                if (current) {
+                    Box(Modifier.fillMaxSize().clip(Radius.cover).background(Color.Black.copy(alpha = 0.55f)), contentAlignment = Alignment.Center) {
+                        if (playing) NowPlayingBars(Color.White)
+                        else Icon(Lucide.Pause, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    }
                 }
             }
-        }
-        Column(Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 6.dp)) {
-            Text(
-                track.title,
-                style = Type.body.copy(fontWeight = FontWeight.Medium),
-                color = if (current) palette.primary else palette.foreground,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(artistsOf(track), style = Type.tiny, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            note?.let { RadioNoteLine(it) }
+            Column(Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 6.dp)) {
+                Text(
+                    track.title,
+                    style = Type.body.copy(fontWeight = FontWeight.Medium),
+                    color = if (current) palette.primary else palette.foreground,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(artistsOf(track), style = Type.tiny, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                note?.let { RadioNoteLine(it) }
+            }
         }
         if (editing) {
             TextButton(onClick = onRemove, enabled = enabled, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp), modifier = Modifier.size(48.dp)) {

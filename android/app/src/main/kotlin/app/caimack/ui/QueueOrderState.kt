@@ -31,7 +31,8 @@ internal class QueueOrderState(queue: List<Track>) {
         if (queue === source) return
         val unchanged = queue.map { it.id } == source.map { it.id }
         source = queue
-        confirmed = reconcile(queue, if (unchanged) confirmed else entries)
+        val previous = if (!unchanged && queue.map { it.id } == entries.map { it.track.id }) entries else confirmed
+        confirmed = reconcile(queue, previous)
         indices = confirmed.mapIndexed { index, entry -> entry.key to index }.toMap()
         if (unchanged) {
             val tracks = confirmed.associate { it.key to it.track }
@@ -44,6 +45,22 @@ internal class QueueOrderState(queue: List<Track>) {
     }
 
     fun sourceIndex(key: Int): Int = indices[key] ?: -1
+
+    fun remove(key: Int): Int? {
+        val index = sourceIndex(key)
+        if (pending != null || index < 0) return null
+        entries = entries.filterNot { it.key == key }
+        pending = ++request
+        return index
+    }
+
+    fun duplicateNext(key: Int, currentIndex: Int): Track? {
+        if (pending != null || currentIndex !in confirmed.indices) return null
+        val track = confirmed.getOrNull(sourceIndex(key))?.track ?: return null
+        entries = entries.toMutableList().apply { add(currentIndex + 1, QueueEntry(sequence++, track)) }
+        pending = ++request
+        return track
+    }
 
     fun move(key: Int, target: Int) {
         if (pending != null) return
