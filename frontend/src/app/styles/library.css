@@ -147,25 +147,38 @@
 }
 
 .playlist-page {
-  --playlist-tint: var(--primary);
+  --playlist-tint: color-mix(in oklab, var(--primary) 30%, var(--background));
+  --playlist-gutter: clamp(1.5rem, 3.3vw, 3.25rem);
+  --playlist-wash-height: 38rem;
+  --playlist-wash-top: 70%;
+  --playlist-wash-mid: 38%;
+  padding: 0 var(--playlist-gutter) 3rem;
+  background: linear-gradient(
+      to bottom,
+      color-mix(in oklab, var(--playlist-tint) var(--playlist-wash-top), var(--background)),
+      color-mix(in oklab, var(--playlist-tint) var(--playlist-wash-mid), var(--background)) 42%,
+      transparent 100%
+    )
+    top / 100% var(--playlist-wash-height) no-repeat;
+}
+
+:root[data-theme="light"] .playlist-page {
+  --playlist-wash-top: 22%;
+  --playlist-wash-mid: 12%;
+}
+
+.playlist-page > :where(:not([data-playlist-mobile-header])) {
+  inline-size: min(100%, 84rem);
+  align-self: center;
 }
 
 .playlist-hero {
-  --playlist-cover-size: clamp(9rem, 23cqi, 14rem);
+  --playlist-cover-size: clamp(10rem, 24cqi, 16.5rem);
   display: grid;
   grid-template-columns: var(--playlist-cover-size) minmax(0, 1fr);
   align-items: end;
-  gap: clamp(1.25rem, 3cqi, 2.5rem);
-  padding: clamp(1.25rem, 3.3cqi, 2.75rem);
-  border: 1px solid var(--library-edge);
-  border-radius: 1rem;
-  background:
-    radial-gradient(
-      ellipse at top left,
-      color-mix(in oklab, var(--playlist-tint) 18%, transparent),
-      transparent 75%
-    ),
-    linear-gradient(145deg, color-mix(in oklab, var(--playlist-tint) 37%, var(--card)), var(--card));
+  gap: clamp(1.25rem, 3cqi, 2.75rem);
+  padding-block: clamp(2rem, 6vh, 4.25rem) 1.25rem;
 }
 
 .playlist-hero-cover {
@@ -173,22 +186,25 @@
   aspect-ratio: 1;
   place-items: center;
   overflow: hidden;
-  border-radius: 0.625rem;
+  border-radius: 0.5rem;
   background: var(--surface-raised);
-  box-shadow: var(--elevation-art);
+  box-shadow:
+    var(--elevation-art),
+    0 1.25rem 3rem -1.5rem rgb(0 0 0 / 36%);
 }
 
 .playlist-hero-copy {
   display: grid;
-  gap: 0.625rem;
+  gap: clamp(0.5rem, 1.2cqi, 0.875rem);
   min-width: 0;
 }
 
 .playlist-hero-title {
-  font-size: clamp(2rem, 7.4cqi, 5rem);
-  font-weight: 750;
+  font-family: var(--font-display);
+  font-size: clamp(2.25rem, 6.5cqi, 5.25rem);
+  font-weight: 650;
   letter-spacing: -0.045em;
-  line-height: 1.04;
+  line-height: 1.08;
   text-wrap: pretty;
 }
 
@@ -221,6 +237,11 @@
 
 .playlist-toolbar {
   justify-content: space-between;
+  min-block-size: 3.5rem;
+}
+
+.playlist-edit-actions {
+  padding-bottom: 0.5rem;
 }
 
 .playlist-list-tools {
@@ -235,17 +256,46 @@
 .playlist-page .library-track-list > .library-track-list-header {
   margin-bottom: 0.25rem;
   padding-block: 0.625rem;
+  border-color: var(--border);
+}
+
+.playlist-page .library-track-row[data-striped]:not(:hover, :focus-within, .track-row-current) {
+  background: transparent;
+}
+
+[data-playlist-mobile-header] {
+  margin-inline: calc(-1 * var(--playlist-gutter));
+}
+
+[data-playlist-mobile-header][data-compact="true"] {
+  border-color: var(--border);
+  background: color-mix(in oklab, var(--playlist-tint) 16%, var(--background));
+}
+
+@media (width < 48rem) {
+  .playlist-page {
+    --playlist-gutter: 1rem;
+    --playlist-wash-height: 40rem;
+  }
+
+  .playlist-hero {
+    padding-block: 0.75rem 0.5rem;
+  }
 }
 
 @container (width < 35rem) {
   .playlist-hero {
     grid-template-columns: minmax(0, 1fr);
-    gap: 1rem;
+    gap: 1.5rem;
   }
 
   .playlist-hero-cover {
-    width: min(100%, 10rem);
+    width: min(64cqi, 13.5rem);
     justify-self: center;
+  }
+
+  .playlist-hero-title {
+    font-size: clamp(1.65rem, 7.3cqi, 2.75rem);
   }
 
   .playlist-list-tools {

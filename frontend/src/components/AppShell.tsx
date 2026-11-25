@@ -103,7 +103,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         className="relative isolate overflow-y-auto overscroll-contain outline-none [grid-area:content] [scrollbar-gutter:stable]"
       >
         <div aria-hidden="true" className="ambient-glow" />
-        <div className="app-content mx-auto flex min-h-full max-w-[90rem] flex-col gap-11 px-10 pt-8 pb-12 max-lg:px-6 max-md:gap-8 max-md:px-4 max-md:pt-5 max-md:pb-8">
+        <div className="app-content mx-auto flex min-h-full max-w-[90rem] flex-col gap-11 px-10 pt-8 pb-12 has-[.playlist-page]:max-w-none has-[.playlist-page]:p-0 max-lg:px-6 max-md:gap-8 max-md:px-4 max-md:pt-5 max-md:pb-8">
           <LibraryChips />
           <HeaderBackdropHost.Provider value={backdropHost}>
             {((!["/map", "/recap"].includes(pathname) && !pathname.startsWith("/mixes/")) ||

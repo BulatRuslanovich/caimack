@@ -23,11 +23,13 @@ function uniqueCoverTracks(tracks: CoverTrack[]) {
 
 export function PlaylistCover({
   playlist,
+  showBadge = true,
   fallback,
   sizes,
   variant,
 }: {
   playlist: Pick<Playlist, "id" | "name" | "hasCover" | "coverTrackId" | "coverTracks">;
+  showBadge?: boolean;
 } & Pick<CoverLook, "fallback" | "sizes" | "variant">) {
   const tracks =
     !playlist.hasCover && playlist.coverTracks !== undefined
@@ -37,21 +39,25 @@ export function PlaylistCover({
     ? tracks.length > 0
     : Boolean(playlist.hasCover || playlist.coverTrackId);
 
-  return (
+  const artwork = tracks ? (
+    <CoverMosaic tracks={tracks} layout="fit" />
+  ) : (
+    <Cover
+      playlistId={playlist.id}
+      hasCover={playlist.hasCover}
+      coverTrackId={playlist.coverTrackId}
+      name={playlist.name}
+      fallback={hasArtwork ? fallback : undefined}
+      sizes={sizes}
+      variant={variant}
+    />
+  );
+
+  return !showBadge && hasArtwork ? (
+    artwork
+  ) : (
     <BadgedCover icon={ListMusicIcon} hasArtwork={hasArtwork}>
-      {tracks ? (
-        <CoverMosaic tracks={tracks} layout="fit" />
-      ) : (
-        <Cover
-          playlistId={playlist.id}
-          hasCover={playlist.hasCover}
-          coverTrackId={playlist.coverTrackId}
-          name={playlist.name}
-          fallback={hasArtwork ? fallback : undefined}
-          sizes={sizes}
-          variant={variant}
-        />
-      )}
+      {artwork}
     </BadgedCover>
   );
 }

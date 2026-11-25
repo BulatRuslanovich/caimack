@@ -8,7 +8,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { api } from "@/lib/api";
-import { cn } from "@/lib/cn";
 import { playlistCoverUrl } from "@/lib/media";
 import { queries } from "@/lib/queries";
 import { useFormat } from "@/lib/useFormat";
@@ -237,11 +236,8 @@ function PlaylistContent({ detail }: { detail: PlaylistDetail }) {
     <div className="playlist-page @container flex min-w-0 flex-col gap-3" style={coverStyle}>
       <div
         data-playlist-mobile-header
-        className={cn(
-          "sticky top-0 z-20 -mx-4 -mt-5 mb-1 hidden grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-center border-b border-transparent px-3 pt-[env(safe-area-inset-top)] transition-colors max-md:grid motion-reduce:transition-none",
-          compactHeader &&
-            "border-border bg-[color-mix(in_oklab,var(--playlist-tint,var(--background))_18%,var(--background))]",
-        )}
+        data-compact={compactHeader}
+        className="sticky top-0 z-20 hidden grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-center border-b border-transparent px-3 pt-[env(safe-area-inset-top)] transition-colors max-md:grid motion-reduce:transition-none"
       >
         <Button
           variant="ghost"
@@ -274,8 +270,9 @@ function PlaylistContent({ detail }: { detail: PlaylistDetail }) {
         <div className="playlist-hero-cover">
           <PlaylistCover
             playlist={{ ...detail, coverTracks: detail.tracks }}
+            showBadge={false}
             variant="full"
-            sizes="(min-width: 64rem) 224px, 192px"
+            sizes="(min-width: 64rem) 264px, 216px"
             fallback={<ListMusicIcon size={48} />}
           />
         </div>
@@ -307,7 +304,7 @@ function PlaylistContent({ detail }: { detail: PlaylistDetail }) {
             tracks={displayed}
             name={detail.name}
             collection={collection}
-            className="size-13 sm:size-14"
+            className="size-14 sm:size-15"
           />
           <ShuffleButton tracks={displayed} iconOnly />
           <LibrarySaveButton kind="playlist" id={id} />
@@ -369,7 +366,7 @@ function PlaylistContent({ detail }: { detail: PlaylistDetail }) {
             <>
               <Button
                 ref={addButton}
-                variant="secondary"
+                variant="ghost"
                 size="sm"
                 className="pointer-coarse:h-11"
                 onClick={() => setAdding(true)}
@@ -378,7 +375,7 @@ function PlaylistContent({ detail }: { detail: PlaylistDetail }) {
               </Button>
               <Button
                 ref={editButton}
-                variant="secondary"
+                variant="ghost"
                 size="sm"
                 className="pointer-coarse:h-11"
                 onClick={() => setEditing(true)}

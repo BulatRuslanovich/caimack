@@ -1,4 +1,65 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
+.lyrics-pane {
+  --lyrics-reading-inset: clamp(3rem, 18dvh, 10rem);
+  --lyrics-measure: 42rem;
+}
+
+.lyrics-lines,
+.lyrics-plain,
+.lyrics-credit {
+  max-inline-size: var(--lyrics-measure);
+  margin-inline: auto;
+}
+
+.lyrics-lines {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.25rem, 1.2dvh, 0.875rem);
+  padding-block: var(--lyrics-reading-inset) 80dvh;
+}
+
+.lyrics-plain {
+  padding: var(--lyrics-reading-inset) 0.875rem 2rem;
+  font-size: clamp(1.0625rem, 2vw, 1.375rem);
+}
+
+.lyrics-credit {
+  padding-inline: 0.875rem;
+}
+
+.lyric-line {
+  transition: opacity 240ms var(--ease);
+}
+
+.lyric-line-text {
+  display: block;
+  width: 100%;
+  padding: 0.45rem 0.875rem;
+  border-radius: 0.5rem;
+  color: var(--foreground);
+  font-size: clamp(1.5rem, 2.65vw, 2.5rem);
+  font-weight: 700;
+  line-height: 1.21;
+  letter-spacing: -0.025em;
+  text-align: start;
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+
+.lyric-line[data-background-line] > .lyric-line-text {
+  padding-inline-start: 1.375rem;
+  font-size: 0.8em;
+  font-weight: 500;
+}
+
+.lyric-line[aria-current="true"] > button {
+  background: color-mix(in oklab, var(--foreground) 8%, transparent);
+}
+
+.lyric-line > button:is(:hover, :focus-visible) {
+  background: color-mix(in oklab, var(--foreground) 11%, transparent);
+}
+
 /* The fill follows genuine source intervals; plain LRC receives no word spans. */
 .lyric-word {
   --lyric-word-fill: 0%;
@@ -8,8 +69,8 @@
     to right,
     var(--foreground) 0%,
     var(--foreground) var(--lyric-word-fill),
-    color-mix(in oklab, var(--foreground) 38%, transparent) var(--lyric-word-fill),
-    color-mix(in oklab, var(--foreground) 38%, transparent) 100%
+    color-mix(in oklab, var(--foreground) 62%, transparent) var(--lyric-word-fill),
+    color-mix(in oklab, var(--foreground) 62%, transparent) 100%
   );
   background-clip: text;
   -webkit-background-clip: text;
