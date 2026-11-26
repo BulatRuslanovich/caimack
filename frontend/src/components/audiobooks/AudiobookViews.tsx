@@ -9,7 +9,6 @@ import {
   CirclePlusIcon,
   CircleCheckIcon,
   CheckIcon,
-  Clock3Icon,
   EllipsisIcon,
   ListMusicIcon,
   PauseIcon,
@@ -427,21 +426,17 @@ export function AudiobooksPage() {
   const t = useT();
   const { enabled, books, result, downloaded, online } = useAudiobooks();
   const { isAdmin } = useAuth();
-  const [filter, setFilter] = useState<"all" | "duration" | "saved" | "downloaded">("all");
+  const [filter, setFilter] = useState<"all" | "saved" | "downloaded">("all");
   if (!enabled) return <AudiobooksDisabled />;
-  const saved = books.filter((book) => book.saved);
-  const allBooks = online ? books : books.filter((book) => downloaded.has(book.id));
+  const recent = [...books].sort(
+    (a, b) => (b.progress?.updatedAtMs ?? 0) - (a.progress?.updatedAtMs ?? 0),
+  );
+  const saved = recent.filter((book) => book.saved);
+  const allBooks = online ? recent : recent.filter((book) => downloaded.has(book.id));
   const listening = listeningBooks(allBooks);
   const hero = listening[0];
-  const catalog = allBooks
-    .filter((book) => book.progress?.completed !== false)
-    .sort((a, b) => (b.progress?.updatedAtMs ?? 0) - (a.progress?.updatedAtMs ?? 0));
-  const filtered =
-    filter === "saved"
-      ? saved
-      : filter === "duration"
-        ? allBooks.toSorted((a, b) => a.durationMs - b.durationMs)
-        : allBooks.filter((book) => downloaded.has(book.id));
+  const catalog = allBooks.filter((book) => book.progress?.completed !== false);
+  const filtered = filter === "saved" ? saved : allBooks.filter((book) => downloaded.has(book.id));
   const empty = t(
     filter === "saved"
       ? "audiobooks.emptySaved"
@@ -457,7 +452,7 @@ export function AudiobooksPage() {
         actions={
           <>
             <div role="group" aria-label={t("nav.audiobooks")} className="flex flex-wrap gap-2">
-              {(["all", "duration", "downloaded", "saved"] as const)
+              {(["downloaded", "saved"] as const)
                 .filter((option) => option !== "downloaded" || isDesktop)
                 .map((option) => (
                   <Button
@@ -465,12 +460,11 @@ export function AudiobooksPage() {
                     size="sm"
                     variant={filter === option ? "primary" : "secondary"}
                     aria-pressed={filter === option}
-                    onClick={() => setFilter(option)}
+                    onClick={() => setFilter(filter === option ? "all" : option)}
                   >
                     {option === "saved" && <CircleCheckIcon size={16} />}
-                    {option === "duration" && <Clock3Icon size={16} />}
                     {option === "downloaded" && <ArrowDownToLineIcon size={16} />}
-                    {t(option === "all" ? "audiobooks.recent" : `audiobooks.${option}`)}
+                    {t(`audiobooks.${option}`)}
                   </Button>
                 ))}
             </div>

@@ -116,6 +116,14 @@ class HomeNavigationUiTest {
         val container = (compose.activity.application as CaimackApp).container
         val originalLocalHttp = container.connectionPreferences.allowLocalHttp.value
         val user = User("home-navigation", "Home Navigation")
+        val books = """
+            [
+              {"id":"older","title":"Older book","durationMs":1000,"chapters":[],
+               "progress":{"chapterId":"chapter","positionMs":1000,"updatedAtMs":1,"completed":true}},
+              {"id":"recent","title":"Recent book","durationMs":2000,"chapters":[],
+               "progress":{"chapterId":"chapter","positionMs":2000,"updatedAtMs":2,"completed":true}}
+            ]
+        """.trimIndent()
         MockWebServer().use { web ->
             web.dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse {
@@ -125,7 +133,8 @@ class HomeNavigationUiTest {
                         "/api/experiments/audiobooks" -> """{"enabled":true}"""
                         "/api/config", "/api/me/settings" -> "{}"
                         "/api/home/feed" -> """{"blocks":[]}"""
-                        "/api/genres", "/api/audiobooks" -> "[]"
+                        "/api/genres" -> "[]"
+                        "/api/audiobooks" -> books
                         else -> return MockResponse.Builder().code(404).build()
                     }
                     return MockResponse.Builder().addHeader("Content-Type", "application/json").body(body).build()
@@ -148,6 +157,17 @@ class HomeNavigationUiTest {
                     val home = node(R.string.nav_home)
 
                     filter.performTouchInput { click() }.assertIsSelected()
+                    if (category == R.string.nav_audiobooks) {
+                        val recent = compose.onNodeWithText("Recent book")
+                        val older = compose.onNodeWithText("Older book")
+                        compose.waitUntil(5_000) {
+                            compose.onAllNodes(hasText("Older book")).fetchSemanticsNodes().isNotEmpty()
+                        }
+                        check(recent.fetchSemanticsNode().boundsInRoot.top < older.fetchSemanticsNode().boundsInRoot.top)
+                        for (label in listOf("Recent", "By duration", "Недавние", "По длительности")) {
+                            compose.onNode(hasText(label) and hasClickAction()).assertDoesNotExist()
+                        }
+                    }
                     home.performTouchInput { click() }
                     all.assertIsDisplayed().assertIsSelected()
 

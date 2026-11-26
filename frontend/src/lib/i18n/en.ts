@@ -68,8 +68,6 @@ export const en = {
   "audiobooks.catalog": "All audiobooks",
   "audiobooks.continue": "Continue listening",
   "audiobooks.continueAtHome": "Continue audiobook",
-  "audiobooks.recent": "Recent",
-  "audiobooks.duration": "By duration",
   "audiobooks.disabled": "Audiobooks are disabled on this server.",
   "audiobooks.narrator": "Read by {name}",
   "audiobooks.remaining": "{time} left · {percent}%",

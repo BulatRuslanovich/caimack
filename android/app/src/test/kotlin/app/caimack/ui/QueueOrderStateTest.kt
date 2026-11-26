@@ -63,4 +63,35 @@ class QueueOrderStateTest {
         assertEquals(1, order.sourceIndex(first))
         assertNull(order.pending)
     }
+
+    @Test fun playNextInsertsANewOccurrenceAndKeepsTheOriginalKeyThroughConfirmation() {
+        val source = listOf(track("a"), track("b"), track("c"))
+        val order = QueueOrderState(source)
+        val original = order.entries.last().key
+
+        assertEquals(source.last(), order.duplicateNext(original, currentIndex = 0))
+        val duplicate = order.entries[1].key
+        assertNotEquals(original, duplicate)
+        assertEquals(original, order.entries.last().key)
+        assertNull(order.remove(original))
+
+        order.sync(listOf(source[0], source[2], source[1], source[2]))
+        assertEquals(1, order.sourceIndex(duplicate))
+        assertEquals(3, order.sourceIndex(original))
+        assertNull(order.pending)
+    }
+
+    @Test fun removingTheFirstDuplicatePreservesTheSecondOccurrence() {
+        val source = listOf(track("a"), track("b"), track("b"))
+        val order = QueueOrderState(source)
+        val removed = order.entries[1].key
+        val kept = order.entries[2].key
+
+        assertEquals(1, order.remove(removed))
+        assertEquals(kept, order.entries[1].key)
+        order.sync(source.dropLast(1))
+        assertEquals(-1, order.sourceIndex(removed))
+        assertEquals(1, order.sourceIndex(kept))
+        assertNull(order.pending)
+    }
 }
