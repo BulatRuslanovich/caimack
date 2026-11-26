@@ -3,7 +3,6 @@
 package app.caimack.ui
 
 import android.widget.Toast
-import android.provider.Settings
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.ui.graphics.graphicsLayer
@@ -56,7 +55,11 @@ internal fun RadioHero(candidates: List<Track>) {
     var starting by remember { mutableStateOf(false) }
     val lead = (if (active) playback.current else null) ?: candidates.firstOrNull { it.hasCover } ?: candidates.firstOrNull()
     val sleeves = (if (active) playback.queue.drop(playback.index + 1) else candidates)
-        .distinctBy { it.albumId ?: it.id }.filter { it.id != lead?.id }.take(2)
+        .filter { it.hasCover && (it.albumId ?: it.id) != (lead?.albumId ?: lead?.id) }
+        .distinctBy { it.albumId ?: it.id }.take(2)
+    val artists = (listOfNotNull(lead?.takeIf { it.hasCover }) + sleeves)
+        .flatMap { track -> track.artists?.takeIf { it.isNotEmpty() }?.map { it.name } ?: listOf(track.artistName) }
+        .filter { it.isNotBlank() }.distinct().joinToString(", ")
     val tone by animateColorAsState(rememberVividToneColor(listOfNotNull(lead?.let { trackCover(it) })), tween(1000), label = "radio-light")
     val action = stringResource(when {
         starting -> R.string.radio_tile_starting
@@ -88,7 +91,8 @@ internal fun RadioHero(candidates: List<Track>) {
             Column(Modifier.fillMaxWidth(0.56f).align(Alignment.CenterStart),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(stringResource(R.string.radio_mine), style = Type.title.copy(fontSize = 22.sp, lineHeight = 28.sp))
-                Text(stringResource(if (offline) R.string.radio_local_description else R.string.radio_hero_description), style = Type.small, color = palette.muted)
+                Text(artists.ifEmpty { stringResource(if (offline) R.string.radio_local_description else R.string.radio_hero_description) },
+                    style = Type.small, color = palette.muted, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 Row(Modifier.heightIn(min = 48.dp).testTag("radio-toggle").semantics { contentDescription = actionLabel }.clip(CircleShape).background(palette.action)
                     .clickable(enabled = !starting, role = Role.Button) {
                         if (active) container.player.toggle()
@@ -109,8 +113,7 @@ internal fun RadioHero(candidates: List<Track>) {
                     }.padding(horizontal = 14.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(if (playing) Lucide.Pause else Lucide.Play, null, tint = palette.onAction, modifier = Modifier.size(18.dp))
-                    Text(action, style = Type.small, color = palette.onAction, maxLines = 1,
-                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Text(action, style = Type.small, color = palette.onAction, modifier = Modifier.weight(1f, fill = false))
                 }
             }
         }
@@ -119,8 +122,8 @@ internal fun RadioHero(candidates: List<Track>) {
             horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Icon(Lucide.Radio, null, tint = palette.primary, modifier = Modifier.size(20.dp))
             Column(Modifier.weight(1f)) {
-                Text(if (active) playback.current!!.title else stringResource(if (offline) R.string.radio_local_collection else R.string.radio_hero_ready),
-                    style = Type.small, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                PlaybackTitle(if (active) playback.current!!.title else stringResource(if (offline) R.string.radio_local_collection else R.string.radio_hero_ready),
+                    playing = active && playback.soundingTrack != null, style = Type.small, maxLines = 1)
                 if (active || !offline) Text(if (active) artistsOf(playback.current!!) else stringResource(R.string.radio_hero_hint),
                     style = Type.tiny, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -133,10 +136,7 @@ internal fun RadioHero(candidates: List<Track>) {
 
 @Composable
 private fun VinylFace(track: Track?, spinning: Boolean, modifier: Modifier) {
-    val context = LocalContext.current
-    val reduced = remember(context) {
-        Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
-    }
+    val reduced = !systemMotionEnabled()
     val angle = remember { Animatable(0f) }
     LaunchedEffect(spinning, reduced) {
         while (spinning && !reduced) {

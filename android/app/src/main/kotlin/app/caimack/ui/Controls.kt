@@ -81,23 +81,25 @@ fun Toggle(
 }
 @Composable
 fun NowPlayingBars(color: Color, modifier: Modifier = Modifier) {
-    val transition = rememberInfiniteTransition(label = "now-playing")
-    val bars = NOW_PLAYING_RHYTHM.map { (period, rest) ->
-        transition.animateFloat(
-            initialValue = 0.25f,
-            targetValue = rest,
-            animationSpec = infiniteRepeatable(tween(period, easing = LinearEasing), RepeatMode.Reverse),
-            label = "bar",
-        )
-    }
+    val bars = if (systemMotionEnabled()) {
+        val transition = rememberInfiniteTransition(label = "now-playing")
+        NOW_PLAYING_RHYTHM.map { (period, peak) ->
+            transition.animateFloat(
+                initialValue = 0.25f,
+                targetValue = peak,
+                animationSpec = infiniteRepeatable(tween(period, easing = LinearEasing), RepeatMode.Reverse),
+                label = "bar",
+            )
+        }
+    } else emptyList()
     Canvas(modifier.size(width = 14.dp, height = 12.dp)) {
         val width = 3.dp.toPx()
-        val gap = (size.width - width * bars.size) / (bars.size - 1)
-        bars.forEachIndexed { index, bar ->
-            val height = size.height * bar.value
+        val gap = (size.width - width * NOW_PLAYING_RHYTHM.size) / (NOW_PLAYING_RHYTHM.size - 1)
+        NOW_PLAYING_RHYTHM.forEachIndexed { index, (_, peak) ->
+            val height = size.height * (bars.getOrNull(index)?.value ?: peak)
             drawRoundRect(
                 color,
-                topLeft = Offset(index * (width + gap), size.height - height),
+                topLeft = Offset(index * (width + gap), (size.height - height) / 2),
                 size = Size(width, height),
                 cornerRadius = CornerRadius(1.dp.toPx()),
             )

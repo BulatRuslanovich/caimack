@@ -5,6 +5,8 @@ package app.caimack.ui
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.test.platform.app.InstrumentationRegistry
 import app.caimack.CaimackApp
@@ -29,7 +31,9 @@ class RadioHeroTest {
         val states = container.player.state as MutableStateFlow<PlayerState>
         val previous = states.value
         val previousRadio = container.radio.state.value
-        val songs = listOf(Track("hero-test", "A very long title that must fit in the fixed footer", "artist", "Artist", durationSeconds = 200))
+        val lead = Track("hero-test", "A very long title that must fit in the fixed footer", "artist", "Artist", durationSeconds = 200, hasCover = true)
+        val songs = listOf(lead, lead.copy(id = "plain", artistName = "No artwork", hasCover = false),
+            lead.copy(id = "sleeve", artistName = "Guest"), lead.copy(id = "second-sleeve"))
         compose.mainClock.autoAdvance = false
         try {
             states.value = PlayerState()
@@ -40,6 +44,8 @@ class RadioHeroTest {
                 }
             }
             compose.mainClock.advanceTimeBy(1000)
+            compose.onNodeWithText("Artist, Guest").assertIsDisplayed()
+            compose.onNodeWithText(context.getString(R.string.radio_hero_start)).assertIsDisplayed()
             val hero = compose.onNodeWithTag("personal-radio").fetchSemanticsNode().boundsInRoot
             val button = compose.onNodeWithTag("radio-toggle").fetchSemanticsNode().boundsInRoot
             assertTrue(button.height / context.resources.displayMetrics.density >= 48f)

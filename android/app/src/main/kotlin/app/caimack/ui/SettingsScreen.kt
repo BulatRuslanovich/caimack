@@ -163,8 +163,7 @@ fun SettingsScreen(category: SettingsCategory? = null) {
             if (category == null && query.isBlank()) SettingsOverview()
             else if (visible.isEmpty()) Empty(stringResource(R.string.settings_search_empty))
             if (SettingKey.Listening in visible) {
-                val navigate = LocalNavigate.current
-                LibraryEntry(stringResource(R.string.listening_title), stringResource(R.string.listening_intro), Lucide.ChartLine) { navigate(ListeningRoute()) }
+                SettingsCategoryRow(SettingsCategory.Listening)
             }
             if (visible.any { it.section == R.string.settings_playback }) {
                 Panel(stringResource(R.string.settings_playback)) {

@@ -3,6 +3,7 @@
 package app.caimack.ui
 
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -199,6 +200,8 @@ private fun AppContent(
     val nav = rememberNavController()
     val destination = nav.currentBackStackEntryAsState().value?.destination
     val collectionPage = destination?.let { it.hasRoute<AlbumRoute>() || it.hasRoute<PlaylistRoute>() } == true
+    val compactWindow = LocalWindowInfo.current.containerDpSize.width < 600.dp
+    val compactHome = compactWindow && destination?.hasRoute<HomeRoute>() == true
     val searchPage = destination?.hasRoute<SearchRoute>() == true
     LaunchedEffect(destination) {
         if (destination != null && (
@@ -320,8 +323,8 @@ private fun AppContent(
             }
         },
         topBar = {
-            Column {
-                if (!collectionPage) Header(nav, user, onBack = { nav.popBackStack() }, onAccount = openAccount)
+            Column(if (compactHome) Modifier.statusBarsPadding() else Modifier) {
+                if (!collectionPage && !compactHome) Header(nav, user, onBack = { nav.popBackStack() }, onAccount = openAccount)
                 if (appUpdate.showBanner) {
                     Box(if (collectionPage) Modifier.statusBarsPadding() else Modifier) {
                         UpdateBanner(appUpdate, onDetails = { updateDetails = true }, onDismiss = { container.updates.dismiss() })
@@ -352,7 +355,9 @@ private fun AppContent(
                 .fillMaxSize().background(palette.background),
         ) {
             composable<HomeRoute> {
-                HomeScreen(nav, homeCategory, homeDownloads) { category, downloads ->
+                HomeScreen(nav, homeCategory, homeDownloads, account = {
+                    if (compactWindow) AccountButton(user, openAccount)
+                }) { category, downloads ->
                     homeCategory = category
                     homeDownloads = downloads
                 }

@@ -122,6 +122,7 @@ class OfflineHomeDeviceTest {
         val originalHttp = container.connectionPreferences.allowLocalHttp.value
         val saved = Track("offline-home-saved", "Saved recording", "artist", "Artist", durationSeconds = 5)
         val missing = saved.copy(id = "offline-home-missing", title = "Server recording")
+        val older = missing.copy(id = "older", title = "Earlier listening")
         val user = User("offline-home", "Home listener")
         val online = AtomicBoolean(true)
         val includeMix = AtomicBoolean(false)
@@ -140,8 +141,10 @@ class OfflineHomeDeviceTest {
                         "/api/book-audio" -> return MockResponse.Builder().body(Buffer().write(audio)).build()
                         "/api/config", "/api/me/settings" -> "{}"
                         "/api/home/feed" -> container.json.encodeToString(HomeFeed(if (includeMix.get()) listOf(
-                            HomeBlock("daily", "dailyMix", "Hero", "Lead", tracks = listOf(missing, saved))
+                            HomeBlock("daily", "dailyMix", "Hero", "Lead", tracks = listOf(missing, saved)),
+                            HomeBlock("quick", "quickTiles", "QuickTiles", "Quick", tracks = listOf(missing, saved)),
                         ) else emptyList()))
+                        "/api/history/recent" -> container.json.encodeToString(Paged(listOf(missing, saved, older), 3, 1, 50))
                         "/api/tracks/${saved.id}/stream" -> return MockResponse.Builder().addHeader("Content-Type", "audio/mpeg").body(Buffer().write(audio)).build()
                         else -> return MockResponse.Builder().code(404).build()
                     }
@@ -166,6 +169,7 @@ class OfflineHomeDeviceTest {
                 }
                 disconnect()
                 awaitText(compose.activity.getString(R.string.home_downloaded))
+                compose.onNodeWithText(compose.activity.getString(R.string.home_quick_picks)).assertDoesNotExist()
                 val play = hasContentDescription(compose.activity.getString(R.string.action_play))
                 compose.onNode(play and hasAnyAncestor(hasScrollAction())).performClick()
                 compose.waitUntil(10_000) { container.player.state.value.current?.id == saved.id && compose.runOnUiThread { container.player.localPosition > 0 } }
@@ -177,7 +181,8 @@ class OfflineHomeDeviceTest {
                     container.radio.state.value.active && container.player.state.value.queue.map { it.id } == listOf(saved.id) &&
                         compose.runOnUiThread { container.player.localPosition > 0 }
                 }
-                compose.runOnUiThread { container.player.pause() }
+                compose.onNodeWithTag("radio-toggle").performClick()
+                compose.waitUntil(5_000) { !container.player.state.value.playing }
                 compose.onNode(hasText(compose.activity.getString(R.string.nav_audiobooks)) and hasClickAction()).performClick()
                 awaitText(localBook.title)
                 compose.onNodeWithText(remoteBook.title).assertDoesNotExist()
@@ -187,12 +192,25 @@ class OfflineHomeDeviceTest {
                 online.set(true)
                 runBlocking { container.api.me() }
                 awaitText(missing.title)
+                val inRecent = hasAnyAncestor(hasTestTag("home-recent"))
+                val seeAll = hasText(compose.activity.getString(R.string.action_see_all))
+                compose.onNode(seeAll and inRecent).performClick()
+                awaitText(older.title)
+                compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+                awaitText(compose.activity.getString(R.string.home_quick_picks))
                 disconnect()
                 Remote.cache.clear()
                 compose.activityRule.scenario.recreate()
                 awaitText(compose.activity.getString(R.string.home_daily_mix))
                 compose.onNodeWithText(missing.title).assertDoesNotExist()
-                compose.onNodeWithText(compose.activity.getString(R.string.action_see_all)).performClick()
+                val recentTile = compose.onNode(hasText(saved.title) and inRecent)
+                // Reset the previous radio session so this tap starts a new offline queue.
+                compose.runOnUiThread { container.player.stop() }
+                recentTile.performClick()
+                compose.waitUntil(5_000) { container.player.state.value.playing && container.player.state.value.current?.id == saved.id }
+                recentTile.performClick()
+                compose.waitUntil(5_000) { !container.player.state.value.playing }
+                compose.onNode(seeAll and !inRecent).performScrollTo().performClick()
                 awaitText(missing.title)
                 compose.onNodeWithText(missing.title).assertIsNotEnabled()
                 compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }

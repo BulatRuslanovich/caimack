@@ -42,12 +42,14 @@ internal fun CategoryFilterRow(
     selection: Any?,
     showClear: Boolean,
     onClear: () -> Unit,
+    modifier: Modifier = Modifier,
     scroll: LazyListState = rememberLazyListState(),
     autoReset: Boolean = true,
     content: LazyListScope.() -> Unit,
 ) {
     if (autoReset) LaunchedEffect(selection, showClear) { scroll.animateScrollToItem(0) }
     LazyRow(
+        modifier = modifier,
         state = scroll,
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),

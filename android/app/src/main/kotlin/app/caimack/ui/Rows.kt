@@ -42,8 +42,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -90,6 +93,25 @@ fun SectionHeader(title: String, note: String? = null, onSeeAll: (() -> Unit)? =
     }
 }
 @Composable
+internal fun PlaybackTitle(
+    title: String, playing: Boolean, style: TextStyle,
+    color: Color = LocalPalette.current.foreground, maxLines: Int = 2,
+) {
+    if (!playing) {
+        Text(title, style = style, color = color, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+        return
+    }
+    val label = stringResource(R.string.player_now_playing)
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(title, Modifier.weight(1f, fill = false), style = style, color = color,
+            maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+        Box(Modifier.height(with(LocalDensity.current) { style.lineHeight.toDp() }), contentAlignment = Alignment.Center) {
+            NowPlayingBars(LocalPalette.current.primary, Modifier.semantics { contentDescription = label })
+        }
+    }
+}
+
+@Composable
 fun Card(
     title: String,
     subtitle: String,
@@ -101,13 +123,15 @@ fun Card(
     details: String? = null,
     menu: (@Composable () -> Unit)? = null,
     reserveDetailsSpace: Boolean = false,
+    playing: Boolean = false,
     cover: @Composable (Modifier) -> Unit,
 ) {
     val palette = LocalPalette.current
     val shape = if (round) CircleShape else Radius.cover
     val text: @Composable (Modifier) -> Unit = { textModifier ->
         Column(textModifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(title, style = Type.body.copy(fontWeight = FontWeight.Medium),
+            if (playing) PlaybackTitle(title, true, Type.body.copy(fontWeight = FontWeight.Medium))
+            else Text(title, style = Type.body.copy(fontWeight = FontWeight.Medium),
                 maxLines = 2, overflow = TextOverflow.Ellipsis,
                 textAlign = if (round && !list) TextAlign.Center else TextAlign.Start,
                 modifier = Modifier.fillMaxWidth())
@@ -150,6 +174,7 @@ fun TrackRow(
     checked: Boolean? = null,
     selectionEnabled: Boolean = true,
     selectionNote: String? = null,
+    playbackInTitle: Boolean = false,
 ) {
     val palette = LocalPalette.current
     val density = LocalLibraryDensity.current
@@ -203,19 +228,19 @@ fun TrackRow(
         }
         Box(Modifier.size(density.coverSize)) {
             Cover(trackCover(track), track.albumTitle ?: track.title, Modifier.fillMaxSize())
-            if (playing && index == null) {
+            if (playing && index == null && !playbackInTitle) {
                 Box(Modifier.fillMaxSize().clip(Radius.cover).background(Color.Black.copy(alpha = 0.55f)), contentAlignment = Alignment.Center) {
                     NowPlayingBars(Color.White)
                 }
             }
         }
         Column(Modifier.weight(1f)) {
-            Text(
+            PlaybackTitle(
                 track.title,
+                playing = playbackInTitle && playback.soundingTrack?.id == track.id,
                 style = Type.body.copy(fontWeight = FontWeight.Medium),
                 color = if (current) palette.primary else palette.foreground,
                 maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
             )
             Text(artistsOf(track), style = Type.small, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             selectionNote?.let { Text(it, style = Type.tiny, color = palette.muted) }

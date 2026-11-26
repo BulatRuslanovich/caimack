@@ -32,6 +32,10 @@ export function HomePage() {
   return status && !status.online ? <OfflineHome status={status} /> : <OnlineHome />;
 }
 
+function withoutNewAlbums<T extends { blocks: HomeBlock[] }>(feed: T): T {
+  return { ...feed, blocks: feed.blocks.filter((block) => block.baseKey !== "newAlbums") };
+}
+
 function OfflineHome({ status }: { status: DesktopStatus }) {
   const t = useT();
   const home = useQuery({
@@ -45,6 +49,7 @@ function OfflineHome({ status }: { status: DesktopStatus }) {
     queryFn: () =>
       desktopRequest<{ blocks: HomeBlock[]; downloads: Track[]; radio: Track[] }>("/offline-home"),
     networkMode: "always",
+    select: withoutNewAlbums,
   });
   return (
     <>
@@ -85,7 +90,7 @@ function OfflineHome({ status }: { status: DesktopStatus }) {
 function OnlineHome() {
   const t = useT();
   const { isAdmin } = useAuth();
-  const feed = useQuery(queries.homeFeed());
+  const feed = useQuery({ ...queries.homeFeed(), select: withoutNewAlbums });
 
   return (
     <>
@@ -138,9 +143,9 @@ function Blocks({
   const seen = new Set(shown);
   const browse = [];
   let includesPopular = false;
-  const audiobookAnchor =
-    blocks.find((block) => block.zone === "Browse" && block.baseKey === "newArrivals") ??
-    blocks.find((block) => block.zone === "Browse" && block.baseKey === "newAlbums");
+  const audiobookAnchor = blocks.find(
+    (block) => block.zone === "Browse" && block.baseKey === "newArrivals",
+  );
 
   for (const block of blocks) {
     if (block.zone !== "Browse") continue;
@@ -260,16 +265,8 @@ function BlockBody({ block, shown }: { block: HomeBlock; shown: Set<string> }) {
         );
       }
 
-      const wholeCards = block.baseKey === "newAlbums";
       return (
-        <Shelf
-          title={title}
-          titleHref={titleHref}
-          note={note}
-          href={href}
-          className={wholeCards ? undefined : section}
-          wholeCards={wholeCards}
-        >
+        <Shelf title={title} titleHref={titleHref} note={note} href={href} className={section}>
           <ShelfItems block={block} />
         </Shelf>
       );

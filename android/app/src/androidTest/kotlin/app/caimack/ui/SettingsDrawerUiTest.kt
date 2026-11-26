@@ -2,6 +2,7 @@
 package app.caimack.ui
 
 import android.graphics.Bitmap
+import android.content.res.Configuration
 import android.os.ParcelFileDescriptor
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.*
@@ -18,6 +19,7 @@ import mockwebserver3.Dispatcher
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import mockwebserver3.RecordedRequest
+import java.util.Locale
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -35,7 +37,9 @@ class SettingsDrawerUiTest {
     private val originalLanguage = container.appearance.language
     private val originalFontScale = context.resources.configuration.fontScale
     private val originalLocalHttp = container.connectionPreferences.allowLocalHttp.value
-    private fun label(id: Int) = context.getString(id)
+    private fun label(id: Int) = context.createConfigurationContext(
+        Configuration(context.resources.configuration).apply { setLocale(Locale.forLanguageTag("ru")) },
+    ).getString(id)
 
     @Before fun start() = runBlocking {
         Remote.cache.clear()
@@ -47,7 +51,8 @@ class SettingsDrawerUiTest {
                     "/api/me/settings" -> "{\"quality\":\"Original\"}"
                     "/api/home/feed" -> "{\"blocks\":[]}"
                     "/api/playlists", "/api/playlists/public", "/api/genres" -> "[]"
-                    else -> return MockResponse.Builder().code(204).build()
+                    "/api/auth/logout" -> return MockResponse.Builder().code(204).build()
+                    else -> return MockResponse.Builder().code(404).build()
                 }
                 return MockResponse.Builder().code(200).addHeader("Content-Type", "application/json").body(body).build()
             }
@@ -86,6 +91,7 @@ class SettingsDrawerUiTest {
         val panelSearch = compose.onNodeWithContentDescription(label(R.string.settings_search)).fetchSemanticsNode().boundsInRoot
         assertTrue("The menu must leave a strip of the app visible on the left", panelSearch.left > 40)
         assertTrue("The menu is narrower than the full screen", panelSearch.width < searchWidth)
+        compose.onNodeWithText(label(R.string.settings_playback_intro)).assertDoesNotExist()
         compose.onNodeWithText(label(R.string.settings_playback)).performClick()
         compose.onNodeWithText(label(R.string.settings_quality)).assertIsDisplayed()
         compose.onNodeWithContentDescription(label(R.string.settings_close)).assertDoesNotExist()

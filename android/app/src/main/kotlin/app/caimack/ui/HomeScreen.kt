@@ -10,8 +10,11 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -37,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -65,7 +69,7 @@ import retrofit2.HttpException
 
 private const val HERO_PREVIEW = 3
 private const val MOBILE_UP_NEXT = 2
-private const val MOBILE_QUICK = 4
+private const val RECENT_LIMIT = 4
 private const val MIN_DISTINCT = 3
 
 @Composable
@@ -73,6 +77,7 @@ internal fun HomeScreen(
     nav: NavController,
     category: String,
     downloads: Boolean,
+    account: @Composable () -> Unit,
     onFilterChange: (category: String, downloads: Boolean) -> Unit,
 ) {
     val container = LocalContainer.current
@@ -98,14 +103,17 @@ internal fun HomeScreen(
         if (duration == 0) scroll.scrollToItem(index) else scroll.animateScrollToItem(index)
     }
     val filters: @Composable () -> Unit = {
-        CategoryFilterRow(selected, false, {}, scroll = scroll, autoReset = false) {
-            item("all") { CategoryFilter(R.string.home_filter_all, selected == "all") { select("all") } }
-            item("music") {
-                HomeCategory(R.string.home_filter_music, selected == "music", downloads, music, emphasis, { select("music") }, toggleDownloads)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            CategoryFilterRow(selected, false, {}, modifier = Modifier.weight(1f), scroll = scroll, autoReset = false) {
+                item("all") { CategoryFilter(R.string.home_filter_all, selected == "all") { select("all") } }
+                item("music") {
+                    HomeCategory(R.string.home_filter_music, selected == "music", downloads, music, emphasis, { select("music") }, toggleDownloads)
+                }
+                if (enabled) item("audiobooks") {
+                    HomeCategory(R.string.nav_audiobooks, selected == "audiobooks", downloads, books, emphasis, { select("audiobooks") }, toggleDownloads)
+                }
             }
-            if (enabled) item("audiobooks") {
-                HomeCategory(R.string.nav_audiobooks, selected == "audiobooks", downloads, books, emphasis, { select("audiobooks") }, toggleDownloads)
-            }
+            account()
         }
     }
     when {
@@ -132,7 +140,7 @@ private fun DownloadedMusicHome(filters: (@Composable () -> Unit)?, fallback: Bo
         if (audiobooks != null) homeAudiobook(audiobooks)
         if (tracks.isEmpty()) item { Empty(stringResource(if (fallback) R.string.home_empty_downloads else R.string.downloads_empty_title)) }
         itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
-            TrackRow(track, onClick = { container.player.play(tracks, index, "home:downloads") })
+            TrackRow(track, onClick = { container.player.play(tracks, index, "home:downloads") }, playbackInTitle = true)
         }
     }
 }
@@ -180,7 +188,8 @@ private fun MusicHome(nav: NavController, audiobooks: AudiobookCatalog?, filters
         },
     ) { blocks ->
         val visible = remember(blocks, offline, library, container.accountKey) {
-            if (offline) offlineHomeBlocks(blocks, library.takeIf { it.account == container.accountKey } ?: LocalLibrary()) else blocks
+            val sections = blocks.filterNot { it.baseKey == "newAlbums" }
+            if (offline) offlineHomeBlocks(sections, library.takeIf { it.account == container.accountKey } ?: LocalLibrary()) else sections
         }
         if (offline && visible.isEmpty()) DownloadedMusicHome(filters, fallback = true, audiobooks = audiobooks)
         else HomeFeed(visible, nav, audiobooks, filters, if (visible.isEmpty()) {
@@ -207,12 +216,13 @@ private fun withPopularMusic(blocks: List<HomeBlock>, popular: SearchResults): L
 }
 
 private fun offlineHomeBlocks(blocks: List<HomeBlock>, library: LocalLibrary): List<HomeBlock> = blocks.mapNotNull { block ->
+    if (block.zone == "Quick" && block.baseKey != "quickTiles") return@mapNotNull null
     val tracks = block.tracks?.filter { it.id in library.trackIds }.orEmpty()
     val visible = block.copy(
-        tracks = if (block.baseKey == "favorites" && tracks.isEmpty()) library.availableTracks.filter { it.isFavorite } else tracks,
+        tracks = tracks,
         albums = block.albums?.filter { ("album" to it.id) in library.collections },
         artists = block.artists?.filter { ("artist" to it.id) in library.collections },
-        playlists = block.playlists?.filter { ("playlist" to it.id) in library.collections },
+        playlists = if (block.zone == "Quick") null else block.playlists?.filter { ("playlist" to it.id) in library.collections },
     )
     visible.takeUnless { it.tracks.isNullOrEmpty() && it.albums.isNullOrEmpty() && it.artists.isNullOrEmpty() && it.playlists.isNullOrEmpty() }
 }
@@ -247,12 +257,10 @@ private fun HomeFeed(
         if (filters != null) item("home-filters") { filters() }
         if (showRadio && status == null) item("personal-radio") { RadioHero(if (offline) localTracks else blocks.flatMap { it.tracks.orEmpty() }) }
 
-        val quick = blocks.filter { it.zone == "Quick" }
-        if (quick.isNotEmpty()) {
+        blocks.firstOrNull { it.baseKey == "quickTiles" && (!it.tracks.isNullOrEmpty() || !it.albums.isNullOrEmpty()) }?.let { quick ->
             item("quick") {
-                val source = "home:quickTiles"
-                Shown(source, seen)
-                QuickTiles(quick, nav) { tracks, index -> container.playable(tracks).takeIf { it.isNotEmpty() }?.let { ready -> container.player.play(ready, ready.indexOfFirst { it.id == tracks.getOrNull(index)?.id }.coerceAtLeast(0), source) }; Unit }
+                Shown("home:quickTiles", seen)
+                QuickTiles(quick, nav)
             }
         }
 
@@ -261,7 +269,6 @@ private fun HomeFeed(
         if (recommendations && status == null) item("recap") { RecapBanner() }
         val browse = blocks.filter { it.zone == "Browse" }
         val audiobookAnchor = browse.firstOrNull { it.baseKey == "newArrivals" }
-            ?: browse.firstOrNull { it.baseKey == "newAlbums" }
         if (audiobookAnchor == null) audiobooks?.let { homeAudiobook(it) }
         if (status != null) item("music-status") { status() }
         browse.forEach { block ->
@@ -288,6 +295,7 @@ private fun Block(block: HomeBlock, nav: NavController, shown: Set<String>, seen
     when (block.layout) {
         "Hero" -> DailyMix(tracks, block.totalCount ?: tracks.size, title, play) { nav.navigate(MixRoute("daily")) }
         "Grid" -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            val playback by container.player.state.collectAsStateWithLifecycle()
             SectionHeader(title, note, seeAll)
             val fresh = onePerAlbum(tracks.filter { it.id !in shown })
             val cards = (if (fresh.size >= MIN_DISTINCT) fresh else onePerAlbum(tracks)).take(4)
@@ -295,7 +303,8 @@ private fun Block(block: HomeBlock, nav: NavController, shown: Set<String>, seen
                 cards.chunked(2).forEach { pair ->
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         pair.forEach { track ->
-                            Card(track.title, artistsOf(track), { play(tracks, tracks.indexOf(track)) }, Modifier.weight(1f)) {
+                            Card(track.title, artistsOf(track), { play(tracks, tracks.indexOf(track)) }, Modifier.weight(1f),
+                                playing = playback.soundingTrack?.id == track.id) {
                                 Cover(trackCover(track, small = false), track.albumTitle ?: track.title, it)
                             }
                         }
@@ -311,7 +320,7 @@ private fun Block(block: HomeBlock, nav: NavController, shown: Set<String>, seen
             SectionHeader(title, note, seeAll)
             Column {
                 tracks.forEachIndexed { index, track ->
-                    TrackRow(track, { play(tracks, index) })
+                    TrackRow(track, { play(tracks, index) }, playbackInTitle = true)
                 }
             }
         }
@@ -324,7 +333,9 @@ private fun Block(block: HomeBlock, nav: NavController, shown: Set<String>, seen
 
 @Composable
 private fun Shelf(block: HomeBlock, nav: NavController, play: (List<Track>, Int) -> Unit) {
-    val media = LocalContainer.current.media
+    val container = LocalContainer.current
+    val media = container.media
+    val playback by container.player.state.collectAsStateWithLifecycle()
     val width = Modifier.width(LocalLibraryDensity.current.shelfWidth)
 
     LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -337,7 +348,8 @@ private fun Shelf(block: HomeBlock, nav: NavController, play: (List<Track>, Int)
             }
             !block.albums.isNullOrEmpty() -> items(block.albums, key = { it.id }) { album ->
                 val cover = media.albumCover(album, small = true)
-                Card(album.title, listOfNotNull(album.artistName, album.year?.toString()).joinToString(", "), { nav.navigate(AlbumRoute(album.id)) }, width, toneUrl = cover) {
+                Card(album.title, listOfNotNull(album.artistName, album.year?.toString()).joinToString(", "), { nav.navigate(AlbumRoute(album.id)) }, width, toneUrl = cover,
+                    playing = playback.soundingTrack?.albumId == album.id) {
                     Cover(cover, album.title, it)
                 }
             }
@@ -351,7 +363,8 @@ private fun Shelf(block: HomeBlock, nav: NavController, play: (List<Track>, Int)
                 val tracks = block.tracks.orEmpty()
                 items(tracks, key = { it.id }) { track ->
                     val cover = trackCover(track)
-                    Card(track.title, artistsOf(track), { play(tracks, tracks.indexOf(track)) }, width, toneUrl = cover) {
+                    Card(track.title, artistsOf(track), { play(tracks, tracks.indexOf(track)) }, width, toneUrl = cover,
+                        playing = playback.soundingTrack?.id == track.id) {
                         Cover(cover, track.albumTitle ?: track.title, it)
                     }
                 }
@@ -383,7 +396,7 @@ private fun DailyMix(tracks: List<Track>, total: Int, title: String, play: (List
                 style = Type.small, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Column {
-            tracks.take(MOBILE_UP_NEXT).forEachIndexed { index, track -> TrackRow(track, { play(tracks, index) }) }
+            tracks.take(MOBILE_UP_NEXT).forEachIndexed { index, track -> TrackRow(track, { play(tracks, index) }, playbackInTitle = true) }
         }
         Row(Modifier.padding(horizontal = 16.dp).heightIn(min = 48.dp).clickable(onClick = seeAll),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -480,61 +493,61 @@ internal fun CollectionShuffleButton(enabled: Boolean, compact: Boolean = false)
 }
 
 @Composable
-private fun QuickTiles(blocks: List<HomeBlock>, nav: NavController, play: (List<Track>, Int) -> Unit) {
-    val media = LocalContainer.current.media
-    val tiles = mutableListOf<@Composable () -> Unit>()
+internal fun QuickTiles(block: HomeBlock, nav: NavController) {
+    val container = LocalContainer.current
+    val playback by container.player.state.collectAsStateWithLifecycle()
+    val current = playback.current
+    val albums = block.albums.orEmpty().take(RECENT_LIMIT)
+    val tracks = block.tracks.orEmpty()
+    val recentTracks = tracks.take(RECENT_LIMIT - albums.size)
+    val count = albums.size + recentTracks.size
+    if (count == 0) return
 
-    for (block in blocks) {
-        val tracks = block.tracks.orEmpty()
-        if (block.layout == "Tile") {
-            tiles += {
-                Tile(stringResource(R.string.home_liked_songs), pluralStringResource(R.plurals.count_tracks, block.totalCount ?: tracks.size, block.totalCount ?: tracks.size), { nav.navigate(FavoritesRoute) }, tracks.firstOrNull()?.let { trackCover(it) }) {
-                    Mosaic(tracks)
+    Column(Modifier.testTag("home-recent"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionHeader(stringResource(R.string.home_quick_picks), onSeeAll = { nav.navigate(RecentRoute) })
+        BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+            val gap = 8.dp
+            val share = (maxWidth - gap * (count - 1)) / count
+            val minWidth = 176.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
+            val fits = share >= minWidth
+            Row(if (fits) Modifier.fillMaxWidth() else Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(gap)) {
+                val card = if (fits) Modifier.weight(1f) else Modifier.width(minWidth)
+                albums.forEach { album ->
+                    val cover = container.media.albumCover(album, small = true)
+                    Tile(album.title, album.artistName, card, cover, playback.soundingTrack?.albumId == album.id,
+                        onClick = { nav.navigate(AlbumRoute(album.id)) }) {
+                        Cover(cover, album.title, Modifier.fillMaxSize())
+                    }
                 }
-            }
-            continue
-        }
-        block.albums.orEmpty().forEach { album ->
-            tiles += {
-                val cover = media.albumCover(album, small = true)
-                Tile(album.title, album.artistName, { nav.navigate(AlbumRoute(album.id)) }, cover) { Cover(cover, album.title, Modifier.fillMaxSize()) }
-            }
-        }
-        tracks.forEachIndexed { index, track ->
-            tiles += {
-                val cover = trackCover(track)
-                Tile(track.title, artistsOf(track), { play(tracks, index) }, cover) { Cover(cover, track.albumTitle ?: track.title, Modifier.fillMaxSize()) }
-            }
-        }
-        block.playlists.orEmpty().forEach { playlist ->
-            tiles += {
-                val cover = media.playlistCover(playlist.id, playlist.hasCover, playlist.coverTrackId, small = true)
-                Tile(playlist.name, pluralStringResource(R.plurals.count_tracks, playlist.trackCount, playlist.trackCount), { nav.navigate(PlaylistRoute(playlist.id)) }, cover) {
-                    PlaylistArtwork(cover, playlist.coverTracks.takeUnless { playlist.hasCover }, playlist.name, Modifier.fillMaxSize())
+                recentTracks.forEach { track ->
+                    val cover = trackCover(track)
+                    Tile(track.title, artistsOf(track), card, cover, playback.soundingTrack?.id == track.id,
+                        onClick = {
+                            if (current?.id == track.id) container.player.toggle()
+                            else {
+                                val ready = container.playable(tracks)
+                                val index = ready.indexOfFirst { it.id == track.id }
+                                if (index >= 0) container.player.play(ready, index, "home:quickTiles")
+                            }
+                        }) {
+                        Cover(cover, track.albumTitle ?: track.title, Modifier.fillMaxSize())
+                    }
                 }
-            }
-        }
-    }
-
-    Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        val columns = if (LocalDensity.current.fontScale >= 1.3f) 1 else 2
-        tiles.take(MOBILE_QUICK).chunked(columns).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                row.forEach { tile -> Box(Modifier.weight(1f)) { tile() } }
-                if (columns == 2 && row.size == 1) Box(Modifier.weight(1f))
             }
         }
     }
 }
 
 @Composable
-private fun Tile(label: String, sublabel: String, onClick: () -> Unit, toneUrl: String?, art: @Composable () -> Unit) {
+private fun Tile(
+    label: String, sublabel: String, modifier: Modifier, toneUrl: String?, playing: Boolean,
+    onClick: () -> Unit, art: @Composable () -> Unit,
+) {
     val palette = LocalPalette.current
     val tone = rememberToneColor(toneUrl)
     Row(
-        Modifier
-            .fillMaxWidth()
-            .heightIn(min = 64.dp)
+        modifier.heightIn(min = 64.dp)
             .clip(Radius.tile)
             .background(palette.card)
             .background(Brush.horizontalGradient(0f to tone.copy(alpha = tone.alpha * 0.3f), 0.55f to Color.Transparent))
@@ -544,22 +557,8 @@ private fun Tile(label: String, sublabel: String, onClick: () -> Unit, toneUrl: 
     ) {
         Box(Modifier.size(48.dp)) { art() }
         Column(Modifier.weight(1f).padding(horizontal = 8.dp, vertical = 4.dp)) {
-            Text(label, style = Type.small.copy(fontWeight = FontWeight.Medium), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            PlaybackTitle(label, playing, Type.small.copy(fontWeight = FontWeight.Medium))
             Text(sublabel, style = Type.tiny, color = palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-    }
-}
-
-@Composable
-private fun Mosaic(tracks: List<Track>) {
-    val covers = tracks.take(4)
-    if (covers.size < 4) {
-        covers.firstOrNull()?.let { Cover(trackCover(it), it.albumTitle ?: it.title, Modifier.fillMaxSize()) }
-        return
-    }
-    Column(Modifier.fillMaxSize()) {
-        covers.chunked(2).forEach { pair ->
-            Row(Modifier.weight(1f)) { pair.forEach { Cover(trackCover(it), it.albumTitle ?: it.title, Modifier.weight(1f).fillMaxSize()) } }
         }
     }
 }
@@ -581,7 +580,6 @@ private fun blockTitle(block: HomeBlock): String {
         "popularTracks" -> stringResource(R.string.home_popular_tracks)
         "popularAlbums" -> stringResource(R.string.home_popular_albums)
         "popularArtists" -> stringResource(R.string.home_popular_artists)
-        "newAlbums" -> stringResource(R.string.home_new_albums)
         "yourPlaylists" -> stringResource(R.string.home_your_playlists)
         "becauseYouListened" -> if (subject != null) stringResource(R.string.rec_because_you_listened, subject) else stringResource(R.string.rec_for_you)
         "discover" -> stringResource(R.string.rec_discover)
@@ -595,7 +593,6 @@ private fun blockLink(block: HomeBlock): Any? = when (block.baseKey) {
     "favorites" -> FavoritesRoute
     "quickTiles" -> RecentRoute
     "newArrivals" -> MixRoute("new")
-    "newAlbums" -> SearchRoute(SearchCategory.Albums)
     "yourPlaylists" -> SearchRoute(SearchCategory.Playlists)
     "artistsForYou" -> SearchRoute(SearchCategory.Artists)
     else -> null

@@ -39,6 +39,7 @@ data class PlayerState(
     val collection: PlaybackCollection? = null,
 ) {
     val current: Track? get() = queue.getOrNull(index)
+    val soundingTrack: Track? get() = if (playing && !buffering) current else null
 
     val previous: Track? get() = queue.getOrNull(previousIndex)
     val next: Track? get() = queue.getOrNull(nextIndex)

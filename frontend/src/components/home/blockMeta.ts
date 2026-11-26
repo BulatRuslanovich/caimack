@@ -18,7 +18,6 @@ const TITLES: Record<string, TranslationKey> = {
   [QUICK_TILES]: "home.quickPicks",
   [NEW_ARRIVALS]: "home.newArrivals",
   [TOP_TRACKS]: "home.topThisWeek",
-  newAlbums: "home.newAlbums",
   yourPlaylists: "home.yourPlaylists",
 
   forYou: "rec.shelf.forYou",
@@ -33,7 +32,6 @@ const LINKS = {
   [QUICK_TILES]: "/recently-played",
   [NEW_ARRIVALS]: "/mixes/new",
   [TOP_TRACKS]: "/mixes/top",
-  newAlbums: "/search?tab=albums",
   yourPlaylists: "/search?tab=playlists",
 
   artistsForYou: "/search?tab=artists",

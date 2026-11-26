@@ -47,9 +47,10 @@ vi.mock("@/components/MediaCard", () => ({
 }));
 vi.mock("@/components/PageHeader", () => ({
   SectionHeader: ({ title }: { title: string }) => <h2>{title}</h2>,
-  Section: ({ title, children }: { title: string; children: ReactNode }) => (
+  Section: ({ title, href, children }: { title: string; href?: string; children: ReactNode }) => (
     <section>
       <h2>{title}</h2>
+      {href && <a href={href}>See all</a>}
       {children}
     </section>
   ),
@@ -138,8 +139,24 @@ function render(blocks: HomeBlock[], books: Audiobook[]) {
 }
 
 it("shows only the most recent unfinished audiobook immediately after fresh arrivals", () => {
+  const newAlbums: HomeBlock = {
+    ...block("newAlbums"),
+    layout: "Shelf",
+    albums: [
+      {
+        id: "new-album",
+        title: "Separate new album",
+        artistId: "artist",
+        artistName: "Artist",
+        trackCount: 1,
+        durationSeconds: 180,
+        hasCover: false,
+        createdAt: "2026-01-01T00:00:00Z",
+      },
+    ],
+  };
   const html = render(
-    [block("newAlbums"), block("newArrivals"), block("topTracks")],
+    [newAlbums, block("newArrivals"), block("topTracks")],
     [
       book("previous-book", 2),
       book("last-book", 3),
@@ -150,6 +167,8 @@ it("shows only the most recent unfinished audiobook immediately after fresh arri
   expect(html).toMatch(
     /home\.newArrivals.*audiobooks\.continueAtHome.*href="\/audiobooks\/last-book".*search\.mostPlayedTracks/,
   );
+  expect(html).not.toContain("Separate new album");
+  expect(html).toContain('href="/mixes/new"');
   expect(html.match(/href="\/audiobooks\//g)).toHaveLength(1);
 });
 
@@ -161,9 +180,9 @@ it("keeps the last audiobook available without a music feed and hides the card w
 });
 
 it("replaces the weekly chart with popular tracks, albums and artists", () => {
-  const markup = render([block("topTracks"), block("newAlbums")], []);
+  const markup = render([block("topTracks"), block("newArrivals")], []);
   expect(markup).toMatch(
-    /search.mostPlayedTracks.*search.mostPlayedAlbums.*search.mostPlayedArtists.*home.newAlbums/,
+    /search.mostPlayedTracks.*search.mostPlayedAlbums.*search.mostPlayedArtists.*home.newArrivals/,
   );
   expect(markup).not.toContain("home.topThisWeek");
   expect(markup).toContain('data-density="compact" data-ranked="false"');

@@ -26,7 +26,7 @@
     <string name="home_popular_albums">Самые прослушиваемые альбомы</string>
     <string name="home_popular_artists">Самые прослушиваемые исполнители</string>
     <string name="home_new_albums">Новые альбомы</string>
-    <string name="home_quick_picks">Снова к ним</string>
+    <string name="home_quick_picks">Недавно слушали</string>
     <string name="home_your_playlists">Ваши плейлисты</string>
     <string name="rec_for_you">Для вас</string>
     <string name="rec_because_you_listened">Потому что вы слушали %1$s</string>

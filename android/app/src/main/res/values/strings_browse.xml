@@ -26,7 +26,7 @@
     <string name="home_popular_albums">Most played albums</string>
     <string name="home_popular_artists">Most played artists</string>
     <string name="home_new_albums">New albums</string>
-    <string name="home_quick_picks">Jump back in</string>
+    <string name="home_quick_picks">Recently played</string>
     <string name="home_your_playlists">Your playlists</string>
     <string name="rec_for_you">Made for you</string>
     <string name="rec_because_you_listened">Because you listened to %1$s</string>
