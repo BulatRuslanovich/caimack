@@ -42,7 +42,7 @@ fun SleepSheet(audiobook: Boolean = false, onDismiss: () -> Unit) {
         onDismiss()
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = palette.card) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = palette.popover) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp)) {
             Text(
                 title,

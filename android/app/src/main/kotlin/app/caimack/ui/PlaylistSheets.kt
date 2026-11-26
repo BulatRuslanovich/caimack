@@ -65,7 +65,7 @@ internal fun PlaylistActionSheet(
         onDismissRequest = { if (!busy) onDismiss() },
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         sheetGesturesEnabled = !busy,
-        containerColor = LocalPalette.current.card,
+        containerColor = LocalPalette.current.popover,
     ) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 12.dp)) {
             SheetHeading(title)

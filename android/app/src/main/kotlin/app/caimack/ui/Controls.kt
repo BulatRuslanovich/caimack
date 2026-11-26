@@ -75,7 +75,7 @@ fun Toggle(
             checkedThumbColor = palette.onPrimary,
             uncheckedTrackColor = palette.raised,
             uncheckedBorderColor = palette.controlBorder,
-            uncheckedThumbColor = palette.muted,
+            uncheckedThumbColor = palette.foreground,
         ),
     )
 }

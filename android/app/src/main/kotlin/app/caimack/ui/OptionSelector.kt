@@ -33,7 +33,7 @@ internal fun OptionSelector(
     Box(modifier) {
         Row(
             Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(Radius.row)
-                .background(palette.card).border(1.dp, palette.borderStrong, Radius.row)
+                .background(palette.card).border(1.dp, palette.controlBorder, Radius.row)
                 .semantics { stateDescription = selected }
                 .clickable(role = Role.Button, onClickLabel = label) { expanded = true }
                 .padding(horizontal = 14.dp, vertical = 12.dp),
@@ -43,7 +43,8 @@ internal fun OptionSelector(
             Text(selected, style = Type.small, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             Icon(Lucide.ChevronDown, label, tint = palette.muted, modifier = Modifier.size(18.dp))
         }
-        DropdownMenu(expanded, onDismissRequest = { expanded = false }, modifier = Modifier.heightIn(max = 360.dp).background(palette.popover)) {
+        DropdownMenu(expanded, onDismissRequest = { expanded = false }, modifier = Modifier.heightIn(max = 360.dp),
+            containerColor = palette.popover) {
             options.forEach { (key, text) ->
                 DropdownMenuItem(
                     text = { Text(text, color = if (key == value) palette.primary else palette.foreground) },

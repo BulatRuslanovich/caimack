@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.SingletonImageLoader
@@ -59,8 +60,10 @@ fun ArtBackdrop(
     if (url == null) return
     val palette = LocalPalette.current
     if (mode == BackdropMode.Header) {
+        if (!LocalToneEnabled.current) return
         val surface = rememberPlayerSurface(url)
-        val top by androidx.compose.animation.animateColorAsState(Color(surface.top), tween(600), label = "header-colour")
+        val tint = lerp(palette.background, Color(surface.top), if (palette.dark) 0.60f else 0.25f)
+        val top by androidx.compose.animation.animateColorAsState(tint, tween(600), label = "header-colour")
         Canvas(modifier.clipToBounds()) {
             drawRect(Brush.verticalGradient(0f to top, 0.62f to top.copy(alpha = 0.38f), 1f to Color.Transparent))
         }

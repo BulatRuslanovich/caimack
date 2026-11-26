@@ -40,11 +40,10 @@ class Appearance(private val context: Context) {
 
     val language: String get() = preferences.getString(LANGUAGE, "").orEmpty()
 
-    fun palette(): Palette = paletteOf(colorway.value, when (theme.value) {
-        DARK -> true
-        LIGHT -> false
-        else -> context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
-    })
+    fun palette(): Palette {
+        val systemDark = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+        return paletteOf(colorway.value, isDark(theme.value, systemDark))
+    }
 
     fun setTheme(value: String) {
         preferences.edit { putString(THEME, value) }
@@ -70,6 +69,12 @@ class Appearance(private val context: Context) {
         const val SYSTEM = "system"
         const val DARK = "dark"
         const val LIGHT = "light"
+
+        internal fun isDark(theme: String, systemDark: Boolean): Boolean = when (theme) {
+            DARK -> true
+            LIGHT -> false
+            else -> systemDark
+        }
 
         private const val FILE = "appearance"
         private const val THEME = "theme"

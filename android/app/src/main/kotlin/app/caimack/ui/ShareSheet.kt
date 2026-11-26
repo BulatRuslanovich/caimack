@@ -104,7 +104,7 @@ fun ShareSheet(track: Track, positionMs: Long, onDismiss: () -> Unit) {
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = palette.card,
+        containerColor = palette.popover,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     ) {
         Column(

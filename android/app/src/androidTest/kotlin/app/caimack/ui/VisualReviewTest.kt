@@ -206,6 +206,10 @@ class VisualReviewTest {
         Thread.sleep(80) // Let the emulator compositor present the frame before the system screenshot.
         val bitmap = componentTag?.let { compose.onNodeWithTag(it).captureToImage().asAndroidBitmap() }
             ?: checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+        saveCapture(name, bitmap)
+    }
+
+    private fun saveCapture(name: String, bitmap: Bitmap) {
         val values = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, "${InstrumentationRegistry.getArguments().getString("visualPrefix").orEmpty()}$name.png")
             put(MediaStore.Downloads.MIME_TYPE, "image/png")
@@ -847,4 +851,112 @@ class VisualReviewTest {
             shell("appwidget revokebind --package ${context.packageName} --user 0")
         }
     }
+    @Test
+    fun fullPlayerUsesLightSystemIconsEvenInLightMode() {
+        container.appearance.setTheme(Appearance.LIGHT)
+        compose.runOnIdle {
+            (container.player.state as MutableStateFlow<PlayerState>).value = PlayerState(queue = original)
+        }
+
+        fun iconsAreDark(): Boolean = compose.runOnIdle {
+            val window = compose.activity.window
+            androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars
+        }
+
+        assertTrue("Light library needs dark status icons", iconsAreDark())
+        compose.onNodeWithContentDescription(compose.activity.getString(R.string.player_open_full)).performClick()
+        assertTrue("The dark artwork stage needs light status icons", !iconsAreDark())
+        compose.onNodeWithContentDescription(compose.activity.getString(R.string.player_close_full)).performClick()
+        assertTrue("Closing the player restores the library's system icons", iconsAreDark())
+    }
+
+
+    @Test fun widgetCoverColoursFollowCurrentArtworkWithGlowDisabled() {
+        val originalGlow = container.appearance.coverTone.value
+        val colours = mapOf("widget-emerald" to 0xFF22835A.toInt(), "widget-violet" to 0xFFA21AC5.toInt())
+        val images = colours.mapValues { (_, colour) ->
+            val bitmap = Bitmap.createBitmap(128, 128, Bitmap.Config.ARGB_8888).apply { eraseColor(colour) }
+            java.io.ByteArrayOutputStream().use { out -> bitmap.compress(Bitmap.CompressFormat.PNG, 100, out); out.toByteArray() }.also { bitmap.recycle() }
+        }
+        val previous = web.dispatcher
+        web.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val path = request.url.encodedPath
+                val image = images[path.substringBeforeLast("/").substringAfterLast("/")]
+                if (path.endsWith("/cover") && image != null) {
+                    val reply = MockResponse.Builder().addHeader("Content-Type", "image/png").body(Buffer().write(image))
+                    if (path.contains("violet")) reply.bodyDelay(550, TimeUnit.MILLISECONDS)
+                    return reply.build()
+                }
+                return previous.dispatch(request)
+            }
+        }
+        fun song(id: String, title: String) = Track(id, title, "north", "North Pier", durationSeconds = 240, hasCover = id in colours)
+        val emerald = song("widget-emerald", "After Hours")
+        val violet = song("widget-violet", "Ultraviolet")
+        val bare = song("widget-bare", "Unmarked Tape")
+        val manager = AppWidgetManager.getInstance(context)
+        val host = AppWidgetHost(context, 2473)
+        shell("appwidget grantbind --package ${context.packageName} --user 0")
+        try {
+            val id = host.allocateAppWidgetId()
+            assertTrue(manager.bindAppWidgetIdIfAllowed(id, ComponentName(context, NowPlayingWidget::class.java)))
+            lateinit var widget: android.appwidget.AppWidgetHostView
+            compose.runOnIdle {
+                host.startListening()
+                widget = host.createView(compose.activity, id, manager.getAppWidgetInfo(id))
+                val frame = FrameLayout.LayoutParams(940, 500, android.view.Gravity.CENTER)
+                compose.activity.addContentView(widget, frame)
+            }
+            fun captureWidget(name: String) {
+                if (!InstrumentationRegistry.getArguments().containsKey("visualPrefix")) return
+                val bitmap = compose.runOnIdle {
+                    Bitmap.createBitmap(widget.width, widget.height, Bitmap.Config.ARGB_8888).also {
+                        widget.draw(Canvas(it))
+                    }
+                }
+                saveCapture(name, bitmap)
+            }
+            fun fill(vararg ids: Int): List<Int?> = compose.runOnIdle {
+                ids.map { widget.findViewById<android.view.View>(it)?.backgroundTintList?.defaultColor }
+            }
+            fun show(track: Track) {
+                compose.runOnIdle { NowPlayingWidget.show(context, track, false) }
+                compose.waitUntil(10_000) { widget.findViewById<TextView>(R.id.widget_title)?.text == track.title }
+                Thread.sleep(750)
+            }
+            fun expect(track: Track, dark: Boolean) {
+                val base = paletteOf(Colorway.Cover, dark)
+                val tone = colours[track.id]?.let { colour -> playerBackdropTone(IntArray(64 * 64) { colour }) }
+                val expected = if (tone != null) coverPalette(dark, coverPaletteSeed(tone)) else base
+                val actual = fill(R.id.widget_root, R.id.widget_primary)
+                assertEquals(listOf(expected.card.toArgb(), expected.action.toArgb()), actual)
+            }
+            container.appearance.setTheme(Appearance.LIGHT)
+            container.appearance.setColorway(Colorway.Cover)
+            container.appearance.setCoverTone(true)
+            show(emerald)
+            expect(emerald, false)
+            captureWidget("widget-cover-glow-on")
+            container.appearance.setCoverTone(false)
+            Thread.sleep(800)
+            expect(emerald, false)
+            captureWidget("widget-cover-glow-off")
+            compose.runOnIdle { NowPlayingWidget.show(context, violet, false) }
+            show(bare)
+            expect(bare, false)
+            captureWidget("widget-no-cover")
+            container.appearance.setTheme(Appearance.DARK)
+            show(violet)
+            expect(violet, true)
+            captureWidget("widget-violet-dark")
+        } finally {
+            container.appearance.setCoverTone(originalGlow)
+            host.stopListening()
+            host.deleteHost()
+            shell("appwidget revokebind --package ${context.packageName} --user 0")
+        }
+    }
+
+
 }

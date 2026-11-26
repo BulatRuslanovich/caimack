@@ -52,7 +52,7 @@ data class Palette(
     val cabinetEdge: Color get() = foreground.copy(alpha = if (dark) 0.09f else 0.11f)
     val border = foreground.copy(alpha = 0.12f)
     val borderStrong = foreground.copy(alpha = 0.24f)
-    val controlBorder = foreground.copy(alpha = if (dark) 0.40f else 0.55f)
+    val controlBorder = foreground.copy(alpha = 0.58f)
 }
 
 enum class Colorway(val key: String) {
@@ -373,7 +373,7 @@ val PlayerPalette = Palette(
     primary = Color(0xFFF5F5F5), onPrimary = Color(0xFF171819),
     primarySoft = Color(0x24F5F5F5),
     action = Color(0xFFF5F5F5), onAction = Color(0xFF171819),
-    destructive = Color(0xFFFF6680), warning = Color(0xFFF2C14E), success = Color(0xFF6FCF97),
+    destructive = Color(0xFFFF859B), warning = Color(0xFFF2C14E), success = Color(0xFF6FCF97),
     sleeves = listOf(Color(0xFF282828), Color(0xFF343434), Color(0xFF404040)),
     dark = true,
 )

@@ -24,11 +24,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -209,15 +207,12 @@ internal fun MiniPlayerLayout(
     val palette = LocalPalette.current
     val motion = playerMotionEnabled()
     val haptic = rememberPlayerHaptics()
-    val loaded = LocalNowPlayingCoverTone.current
-    val resolved = loaded?.let { cover -> cover.tone?.let {
+    val toneEnabled = LocalToneEnabled.current
+    val target = LocalNowPlayingCoverTone.current?.takeIf { toneEnabled }?.let {
         oklch(if (palette.dark) 0.33 else 0.88, min(it.chroma * 0.85, if (palette.dark) 0.09 else 0.065), it.hue)
-    } ?: palette.raised }
-    // Keep the previous colour while the next cover loads, including uncached radio tracks.
-    var lastBackground by remember(palette.dark) { mutableStateOf(palette.raised) }
-    SideEffect { if (resolved != null) lastBackground = resolved }
+    } ?: palette.raised
     val background by key(palette.dark) {
-        animateColorAsState(resolved ?: lastBackground, tween(if (motion) 450 else 0), label = "mini-player-background")
+        animateColorAsState(target, tween(if (motion) 450 else 0), label = "mini-player-background")
     }
     val foreground = palette.foreground
     val secondary = foreground.copy(alpha = 0.76f)

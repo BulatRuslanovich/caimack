@@ -18,8 +18,9 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.caimack.session.SessionState
@@ -45,12 +46,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         volumeControlStream = AudioManager.STREAM_MUSIC
-        enableEdgeToEdge()
+        val container = (application as CaimackApp).container
+        val initialDark = container.appearance.palette().dark
+        applySystemBars(initialDark, initialDark)
         if(android.os.Build.VERSION.SDK_INT>=37 && androidx.core.content.ContextCompat.checkSelfPermission(this,"android.permission.ACCESS_LOCAL_NETWORK") != android.content.pm.PackageManager.PERMISSION_GRANTED) {
             localNetworkPermission.launch("android.permission.ACCESS_LOCAL_NETWORK")
         }
 
-        val container = (application as CaimackApp).container
         if (savedInstanceState == null) {
             playFromSearch(intent)
             openFromNotification(intent)
@@ -60,20 +62,16 @@ class MainActivity : ComponentActivity() {
             val state by container.session.state.collectAsStateWithLifecycle()
             val address by container.server.url.collectAsStateWithLifecycle()
             val theme by container.appearance.theme.collectAsStateWithLifecycle()
-            val dark = theme == Appearance.DARK || (theme == Appearance.SYSTEM && isSystemInDarkTheme())
+            val dark = Appearance.isDark(theme, isSystemInDarkTheme())
             val colorway by container.appearance.colorway.collectAsStateWithLifecycle()
-
-            DisposableEffect(dark) {
-                val bars = if (dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
-                enableEdgeToEdge(bars, bars)
-                onDispose {}
-            }
+            val updateSystemBars = remember { ::applySystemBars }
 
             CompositionLocalProvider(LocalContainer provides container) {
                 val current = state
                 if (current is SessionState.SignedIn) {
-                    App(current.user, dark, colorway)
+                    App(current.user, dark, colorway, updateSystemBars)
                 } else {
+                    LaunchedEffect(dark) { applySystemBars(dark, dark) }
                     CaimackTheme(dark = dark, colorway = colorway) {
                         Surface(Modifier.fillMaxSize()) {
                             if (current is SessionState.SignedOut) LoginScreen(
@@ -86,6 +84,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun applySystemBars(darkStatus: Boolean, darkNavigation: Boolean) {
+        fun style(dark: Boolean) = if (dark) SystemBarStyle.dark(Color.TRANSPARENT)
+            else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+        enableEdgeToEdge(style(darkStatus), style(darkNavigation))
     }
 
     override fun onNewIntent(intent: Intent) {

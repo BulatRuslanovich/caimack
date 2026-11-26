@@ -35,7 +35,7 @@ internal fun TrackInfoSheet(track: Track, onDismiss: () -> Unit) {
     }
     ModalBottomSheet(onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = LocalPalette.current.card) {
+        containerColor = LocalPalette.current.popover) {
         TrackInfoContent(details)
     }
 }

@@ -18,7 +18,7 @@
     <string name="settings_theme_dark">Dark</string>
     <string name="settings_theme_light">Light</string>
     <string name="settings_colorway">Palette</string>
-    <string name="settings_cover_tone">Cover colour</string>
+    <string name="settings_cover_tone">Artwork glow</string>
     <string name="settings_colorway_coffee">Coffee</string>
     <string name="settings_colorway_graphite">OLED Black</string>
     <string name="settings_colorway_midnight">Midnight Blue</string>
@@ -61,9 +61,9 @@
     <string name="settings_help_normalizeVolume">Reduce loudness differences between tracks.</string>
     <string name="settings_help_equalizer">Ten bands from 31 Hz to 16 kHz. Drag the points to adjust the sound. Scroll sideways to see all bands.</string>
     <string name="settings_help_theme">Use light, dark or your system appearance.</string>
-    <string name="settings_help_colorway">Change the colours of backgrounds, surfaces and accents.</string>
+    <string name="settings_help_colorway">Change the colours of backgrounds, surfaces and accents. From track artwork uses the current cover for surfaces and buttons. It falls back to Coffee without a usable colour.</string>
     <string name="settings_help_language">Change the interface language.</string>
-    <string name="settings_help_coverTone">Show highlights that pick up the colours of the current cover.</string>
+    <string name="settings_help_coverTone">Add soft artwork tints to cards, collection headers and the mini-player. The palette and full-screen player have their own colours.</string>
     <string name="settings_library_density">Library density</string>
     <string name="settings_density_compact">Compact</string>
     <string name="settings_density_comfortable">Comfortable</string>

@@ -120,7 +120,7 @@ fun PlaybackDevicesButton(
             }
         }
     }
-    if (open) ModalBottomSheet(onDismissRequest = { open = false }, containerColor = palette.card) {
+    if (open) ModalBottomSheet(onDismissRequest = { open = false }, containerColor = palette.popover) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, style = Type.heading)
             Text(stringResource(if (audiobook) R.string.connect_audiobook_description else R.string.connect_description), style = Type.small, color = palette.muted)

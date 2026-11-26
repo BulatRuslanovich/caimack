@@ -80,6 +80,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
@@ -121,14 +122,13 @@ import kotlinx.coroutines.CancellationException
 private enum class Panel { None, Lyrics, Queue }
 @Composable
 fun FullPlayer(state: PlayerState, onClose: () -> Unit) {
-    val savedColor = LocalPalette.current.primary
     CaimackTheme(dark = true, palette = PlayerPalette) {
-        FullPlayerContent(state, savedColor, onClose)
+        FullPlayerContent(state, onClose)
     }
 }
 
 @Composable
-private fun FullPlayerContent(state: PlayerState, savedColor: Color, onClose: () -> Unit) {
+private fun FullPlayerContent(state: PlayerState, onClose: () -> Unit) {
     val haptic = rememberPlayerHaptics()
     val palette = LocalPalette.current
     val container = LocalContainer.current
@@ -221,7 +221,7 @@ private fun FullPlayerContent(state: PlayerState, savedColor: Color, onClose: ()
                 IconAction(
                     if (liked) Lucide.HeartFilled else Lucide.Heart,
                     stringResource(if (liked) R.string.menu_unlike else R.string.menu_like),
-                    tint = if (liked) savedColor else palette.muted,
+                    tint = if (liked) palette.primary else palette.muted,
                 ) { haptic(PlayerHaptic.Favorite); container.favorites.toggle(track) }
                 IconAction(Lucide.Plus, stringResource(R.string.playlist_memberships)) { playlistsFor = track }
             }
@@ -578,7 +578,7 @@ internal fun Seekbar(
     ) {
         val fill = if (dragging != null) palette.primary else palette.foreground
         if (peaks != null) {
-            val rest = palette.borderStrong
+            val rest = palette.controlBorder
             Canvas(Modifier.fillMaxSize()) {
                 val bar = size.width / peaks.size
                 peaks.forEachIndexed { index, peak ->
@@ -591,7 +591,7 @@ internal fun Seekbar(
                 }
             }
         } else {
-            PlayerProgressTrack(progress, fill, palette.borderStrong)
+            PlayerProgressTrack(progress, fill, palette.controlBorder)
         }
         if (dragging != null) {
             val width = with(LocalDensity.current) { maxWidth.toPx() }
@@ -780,15 +780,14 @@ internal fun TimedLyrics(lyrics: Lyrics, active: Int, position: () -> Long, onSe
                         }
                     },
                     style = Type.section.copy(fontSize = Type.section.fontSize * 1.15f),
-                    foreground = Color.White,
+                    foreground = palette.foreground,
                     upcoming = when {
-                        current && line.words.isEmpty() -> Color.White
-                        current -> Color.White.copy(alpha = 0.72f)
-                        index < active -> Color.White.copy(alpha = 0.55f)
-                        else -> Color.White.copy(alpha = 0.65f)
+                        current && line.words.isEmpty() -> palette.foreground
+                        current -> lerp(palette.muted, palette.foreground, 0.6f)
+                        else -> palette.muted
                     },
                     modifier = Modifier.fillMaxWidth().clip(Radius.panel)
-                        .background(if (current) Color.White.copy(alpha = 0.08f) else Color.Transparent)
+                        .background(if (current) palette.primarySoft.copy(alpha = 0.08f) else Color.Transparent)
                         .testTag("lyrics-line-$index").semantics { selected = current }
                         .clickable { onSeek(line.at) }
                         .padding(horizontal = 12.dp, vertical = 7.dp),

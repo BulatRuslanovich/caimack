@@ -11,6 +11,7 @@ import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -149,7 +150,7 @@ internal fun NavController.openSection(route: Any) {
 }
 
 @Composable
-fun App(user: User, dark: Boolean, colorway: Colorway) {
+fun App(user: User, dark: Boolean, colorway: Colorway, applySystemBars: (Boolean, Boolean) -> Unit) {
     val container = LocalContainer.current
     val playback by container.player.state.collectAsStateWithLifecycle()
     val audiobookPlayback by container.audiobookPlayback.state.collectAsStateWithLifecycle()
@@ -168,18 +169,17 @@ fun App(user: User, dark: Boolean, colorway: Colorway) {
         LocalArtworkResolver provides resolveArtwork,
     ) {
         val adaptive = colorway == Colorway.Cover
-        val cover = if (toneEnabled || adaptive) {
-            if (activeAudiobook != null) bookCover else playback.current?.let { trackCover(it) }
-        } else null
+        val cover = if (activeAudiobook != null) bookCover else playback.current?.let { trackCover(it) }
         val loadedTone = rememberLoadedPlayerTone(cover)
+        val tone = rememberSettledPlayerTone(cover, loadedTone)
         val palette = if (adaptive) {
-            rememberCoverPalette(dark, cover, loadedTone)
+            rememberCoverPalette(dark, tone)
         } else {
             paletteOf(colorway, dark)
         }
         CaimackTheme(dark = dark, colorway = colorway, palette = palette) {
             Surface(Modifier.fillMaxSize()) {
-                AppContent(user, playback, activeAudiobook, bookCover, toneEnabled, loadedTone.takeIf { toneEnabled })
+                AppContent(user, playback, activeAudiobook, bookCover, toneEnabled, tone, applySystemBars)
             }
         }
     }
@@ -193,7 +193,8 @@ private fun AppContent(
     activeAudiobook: Audiobook?,
     bookCover: String?,
     toneEnabled: Boolean,
-    loadedTone: LoadedPlayerTone?,
+    coverTone: PlayerBackdropTone?,
+    applySystemBars: (Boolean, Boolean) -> Unit,
 ) {
     val palette = LocalPalette.current
     val container = LocalContainer.current
@@ -246,10 +247,16 @@ private fun AppContent(
 
     val hasPlayback = bookPlayback != null || playback.current != null
     val full = expanded && hasPlayback
+    val playerVisibility = remember { MutableTransitionState(false) }
+    playerVisibility.targetState = full
+    // The player enters from the navigation bar and covers the status bar last.
+    val darkStatus = palette.dark || (playerVisibility.currentState && full)
+    val darkNavigation = palette.dark || playerVisibility.currentState || full
+    LaunchedEffect(darkStatus, darkNavigation) { applySystemBars(darkStatus, darkNavigation) }
     val libraryDensity by container.appearance.libraryDensity.collectAsStateWithLifecycle()
 
     val colorway = LocalColorway.current
-    val tone = loadedTone?.tone?.let { CoverTone(it.hue, it.chroma) }
+    val tone = coverTone?.takeIf { toneEnabled }?.let { CoverTone(it.hue, it.chroma) }
     val toneTarget = if (colorway == Colorway.Graphite && palette.dark) Color.Transparent else tone?.color(palette, colorway) ?: Color.Transparent
     val motion = playerMotionEnabled()
     val nowPlayingTone by animateColorAsState(toneTarget, tween(if (motion) 900 else 0), label = "tone")
@@ -289,7 +296,7 @@ private fun AppContent(
         LocalAvailableTracks provides availableTracks,
         LocalAvailableCollections provides localLibrary.collections,
         LocalNowPlayingTone provides nowPlayingTone,
-        LocalNowPlayingCoverTone provides loadedTone,
+        LocalNowPlayingCoverTone provides coverTone,
         LocalToneEnabled provides toneEnabled,
         LocalSnackbar provides snackbar,
     ) {
@@ -315,7 +322,7 @@ private fun AppContent(
                 Snackbar(
                     snackbarData = data,
                     shape = Radius.panel,
-                    containerColor = palette.raised,
+                    containerColor = palette.popover,
                     contentColor = palette.foreground,
                     actionColor = palette.primary,
                     dismissActionContentColor = palette.muted,
@@ -390,7 +397,7 @@ private fun AppContent(
     }
 
     AnimatedVisibility(
-        full,
+        visibleState = playerVisibility,
         enter = slideInVertically(tween(if (motion) NOW_PLAYING_TRANSITION_MS else 0, easing = FastOutSlowInEasing)) { it },
         exit = slideOutVertically(tween(if (motion) NOW_PLAYING_TRANSITION_MS else 0, easing = FastOutSlowInEasing)) { it },
     ) {

@@ -62,6 +62,10 @@ class PlayerBackdropUiTest {
         }
         server.start()
         val container = (InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as CaimackApp).container
+        val oldServer = container.server.url.value
+        val oldLocalHttp = container.connectionPreferences.allowLocalHttp.value
+        container.connectionPreferences.setAllowLocalHttp(true)
+        runBlocking { container.server.remember(server.url("/").toString()) }
         var url by mutableStateOf<String?>(server.url("/slow").toString())
         var accent: CoverTone? = null
         compose.setContent {
@@ -97,7 +101,17 @@ class PlayerBackdropUiTest {
             compose.waitForIdle()
             assertEquals(0xff525252.toInt(), topPixel())
             assertNull(accent)
-        } finally { server.close() }
+        } finally {
+            runBlocking {
+                if (oldServer != null) container.server.remember(oldServer.toString())
+                else {
+                    container.preferences.edit { it.remove(stringPreferencesKey("server")) }
+                    container.server.restore()
+                }
+            }
+            container.connectionPreferences.setAllowLocalHttp(oldLocalHttp)
+            server.close()
+        }
     }
 
     /** Optional visual audit: supply the locally captured reference assets via a Gradle init script. */

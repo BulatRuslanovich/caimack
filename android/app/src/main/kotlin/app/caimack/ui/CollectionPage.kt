@@ -80,7 +80,8 @@ internal fun CollectionPage(
     content: LazyListScope.() -> Unit,
 ) {
     val palette = LocalPalette.current
-    val coverTone = rememberPlayerCoverTone(backdrop)
+    val toneEnabled = LocalToneEnabled.current
+    val coverTone = rememberPlayerCoverTone(backdrop.takeIf { toneEnabled })
     val top by animateColorAsState(
         coverTone?.let { oklch(if (palette.dark) 0.38 else 0.89, it.chroma.coerceAtMost(0.105), it.hue) }
             ?: palette.raised,

@@ -307,7 +307,7 @@ fun SettingsScreen(category: SettingsCategory? = null) {
                             valueRange = -EqualizerState.LIMIT_DB.toFloat()..EqualizerState.LIMIT_DB.toFloat(),
                             steps = EqualizerState.LIMIT_DB * 2 - 1,
                             modifier = Modifier.semantics { contentDescription = preampLabel },
-                            colors = SliderDefaults.colors(thumbColor = palette.primary, activeTrackColor = palette.primary, inactiveTrackColor = palette.raised),
+                            colors = SliderDefaults.colors(thumbColor = palette.primary, activeTrackColor = palette.primary, inactiveTrackColor = palette.controlBorder),
                         )
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Column(Modifier.weight(1f)) {
@@ -342,16 +342,14 @@ fun SettingsScreen(category: SettingsCategory? = null) {
                     if (SettingKey.Palette in visible) {
                         val colorway by container.appearance.colorway.collectAsStateWithLifecycle()
                         val dark = palette.dark
+                        val coverPreview = if (colorway == Colorway.Cover) palette
+                            else rememberCoverPalette(dark, LocalNowPlayingCoverTone.current)
                         Choice(
                             stringResource(R.string.settings_colorway),
                             stringResource(R.string.settings_help_colorway),
                             colorway.key,
                             Colorway.entries.map { option ->
-                                val preview = if (option == Colorway.Cover) {
-                                    coverPalette(dark, CoverPalettePreview)
-                                } else {
-                                    paletteOf(option, dark)
-                                }
+                                val preview = if (option == Colorway.Cover) coverPreview else paletteOf(option, dark)
                                 Option(option.key, stringResource(colorwayName(option)), preview = { ColorwaySwatch(preview) })
                             },
                         ) { container.appearance.setColorway(Colorway.of(it)) }
@@ -506,10 +504,21 @@ private fun colorwayName(colorway: Colorway) = when (colorway) {
 @Composable
 private fun ColorwaySwatch(palette: Palette) {
     Row(
-        Modifier.fillMaxWidth().padding(bottom = 6.dp).height(28.dp).clip(Radius.tile).border(1.dp, LocalPalette.current.border, Radius.tile),
+        Modifier.fillMaxWidth().padding(bottom = 6.dp).height(36.dp)
+            .clip(Radius.tile).background(palette.background)
+            .border(1.dp, palette.borderStrong, Radius.tile).padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        listOf(palette.background, palette.card, palette.raised, palette.foreground, palette.primary).forEach {
-            Box(Modifier.weight(1f).fillMaxHeight().background(it))
+        Box(Modifier.weight(1f).fillMaxHeight().background(palette.card, Radius.cover)) {
+            Box(Modifier.fillMaxWidth().padding(4.dp).height(3.dp).background(palette.primary, CircleShape))
+        }
+        Box(Modifier.weight(1f).fillMaxHeight().background(palette.popover, Radius.cover)
+            .border(1.dp, palette.border, Radius.cover), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxWidth().padding(horizontal = 4.dp).height(3.dp).background(palette.muted, CircleShape))
+        }
+        Box(Modifier.width(16.dp).height(16.dp).background(palette.action, CircleShape), contentAlignment = Alignment.Center) {
+            Box(Modifier.width(5.dp).height(5.dp).background(palette.onAction, CircleShape))
         }
     }
 }

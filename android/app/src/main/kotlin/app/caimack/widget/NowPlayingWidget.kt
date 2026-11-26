@@ -42,6 +42,7 @@ import app.caimack.ui.coverPaletteSeed
 import app.caimack.ui.coverCrop
 import app.caimack.ui.playerBackdropTone
 import app.caimack.ui.PlayerBackdropSettings
+import app.caimack.ui.PlayerBackdropTone
 import app.caimack.ui.CoverTone
 import app.caimack.ui.coverPlaceholder
 import app.caimack.ui.drawVinyl
@@ -155,7 +156,16 @@ class NowPlayingWidget : AppWidgetProvider() {
                     catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
                     catch (_: Exception) { null }
                 }
-                val look = Look.of(app)
+                val baseLook = Look.of(app)
+                val tone = cover?.takeIf { baseLook.coverTone || baseLook.colorway == Colorway.Cover }?.let { bitmap ->
+                    val edge = PlayerBackdropSettings.sampleEdge
+                    val sample = Bitmap.createScaledBitmap(bitmap, edge, edge, true)
+                    val pixels = IntArray(edge * edge)
+                    sample.getPixels(pixels, 0, edge, 0, 0, edge, edge)
+                    playerBackdropTone(pixels)
+                }
+                val look = baseLook.withArtwork(tone)
+                val washTone = tone?.takeIf { look.coverTone }?.let { CoverTone(it.hue, it.chroma) }
                 val frame = RecordFrame(
                     stored.getString(TRACK, null),
                     stored.getString(ART_NAME, null) ?: stored.getString(TITLE, null) ?: "Caimack",
@@ -171,9 +181,9 @@ class NowPlayingWidget : AppWidgetProvider() {
                 val squareArtwork = if (hasSquare && stored.audiobook) bookArtwork(app, look, frame, scale = 1f) else bindArtwork
                 fun render(animate: Boolean): () -> Unit {
                     val artwork: (RemoteViews) -> Unit = { bindArtwork(it, animate) }
-                    val compact = if (compactIds.isNotEmpty()) views(app, look, stored, R.layout.widget_now_playing_compact, cover, artwork) else null
-                    val expanded = if (expandedIds.isNotEmpty()) views(app, look, stored, R.layout.widget_now_playing, cover, artwork) else null
-                    val record = if (hasSquare) views(app, look, stored, R.layout.widget_record, cover) { squareArtwork(it, animate) } else null
+                    val compact = if (compactIds.isNotEmpty()) views(app, look, stored, R.layout.widget_now_playing_compact, washTone, artwork) else null
+                    val expanded = if (expandedIds.isNotEmpty()) views(app, look, stored, R.layout.widget_now_playing, washTone, artwork) else null
+                    val record = if (hasSquare) views(app, look, stored, R.layout.widget_record, washTone) { squareArtwork(it, animate) } else null
                     return {
                         if (compact != null) manager.updateAppWidget(compactIds, compact)
                         if (expanded != null) manager.updateAppWidget(expandedIds, expanded)
@@ -224,23 +234,13 @@ class NowPlayingWidget : AppWidgetProvider() {
         private fun fraction(position: Long, duration: Long) =
             if (duration <= 0) 0 else (position * PROGRESS_MAX / duration).toInt().coerceIn(0, PROGRESS_MAX)
 
-        private fun views(app: Context, look: Look, stored: Snapshot, layout: Int, cover: Bitmap?, artwork: (RemoteViews) -> Unit): RemoteViews {
+        private fun views(app: Context, look: Look, stored: Snapshot, layout: Int, washTone: CoverTone?, artwork: (RemoteViews) -> Unit): RemoteViews {
             val square = layout == R.layout.widget_record
             val context = Appearance.localized(app)
             val title = stored.getString(TITLE, null)
             val idle = title == null
             val playing = stored.getBoolean(PLAYING, false)
             val liked = stored.getBoolean(LIKED, false)
-            val tone = cover?.takeIf { look.coverTone || look.colorway == Colorway.Cover }?.let { bitmap ->
-                val edge = PlayerBackdropSettings.sampleEdge
-                val sample = Bitmap.createScaledBitmap(bitmap, edge, edge, true)
-                IntArray(edge * edge).also { sample.getPixels(it, 0, edge, 0, 0, edge, edge) }
-                    .let(::playerBackdropTone)
-            }
-
-            val washTone = tone?.takeIf { look.coverTone }?.let { CoverTone(it.hue, it.chroma) }
-            val savedSeed = tone?.takeIf { look.colorway == Colorway.Cover && liked }?.let(::coverPaletteSeed)
-
             return RemoteViews(context.packageName, layout).apply {
                 tint(R.id.widget_root, "setBackgroundTintList", look) { it.card }
                 icon(R.id.widget_wash, look) { palette -> wash(washTone?.color(palette, look.colorway)) }
@@ -282,11 +282,7 @@ class NowPlayingWidget : AppWidgetProvider() {
                 colorInt(R.id.widget_secondary, "setColorFilter", look) { it.foreground }
                 colorInt(R.id.widget_previous, "setColorFilter", look) { it.foreground }
                 colorInt(R.id.widget_like, "setColorFilter", look) { palette ->
-                    when {
-                        !liked -> palette.muted
-                        savedSeed != null -> coverPalette(palette.dark, savedSeed).primary
-                        else -> palette.primary
-                    }
+                    if (liked) palette.primary else palette.muted
                 }
 
                 val playingParts = if (idle) View.GONE else View.VISIBLE
@@ -322,7 +318,7 @@ class NowPlayingWidget : AppWidgetProvider() {
 
                 setProgressBar(R.id.widget_progress, PROGRESS_MAX, fraction(stored.getLong(POSITION, 0), stored.getLong(DURATION, 0)), false)
                 tint(R.id.widget_progress, "setProgressTintList", look) { it.foreground }
-                tint(R.id.widget_progress, "setProgressBackgroundTintList", look) { it.borderStrong }
+                tint(R.id.widget_progress, "setProgressBackgroundTintList", look) { it.controlBorder }
             }
         }
 
@@ -477,6 +473,14 @@ class NowPlayingWidget : AppWidgetProvider() {
     }
 
     private class Look(val day: Palette, val night: Palette, val colorway: Colorway, val coverTone: Boolean) {
+        fun withArtwork(tone: PlayerBackdropTone?): Look {
+            if (colorway != Colorway.Cover || tone == null) return this
+            val seed = coverPaletteSeed(tone)
+            val adaptiveDay = coverPalette(day.dark, seed)
+            val adaptiveNight = if (day === night) adaptiveDay else coverPalette(night.dark, seed)
+            return Look(adaptiveDay, adaptiveNight, colorway, coverTone)
+        }
+
         companion object {
             fun of(context: Context): Look {
                 val appearance = (context.applicationContext as CaimackApp).container.appearance

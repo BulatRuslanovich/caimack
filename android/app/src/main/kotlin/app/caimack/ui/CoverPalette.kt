@@ -14,8 +14,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import kotlin.math.min
 
-internal val CoverPalettePreview = Color(0xFF5F8CEF)
-
 internal fun coverPaletteSeed(tone: PlayerBackdropTone): Color =
     oklch(0.66, min(tone.chroma * 1.4, 0.22), tone.hue)
 
@@ -46,11 +44,17 @@ internal fun coverPalette(dark: Boolean, seed: Color): Palette {
 }
 
 @Composable
-internal fun rememberCoverPalette(dark: Boolean, url: String?, loaded: LoadedPlayerTone?): Palette {
+internal fun rememberSettledPlayerTone(url: String?, loaded: LoadedPlayerTone?): PlayerBackdropTone? {
     var settled by remember { mutableStateOf<PlayerBackdropTone?>(null) }
-    val pending = url != null && loaded == null
-    if (!pending) SideEffect { settled = loaded?.tone }
-    val tone = (if (pending) settled else loaded?.tone) ?: return paletteOf(Colorway.Cover, dark)
+    if (url != null && loaded == null) return settled
+    val tone = loaded?.tone
+    SideEffect { settled = tone }
+    return tone
+}
+
+@Composable
+internal fun rememberCoverPalette(dark: Boolean, tone: PlayerBackdropTone?): Palette {
+    if (tone == null) return paletteOf(Colorway.Cover, dark)
     val target = remember(tone) { coverPaletteSeed(tone) }
     val duration = if (systemMotionEnabled()) 320 else 0
     val seed by animateColorAsState(target, tween(duration), label = "cover palette")

@@ -73,7 +73,7 @@ fun PlaylistDialog(
 
     Dialog(onDismissRequest = { if (!saving) onDismiss() }) {
         Column(
-            Modifier.fillMaxWidth().clip(Radius.hero).background(palette.card).padding(20.dp),
+            Modifier.fillMaxWidth().clip(Radius.hero).background(palette.popover).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(title, style = Type.title)
@@ -120,7 +120,7 @@ fun ConfirmDialog(title: String, confirm: String, onDismiss: () -> Unit, onConfi
     val palette = LocalPalette.current
     Dialog(onDismissRequest = onDismiss) {
         Column(
-            Modifier.fillMaxWidth().clip(Radius.hero).background(palette.card).padding(20.dp),
+            Modifier.fillMaxWidth().clip(Radius.hero).background(palette.popover).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             Text(title, style = Type.section)

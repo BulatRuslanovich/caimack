@@ -51,7 +51,7 @@ internal fun SearchInput(
     val palette = LocalPalette.current
     val focus = LocalFocusManager.current
     var focused by remember { mutableStateOf(false) }
-    val border by animateColorAsState(if (focused) palette.foreground else palette.border, label = "search-border")
+    val border by animateColorAsState(if (focused) palette.foreground else palette.controlBorder, label = "search-border")
     val background by animateColorAsState(if (focused) palette.raised else palette.card, label = "search-background")
     Row(
         modifier.fillMaxWidth().heightIn(min = 48.dp).clip(Radius.row)

@@ -483,7 +483,7 @@ private fun ManageSheet(
     onRadio: () -> Unit,
 ) {
     val palette = LocalPalette.current
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = palette.card) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = palette.popover) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp)) {
             if (canCopy) SheetRow(stringResource(R.string.playlist_copy_all), Lucide.ListMusic, onCopy)
             if (canRecommend) SheetRow(stringResource(R.string.playlist_radio), Lucide.Radio, onRadio)

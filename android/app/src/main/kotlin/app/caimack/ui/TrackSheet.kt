@@ -107,7 +107,7 @@ fun TrackSheet(track: Track, onRemoveFromPlaylist: (() -> Unit)? = null, positio
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = palette.card,
+        containerColor = palette.popover,
         dragHandle = {
             // Route drags on the handle through the same nested scroll path as the list.
             BottomSheetDefaults.DragHandle(
