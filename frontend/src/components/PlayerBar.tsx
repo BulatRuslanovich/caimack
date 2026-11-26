@@ -15,14 +15,18 @@ import { Button } from "./ui/button";
 const SWIPE_OPEN_PX = 40;
 const SWIPE_SKIP_PX = 80;
 
+type ExpandedPlayerRenderer = (onClose: () => void, restoreFocus: () => void) => ReactNode;
+
 function ExpandedPlayer({
   render,
   onClose,
+  restoreFocus,
 }: {
-  render: (onClose: () => void) => ReactNode;
+  render: ExpandedPlayerRenderer;
   onClose: () => void;
+  restoreFocus: () => void;
 }) {
-  return render(onClose);
+  return render(onClose, restoreFocus);
 }
 
 export function PlayerBar({
@@ -47,7 +51,7 @@ export function PlayerBar({
   actions: ReactNode;
   progress: ReactNode;
   progressLine: ReactNode;
-  expandedPlayer: (onClose: () => void) => ReactNode;
+  expandedPlayer: ExpandedPlayerRenderer;
   next: () => void;
   previous: () => void;
   label?: string;
@@ -60,6 +64,8 @@ export function PlayerBar({
   const expansionRequest = useRef(0);
   const transition = useRef<ViewTransition | null>(null);
   const swipeFrom = useRef<{ x: number; y: number } | null>(null);
+  const artworkButton = useRef<HTMLButtonElement>(null);
+  const opener = useRef<HTMLButtonElement | null>(null);
 
   useEffect(
     () => () => {
@@ -91,11 +97,13 @@ export function PlayerBar({
     void running.finished.then(finish, finish);
   };
 
-  const open = () => {
+  const open = (trigger = artworkButton.current) => {
     const request = ++expansionRequest.current;
     void loadFullPlayer()
       .then(() => {
-        if (request === expansionRequest.current) applyExpanded(true);
+        if (request !== expansionRequest.current) return;
+        opener.current = trigger;
+        applyExpanded(true);
       })
       .catch(notifyError);
   };
@@ -103,6 +111,12 @@ export function PlayerBar({
   const close = () => {
     expansionRequest.current++;
     applyExpanded(false);
+  };
+
+  const restoreFocus = () => {
+    const trigger = opener.current;
+    const target = trigger?.getClientRects().length ? trigger : artworkButton.current;
+    target?.focus({ preventScroll: true });
   };
 
   return (
@@ -146,7 +160,7 @@ export function PlayerBar({
         <div className="grid h-full grid-cols-[minmax(0,1fr)_clamp(15rem,32vw,28rem)_minmax(0,1fr)] items-center gap-5 max-lg:gap-3 max-md:h-auto max-md:grid-cols-1 max-md:gap-0">
           <div
             className={cn(
-              "relative flex min-w-0 items-center gap-3 max-md:gap-2.5",
+              "relative flex min-w-0 items-center gap-3 max-md:gap-2.5 max-[23.75rem]:gap-1",
               swipeX === 0 && "transition-[translate,opacity] duration-200 ease-brand",
             )}
             style={{
@@ -156,16 +170,17 @@ export function PlayerBar({
           >
             <span
               aria-hidden="true"
-              onClick={open}
+              onClick={() => open()}
               className="absolute inset-0 cursor-pointer md:hidden"
             />
             <button
+              ref={artworkButton}
               type="button"
-              onClick={open}
+              onClick={(event) => open(event.currentTarget)}
               aria-label={t("player.openFull")}
               onPointerEnter={preloadFullPlayer}
               onFocus={preloadFullPlayer}
-              className="player-artwork mr-2.5 shrink-0 leading-none max-md:mr-1"
+              className="player-artwork mr-2.5 shrink-0 leading-none max-md:mr-1 max-[23.75rem]:mr-0"
             >
               {artwork(expanded)}
             </button>
@@ -183,7 +198,7 @@ export function PlayerBar({
             <Button
               variant="ghost"
               size="icon"
-              onClick={open}
+              onClick={(event) => open(event.currentTarget)}
               className="max-lg:hidden"
               aria-label={t("player.openFull")}
               onPointerEnter={preloadFullPlayer}
@@ -196,7 +211,9 @@ export function PlayerBar({
         </div>
         {progressLine}
       </footer>
-      {expanded && <ExpandedPlayer render={expandedPlayer} onClose={close} />}
+      {expanded && (
+        <ExpandedPlayer render={expandedPlayer} onClose={close} restoreFocus={restoreFocus} />
+      )}
     </>
   );
 }

@@ -72,6 +72,7 @@ export function Player() {
 
   return (
     <PlayerBar
+      label={t("player.nowPlaying")}
       artworkUrl={trackCoverUrl(currentTrack, "thumb")}
       artwork={(expanded) => (
         <Record
@@ -159,8 +160,12 @@ export function Player() {
           </div>
         </>
       }
-      expandedPlayer={(onClose) => (
-        <DeferredFullPlayer onClose={onClose} onToggleFavorite={likeCurrent} />
+      expandedPlayer={(onClose, restoreFocus) => (
+        <DeferredFullPlayer
+          onClose={onClose}
+          restoreFocus={restoreFocus}
+          onToggleFavorite={likeCurrent}
+        />
       )}
       next={actions.next}
       previous={actions.previous}

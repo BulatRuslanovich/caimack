@@ -35,7 +35,7 @@ export function MobileHeader() {
 
   return (
     <header
-      className="hidden items-center justify-between border-b border-border px-4 [grid-area:mobile-header] max-md:flex"
+      className="hidden items-center justify-between border-b border-border px-4 [grid-area:mobile-header] max-md:flex [.app-shell:has([data-playlist-mobile-header])_&]:hidden"
       style={{
         minHeight: "calc(3.5rem + env(safe-area-inset-top))",
         paddingTop: "env(safe-area-inset-top)",

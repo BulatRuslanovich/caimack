@@ -100,7 +100,7 @@
   }
 }
 
-@media (width < 48rem) {
+@media (width < 56.25rem) {
   :root {
     --player-height: 64px;
   }

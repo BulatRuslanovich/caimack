@@ -73,6 +73,7 @@ interface TrackListProps {
   showArtist?: boolean;
   showAudioSpec?: boolean;
   showTempoKey?: boolean;
+  showPlayButtons?: boolean;
   useTrackNumbers?: boolean;
   playedAt?: Record<string, string>;
   addedAt?: Readonly<Record<string, string>> | "createdAt";
@@ -88,18 +89,19 @@ interface TrackListProps {
 
 const ROW_COLUMNS = {
   "album+date":
-    "grid-cols-[2rem_minmax(0,1.65fr)_minmax(0,1fr)_7rem_var(--track-duration)_var(--track-actions)]",
+    "grid-cols-[var(--track-lead)_minmax(0,1.65fr)_minmax(0,1fr)_7rem_var(--track-duration)_var(--track-actions)]",
   album:
-    "grid-cols-[2rem_minmax(0,1.65fr)_minmax(0,1fr)_var(--track-duration)_var(--track-actions)]",
-  date: "grid-cols-[2rem_minmax(0,1fr)_7rem_var(--track-duration)_var(--track-actions)]",
-  plain: "grid-cols-[2rem_minmax(0,1fr)_var(--track-duration)_var(--track-actions)]",
+    "grid-cols-[var(--track-lead)_minmax(0,1.65fr)_minmax(0,1fr)_var(--track-duration)_var(--track-actions)]",
+  date: "grid-cols-[var(--track-lead)_minmax(0,1fr)_7rem_var(--track-duration)_var(--track-actions)]",
+  plain: "grid-cols-[var(--track-lead)_minmax(0,1fr)_var(--track-duration)_var(--track-actions)]",
   "album+date+tempo":
-    "grid-cols-[2rem_minmax(0,1.65fr)_minmax(0,1fr)_7rem_6rem_var(--track-duration)_var(--track-actions)]",
+    "grid-cols-[var(--track-lead)_minmax(0,1.65fr)_minmax(0,1fr)_7rem_6rem_var(--track-duration)_var(--track-actions)]",
   "album+tempo":
-    "grid-cols-[2rem_minmax(0,1.65fr)_minmax(0,1fr)_6rem_var(--track-duration)_var(--track-actions)]",
+    "grid-cols-[var(--track-lead)_minmax(0,1.65fr)_minmax(0,1fr)_6rem_var(--track-duration)_var(--track-actions)]",
   "date+tempo":
-    "grid-cols-[2rem_minmax(0,1fr)_7rem_6rem_var(--track-duration)_var(--track-actions)]",
-  tempo: "grid-cols-[2rem_minmax(0,1fr)_6rem_var(--track-duration)_var(--track-actions)]",
+    "grid-cols-[var(--track-lead)_minmax(0,1fr)_7rem_6rem_var(--track-duration)_var(--track-actions)]",
+  tempo:
+    "grid-cols-[var(--track-lead)_minmax(0,1fr)_6rem_var(--track-duration)_var(--track-actions)]",
 } as const;
 
 const revealOnRow =
@@ -110,14 +112,19 @@ function rowGridFor(
   showDate: boolean,
   showTempoKey: boolean,
   showDurationOnMobile: boolean,
+  sortable: boolean,
 ): string {
   const parts = [showAlbum && "album", showDate && "date", showTempoKey && "tempo"].filter(Boolean);
   const key = (parts.join("+") || "plain") as keyof typeof ROW_COLUMNS;
   return cn(
     playbackGridClass,
-    "max-md:grid-cols-[2.125rem_minmax(0,1fr)_auto_var(--track-actions)]",
-    !showDurationOnMobile && "max-[380px]:grid-cols-[2.125rem_minmax(0,1fr)_var(--track-actions)]",
+    "max-md:grid-cols-[var(--track-lead)_minmax(0,1fr)_auto_var(--track-actions)]",
+    !showDurationOnMobile &&
+      "max-[23.75rem]:grid-cols-[var(--track-lead)_minmax(0,1fr)_var(--track-actions)]",
     ROW_COLUMNS[key],
+    sortable
+      ? "[--track-lead:3.5rem] max-md:[--track-lead:4rem]"
+      : "[--track-lead:2rem] max-md:[--track-lead:2.125rem]",
     isDesktop
       ? "[--track-duration:5.5rem] [--track-actions:3.5rem] pointer-coarse:[--track-actions:3.75rem]"
       : "[--track-duration:3.5rem] [--track-actions:4.625rem] pointer-coarse:[--track-actions:5.625rem] max-md:[--track-actions:2.5rem] max-md:pointer-coarse:[--track-actions:2.75rem]",
@@ -132,6 +139,7 @@ export function TrackList({
   showArtist = true,
   showAudioSpec = false,
   showTempoKey = false,
+  showPlayButtons = false,
   useTrackNumbers = false,
   playedAt,
   addedAt,
@@ -226,10 +234,11 @@ export function TrackList({
 
   const focusRow = (index: number) => {
     const clamped = Math.max(0, Math.min(index, tracks.length - 1));
-    pendingFocus.current = true;
     viewport.current?.scrollToIndex(clamped);
     setFocused(clamped);
-    bodyRef.current?.querySelector<HTMLElement>(`[data-row="${clamped}"]`)?.focus();
+    const row = bodyRef.current?.querySelector<HTMLElement>(`[data-row="${clamped}"]`);
+    pendingFocus.current = !row;
+    row?.focus();
     return clamped;
   };
 
@@ -319,7 +328,7 @@ export function TrackList({
     addedAt !== undefined ? visibleAdded : playedAt !== undefined && columns === "all";
   const visibleTempo = showTempoKey && columns !== "narrow";
   const showDurationOnMobile = sort !== undefined;
-  const grid = rowGridFor(visibleAlbum, visibleDate, visibleTempo, showDurationOnMobile);
+  const grid = rowGridFor(visibleAlbum, visibleDate, visibleTempo, showDurationOnMobile, sortable);
 
   const rows = tracks.map((track, index) => (
     <TrackRow
@@ -335,6 +344,7 @@ export function TrackList({
       showArtist={showArtist}
       showAudioSpec={showAudioSpec}
       showTempoKey={visibleTempo}
+      showPlayButtons={showPlayButtons}
       showDurationOnMobile={showDurationOnMobile}
       useTrackNumbers={useTrackNumbers}
       date={addedAt === "createdAt" ? track.createdAt : (addedAt ?? playedAt)?.[track.id]}
@@ -380,6 +390,8 @@ export function TrackList({
               aria-label={t("tracks.selectAllOnPage")}
             />
           </span>
+        ) : showPlayButtons ? (
+          <span role="columnheader" aria-label={t("action.play")} />
         ) : (
           <Caption role="columnheader" className="max-md:invisible">
             #
@@ -410,7 +422,7 @@ export function TrackList({
         <TrackColumnHeader
           column="duration"
           sort={sort}
-          className={cn("text-right", !showDurationOnMobile && "max-[380px]:hidden")}
+          className={cn("text-right", !showDurationOnMobile && "max-[23.75rem]:hidden")}
         >
           {t("column.duration")}
         </TrackColumnHeader>
@@ -518,6 +530,7 @@ interface TrackRowProps {
   showArtist: boolean;
   showAudioSpec: boolean;
   showTempoKey: boolean;
+  showPlayButtons: boolean;
   showDurationOnMobile: boolean;
   useTrackNumbers: boolean;
   date?: string;
@@ -558,6 +571,7 @@ const TrackRowContent = memo(function TrackRowContent({
   showArtist,
   showAudioSpec,
   showTempoKey,
+  showPlayButtons,
   showDurationOnMobile,
   useTrackNumbers,
   date,
@@ -604,6 +618,7 @@ const TrackRowContent = memo(function TrackRowContent({
       ref={drag?.setNodeRef}
       role="row"
       data-row={index}
+      aria-current={isCurrent || undefined}
       aria-rowindex={index + 2}
       data-striped={index % 2 === 0 || undefined}
       tabIndex={focused ? 0 : -1}
@@ -647,20 +662,30 @@ const TrackRowContent = memo(function TrackRowContent({
               <DragHandle
                 {...drag?.attributes}
                 {...drag?.listeners}
+                className="grid size-6 shrink-0 place-items-center rounded-sm group-focus-within:opacity-100 max-md:h-11"
                 aria-label={t("tracks.reorderNamed", { title: track.title })}
               />
             )}
 
-            <PlaybackRowNumber
-              number={useTrackNumbers ? (track.trackNumber ?? index + 1) : index + 1}
-              current={isCurrent}
-              playing={isPlaying}
-            />
+            {!showPlayButtons && (
+              <PlaybackRowNumber
+                number={useTrackNumbers ? (track.trackNumber ?? index + 1) : index + 1}
+                current={isCurrent}
+                playing={isPlaying}
+                className="group-focus-within:hidden"
+              />
+            )}
 
             <Button
               variant="ghost"
               size="icon-sm"
-              className="hidden text-foreground group-hover:grid active:scale-95 max-md:size-8 [@media(hover:none)]:grid"
+              className={cn(
+                "shrink-0 text-foreground active:scale-95 max-md:h-11 max-md:w-8",
+                sortable && "max-md:w-9",
+                !showPlayButtons &&
+                  "hidden group-focus-within:grid group-hover:grid [@media(hover:none)]:grid",
+                isCurrent && "text-primary",
+              )}
               disabled={unavailable}
               onClick={play}
               aria-label={
@@ -723,7 +748,7 @@ const TrackRowContent = memo(function TrackRowContent({
         className={cn(
           playbackDurationClass,
           "flex items-center justify-end gap-1",
-          !showDurationOnMobile && "max-[380px]:hidden",
+          !showDurationOnMobile && "max-[23.75rem]:hidden",
         )}
         role="cell"
         data-track-duration

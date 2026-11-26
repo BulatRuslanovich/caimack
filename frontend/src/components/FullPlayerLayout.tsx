@@ -15,6 +15,7 @@ export const fullPlayerControls = "flex w-full max-w-[34rem] flex-col gap-6 max-
 
 export function FullPlayerLayout({
   onClose,
+  restoreFocus,
   stage,
   artworkShown = true,
   backdrop,
@@ -24,6 +25,7 @@ export function FullPlayerLayout({
   children,
 }: {
   onClose: () => void;
+  restoreFocus?: () => void;
   stage: RefObject<HTMLDivElement | null>;
   artworkShown?: boolean;
   backdrop: ReactNode;
@@ -54,7 +56,15 @@ export function FullPlayerLayout({
   return (
     <DialogPrimitive.Root open onOpenChange={(open) => !open && onClose()}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Content asChild aria-describedby={undefined}>
+        <DialogPrimitive.Content
+          asChild
+          aria-describedby={undefined}
+          onCloseAutoFocus={(event) => {
+            if (!restoreFocus) return;
+            event.preventDefault();
+            restoreFocus();
+          }}
+        >
           <div
             data-player-fullscreen="true"
             data-aura-host

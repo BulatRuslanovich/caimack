@@ -192,7 +192,7 @@ export const queries = {
       queryKey: ["search", q],
       queryFn: ({ signal }) => api.search(q, 25, signal),
       enabled: q.length >= SEARCH_MIN_LENGTH,
-      placeholderData: keepPreviousData,
+      meta: { handlesError: true },
     }),
 
   searchPopular: () =>

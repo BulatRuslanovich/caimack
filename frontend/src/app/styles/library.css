@@ -272,7 +272,7 @@
   background: color-mix(in oklab, var(--playlist-tint) 16%, var(--background));
 }
 
-@media (width < 48rem) {
+@media (width < 56.25rem) {
   .playlist-page {
     --playlist-gutter: 1rem;
     --playlist-wash-height: 40rem;
@@ -456,7 +456,7 @@
   }
 }
 
-@media (width < 768px) {
+@media (width < 56.25rem) {
   .catalog-mobile-chips {
     gap: 0.5rem;
     box-shadow: none;
@@ -489,6 +489,9 @@
   .library-track-list {
     padding: 0;
   }
+}
+
+@media (width < 768px) {
   :root {
     --library-card-min: 8.75rem;
     --library-card-gap: 0.75rem;

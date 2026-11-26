@@ -293,8 +293,10 @@ export default function LibraryPage() {
             {t("folders.failed")}
           </p>
         )}
-        {q && <p className="text-sm text-muted-foreground">{t("collection.dragSearch")}</p>}
-        {shown.length === 0 && shownFolders.length === 0 && !favorites && !showDownloads && (
+        {q && entries.length > 0 && (
+          <p className="text-sm text-muted-foreground">{t("collection.dragSearch")}</p>
+        )}
+        {entries.length === 0 && (
           <EmptyState
             title={t(
               q
@@ -311,7 +313,19 @@ export default function LibraryPage() {
                           ? "collection.emptyPlaylists"
                           : "collection.empty",
             )}
-            description={t(currentFolder ? "folders.emptyHint" : "collection.hint")}
+            description={q ? undefined : t(currentFolder ? "folders.emptyHint" : "collection.hint")}
+            action={
+              q && (
+                <Button
+                  onClick={() => {
+                    setSearch("");
+                    searchInput.current?.focus();
+                  }}
+                >
+                  {t("action.clear")}
+                </Button>
+              )
+            }
           />
         )}
       </>
@@ -415,7 +429,7 @@ export default function LibraryPage() {
         </nav>
       )}
       <div className="space-y-1">
-        <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 shadow-[inset_0_-1px_0_var(--border)] max-md:flex-col max-md:items-stretch max-md:shadow-none">
+        <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 shadow-[inset_0_-1px_0_var(--border)] max-md:flex-col max-md:flex-nowrap max-md:items-stretch max-md:shadow-none">
           <ToggleGroup
             aria-label={t("nav.mediaLibrary")}
             className="min-w-0 shadow-none"

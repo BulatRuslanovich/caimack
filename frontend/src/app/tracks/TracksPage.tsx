@@ -204,6 +204,7 @@ export function TracksPage({ query }: { query: string }) {
           <Section className="gap-2">
             <TrackList
               tracks={data.items}
+              showPlayButtons
               addedAt="createdAt"
               sort={{
                 active: sortColumn,

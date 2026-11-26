@@ -241,7 +241,11 @@ function SearchView() {
                           href={seeAll(query, "tracks", data.tracks.length)}
                           className="min-w-0 gap-2.5"
                         >
-                          <TrackList tracks={previewTracks} showAlbum={!topResult} />
+                          <TrackList
+                            tracks={previewTracks}
+                            showAlbum={!topResult}
+                            showPlayButtons
+                          />
                         </Section>
                       )}
                     </div>

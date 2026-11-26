@@ -26,9 +26,11 @@ import { AudiobookCover } from "./AudiobookViews";
 export function AudiobookFullScreenPlayer({
   artwork,
   onClose,
+  restoreFocus,
 }: {
   artwork: string | null;
   onClose: () => void;
+  restoreFocus?: () => void;
 }) {
   const t = useT();
   const { player } = useAudiobooks();
@@ -45,6 +47,7 @@ export function AudiobookFullScreenPlayer({
   return (
     <FullPlayerLayout
       onClose={onClose}
+      restoreFocus={restoreFocus}
       stage={stage}
       backdrop={<ArtBackdrop src={artwork} mode="player" />}
       actions={

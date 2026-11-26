@@ -116,8 +116,12 @@ function AudiobookPlayer({ book }: { book: Audiobook }) {
             </Button>
           </div>
         }
-        expandedPlayer={(onClose) => (
-          <DeferredAudiobookFullPlayer artwork={artwork} onClose={onClose} />
+        expandedPlayer={(onClose, restoreFocus) => (
+          <DeferredAudiobookFullPlayer
+            artwork={artwork}
+            onClose={onClose}
+            restoreFocus={restoreFocus}
+          />
         )}
         next={() => player.changeChapter(1)}
         previous={() => player.changeChapter(-1)}

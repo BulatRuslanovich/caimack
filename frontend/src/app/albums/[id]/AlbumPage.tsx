@@ -46,7 +46,7 @@ export function AlbumPage() {
 
   const id = useParams<{ id: string }>().id;
   const [editing, setEditing] = useState(false);
-  const album = useQuery(queries.album(id));
+  const album = useQuery({ ...queries.album(id), meta: { handlesError: true } });
 
   useEntityOpened("albumOpened", id);
 

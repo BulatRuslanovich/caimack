@@ -85,7 +85,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </a>
 
       <Sidebar />
-      {!/^\/playlists\/[^/]+\/?$/.test(pathname) && <MobileHeader />}
+      <MobileHeader />
 
       <div
         ref={setBackdropHost}

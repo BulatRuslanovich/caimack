@@ -14,8 +14,8 @@ export const playbackDurationClass = "text-right text-sm text-muted-foreground t
 
 export function playbackRowClass(current: boolean) {
   return cn(
-    "library-track-row group relative transition-colors outline-none",
-    "hover:bg-card focus-within:bg-card focus-visible:bg-card focus-visible:inset-ring focus-visible:inset-ring-ring",
+    "library-track-row group relative transition-colors",
+    "hover:bg-card focus-within:bg-card focus-visible:bg-card focus-visible:-outline-offset-2",
     current && "track-row-current bg-card",
   );
 }

@@ -68,7 +68,7 @@ const SORT_COLUMNS: TrackSortColumn[] = ["title", "album", "added", "duration"];
 
 export function PlaylistPage() {
   const id = useParams<{ id: string }>().id;
-  const playlist = useQuery(queries.playlist(id));
+  const playlist = useQuery({ ...queries.playlist(id), meta: { handlesError: true } });
   return (
     <Query result={playlist}>{(detail) => <PlaylistContent key={id} detail={detail} />}</Query>
   );

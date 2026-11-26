@@ -176,6 +176,7 @@ function ShareCardButton({ track }: { track: Track }) {
 
 interface FullScreenPlayerProps {
   onClose: () => void;
+  restoreFocus?: () => void;
   onToggleFavorite: () => void;
 }
 
@@ -190,7 +191,11 @@ export function FullScreenPlayer(props: FullScreenPlayerProps) {
   );
 }
 
-function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayerProps) {
+function FullScreenPlayerContent({
+  onClose,
+  restoreFocus,
+  onToggleFavorite,
+}: FullScreenPlayerProps) {
   const player = usePlayer();
   const connect = useConnect();
   const t = useT();
@@ -250,6 +255,7 @@ function FullScreenPlayerContent({ onClose, onToggleFavorite }: FullScreenPlayer
   return (
     <FullPlayerLayout
       onClose={onClose}
+      restoreFocus={restoreFocus}
       stage={stage}
       artworkShown={panel === "art"}
       chrome={chrome}
