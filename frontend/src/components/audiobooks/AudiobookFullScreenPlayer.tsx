@@ -14,6 +14,7 @@ import { ArtBackdrop } from "../ArtBackdrop";
 import { FullPlayerLayout, fullPlayerControls, fullPlayerStage } from "../FullPlayerLayout";
 import { VolumeControls } from "../PlayerVolume";
 import { PrefetchLink } from "../PrefetchLink";
+import { SleepTimerControl } from "../SleepTimerButton";
 import { Button } from "../ui/button";
 import {
   AudiobookProgress,
@@ -52,6 +53,14 @@ export function AudiobookFullScreenPlayer({
       backdrop={<ArtBackdrop src={artwork} mode="player" />}
       actions={
         <div className="flex justify-self-end">
+          {player.setSleepTimer && (
+            <SleepTimerControl
+              audiobook
+              size="icon-lg"
+              sleepTimer={player.sleepTimer}
+              setSleepTimer={player.setSleepTimer}
+            />
+          )}
           <Button asChild variant="ghost" size="icon-lg">
             <PrefetchLink
               href={audiobookHref(book.id)}

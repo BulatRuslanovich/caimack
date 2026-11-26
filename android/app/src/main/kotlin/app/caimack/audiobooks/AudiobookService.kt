@@ -28,11 +28,13 @@ import app.caimack.CaimackApp
 import app.caimack.MainActivity
 import app.caimack.R
 import app.caimack.playback.PlaybackNotificationProvider
+import app.caimack.playback.SleepTimerState
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
@@ -45,6 +47,7 @@ class AudiobookService : MediaSessionService() {
     private var accounts: Job? = null
     private var syncing: Job? = null
     private var ticking: Job? = null
+    private var sleeping: Job? = null
     private var last: AudiobookPlaybackState? = null
     private var selection: Long? = null
     private var version = 0L
@@ -65,6 +68,7 @@ class AudiobookService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
+        val sleepTimer = container.audiobookPlayback.sleepTimer
         player.addListener(object : Player.Listener {
             override fun onPositionDiscontinuity(oldPosition: PositionInfo, newPosition: PositionInfo, reason: Int) {
                 val previous = last?.takeIf { oldPosition.mediaItem?.mediaId == it.chapterId } ?: return
@@ -83,8 +87,12 @@ class AudiobookService : MediaSessionService() {
             }
 
             override fun onEvents(player: Player, events: Player.Events) {
+                val previousBook = last?.bookId
                 publish()
                 val current = last
+                if (current?.bookId != previousBook || player.playbackState == Player.STATE_ENDED) {
+                    sleepTimer.cancel()
+                }
                 val extras = player.currentMediaItem?.mediaMetadata?.extras
                 val incoming = extras?.getLong(AudiobookPlayback.SELECTION)
                 if (incoming != selection) {
@@ -110,8 +118,20 @@ class AudiobookService : MediaSessionService() {
 
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 if (playWhenReady) container.player.pauseLocal()
+                if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) sleepTimer.cancel()
             }
         })
+        sleeping = container.scope.launch(Dispatchers.Main) {
+            sleepTimer.state.collectLatest { timer ->
+                player.volume = 1f
+                player.pauseAtEndOfMediaItems = timer is SleepTimerState.TrackEnd
+                if (timer is SleepTimerState.Minutes) {
+                    timer.fade { player.volume = it }
+                    player.pause()
+                    sleepTimer.cancel()
+                }
+            }
+        }
         accounts = container.scope.launch(Dispatchers.Main) {
             container.audiobookAccounts.distinctUntilChanged().collect { account ->
                 if (account == owner) return@collect
@@ -238,6 +258,8 @@ class AudiobookService : MediaSessionService() {
         accounts?.cancel()
         syncing?.cancel()
         ticking?.cancel()
+        sleeping?.cancel()
+        container.audiobookPlayback.sleepTimer.cancel()
         session?.release()
         player.release()
         container.audiobookPlayback.publish(null)

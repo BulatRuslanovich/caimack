@@ -40,6 +40,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.caimack.R
 import app.caimack.audiobooks.Audiobook
 import app.caimack.audiobooks.AudiobookPlaybackState
@@ -105,6 +106,10 @@ private fun BookPlayerContent(
     val duration = playback.durationMs.takeIf { it > 0 } ?: chapter?.durationMs ?: 0
     var chapters by rememberSaveable(book.id) { mutableStateOf(false) }
     var options by remember { mutableStateOf(false) }
+    var sleepSheet by remember(book.id, playback.remote) { mutableStateOf(false) }
+    val sleepTimer by player.sleepTimer.state.collectAsStateWithLifecycle()
+
+    if (sleepSheet) SleepSheet(audiobook = true) { sleepSheet = false }
 
     FullPlayerLayout(
         panelOpen = chapters,
@@ -191,6 +196,10 @@ private fun BookPlayerContent(
                 )
                 Row(Modifier.fillMaxWidth().testTag("full-player-footer"), verticalAlignment = Alignment.CenterVertically) {
                     PlaybackDevicesButton(Modifier.weight(1f), audiobook = true)
+                    if (!playback.remote) {
+                        IconAction(Lucide.Moon, sleepTimerLabel(sleepTimer, audiobook = true),
+                            tint = if (sleepTimer != null) palette.primary else palette.muted) { sleepSheet = true }
+                    }
                     Box(Modifier.semantics { selected = chapters }) {
                         IconAction(Lucide.ListVideo, stringResource(R.string.audiobook_chapters),
                             tint = if (chapters) palette.primary else palette.muted) { chapters = !chapters }

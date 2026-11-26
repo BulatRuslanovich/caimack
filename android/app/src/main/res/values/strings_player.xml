@@ -79,9 +79,11 @@
     <string name="sleep_title">Sleep timer</string>
     <string name="sleep_minutes">%1$d min</string>
     <string name="sleep_track_end">End of track</string>
+    <string name="sleep_chapter_end">End of chapter</string>
     <string name="sleep_off">Turn off</string>
     <string name="sleep_remaining">Sleep timer: %1$s left</string>
     <string name="sleep_at_track_end">Sleep timer: stops after this track</string>
+    <string name="sleep_at_chapter_end">Sleep timer: stops after this chapter</string>
     <string name="share_card">Story card</string>
     <string name="share_title">Share what you’re listening to</string>
     <string name="share_caption">now playing</string>

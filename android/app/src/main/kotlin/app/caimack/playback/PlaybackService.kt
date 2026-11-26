@@ -573,12 +573,7 @@ class PlaybackService : MediaLibraryService() {
         player.pauseAtEndOfMediaItems = timer is SleepTimerState.TrackEnd
         if (timer !is SleepTimerState.Minutes) return
 
-        delay((timer.remainingMs - SleepTimer.FADE_MS).coerceAtLeast(0))
-        while (timer.remainingMs > 0) {
-            setSleepLevel(player, timer.remainingMs.toFloat() / SleepTimer.FADE_MS)
-            delay(SLEEP_FADE_TICK_MS)
-        }
-
+        timer.fade { setSleepLevel(player, it) }
         player.pause()
         setSleepLevel(player, 1f)
         container.sleepTimer.cancel()
@@ -902,6 +897,5 @@ class PlaybackService : MediaLibraryService() {
         private const val MAX_SKIPS = 3
         private const val UNAUTHORIZED = 401
         private const val MIN_TRIM_SECONDS = 0.3
-        private const val SLEEP_FADE_TICK_MS = 200L
     }
 }

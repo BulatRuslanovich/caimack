@@ -7,6 +7,7 @@ import { formatDuration } from "@/lib/format";
 import {
   SLEEP_TIMER_MINUTES,
   useSleepCountdown,
+  type SleepTimer,
   type SleepTimerChoice,
 } from "@/lib/playback/useSleepTimer";
 import { useToast } from "@/lib/useToast";
@@ -23,15 +24,25 @@ import {
 } from "./ui/dropdown-menu";
 import { CheckIcon, MoonIcon, MoonStarIcon } from "lucide-react";
 
-export function SleepTimerButton({
+export function SleepTimerButton(props: { size?: "icon" | "icon-lg"; className?: string }) {
+  const { sleepTimer } = usePlayerState();
+  const { setSleepTimer } = usePlayerActions();
+  return <SleepTimerControl {...props} sleepTimer={sleepTimer} setSleepTimer={setSleepTimer} />;
+}
+
+export function SleepTimerControl({
+  sleepTimer,
+  setSleepTimer,
+  audiobook = false,
   size = "icon",
   className,
 }: {
+  sleepTimer: SleepTimer | null;
+  setSleepTimer: (choice: SleepTimerChoice) => void;
+  audiobook?: boolean;
   size?: "icon" | "icon-lg";
   className?: string;
 }) {
-  const { sleepTimer } = usePlayerState();
-  const { setSleepTimer } = usePlayerActions();
   const { notify } = useToast();
   const t = useT();
   const remaining = useSleepCountdown(sleepTimer);
@@ -41,15 +52,17 @@ export function SleepTimerButton({
     remaining !== null
       ? t("sleep.remaining", { time: formatDuration(remaining) })
       : sleepTimer?.kind === "trackEnd"
-        ? t("sleep.atTrackEnd")
+        ? t(audiobook ? "sleep.atChapterEnd" : "sleep.atTrackEnd")
         : t("sleep.label");
 
   const choose = (choice: SleepTimerChoice) => {
     setSleepTimer(choice);
 
     if (choice === null) notify(t("sleep.cancelled"), "info");
-    else if (choice === "trackEnd") notify(t("sleep.startedTrackEnd"), "info");
-    else notify(t("sleep.started", { count: choice }), "info");
+    else if (choice === "trackEnd")
+      notify(t(audiobook ? "sleep.atChapterEnd" : "sleep.startedTrackEnd"), "info");
+    else
+      notify(t(audiobook ? "sleep.startedAudiobook" : "sleep.started", { count: choice }), "info");
   };
 
   const chosenMinutes = sleepTimer?.kind === "minutes" ? sleepTimer.minutes : null;
@@ -94,7 +107,7 @@ export function SleepTimerButton({
           data-selected={sleepTimer?.kind === "trackEnd"}
           onSelect={() => choose("trackEnd")}
         >
-          <span className="flex-1">{t("sleep.trackEnd")}</span>
+          <span className="flex-1">{t(audiobook ? "sleep.chapterEnd" : "sleep.trackEnd")}</span>
           {sleepTimer?.kind === "trackEnd" && <CheckIcon aria-hidden="true" />}
         </DropdownMenuItem>
 

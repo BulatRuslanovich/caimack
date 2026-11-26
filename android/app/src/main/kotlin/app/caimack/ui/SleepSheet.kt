@@ -11,31 +11,35 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.caimack.R
+import app.caimack.api.ConnectCommand
 import app.caimack.playback.SleepTimer
 import app.caimack.playback.SleepTimerState
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SleepSheet(onDismiss: () -> Unit) {
+fun SleepSheet(audiobook: Boolean = false, onDismiss: () -> Unit) {
     val palette = LocalPalette.current
     val container = LocalContainer.current
-    val timer = container.sleepTimer
-    val state = displayedSleepTimer()
-    val remaining by rememberSleepRemaining(state)
-
-    val title = when {
-        remaining != null -> stringResource(R.string.sleep_remaining, durationOf(((remaining!! + 999) / 1000).toInt()))
-        state is SleepTimerState.TrackEnd -> stringResource(R.string.sleep_at_track_end)
-        else -> stringResource(R.string.sleep_title)
+    val timer = if (audiobook) container.audiobookPlayback.sleepTimer else container.sleepTimer
+    val state = if (audiobook) timer.state.collectAsStateWithLifecycle().value else displayedSleepTimer()
+    val title = sleepTimerLabel(state, audiobook)
+    fun choose(minutes: Int? = null, atEnd: Boolean = false) {
+        if (audiobook || !container.connect.route(ConnectCommand.SetSleepTimer(minutes, atEnd))) {
+            when {
+                atEnd -> timer.untilTrackEnd()
+                minutes != null -> timer.set(minutes)
+                else -> timer.cancel()
+            }
+        }
+        onDismiss()
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = palette.card) {
@@ -50,26 +54,33 @@ fun SleepSheet(onDismiss: () -> Unit) {
             SleepTimer.MINUTES.forEach { minutes ->
                 val chosen = (state as? SleepTimerState.Minutes)?.minutes == minutes
                 SheetRow(stringResource(R.string.sleep_minutes, minutes), if (chosen) Lucide.Check else Lucide.Moon) {
-                    if (!container.connect.route(app.caimack.api.ConnectCommand.SetSleepTimer(minutes, false))) timer.set(minutes)
-                    onDismiss()
+                    choose(minutes)
                 }
             }
             SheetRow(
-                stringResource(R.string.sleep_track_end),
+                stringResource(if (audiobook) R.string.sleep_chapter_end else R.string.sleep_track_end),
                 if (state is SleepTimerState.TrackEnd) Lucide.Check else Lucide.Moon,
             ) {
-                if (!container.connect.route(app.caimack.api.ConnectCommand.SetSleepTimer(null, true))) timer.untilTrackEnd()
-                onDismiss()
+                choose(atEnd = true)
             }
 
             if (state != null) {
                 HorizontalDivider(Modifier.padding(vertical = 8.dp), color = palette.border)
                 SheetRow(stringResource(R.string.sleep_off), Lucide.X) {
-                    if (!container.connect.route(app.caimack.api.ConnectCommand.SetSleepTimer(null, false))) timer.cancel()
-                    onDismiss()
+                    choose()
                 }
             }
         }
+    }
+}
+
+@Composable
+internal fun sleepTimerLabel(state: SleepTimerState?, audiobook: Boolean): String {
+    val remaining = rememberSleepRemaining(state).value
+    return when {
+        remaining != null -> stringResource(R.string.sleep_remaining, durationOf(((remaining + 999) / 1000).toInt()))
+        state is SleepTimerState.TrackEnd -> stringResource(if (audiobook) R.string.sleep_at_chapter_end else R.string.sleep_at_track_end)
+        else -> stringResource(R.string.sleep_title)
     }
 }
 

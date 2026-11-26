@@ -84,6 +84,8 @@
     <string name="sleep_off">Выключить</string>
     <string name="sleep_remaining">Таймер сна: осталось %1$s</string>
     <string name="sleep_at_track_end">Таймер сна: остановится после этого трека</string>
+    <string name="sleep_chapter_end">До конца главы</string>
+    <string name="sleep_at_chapter_end">Таймер сна: остановится после этой главы</string>
     <string name="share_card">Карточка для сторис</string>
     <string name="share_title">Поделиться тем, что слушаете</string>
     <string name="share_caption">сейчас играет</string>

@@ -6,6 +6,11 @@ import { deviceId } from "@/lib/events";
 import { api } from "@/lib/api";
 import { useConnect } from "@/lib/playback/useConnectPlayback";
 import type { AudiobookHandoff } from "@/lib/playback/connect";
+import {
+  useSleepTimer,
+  type SleepTimer,
+  type SleepTimerChoice,
+} from "@/lib/playback/useSleepTimer";
 import { useT } from "@/contexts/I18nContext";
 import {
   downloadAudiobook,
@@ -60,6 +65,8 @@ interface AudiobookPlayer {
   muted: boolean;
   setVolume: (volume: number) => void;
   toggleMute: () => void;
+  sleepTimer: SleepTimer | null;
+  setSleepTimer: ((choice: SleepTimerChoice) => void) | null;
   close: () => void;
   transferTo: (id: string | null) => Promise<void>;
 }
@@ -188,6 +195,19 @@ export function AudiobookProvider({
   const lastBookReport = useRef<{ key: string; connection: string; selection: number } | null>(
     null,
   );
+  const {
+    timer: sleepTimer,
+    gain: sleepGain,
+    choose: setSleepTimer,
+  } = useSleepTimer(() => {
+    if (!current.current) return;
+    selectionId.current++;
+    loadId.current++;
+    selecting.current = false;
+    audioRef.current?.pause();
+    setPlaying(false);
+    setPending(false);
+  });
   const reportLocal = useCallback(() => {
     if (!connected || !connectionId || !ownDevice) return Promise.resolve();
     const send = async () => {
@@ -278,12 +298,13 @@ export function AudiobookProvider({
     selecting.current = false;
     loadId.current++;
     current.current = null;
+    setSleepTimer(null);
     unload();
     setActive(null);
     setPlaying(false);
     setPending(false);
     onActiveChange(false);
-  }, [checkpoint, onActiveChange, unload]);
+  }, [checkpoint, onActiveChange, setSleepTimer, unload]);
 
   useEffect(() => {
     if (!enabled) controller.current?.abort();
@@ -323,9 +344,9 @@ export function AudiobookProvider({
 
   useEffect(() => {
     if (!audioRef.current) return;
-    audioRef.current.volume = volume;
+    audioRef.current.volume = volume * sleepGain;
     audioRef.current.muted = muted;
-  }, [volume, muted]);
+  }, [volume, muted, sleepGain]);
 
   const reportPlayError = (error: unknown) => {
     if (error instanceof DOMException) {
@@ -393,6 +414,7 @@ export function AudiobookProvider({
     }
 
     const request = ++loadId.current;
+    if (session?.book.id !== book.id) setSleepTimer(null);
     current.current = null;
     unload();
     pauseMusic();
@@ -692,6 +714,10 @@ export function AudiobookProvider({
 
     const next = session.chapterIndex + 1;
     const completed = next >= session.book.chapters.length;
+    const stopAtEnd =
+      sleepTimer?.kind === "trackEnd" ||
+      (sleepTimer?.kind === "minutes" && sleepTimer.endsAt <= Date.now());
+    if (completed || stopAtEnd) setSleepTimer(null);
     const chapter = session.book.chapters[completed ? session.chapterIndex : next];
     session.progress =
       catalog.checkpoint(
@@ -700,7 +726,7 @@ export function AudiobookProvider({
         session.progress,
       ) ?? session.progress;
     setPlaying(false);
-    if (!completed && !selecting.current) void start(session.book, chapter.id, true);
+    if (!completed && !stopAtEnd && !selecting.current) void start(session.book, chapter.id, true);
   };
 
   const play = (book: Audiobook, chapterId?: string) => {
@@ -899,6 +925,8 @@ export function AudiobookProvider({
           muted,
           setVolume,
           toggleMute,
+          sleepTimer: enabled && active ? sleepTimer : null,
+          setSleepTimer: enabled && active ? setSleepTimer : null,
           transferTo,
           close,
         },

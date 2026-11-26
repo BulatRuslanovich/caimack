@@ -1204,10 +1204,13 @@ export const en = {
   "sleep.label": "Sleep timer",
   "sleep.minutes": "{count} min",
   "sleep.trackEnd": "End of track",
+  "sleep.chapterEnd": "End of chapter",
   "sleep.off": "Turn off",
   "sleep.remaining": "Sleep timer: {time} left",
   "sleep.atTrackEnd": "Sleep timer: stops after this track",
+  "sleep.atChapterEnd": "Sleep timer: stops after this chapter",
   "sleep.started": "Music stops in {count} min",
+  "sleep.startedAudiobook": "Audiobook stops in {count} min",
   "sleep.startedTrackEnd": "Music stops after this track",
   "sleep.cancelled": "Sleep timer off",
 

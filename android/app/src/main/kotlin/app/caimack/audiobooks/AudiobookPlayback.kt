@@ -15,6 +15,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import app.caimack.playback.SleepTimer
 import com.google.common.util.concurrent.ListenableFuture
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
@@ -36,6 +37,7 @@ data class AudiobookPlaybackState(
     val playing: Boolean,
     val buffering: Boolean,
     val failed: Boolean,
+    val remote: Boolean = false,
 )
 
 internal class AudiobookPlayback(
@@ -56,11 +58,12 @@ internal class AudiobookPlayback(
         private set
     val sessionId get() = selection
     val state = current.asStateFlow()
+    val sleepTimer = SleepTimer()
 
     fun showRemote(book: app.caimack.api.ConnectBook?) {
         val duration = book?.let { selected -> store.state.value.books.firstOrNull { it.id == selected.bookId }
             ?.chapters?.firstOrNull { it.id == selected.chapterId }?.durationMs } ?: 0
-        remote = book?.let { AudiobookPlaybackState(it.bookId, it.chapterId, it.positionMs, duration, it.playing, false, false) }
+        remote = book?.let { AudiobookPlaybackState(it.bookId, it.chapterId, it.positionMs, duration, it.playing, false, false, remote = true) }
         current.value = localState ?: remote
     }
 
