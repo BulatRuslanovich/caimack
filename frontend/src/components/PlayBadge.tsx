@@ -23,6 +23,7 @@ export function PlayBadge({
   return (
     <span
       aria-hidden="true"
+      data-sounding={playing || undefined}
       className={cn(
         "grid shrink-0 place-items-center rounded-full bg-action text-action-foreground shadow-art",
         size === 8 ? "size-8" : "size-9",

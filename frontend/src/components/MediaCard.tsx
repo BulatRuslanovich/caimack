@@ -19,7 +19,7 @@ import { useT } from "@/contexts/I18nContext";
 import { PlaylistCover } from "./collection/PlaylistCover";
 import { AlbumCover, ArtistCover, Cover } from "./Cover";
 import { ListMusicIcon } from "lucide-react";
-import { BufferingRing } from "./PlaybackIndicators";
+import { BufferingRing, PlayingGlyph } from "./PlaybackIndicators";
 import { LibraryItemMenu } from "./LibrarySaveButton";
 import { PlayBadge } from "./PlayBadge";
 
@@ -68,6 +68,7 @@ export function Card<T extends string>({
           current && "text-primary",
         )}
       >
+        {action && <PlayingGlyph />}
         {title}
       </span>
       <span className="library-secondary line-clamp-2 text-sm leading-snug">{subtitle}</span>

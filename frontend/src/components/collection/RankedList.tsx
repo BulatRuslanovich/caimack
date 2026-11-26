@@ -2,6 +2,7 @@
 
 "use client";
 
+import { PlayingGlyph } from "@/components/PlaybackIndicators";
 import { PauseIcon, PlayIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatArtists, formatDuration } from "@/lib/format";
@@ -37,6 +38,7 @@ export function RankedList({
       )}
     >
       {tracks.map((track, index) => {
+        const playing = soundingNow(track.id);
         const current = currentTrackId === track.id;
 
         return (
@@ -75,6 +77,7 @@ export function RankedList({
                 <TrackCover track={track} />
                 <span
                   aria-hidden="true"
+                  data-sounding={playing || undefined}
                   className={cn(
                     "absolute inset-0 grid place-items-center bg-black/55 text-white",
                     "opacity-0 transition-opacity duration-150 ease-brand group-hover:opacity-100",
@@ -82,12 +85,13 @@ export function RankedList({
                     current && "opacity-100",
                   )}
                 >
-                  {soundingNow(track.id) ? <PauseIcon size={16} /> : <PlayIcon size={16} />}
+                  {playing ? <PauseIcon size={16} /> : <PlayIcon size={16} />}
                 </span>
               </span>
 
               <span className="min-w-0">
                 <span className={cn("block truncate font-semibold", current && "text-primary")}>
+                  <PlayingGlyph />
                   {track.title}
                 </span>
                 <span className="block truncate text-sm text-muted-foreground">

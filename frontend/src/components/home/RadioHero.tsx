@@ -35,6 +35,11 @@ function EnabledRadioHero({ tracks, offline = false }: { tracks: Track[]; offlin
           index,
     )
     .slice(0, 2);
+  const artists = [
+    ...new Set(
+      [...sleeves, ...(featured?.hasCover ? [featured] : [])].map(formatArtists).filter(Boolean),
+    ),
+  ].join(", ");
   const lightTrack = sleeves[0] ?? featured;
   const light = useCoverLight(lightTrack ? trackCoverUrl(lightTrack, "thumb") : null);
   const action = start.isPending
@@ -60,7 +65,9 @@ function EnabledRadioHero({ tracks, offline = false }: { tracks: Track[]; offlin
         </h1>
         <div className="radio-info">
           <p className="radio-description" aria-hidden={current ? true : undefined}>
-            {t(offline ? "radio.localDescription" : "radio.description")}
+            {artists && !offline
+              ? t("radio.fromCollection", { artists })
+              : t(offline ? "radio.localDescription" : "radio.description")}
           </p>
           <div className="radio-status" role="status">
             {current && (
@@ -96,12 +103,13 @@ function EnabledRadioHero({ tracks, offline = false }: { tracks: Track[]; offlin
           onClick={() => (active ? player.toggle() : start.mutate())}
         >
           {start.isPending ? (
-            <LoaderCircleIcon size={22} className="motion-safe:animate-spin" aria-hidden="true" />
+            <LoaderCircleIcon size={18} className="motion-safe:animate-spin" aria-hidden="true" />
           ) : playing ? (
-            <PauseIcon size={22} className="fill-current" aria-hidden="true" />
+            <PauseIcon size={18} className="fill-current" aria-hidden="true" />
           ) : (
-            <PlayIcon size={22} className="translate-x-px fill-current" aria-hidden="true" />
+            <PlayIcon size={18} className="translate-x-px fill-current" aria-hidden="true" />
           )}
+          <span>{action}</span>
         </Button>
       </div>
 

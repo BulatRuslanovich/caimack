@@ -176,6 +176,7 @@ function Blocks({
     <div className="home-page [&_h2]:line-clamp-2 [&_h2]:whitespace-normal">
       <div className="home-listening-stage">
         <RadioHero tracks={localRadio ?? radioTracks} offline={offline} />
+        {quick.length > 0 && <QuickTiles blocks={quick} />}
         {lead.length > 0 && (
           <div className="home-daily-selection">
             {lead.map((block) => (
@@ -183,7 +184,6 @@ function Blocks({
             ))}
           </div>
         )}
-        {quick.length > 0 && <QuickTiles blocks={quick} />}
       </div>
 
       {!offline && <RecapBanner />}

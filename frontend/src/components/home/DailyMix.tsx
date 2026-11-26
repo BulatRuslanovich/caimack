@@ -9,6 +9,7 @@ import { useId } from "react";
 import { cn } from "@/lib/cn";
 import { formatArtists, formatDuration } from "@/lib/format";
 import { useFormat } from "@/lib/useFormat";
+import { PlayingGlyph } from "@/components/PlaybackIndicators";
 import { usePlayback } from "@/lib/playback/usePlayback";
 import type { HomeBlock } from "@/lib/types";
 import { useT } from "@/contexts/I18nContext";
@@ -135,6 +136,7 @@ export function DailyMix<T extends string>({
                       )}
                       title={track.title}
                     >
+                      <PlayingGlyph />
                       {track.title}
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">

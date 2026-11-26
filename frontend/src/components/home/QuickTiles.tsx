@@ -3,7 +3,6 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { HeartIcon, ListMusicIcon } from "lucide-react";
 import type { Route } from "next";
 import { PrefetchLink as Link } from "@/components/PrefetchLink";
 import type { ReactNode } from "react";
@@ -12,21 +11,21 @@ import { PlaySource } from "@/lib/playback/playSource";
 import { queries } from "@/lib/queries";
 import { useShelfImpression } from "@/lib/useShelfImpression";
 import { formatArtists } from "@/lib/format";
-import { coverUrl, playlistCoverUrl, trackCoverUrl } from "@/lib/media";
+import { coverUrl, trackCoverUrl } from "@/lib/media";
 import { useTone } from "@/lib/useCoverTone";
 import type { HomeBlock, Track } from "@/lib/types";
+import { PlayingGlyph } from "@/components/PlaybackIndicators";
 import { usePlayback } from "@/lib/playback/usePlayback";
 import { useNowPlaying } from "@/contexts/PlayerContext";
 import { useT } from "@/contexts/I18nContext";
-import { CoverMosaic } from "@/components/collection/CoverMosaic";
-import { PlaylistCover } from "../collection/PlaylistCover";
+import { Section } from "@/components/PageHeader";
 import { AlbumCover, TrackCover } from "../Cover";
 import { CardPlayButton } from "../MediaCard";
 import { PlayBadge } from "../PlayBadge";
 
 export function QuickTiles({ blocks }: { blocks: HomeBlock[] }) {
-  const ref = useShelfImpression<HTMLDivElement>("home:quickTiles");
-  const favorites = blocks.find((block) => block.layout === "Tile");
+  const t = useT();
+  const ref = useShelfImpression<HTMLElement>("home:quickTiles");
 
   const tiles = blocks
     .filter((block) => block.layout !== "Tile")
@@ -38,35 +37,12 @@ export function QuickTiles({ blocks }: { blocks: HomeBlock[] }) {
       )),
     );
 
-  if (!favorites && !tiles.length) return null;
+  if (!tiles.length) return null;
 
   return (
-    <div ref={ref} className="home-quick-access">
-      {favorites && <FavoritesTile block={favorites} />}
-      {tiles.slice(0, favorites ? 3 : 4)}
-    </div>
-  );
-}
-
-function FavoritesTile({ block }: { block: HomeBlock }) {
-  const t = useT();
-  const tracks = block.tracks ?? [];
-
-  return (
-    <Tile
-      href="/favorites"
-      label={t("home.likedSongs")}
-      sublabel={t("count.tracks", { count: block.totalCount ?? tracks.length })}
-      art={<CoverMosaic tracks={tracks} />}
-      toneSrc={tracks[0] ? trackCoverUrl(tracks[0], "thumb") : null}
-      action={
-        <HeartIcon
-          size={16}
-          aria-hidden="true"
-          className="quick-tile-favorite shrink-0 fill-current text-primary"
-        />
-      }
-    />
+    <Section ref={ref} className="home-recent" title={t("home.quickPicks")} href="/recently-played">
+      <div className="home-quick-access">{tiles.slice(0, 4)}</div>
+    </Section>
   );
 }
 
@@ -75,9 +51,6 @@ function recentTiles(block: HomeBlock) {
 
   return [
     ...(block.albums ?? []).map((album) => <AlbumTile key={album.id} album={album} />),
-    ...(block.playlists ?? []).map((playlist) => (
-      <PlaylistTile key={playlist.id} playlist={playlist} />
-    )),
     ...tracks.map((track) => <TrackTile key={track.id} track={track} context={tracks} />),
   ];
 }
@@ -97,10 +70,11 @@ function AlbumTile({ album }: { album: NonNullable<HomeBlock["albums"]>[number] 
       play={
         <CardPlayButton
           name={album.title}
+          sourceCollection={{ kind: "album", id: album.id }}
           tracks={detail.data?.tracks}
           load={async () => (await client.fetchQuery(queries.album(album.id))).tracks}
           size={8}
-          className="quick-tile-play [@media(hover:none)]:hidden"
+          className="quick-tile-play"
         />
       }
     />
@@ -109,11 +83,18 @@ function AlbumTile({ album }: { album: NonNullable<HomeBlock["albums"]>[number] 
 
 function TrackTile({ track, context }: { track: Track; context: Track[] }) {
   const { currentTrackId, playTrack, soundingNow } = usePlayback();
+  const t = useT();
   const isCurrent = currentTrackId === track.id;
+  const playing = soundingNow(track.id);
 
   return (
     <Tile
       current={isCurrent}
+      actionLabel={[
+        playing ? t("action.pause") : t("action.play"),
+        track.title,
+        formatArtists(track),
+      ].join(": ")}
       label={track.title}
       sublabel={formatArtists(track)}
       onClick={() => playTrack(track, context)}
@@ -122,7 +103,7 @@ function TrackTile({ track, context }: { track: Track; context: Track[] }) {
       action={
         <PlayBadge
           size={8}
-          playing={soundingNow(track.id)}
+          playing={playing}
           visible={isCurrent}
           className="quick-tile-play-badge"
         />
@@ -131,41 +112,10 @@ function TrackTile({ track, context }: { track: Track; context: Track[] }) {
   );
 }
 
-function PlaylistTile({ playlist }: { playlist: NonNullable<HomeBlock["playlists"]>[number] }) {
-  const t = useT();
-  const client = useQueryClient();
-  const detail = useQuery({ ...queries.playlist(playlist.id), enabled: false });
-
-  return (
-    <Tile
-      href={`/playlists/${playlist.id}`}
-      label={playlist.name}
-      sublabel={t("count.tracks", { count: playlist.trackCount })}
-      art={<PlaylistCover playlist={playlist} fallback={<ListMusicIcon />} />}
-      toneSrc={playlistCoverUrl({
-        playlistId: playlist.id,
-        hasCover: playlist.hasCover,
-        coverTrackId: playlist.coverTrackId,
-        variant: "thumb",
-      })}
-      play={
-        playlist.trackCount > 0 && (
-          <CardPlayButton
-            name={playlist.name}
-            tracks={detail.data?.tracks}
-            load={async () => (await client.fetchQuery(queries.playlist(playlist.id))).tracks}
-            size={8}
-            className="quick-tile-play [@media(hover:none)]:hidden"
-          />
-        )
-      }
-    />
-  );
-}
-
 function Tile<T extends string>({
   href,
   onClick,
+  actionLabel,
   art,
   label,
   sublabel,
@@ -176,6 +126,7 @@ function Tile<T extends string>({
 }: {
   href?: Route<T>;
   onClick?: () => void;
+  actionLabel?: string;
   art: ReactNode;
   label: string;
   sublabel?: ReactNode;
@@ -190,11 +141,17 @@ function Tile<T extends string>({
     <>
       <span className="quick-tile-art size-14 shrink-0 overflow-hidden">{art}</span>
       <span className="flex min-w-0 flex-1 flex-col">
-        <span
-          className={cn("line-clamp-2 text-sm leading-snug font-medium", current && "text-primary")}
-          title={label}
-        >
-          {label}
+        <span className="flex items-start gap-1.5 text-sm leading-snug">
+          <span
+            className={cn(
+              "line-clamp-2 min-w-0 wrap-anywhere font-medium",
+              current && "text-primary",
+            )}
+            title={label}
+          >
+            {label}
+          </span>
+          <PlayingGlyph />
         </span>
         {sublabel && <span className="truncate text-xs text-muted-foreground">{sublabel}</span>}
       </span>
@@ -212,7 +169,7 @@ function Tile<T extends string>({
           {body}
         </Link>
       ) : (
-        <button type="button" onClick={onClick} className={shell}>
+        <button type="button" onClick={onClick} aria-label={actionLabel} className={shell}>
           {body}
         </button>
       )}
