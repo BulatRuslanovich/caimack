@@ -889,7 +889,7 @@ export const ru: Dictionary = {
   "settings.theme.dark": "Тёмная",
   "settings.theme.light": "Светлая",
   "settings.theme.jdm": "JDM",
-  "settings.coverTone": "Цвет обложки",
+  "settings.coverTone": "Подсветка от обложек",
   "settings.colorway": "Палитра",
   "settings.colorway.coffee": "Кофе",
   "settings.colorway.graphite": "OLED чёрный",
@@ -1449,14 +1449,16 @@ export const ru: Dictionary = {
   "map.layer.links": "Связи",
   "map.layer.nebula": "Туманности",
   "map.layer.motion": "Анимация",
-  "settings.help.coverTone": "Подсвечивает интерфейс оттенком обложки текущего трека.",
+  "settings.help.coverTone":
+    "Добавляет мягкие оттенки обложек карточкам, шапкам коллекций и мини-плееру. У палитры и полноэкранного плеера свои цвета.",
   "settings.help.quality":
     "При медленном соединении плеер может снизить качество. Фактическое качество видно в плеере.",
   "settings.help.smartTransitions": "Подбирает переход между треками с учётом их звучания.",
   "settings.help.leanBack": "Автоматически открывает экран прослушивания при бездействии.",
   "settings.help.yandexMusic": "Включает поиск и импорт музыки из Яндекс Музыки.",
   "settings.help.vkMusic": "Включает поиск и импорт треков и плейлистов из VK Музыки.",
-  "settings.help.colorway": "Меняет палитру фона, поверхностей и акцентных элементов.",
+  "settings.help.colorway":
+    "Меняет цвета фона, поверхностей и акцентов. Палитра от обложки подбирает цвета панелей и кнопок по текущему треку. Если подходящего оттенка нет, используется Coffee.",
   "settings.help.theme": "Светлый, тёмный режим или автоматический выбор по системе.",
   "settings.help.crossfade": "Плавно смешивает конец трека с началом следующего.",
   "settings.help.language": "Меняет язык интерфейса.",

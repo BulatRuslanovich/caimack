@@ -843,7 +843,7 @@ export const en = {
   "settings.theme.dark": "Dark",
   "settings.theme.light": "Light",
   "settings.theme.jdm": "JDM",
-  "settings.coverTone": "Cover colour",
+  "settings.coverTone": "Artwork glow",
   "settings.colorway": "Palette",
   "settings.colorway.coffee": "Coffee",
   "settings.colorway.graphite": "OLED Black",
@@ -1391,9 +1391,11 @@ export const en = {
   "settings.help.equalizer": "Shape the sound with ten frequency bands or choose a preset.",
   "settings.equalizerControls": "Drag a point or use the arrow keys; double-click to reset a band.",
   "settings.help.theme": "Use light, dark or your system appearance.",
-  "settings.help.colorway": "Change the colours of backgrounds, surfaces and accents.",
+  "settings.help.colorway":
+    "Change the colours of backgrounds, surfaces and accents. From track artwork uses the current cover for surfaces and buttons. It falls back to Coffee without a usable colour.",
   "settings.help.language": "Change the interface language.",
-  "settings.help.coverTone": "Show highlights that pick up the colours of the current cover.",
+  "settings.help.coverTone":
+    "Add soft artwork tints to cards, collection headers and the mini-player. The palette and full-screen player have their own colours.",
   "settings.help.visualizer":
     "Show a glow and rings around the record that respond to music in the full-screen player.",
   "settings.help.leanBack": "Open the listening screen automatically when idle.",

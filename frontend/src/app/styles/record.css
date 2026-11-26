@@ -14,7 +14,6 @@
   z-index: 2;
   overflow: hidden;
   border-radius: var(--radius-xs);
-  box-shadow: var(--elevation-pop);
 }
 
 .record-disc {
@@ -52,9 +51,7 @@
   background:
     radial-gradient(circle, transparent 0 31%, #121010 31.5% 33%, transparent 33.5%),
     repeating-radial-gradient(circle, #121010 0 1.1px, #221e1c 1.1px 2.4px);
-  box-shadow:
-    0 0 0 1px rgb(0 0 0 / 50%),
-    0 16px 40px -16px rgb(0 0 0 / 80%);
+  outline: 1px solid rgb(0 0 0 / 50%);
 }
 
 .record[data-scratchable="true"] .record-disc {
@@ -243,9 +240,7 @@
       transparent 40.5%
     ),
     repeating-radial-gradient(circle, #121010 0 1px, #221e1c 1px 2px);
-  box-shadow:
-    0 0 0 1px var(--border-strong),
-    var(--elevation-art);
+  outline: 1px solid var(--border-strong);
   animation: record-spin 1.8s linear infinite;
 }
 

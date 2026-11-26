@@ -4,19 +4,15 @@
 @property --cover-palette-seed {
   syntax: "<color>";
   inherits: true;
-  initial-value: #5f8cef;
+  initial-value: transparent;
 }
 
-:root[data-cover-palette="changing"] {
+:root[data-colorway="cover"][data-cover-palette="changing"] {
   --cover-palette-duration: 320ms;
 }
 
-[data-colorway-preview="cover"] {
-  --cover-palette-seed: initial;
-}
-
 :root[data-colorway="cover"][data-cover-palette],
-[data-colorway-preview="cover"][data-theme-preview="dark"] {
+:root[data-cover-palette] [data-colorway-preview="cover"][data-theme-preview="dark"] {
   --card: color-mix(in srgb, #1b1b1b 85%, var(--cover-palette-seed));
   --popover: color-mix(in srgb, #252525 84%, var(--cover-palette-seed));
   --surface-raised: color-mix(in srgb, #2b2b2b 83%, var(--cover-palette-seed));
@@ -33,7 +29,7 @@
 }
 
 :root[data-colorway="cover"][data-cover-palette][data-theme="light"],
-[data-colorway-preview="cover"][data-theme-preview="light"] {
+:root[data-cover-palette] [data-colorway-preview="cover"][data-theme-preview="light"] {
   --card: color-mix(in srgb, white 92%, var(--cover-palette-seed));
   --popover: color-mix(in srgb, white 96%, var(--cover-palette-seed));
   --surface-raised: color-mix(in srgb, white 95%, var(--cover-palette-seed));
@@ -213,9 +209,9 @@
   --primary-foreground: #2b1e3e;
   --primary-soft: rgb(204 183 229 / 12%);
 
-  --action: #e8d5c4;
-  --action-hover: #f5dccb;
-  --action-foreground: #35201f;
+  --action: #e0ccf2;
+  --action-hover: #eddef9;
+  --action-foreground: #2b1e3e;
 
   --destructive: #ff9ab0;
   --warning: #f4c779;
@@ -250,9 +246,9 @@
   --primary-foreground: #ffffff;
   --primary-soft: rgb(102 68 133 / 10%);
 
-  --action: #884e42;
-  --action-hover: #713c34;
-  --action-foreground: #fff7f2;
+  --action: #684279;
+  --action-hover: #543461;
+  --action-foreground: #fff7ff;
 
   --destructive: #a22648;
   --warning: #744e0e;
@@ -398,9 +394,9 @@
   --primary-foreground: #fffaf6;
   --primary-soft: rgb(146 59 7 / 9%);
 
-  --action: #ff6900;
-  --action-hover: #f27a22;
-  --action-foreground: #291508;
+  --action: #aa460c;
+  --action-hover: #8f380a;
+  --action-foreground: #fff7eb;
 
   --destructive: #a32a26;
   --warning: #754b00;

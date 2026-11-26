@@ -4,7 +4,7 @@
 
 import { useEffect } from "react";
 import { trackCoverUrl } from "@/lib/media";
-import { setCoverPaletteTone, useColorway } from "@/lib/theme";
+import { setCoverPaletteTone } from "@/lib/theme";
 import { toneStyle, useCoverTone } from "@/lib/useCoverTone";
 import { usePlayerState } from "@/contexts/PlayerContext";
 import { useAudiobooks } from "@/contexts/AudiobookContext";
@@ -20,8 +20,7 @@ export function NowPlayingTone() {
       ? trackCoverUrl(currentTrack, "thumb")
       : null;
   const tone = useCoverTone(cover);
-  const adaptive = useColorway() === "cover";
-  const paletteTone = useCoverTone(adaptive ? cover : null, "player");
+  const paletteTone = useCoverTone(cover, "player");
 
   useEffect(() => {
     if (paletteTone !== undefined) setCoverPaletteTone(paletteTone);

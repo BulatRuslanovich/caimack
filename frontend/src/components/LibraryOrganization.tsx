@@ -74,7 +74,7 @@ export function LibraryFolderEditor({
           <label className="block space-y-2">
             <span className="text-sm">{t("folders.name")}</span>
             <input
-              className="w-full rounded-md border border-border bg-background px-3 py-2"
+              className="w-full rounded-md border border-control-border bg-background px-3 py-2"
               autoFocus
               maxLength={200}
               required
@@ -138,7 +138,7 @@ export function LibraryMoveDialog({
               <label className="block space-y-2">
                 <span className="text-sm">{t("folders.destination")}</span>
                 <select
-                  className="w-full rounded-md border border-border bg-background px-3 py-3"
+                  className="w-full rounded-md border border-control-border bg-background px-3 py-3"
                   value={destination}
                   onChange={(e) => setDestination(e.target.value)}
                   disabled={mutation.isPending}

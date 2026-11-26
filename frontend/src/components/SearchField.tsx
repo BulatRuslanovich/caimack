@@ -78,8 +78,8 @@ export function SearchField({
         if (!event.currentTarget.contains(event.relatedTarget)) onBlur?.(input.trim());
       }}
       className={cn(
-        "search-field flex max-w-xl items-center gap-2.5 rounded-full border border-border bg-card px-3.5 text-muted-foreground transition-[background-color,border-color,box-shadow] duration-150 motion-reduce:transition-none",
-        "hover:border-border-strong focus-within:border-ring focus-within:bg-raised focus-within:text-foreground focus-within:ring-2 focus-within:ring-ring/15",
+        "search-field flex max-w-xl items-center gap-2.5 rounded-full border border-control-border bg-card px-3.5 text-muted-foreground transition-colors duration-150 motion-reduce:transition-none",
+        "hover:border-ring focus-within:bg-raised focus-within:text-foreground focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ring",
         className,
       )}
     >

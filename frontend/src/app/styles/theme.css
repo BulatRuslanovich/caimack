@@ -2,7 +2,14 @@
 /* Copyright (c) 2026 Bulat Ruslanovich */
 
 :root,
-[data-theme-preview="dark"] {
+[data-theme-preview] {
+  --popover-foreground: var(--foreground);
+  --accent-foreground: var(--foreground);
+  --border: color-mix(in oklab, var(--foreground) 12%, transparent);
+  --border-strong: color-mix(in oklab, var(--foreground) 24%, transparent);
+  --control-border: color-mix(in srgb, var(--foreground) 58%, transparent);
+  --ring: var(--foreground);
+
   --background: #1d1916;
   --card: #29221d;
   --popover: #342a23;
@@ -12,12 +19,6 @@
   --foreground: #f7efe4;
   --muted-foreground: #c8b6a5;
   --faint-foreground: #b9a898;
-  --popover-foreground: var(--foreground);
-  --accent-foreground: var(--foreground);
-
-  --border: color-mix(in oklab, var(--foreground) 12%, transparent);
-  --border-strong: color-mix(in oklab, var(--foreground) 24%, transparent);
-  --control-border: color-mix(in oklab, var(--foreground) 40%, transparent);
 
   --primary: #e7bc78;
   --primary-foreground: #291d12;
@@ -26,8 +27,6 @@
   --action: #ebd8bb;
   --action-hover: #f7e7cc;
   --action-foreground: #291d12;
-
-  --ring: var(--foreground);
 
   --destructive: #ff9487;
   --warning: #f3c268;
@@ -57,8 +56,6 @@
   --foreground: #32261e;
   --muted-foreground: #5e4c3d;
   --faint-foreground: #6b5645;
-
-  --control-border: color-mix(in oklab, var(--foreground) 55%, transparent);
 
   --primary: #79501e;
   --primary-foreground: #fffaf0;

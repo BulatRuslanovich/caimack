@@ -66,12 +66,18 @@
 }
 
 .art-backdrop[data-mode="header"] .art-backdrop-palette {
+  --header-tint: 60%;
+  opacity: var(--tone-on);
   background: linear-gradient(
     180deg,
-    color-mix(in oklab, var(--art-color) 88%, var(--background)),
-    color-mix(in oklab, var(--art-color) 38%, var(--background)) 62%,
+    color-mix(in oklab, var(--art-color) var(--header-tint), var(--background)),
+    color-mix(in oklab, var(--art-color) calc(var(--header-tint) / 2), var(--background)) 62%,
     var(--background)
   );
+}
+
+:root[data-theme="light"] .art-backdrop[data-mode="header"] .art-backdrop-palette {
+  --header-tint: 25%;
 }
 
 /* Effects are optional overlays over the solid cover colour. */
@@ -101,13 +107,13 @@ body:has([data-player-fullscreen]) :is(.floating-panel, .dialog-panel, .sheet-pa
   --faint-foreground: #bcbcbc;
   --success: #6fcf97;
   --warning: #f2c14e;
-  --destructive: #ff6680;
+  --destructive: #ff859b;
   --library-secondary: var(--muted-foreground);
   --library-tertiary: var(--faint-foreground);
   --library-surface: color-mix(in oklab, var(--card) 65%, var(--background));
   --border: color-mix(in oklab, var(--foreground) 12%, transparent);
   --border-strong: color-mix(in oklab, var(--foreground) 24%, transparent);
-  --control-border: color-mix(in oklab, var(--foreground) 40%, transparent);
+  --control-border: color-mix(in srgb, var(--foreground) 58%, transparent);
   --ring: var(--foreground);
   --tone-l: 0.56;
   --tone-c-max: 0.16;

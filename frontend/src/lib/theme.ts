@@ -70,9 +70,7 @@ function notify(): void {
   listeners.forEach((listener) => listener());
 }
 
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
-
+export function watchSystemTheme(): () => void {
   const media = window.matchMedia(LIGHT_QUERY);
   const onSystemChange = () => {
     if (getChoice() !== "system") return;
@@ -81,12 +79,15 @@ function subscribe(listener: () => void): () => void {
     notify();
   };
 
+  // The OS can change between the inline script and hydration.
   media.addEventListener("change", onSystemChange);
+  onSystemChange();
+  return () => media.removeEventListener("change", onSystemChange);
+}
 
-  return () => {
-    listeners.delete(listener);
-    media.removeEventListener("change", onSystemChange);
-  };
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
 }
 
 function getChoice(): ThemeChoice {

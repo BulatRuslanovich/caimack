@@ -9,6 +9,7 @@ import { usePlayerUi } from "@/contexts/PlayerUiContext";
 import { useLibraryDensity } from "@/lib/libraryDensity";
 import { isTypingTarget } from "@/lib/shortcuts";
 import { signConsole } from "@/lib/signature";
+import { watchSystemTheme } from "@/lib/theme";
 import { useRecommendations } from "@/lib/useRecommendations";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
@@ -38,6 +39,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isPublicPage = isLoginPage || pathname.startsWith("/invite/");
 
   useEffect(() => signConsole(), []);
+  useEffect(watchSystemTheme, []);
 
   useEffect(() => {
     if (loading) return;

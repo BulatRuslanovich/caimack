@@ -147,7 +147,12 @@
 }
 
 .playlist-page {
-  --playlist-tint: color-mix(in oklab, var(--primary) 30%, var(--background));
+  --playlist-base: color-mix(in oklab, var(--primary) 30%, var(--background));
+  --playlist-tint: color-mix(
+    in oklab,
+    var(--playlist-base),
+    var(--playlist-art, var(--playlist-base)) calc(var(--tone-on) * 30%)
+  );
   --playlist-gutter: clamp(1.5rem, 3.3vw, 3.25rem);
   --playlist-wash-height: 38rem;
   --playlist-wash-top: 70%;

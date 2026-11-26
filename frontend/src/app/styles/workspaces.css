@@ -275,6 +275,12 @@
   white-space: normal;
 }
 
+@media (hover: hover) {
+  .settings-option:not(:disabled):hover {
+    background: var(--surface-raised);
+  }
+}
+
 .settings-device-trigger::after {
   content: "";
   width: 0.375rem;

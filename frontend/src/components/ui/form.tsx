@@ -18,11 +18,10 @@ import { Checkbox } from "./checkbox";
 const labelClass = "text-sm leading-none font-medium text-muted-foreground select-none";
 
 const controlClass = cn(
-  "flex w-full rounded-md border border-control-border bg-raised px-3 py-2 text-base transition-colors outline-none",
+  "flex w-full rounded-md border border-control-border bg-raised px-3 py-2 text-base transition-colors",
   "placeholder:text-faint",
   "autofill:shadow-[inset_0_0_0_100px_var(--surface-raised)] autofill:[-webkit-text-fill-color:var(--foreground)]",
-  "focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25",
-  "aria-invalid:border-destructive aria-invalid:ring-destructive/25",
+  "aria-invalid:border-destructive",
   "disabled:cursor-not-allowed disabled:opacity-50",
 );
 
@@ -102,7 +101,7 @@ export function TextField({
               aria-pressed={revealed}
               aria-controls={fieldId}
               disabled={props.disabled}
-              className="absolute inset-y-0 right-0 grid w-10 place-items-center rounded-r-md text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/25 disabled:opacity-50"
+              className="absolute inset-y-0 right-0 grid w-10 place-items-center rounded-r-md text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:-outline-offset-2 disabled:opacity-50"
             >
               {revealed ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
             </button>

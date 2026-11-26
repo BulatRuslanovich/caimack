@@ -223,13 +223,13 @@
   background:
     radial-gradient(
       ellipse at 86% 40%,
-      color-mix(in oklab, var(--cover-light) 66%, transparent),
+      color-mix(in oklab, var(--cover-light) 42%, transparent),
       transparent 70%
     ),
     linear-gradient(
       100deg,
       transparent 30%,
-      color-mix(in oklab, var(--cover-light) 22%, transparent)
+      color-mix(in oklab, var(--cover-light) 14%, transparent)
     );
   opacity: var(--cover-light-gain);
 }
@@ -332,9 +332,7 @@
   aspect-ratio: 1;
   border: 5px solid color-mix(in oklab, var(--foreground) 12%, var(--background));
   border-radius: 50%;
-  box-shadow:
-    0 22px 30px -16px rgb(0 0 0 / 75%),
-    0 0 0 1px var(--border);
+  outline: 1px solid var(--border);
 }
 .radio-platter .record-spin {
   animation: record-spin 8s linear infinite;
@@ -362,9 +360,7 @@
   aspect-ratio: 1;
   overflow: hidden;
   border-radius: 2px;
-  box-shadow:
-    0 12px 26px -8px rgb(0 0 0 / 70%),
-    0 0 0 1px rgb(255 255 255 / 12%);
+  outline: 1px solid rgb(255 255 255 / 12%);
 }
 .radio-sleeve-0 {
   z-index: 2;

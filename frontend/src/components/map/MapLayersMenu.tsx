@@ -55,9 +55,9 @@ export function MapLayersMenu({
         <span className="flex-1">{t(`map.layer.${layer}`)}</span>
         <span
           aria-hidden="true"
-          className="flex h-5 w-8 shrink-0 items-center rounded-full bg-border-strong p-0.5 transition-colors group-data-[state=checked]:bg-primary motion-reduce:transition-none"
+          className="flex h-5 w-8 shrink-0 items-center rounded-full border border-control-border bg-card p-0.5 transition-colors group-data-[state=checked]:border-primary group-data-[state=checked]:bg-primary motion-reduce:transition-none"
         >
-          <span className="size-4 shrink-0 rounded-full bg-white shadow-sm transition-transform group-data-[state=checked]:translate-x-3 motion-reduce:transition-none" />
+          <span className="size-3.5 shrink-0 rounded-full bg-foreground transition-[translate,background-color] group-data-[state=checked]:translate-x-3 group-data-[state=checked]:bg-primary-foreground motion-reduce:transition-none" />
         </span>
       </CheckboxItem>
     );

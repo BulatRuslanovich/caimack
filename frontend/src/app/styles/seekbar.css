@@ -4,6 +4,7 @@
 .seekbar {
   --progress: 0%;
   --seek-fill: var(--foreground);
+  --seek-buffer: color-mix(in srgb, var(--foreground) 72%, transparent);
 
   appearance: none;
   display: block;
@@ -20,7 +21,7 @@
   background: linear-gradient(
     to right,
     var(--seek-fill) var(--progress),
-    var(--border-strong) var(--progress)
+    var(--control-border) var(--progress)
   );
 }
 
@@ -30,7 +31,7 @@
   background: linear-gradient(
     to right,
     var(--seek-fill) var(--progress),
-    var(--border-strong) var(--progress)
+    var(--control-border) var(--progress)
   );
 }
 
@@ -83,9 +84,9 @@
   background: linear-gradient(
     to right,
     var(--seek-fill) var(--progress),
-    var(--border-strong) var(--progress),
-    var(--border-strong) var(--buffered, 0%),
-    color-mix(in srgb, var(--foreground) 12%, transparent) var(--buffered, 0%)
+    var(--seek-buffer) var(--progress),
+    var(--seek-buffer) var(--buffered, 0%),
+    var(--control-border) var(--buffered, 0%)
   );
 }
 
@@ -93,9 +94,9 @@
   background: linear-gradient(
     to right,
     var(--seek-fill) var(--progress),
-    var(--border-strong) var(--progress),
-    var(--border-strong) var(--buffered, 0%),
-    color-mix(in srgb, var(--foreground) 12%, transparent) var(--buffered, 0%)
+    var(--seek-buffer) var(--progress),
+    var(--seek-buffer) var(--buffered, 0%),
+    var(--control-border) var(--buffered, 0%)
   );
 }
 

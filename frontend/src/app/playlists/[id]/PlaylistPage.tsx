@@ -112,7 +112,7 @@ function PlaylistContent({ detail }: { detail: PlaylistDetail }) {
   const tone = useCoverTone(cover, "backdrop");
   const coverStyle = tone
     ? ({
-        "--playlist-tint": `oklch(0.55 ${Math.min(tone.chroma * 1.35, 0.23)} ${tone.hue})`,
+        "--playlist-art": `oklch(0.55 ${Math.min(tone.chroma * 1.35, 0.23)} ${tone.hue})`,
       } as CSSProperties)
     : undefined;
 

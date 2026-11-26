@@ -33,12 +33,27 @@ function Miniature({ palette, colorway }: { palette: Palette; colorway: Colorway
       data-colorway-preview={colorway}
       className="flex min-w-0 flex-1 gap-1.5 bg-background p-1.5"
     >
-      <span className="w-1/4 rounded-xs bg-card" />
+      <span className="flex w-1/4 flex-col gap-1 rounded-xs border border-border bg-card p-1">
+        <span className="h-1 rounded-full bg-primary" />
+        <span className="h-0.5 rounded-full bg-border-strong" />
+      </span>
       <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="size-5 rounded-xs bg-(--sleeve-2)" />
-        <span className="h-1 w-4/5 rounded-full bg-foreground" />
-        <span className="h-1 w-3/5 rounded-full bg-muted-foreground" />
-        <span className="mt-auto h-1 w-1/3 rounded-full bg-primary" />
+        <span className="flex items-center gap-1 rounded-xs border border-border bg-card p-1">
+          <span className="size-4 shrink-0 rounded-xs bg-(--sleeve-2)" />
+          <span className="flex min-w-0 flex-1 flex-col gap-1">
+            <span className="h-1 rounded-full bg-foreground" />
+            <span className="h-0.5 w-2/3 rounded-full bg-muted-foreground" />
+          </span>
+        </span>
+        <span className="flex min-w-0 flex-1 items-center justify-between gap-1">
+          <span className="grid size-4 shrink-0 place-items-center rounded-full bg-action">
+            <span className="border-y-[2.5px] border-l-4 border-y-transparent border-l-action-foreground" />
+          </span>
+          <span className="flex h-full w-1/2 flex-col justify-center gap-0.5 rounded-xs border border-border-strong bg-popover px-1">
+            <span className="h-0.5 rounded-full bg-primary" />
+            <span className="h-0.5 w-2/3 rounded-full bg-muted-foreground" />
+          </span>
+        </span>
       </span>
     </span>
   );

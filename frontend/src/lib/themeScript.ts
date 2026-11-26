@@ -44,7 +44,7 @@ export const NO_FLASH_THEME_SCRIPT = `try {
     : saved;
   if (palette !== "dark" && palette !== "light") palette = "dark";
   var colorway = localStorage.getItem("${COLORWAY_STORAGE_KEY}");
-  if (!colors[colorway]) colorway = "${DEFAULT_COLORWAY}";
+  if (!Object.hasOwn(colors, colorway)) colorway = "${DEFAULT_COLORWAY}";
   document.documentElement.dataset.theme = palette;
   document.documentElement.dataset.colorway = colorway;
   var density = localStorage.getItem("music-streaming.library-density");

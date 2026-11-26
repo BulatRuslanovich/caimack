@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   COLORWAYS,
   COLORWAY_STORAGE_KEY,
+  COVER_TONE_STORAGE_KEY,
   NO_FLASH_THEME_SCRIPT,
   THEME_COLORS,
   THEME_STORAGE_KEY,
@@ -33,6 +34,8 @@ const contrast = (a: number[], b: number[]) => {
   const [lo, hi] = [luminance(a), luminance(b)].sort((a, b) => a - b);
   return (hi + 0.05) / (lo + 0.05);
 };
+const controlAlpha =
+  Number(css.match(/--control-border: color-mix\(in srgb, var\(--foreground\) (\d+)%/)?.[1]) / 100;
 
 describe("shared application palettes", () => {
   it("covers both modes of every fixed colorway", () => {
@@ -59,6 +62,25 @@ describe("shared application palettes", () => {
         localStorage: { getItem: (key: string) => preferences.get(key) ?? null },
       });
       expect(dataset).toEqual({ theme, colorway: "cover" });
+      expect(setAttribute).toHaveBeenCalledWith("content", THEME_COLORS.coffee[theme]);
+    },
+  );
+  it.each(["dark", "light"] as const)(
+    "restores system %s and artwork glow before hydration with an invalid palette",
+    (theme) => {
+      const dataset = {};
+      const setAttribute = vi.fn();
+      const preferences = new Map([
+        [COLORWAY_STORAGE_KEY, "constructor"],
+        [THEME_STORAGE_KEY, "system"],
+        [COVER_TONE_STORAGE_KEY, "off"],
+      ]);
+      runInNewContext(NO_FLASH_THEME_SCRIPT, {
+        document: { documentElement: { dataset }, querySelector: () => ({ setAttribute }) },
+        localStorage: { getItem: (key: string) => preferences.get(key) ?? null },
+        matchMedia: () => ({ matches: theme === "light" }),
+      });
+      expect(dataset).toEqual({ theme, colorway: "coffee", coverTone: "off" });
       expect(setAttribute).toHaveBeenCalledWith("content", THEME_COLORS.coffee[theme]);
     },
   );
@@ -93,6 +115,22 @@ describe("shared application palettes", () => {
         (channel, i) => channel * (1 - alpha) + Number(soft[i + 1]) * alpha,
       );
       expect(contrast(rgb(tokens.primary), selected), "selected label").toBeGreaterThanOrEqual(4.5);
+    });
+    it(`${name} ${mode}: visible control outlines and action fills`, () => {
+      for (const surface of ["background", "card", "popover", "surface-raised", "accent"]) {
+        const background = rgb(tokens[surface]);
+        const border = rgb(tokens.foreground).map(
+          (value, i) => value * controlAlpha + background[i] * (1 - controlAlpha),
+        );
+        expect(
+          contrast(border, background),
+          `control outline on ${surface}`,
+        ).toBeGreaterThanOrEqual(3);
+        expect(
+          contrast(rgb(tokens.action), background),
+          `action on ${surface}`,
+        ).toBeGreaterThanOrEqual(3);
+      }
     });
     it(`${name} ${mode}: Android, web and browser chrome agree`, () => {
       const className =

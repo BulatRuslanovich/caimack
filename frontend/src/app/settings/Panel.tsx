@@ -54,9 +54,9 @@ export function Choice<T extends string>({
             key={option.value}
             value={option.value}
             className={cn(
-              "settings-option flex cursor-pointer flex-col items-start gap-0.5 rounded-md border border-transparent text-left transition-colors outline-none",
+              "settings-option flex cursor-pointer flex-col items-start gap-0.5 rounded-md border border-transparent text-left transition-colors",
               previews ? "p-3" : "px-4 py-2.5",
-              "hover:bg-raised focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-wait disabled:opacity-70",
+              "disabled:cursor-wait disabled:opacity-70",
             )}
           >
             {option.preview}

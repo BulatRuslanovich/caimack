@@ -49,10 +49,7 @@ export function WaveformSeekbar({
         />
       )}
 
-      <Bars
-        peaks={peaks}
-        className="wave-bars text-[color-mix(in_oklab,var(--foreground)_28%,transparent)]"
-      />
+      <Bars peaks={peaks} className="wave-bars text-control-border" />
       <Bars peaks={peaks} className="wave-bars wave-played text-foreground" />
 
       {transition && total > 0 && transition.at < total && (
